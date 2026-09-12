@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow Field Plotter</title>
+<style>
+  :root{
+    --accent:#b8e05f; --bg:#101012; --panel:#17171a; --line:#2a2a2f;
+    --ink:#e6e4df; --dim:#8a8a92; --teal:#5f9ea0;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);
+    font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    display:grid;grid-template-columns:1fr 292px;grid-template-rows:minmax(0,1fr);overflow:hidden}
+  @media (max-width:820px){
+    body{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+    #rail{border-left:none;border-top:1px solid var(--line);max-height:52vh}
+  }
+  #stage{position:relative;display:grid;place-content:safe center;padding:20px;
+    min-height:0;min-width:0;overflow:auto}
+  #holder{position:relative;line-height:0;box-shadow:0 0 0 1px var(--line),0 24px 60px -30px #000}
+  #holder canvas{display:block;max-width:100%;max-height:100%}
+  #ink{position:absolute;left:0;top:0}
+  #empty{position:absolute;inset:20px;display:grid;place-items:center;border:1px dashed var(--line);
+    color:var(--dim);text-align:center;padding:24px;cursor:pointer}
+  #empty.hide{display:none}
+  #empty strong{display:block;color:var(--ink);font-weight:500;margin-bottom:6px;letter-spacing:.04em}
+  #hud{position:absolute;left:24px;bottom:24px;color:var(--dim);font-size:11px;
+    letter-spacing:.06em;pointer-events:none}
+
+  #rail{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:14px 14px 40px}
+  h1{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);
+    margin:2px 0 14px;font-weight:500}
+  h1 span{color:var(--dim);letter-spacing:.06em;display:block;text-transform:none;margin-top:3px}
+  #status{margin:0 0 12px;padding:8px 9px;font-size:11px;line-height:1.5;border:1px solid var(--line);
+    color:var(--dim);display:none;white-space:pre-wrap}
+  #status.on{display:block}
+  #status.err{border-color:#a3543a;color:#e0a58c}
+  details.sec{border-top:1px solid var(--line)}
+  details.sec>summary{list-style:none;cursor:pointer;user-select:none;padding:11px 2px 10px;
+    font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--a,var(--accent));
+    display:flex;align-items:center;gap:8px}
+  details.sec>summary::-webkit-details-marker{display:none}
+  details.sec>summary::before{content:'\25B8';font-size:9px;opacity:.65;transition:transform .12s;
+    display:inline-block}
+  details.sec[open]>summary::before{transform:rotate(90deg)}
+  details.sec[open]{padding-bottom:10px}
+  details.sec input[type=range]::-webkit-slider-thumb{background:var(--a,var(--accent))}
+  details.sec input[type=range]::-moz-range-thumb{background:var(--a,var(--accent))}
+  details.sec select:hover,details.sec button:hover,details.sec .file:hover{border-color:var(--a,var(--accent))}
+  details.sec .chk input{accent-color:var(--a,var(--accent))}
+  .sec-source{--a:#c9c2b4} .sec-density{--a:#5fa8d3} .sec-seed{--a:#c2a86a}
+  .sec-agents{--a:#b8e05f} .sec-cycle{--a:#c2a86a} .sec-shape{--a:#d9895a} .sec-fluid{--a:#4fb0c6} .sec-depth{--a:#8d7bb0} .sec-flock{--a:#a98bd0} .sec-ink{--a:#d4708f} .sec-stroke{--a:#d9895a}
+  .sec-colour{--a:#e2a13c} .sec-out{--a:#94a3ad}
+  label{display:block;margin:0 0 9px}
+  .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;
+    color:var(--dim);margin-bottom:3px}
+  .lab b{color:var(--ink);font-weight:400;font-variant-numeric:tabular-nums;cursor:text}
+  .lab b:hover{box-shadow:inset 0 -1px 0 var(--dim)}
+  input[type=range]{width:100%;height:16px;-webkit-appearance:none;appearance:none;background:none;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:1px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;
+    margin-top:-4px;border-radius:0;cursor:ew-resize}
+  input[type=range]::-moz-range-thumb{width:9px;height:9px;border:none;border-radius:0;cursor:ew-resize}
+  select,button,.file,input[type=color]{width:100%;background:#0c0c0e;color:var(--ink);
+    border:1px solid var(--line);padding:6px 8px;font:inherit;font-size:12px;border-radius:0;cursor:pointer}
+  input[type=color]{padding:2px;height:28px}
+  .file{display:block;text-align:center;margin-bottom:8px}
+  .file input{display:none}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);
+    margin-bottom:9px;cursor:pointer}
+  .note{font-size:10px;color:var(--dim);line-height:1.5;margin:-2px 0 10px}
+  .note em{color:var(--teal);font-style:normal}
+  .numedit{width:74px;background:#000;color:var(--accent);border:1px solid var(--accent);
+    font:inherit;font-size:11px;padding:0 3px;text-align:right}
+  .numedit:focus{outline:none}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="holder">
+    <canvas id="gl"></canvas>
+    <canvas id="ink"></canvas>
+  </div>
+  <div id="empty"><div><strong>Load an image, or start the webcam</strong>
+    Drop a file here. Or run with no source at all for pure curl noise.</div></div>
+  <div id="hud"></div>
+</div>
+
+<div id="rail">
+  <h1>Flow Field Plotter <b style="color:var(--dim);font-weight:400">v0.1</b>
+    <span>Metamo Industries · agents drawn along image structure</span></h1>
+  <div id="status"></div>
+
+  <details class="sec sec-source" open>
+    <summary>Source</summary>
+    <label class="file" tabindex="0">Image<input type="file" id="fImg"></label>
+    <div class="row">
+      <button id="bCam">Webcam</button>
+      <button id="bNoSrc">No source</button>
+    </div>
+    <div style="height:8px"></div>
+    <div class="row">
+      <button id="bRun">Start</button>
+      <button id="bClear">Clear</button>
+    </div>
+    <div class="note"><em id="vSrc">No source</em> · Analysis runs at 320×180 — we only need regions and movement, not detail.</div>
+  </details>
+
+  <details class="sec sec-density">
+    <summary>Density</summary>
+    <label><span class="lab">View</span>
+      <select id="sView">
+        <option value="0">Artwork</option>
+        <option value="1">Density map</option>
+        <option value="2">Orientation field</option>
+        <option value="3">Fluid velocity</option>
+      </select></label>
+    <label><span class="lab">Edges <b id="vWGrad"></b></span>
+      <input type="range" id="rWGrad" min="0" max="2" step="0.01" value="1"></label>
+    <label><span class="lab">Anisotropy <b id="vWAni"></b></span>
+      <input type="range" id="rWAni" min="0" max="2" step="0.01" value="0.35"></label>
+    <label><span class="lab">Darkness <b id="vWDark"></b></span>
+      <input type="range" id="rWDark" min="0" max="2" step="0.01" value="0.5"></label>
+    <label><span class="lab">Motion <b id="vWMot"></b></span>
+      <input type="range" id="rWMot" min="0" max="4" step="0.01" value="1.2"></label>
+    <label><span class="lab">Motion → force <b id="vMForce"></b></span>
+      <input type="range" id="rMForce" min="0" max="6" step="0.05" value="1.2"></label>
+    <label><span class="lab">Motion → speed <b id="vMSpeed"></b></span>
+      <input type="range" id="rMSpeed" min="0" max="6" step="0.05" value="1"></label>
+    <label><span class="lab">Motion → push <b id="vMPush"></b></span>
+      <input type="range" id="rMPush" min="0" max="6" step="0.05" value="0.6"></label>
+    <label><span class="lab">Motion → direction <b id="vMFlow"></b></span>
+      <input type="range" id="rMFlow" min="0" max="1" step="0.01" value="0.5"></label>
+    <label><span class="lab">Motion wakes agents <b id="vMWake"></b></span>
+      <input type="range" id="rMWake" min="0" max="2" step="0.01" value="0.6"></label>
+    <label><span class="lab">Motion decay <b id="vMDecay"></b></span>
+      <input type="range" id="rMDecay" min="0.5" max="0.99" step="0.005" value="0.88"></label>
+    <label><span class="lab">Floor <b id="vFloor"></b></span>
+      <input type="range" id="rFloor" min="0" max="0.5" step="0.005" value="0.03"></label>
+    <div class="note">Direction uses normal optical flow — strokes get pushed the way things actually moved, not just excited where they moved. The density map is the composition — it decides where agents exist before a single line is drawn. Switch View to see it.</div>
+  </details>
+
+  <details class="sec sec-seed">
+    <summary>Seeding</summary>
+    <label><span class="lab">Agents <b id="vCount"></b></span>
+      <input type="range" id="rCount" min="50" max="4000" step="10" value="900"></label>
+    <label><span class="lab">Contour share <b id="vContour"></b></span>
+      <input type="range" id="rContour" min="0" max="1" step="0.01" value="0.45"></label>
+    <label><span class="lab">Min spacing <b id="vRMin"></b></span>
+      <input type="range" id="rRMin" min="1" max="30" step="0.5" value="3"></label>
+    <label><span class="lab">Max spacing <b id="vRMax"></b></span>
+      <input type="range" id="rRMax" min="4" max="120" step="1" value="34"></label>
+    <label><span class="lab">Turnover / s <b id="vTurn"></b></span>
+      <input type="range" id="rTurn" min="0" max="1" step="0.01" value="0.25"></label>
+    <div class="note">Blue-noise spacing scales with density, so tone is carried by how close the marks sit — not by line weight. Turnover replaces resting agents; set it to 0 for a plate that converges.</div>
+  </details>
+
+  <details class="sec sec-cycle" open>
+    <summary>Cycle</summary>
+    <label class="chk"><input type="checkbox" id="cCycleOn"> Finite plate (converges and stops)</label>
+    <label><span class="lab">Frames <b id="vFrames"></b></span>
+      <input type="range" id="rFrames" min="20" max="3000" step="10" value="400"></label>
+    <label><span class="lab">Seed <b id="vSeed"></b></span>
+      <input type="range" id="rSeed" min="1" max="9999" step="1" value="2659"></label>
+    <div class="row"><button id="bRestart">Restart plate</button><button id="bReseed">New seed</button></div>
+    <div class="note"><em id="vCycle">Continuous</em> · Frames are layered on top of one another while the start/end pairs below sweep across the run. The same seed reproduces a plate exactly.</div>
+    <div class="note" style="margin-top:8px">Start → end pairs</div>
+    <label><span class="lab">Speed start <b id="vSpeedA"></b></span>
+      <input type="range" id="rSpeedA" min="0.1" max="8" step="0.05" value="2.2"></label>
+    <label><span class="lab">Speed ease</span>
+      <select id="sEaseSpeed"></select></label>
+    <label><span class="lab">Width start <b id="vWidthA"></b></span>
+      <input type="range" id="rWidthA" min="0.2" max="24" step="0.1" value="3.5"></label>
+    <label><span class="lab">Width ease</span>
+      <select id="sEaseWidth"></select></label>
+    <label><span class="lab">Opacity start <b id="vAlphaA"></b></span>
+      <input type="range" id="rAlphaA" min="0.02" max="1" step="0.01" value="0.85"></label>
+    <label><span class="lab">Opacity ease</span>
+      <select id="sEaseAlpha"></select></label>
+    <label><span class="lab">Scatter start <b id="vScatterA"></b></span>
+      <input type="range" id="rScatterA" min="0" max="3" step="0.01" value="0"></label>
+    <label><span class="lab">Scatter end <b id="vScatter"></b></span>
+      <input type="range" id="rScatter" min="0" max="3" step="0.01" value="0"></label>
+    <label><span class="lab">Scatter ease</span>
+      <select id="sEaseScatter"></select></label>
+    <div class="note">The end values are the ordinary sliders elsewhere in the panel — Speed and Wander in Motion, Width and Opacity in Ink. Scatter is chaos layered on top of the field.</div>
+  </details>
+
+  <details class="sec sec-agents" open>
+    <summary>Motion</summary>
+    <label><span class="lab">Drag <b id="vDrag"></b></span>
+      <input type="range" id="rDrag" min="0.01" max="0.9" step="0.005" value="0.12"></label>
+    <label><span class="lab">Field force <b id="vForce"></b></span>
+      <input type="range" id="rForce" min="0" max="4" step="0.01" value="1.3"></label>
+    <label><span class="lab">Speed <b id="vSpeed"></b></span>
+      <input type="range" id="rSpeed" min="0.1" max="8" step="0.05" value="2.2"></label>
+    <label><span class="lab">Wander (curl) <b id="vWander"></b></span>
+      <input type="range" id="rWander" min="0" max="1" step="0.01" value="0.22"></label>
+    <label><span class="lab">Noise scale <b id="vNScale"></b></span>
+      <input type="range" id="rNScale" min="0.001" max="0.05" step="0.0005" value="0.006"></label>
+    <label><span class="lab">Start spread <b id="vSpread"></b></span>
+      <input type="range" id="rSpread" min="0" max="12" step="0.1" value="1.2"></label>
+    <label><span class="lab">Rest below <b id="vRest"></b></span>
+      <input type="range" id="rRest" min="0" max="1.5" step="0.01" value="0.18"></label>
+    <label><span class="lab">Max stroke <b id="vLife"></b></span>
+      <input type="range" id="rLife" min="4" max="600" step="1" value="140"></label>
+    <div class="note">Momentum is what makes a line look drawn rather than traced — with drag low, agents overshoot and cut corners instead of hugging the gradient.</div>
+  </details>
+
+  <details class="sec sec-fluid">
+    <summary>Fluid</summary>
+    <label class="chk"><input type="checkbox" id="cFluid"> Enable fluid</label>
+    <label><span class="lab">Agent coupling <b id="vFCouple"></b></span>
+      <input type="range" id="rFCouple" min="0" max="8" step="0.05" value="1.4"></label>
+    <label><span class="lab">Inject: flow <b id="vFInjF"></b></span>
+      <input type="range" id="rFInjF" min="0" max="6" step="0.05" value="1.2"></label>
+    <label><span class="lab">Inject: structure <b id="vFInjS"></b></span>
+      <input type="range" id="rFInjS" min="0" max="4" step="0.02" value="0.4"></label>
+    <label><span class="lab">Inject: curl noise <b id="vFInjN"></b></span>
+      <input type="range" id="rFInjN" min="0" max="4" step="0.02" value="0"></label>
+    <label><span class="lab">Viscosity <b id="vFVisc"></b></span>
+      <input type="range" id="rFVisc" min="0" max="0.9" step="0.005" value="0.06"></label>
+    <label><span class="lab">Vorticity <b id="vFVort"></b></span>
+      <input type="range" id="rFVort" min="0" max="2" step="0.01" value="0.25"></label>
+    <label><span class="lab">Dissipation <b id="vFDissip"></b></span>
+      <input type="range" id="rFDissip" min="0" max="0.2" step="0.001" value="0.02"></label>
+    <label><span class="lab">Solver passes <b id="vFIter"></b></span>
+      <input type="range" id="rFIter" min="2" max="60" step="1" value="24"></label>
+    <button id="bFClear">Clear fluid</button>
+    <div class="note">A real velocity field, kept divergence-free, that carries the agents. Movement pushes it, edge tangents stir it, and vorticity restores the swirl the solver would otherwise lose. Dissipation is how quickly the water goes still — set it near 0 and a gesture keeps circulating long after it ended.</div>
+  </details>
+
+  <details class="sec sec-flock">
+    <summary>Flocking</summary>
+    <label><span class="lab">Separation <b id="vSep"></b></span>
+      <input type="range" id="rSep" min="0" max="3" step="0.01" value="1.1"></label>
+    <label><span class="lab">Alignment <b id="vAli"></b></span>
+      <input type="range" id="rAli" min="0" max="2" step="0.01" value="0.35"></label>
+    <label><span class="lab">Cohesion <b id="vCoh"></b></span>
+      <input type="range" id="rCoh" min="0" max="2" step="0.01" value="0.15"></label>
+    <label><span class="lab">Neighbourhood <b id="vNbr"></b></span>
+      <input type="range" id="rNbr" min="4" max="60" step="1" value="16"></label>
+    <div class="note">Separation is what keeps the line clean — agents refuse to redraw a contour a neighbour already drew.</div>
+  </details>
+
+  <details class="sec sec-depth">
+    <summary>Depth &amp; time</summary>
+    <label><span class="lab">Mode</span>
+      <select id="sZMode">
+        <option value="0">Flat</option>
+        <option value="1">Wind — ink blows away from camera</option>
+        <option value="2">Time slices — each moment sits deeper</option>
+      </select></label>
+    <label><span class="lab">Slice rate <b id="vZRate"></b></span>
+      <input type="range" id="rZRate" min="0" max="4" step="0.01" value="0.35"></label>
+    <label><span class="lab">Wind speed <b id="vZWind"></b></span>
+      <input type="range" id="rZWind" min="-4" max="4" step="0.01" value="1"></label>
+    <label><span class="lab">Wind by brightness <b id="vZLum"></b></span>
+      <input type="range" id="rZLum" min="-1" max="1" step="0.01" value="0"></label>
+    <label><span class="lab">Perspective <b id="vZPersp"></b></span>
+      <input type="range" id="rZPersp" min="0" max="3" step="0.01" value="0.5"></label>
+    <label><span class="lab">Depth fade <b id="vZFog"></b></span>
+      <input type="range" id="rZFog" min="0" max="3" step="0.01" value="0.35"></label>
+    <label><span class="lab">Vanishing X <b id="vZVX"></b></span>
+      <input type="range" id="rZVX" min="0" max="1" step="0.005" value="0.5"></label>
+    <label><span class="lab">Vanishing Y <b id="vZVY"></b></span>
+      <input type="range" id="rZVY" min="0" max="1" step="0.005" value="0.5"></label>
+    <div class="note">In slice mode a stroke keeps the depth of the moment it was born. Successive moments nest inward, so a moving subject builds a solid from its own history.</div>
+    <label><span class="lab">Trail fade <b id="vFade"></b></span>
+      <input type="range" id="rFade" min="0" max="0.08" step="0.0005" value="0"></label>
+    <label><span class="lab">Symmetry</span>
+      <select id="sSym">
+        <option value="0">None</option>
+        <option value="1">Mirror horizontally</option>
+        <option value="2">Mirror vertically</option>
+        <option value="3">Quad</option>
+        <option value="4">Radial ×6</option>
+        <option value="5">Radial ×8</option>
+      </select></label>
+  </details>
+
+  <details class="sec sec-shape">
+    <summary>Mark</summary>
+    <label><span class="lab">Shape</span><select id="sShape"></select></label>
+    <label><span class="lab">Fill</span>
+      <select id="sFill">
+        <option value="0">Fill and stroke</option>
+        <option value="1">Fill only</option>
+        <option value="2">Stroke only</option>
+      </select></label>
+    <label><span class="lab">Stamp every <b id="vStampEvery"></b></span>
+      <input type="range" id="rStampEvery" min="1" max="40" step="1" value="4"></label>
+    <label><span class="lab">Size start <b id="vSizeA"></b></span>
+      <input type="range" id="rSizeA" min="0.2" max="40" step="0.2" value="3"></label>
+    <label><span class="lab">Size end <b id="vSizeB"></b></span>
+      <input type="range" id="rSizeB" min="0.2" max="40" step="0.2" value="3"></label>
+    <label><span class="lab">Size ease</span><select id="sEaseSize"></select></label>
+    <label><span class="lab">Size range min <b id="vSizeMin"></b></span>
+      <input type="range" id="rSizeMin" min="0.1" max="2" step="0.01" value="1"></label>
+    <label><span class="lab">Size range max <b id="vSizeMax"></b></span>
+      <input type="range" id="rSizeMax" min="0.1" max="2" step="0.01" value="1"></label>
+    <label><span class="lab">Rotation</span><select id="sRot"></select></label>
+    <label><span class="lab">Fixed angle <b id="vRotAngle"></b></span>
+      <input type="range" id="rRotAngle" min="0" max="360" step="5" value="0"></label>
+    <label><span class="lab">Colour offset <b id="vColOff"></b></span>
+      <input type="range" id="rColOff" min="0" max="0.3" step="0.002" value="0"></label>
+    <div class="note">With a shape chosen the agent stops drawing a continuous line and drops marks along its path instead — the mark becomes the unit rather than the trajectory. Size range gives each agent its own multiplier, so a population varies. Colour offset samples the image near the agent rather than exactly under it.</div>
+  </details>
+
+  <details class="sec sec-ink" open>
+    <summary>Ink</summary>
+    <label><span class="lab">Width <b id="vWidth"></b></span>
+      <input type="range" id="rWidth" min="0.2" max="24" step="0.1" value="3.5"></label>
+    <label><span class="lab">Opacity <b id="vAlpha"></b></span>
+      <input type="range" id="rAlpha" min="0.05" max="1" step="0.01" value="0.85"></label>
+    <label><span class="lab">Colour source</span>
+      <select id="sInk">
+        <option value="0">Fixed ink</option>
+        <option value="1">Sampled from image, darkened</option>
+      </select></label>
+    <div class="row"><input type="color" id="cInk" value="#191a1f">
+      <input type="color" id="cPaper" value="#efe9dd"></div>
+    <div class="note">Ink and paper. Moebius contours are often coloured rather than black — try a warm brown or deep blue.</div>
+    <label><span class="lab">Opacity from brightness <b id="vLumA"></b></span>
+      <input type="range" id="rLumA" min="0" max="1" step="0.01" value="0"></label>
+    <label class="chk"><input type="checkbox" id="cLumInv"> Invert (dark areas solid)</label>
+    <label class="chk" style="margin-top:9px"><input type="checkbox" id="cPaperOn" checked> Draw paper behind</label>
+  </details>
+
+  <details class="sec sec-stroke">
+    <summary>Stroke shape</summary>
+    <div class="note">Width</div>
+    <label><span class="lab">Taper in <b id="vTIn"></b></span>
+      <input type="range" id="rTIn" min="0" max="0.5" step="0.005" value="0.12"></label>
+    <label><span class="lab">Taper out <b id="vTOut"></b></span>
+      <input type="range" id="rTOut" min="0" max="0.9" step="0.005" value="0.35"></label>
+    <label><span class="lab">Taper curve <b id="vTCurve"></b></span>
+      <input type="range" id="rTCurve" min="0.2" max="4" step="0.05" value="1"></label>
+    <label><span class="lab">By velocity <b id="vWVel"></b></span>
+      <input type="range" id="rWVel" min="-1" max="1" step="0.01" value="0"></label>
+    <label><span class="lab">By heading (nib) <b id="vWNib"></b></span>
+      <input type="range" id="rWNib" min="0" max="1" step="0.01" value="0"></label>
+    <label><span class="lab">Minimum <b id="vWMin"></b></span>
+      <input type="range" id="rWMin" min="0" max="1" step="0.01" value="0.05"></label>
+    <div class="note" style="margin-top:8px">Opacity</div>
+    <label><span class="lab">Fade in <b id="vAIn"></b></span>
+      <input type="range" id="rAIn" min="0" max="0.5" step="0.005" value="0.05"></label>
+    <label><span class="lab">Fade out <b id="vAOut"></b></span>
+      <input type="range" id="rAOut" min="0" max="0.9" step="0.005" value="0.25"></label>
+    <label><span class="lab">Fade curve <b id="vACurve"></b></span>
+      <input type="range" id="rACurve" min="0.2" max="4" step="0.05" value="1"></label>
+    <label><span class="lab">By velocity <b id="vAVel"></b></span>
+      <input type="range" id="rAVel" min="-1" max="1" step="0.01" value="0"></label>
+    <label><span class="lab">By heading <b id="vANib"></b></span>
+      <input type="range" id="rANib" min="0" max="1" step="0.01" value="0"></label>
+    <label><span class="lab">Minimum <b id="vAMin"></b></span>
+      <input type="range" id="rAMin" min="0" max="1" step="0.01" value="0.05"></label>
+    <label><span class="lab">Nib angle <b id="vNibAng"></b></span>
+      <input type="range" id="rNibAng" min="0" max="180" step="1" value="35"></label>
+    <div class="note">Velocity at −1 makes fast strokes thin and slow ones heavy, which is how a loaded brush behaves. Nib mimics a chisel tip: strokes across the nib angle are broad, along it are hairlines. Set every value to 0 for uniform ligne-claire weight.</div>
+  </details>
+
+  <details class="sec sec-colour">
+    <summary>Colour</summary>
+    <label class="chk"><input type="checkbox" id="cColOn" checked> Colour pass</label>
+    <label><span class="lab">Kuwahara radius <b id="vKR"></b></span>
+      <input type="range" id="rKR" min="0" max="12" step="1" value="5"></label>
+    <label><span class="lab">Steering <b id="vSteer"></b></span>
+      <input type="range" id="rSteer" min="0" max="1" step="0.01" value="1"></label>
+    <div class="note">Steering stretches the Kuwahara kernel along the same edge directions the strokes follow. At 0 it is a plain square filter — flick between them to see the smear line up with the ink.</div>
+    <label><span class="lab">GI boost <b id="vGI"></b></span>
+      <input type="range" id="rGI" min="0" max="3" step="0.01" value="0.9"></label>
+    <label><span class="lab">Bloom spread <b id="vBloom"></b></span>
+      <input type="range" id="rBloom" min="0" max="24" step="0.5" value="7"></label>
+    <label><span class="lab">Saturation <b id="vSat"></b></span>
+      <input type="range" id="rSat" min="0" max="2.5" step="0.01" value="1.25"></label>
+    <label><span class="lab">Posterize <b id="vPost"></b></span>
+      <input type="range" id="rPost" min="1" max="24" step="1" value="1"></label>
+    <label><span class="lab">Dye mix <b id="vDyeMix"></b></span>
+      <input type="range" id="rDyeMix" min="0" max="1" step="0.01" value="0"></label>
+    <label><span class="lab">Dye feed <b id="vDyeFeed"></b></span>
+      <input type="range" id="rDyeFeed" min="0" max="1" step="0.01" value="0.5"></label>
+    <label><span class="lab">Feed only where moving <b id="vDyeMot"></b></span>
+      <input type="range" id="rDyeMot" min="0" max="6" step="0.05" value="0"></label>
+    <label><span class="lab">Smear rate <b id="vDyeAdv"></b></span>
+      <input type="range" id="rDyeAdv" min="0" max="4" step="0.02" value="1"></label>
+    <label><span class="lab">Dye fade <b id="vDyeDis"></b></span>
+      <input type="range" id="rDyeDis" min="0" max="0.06" step="0.0005" value="0.006"></label>
+    <button id="bDyeClear">Clear dye</button>
+    <div class="note" style="margin-top:8px">Dye is colour carried by the fluid rather than blurred — flat regions pull out into long smooth gradients. Needs the fluid enabled to move.</div>
+    <label><span class="lab">Ink bleed <b id="vBleed"></b></span>
+      <input type="range" id="rBleed" min="0" max="1" step="0.01" value="0"></label>
+    <label><span class="lab">Bleed reach <b id="vBleedR"></b></span>
+      <input type="range" id="rBleedR" min="1" max="60" step="1" value="14"></label>
+    <div class="note">Bleed drags the ink layer along the same edge directions and stains the colour beneath. The crisp strokes stay on top, so you get the smear without losing the line.</div>
+    <label><span class="lab">Wash <b id="vWash"></b></span>
+      <input type="range" id="rWash" min="0" max="1" step="0.01" value="0.35"></label>
+    <div class="note">Bloom is applied after the Kuwahara so the glow smears along the structure directions. Wash fades it toward the paper colour.</div>
+  </details>
+
+  <details class="sec sec-out">
+    <summary>Output</summary>
+    <label><span class="lab">Export scale <b id="vScale"></b></span>
+      <input type="range" id="rScale" min="1" max="6" step="1" value="2"></label>
+    <div class="row">
+      <button id="bPNG">Save PNG</button>
+      <button id="bSVG">Save SVG</button>
+    </div>
+    <div class="note"><em id="vPaths">0 strokes</em> · SVG carries the real polylines, so it is plotter-ready and resolution-free.</div>
+  </details>
+</div>
+
+<script>
+/* ============================================================================
+   Flow Field Plotter v0.1
+   Agents advected along the structure-tensor field of a source image, or
+   through curl noise with no source at all. Strokes are stored as polylines,
+   so the canvas is one renderer and SVG is another from the same data.
+   ========================================================================== */
+
+const el = id => document.getElementById(id);
+const stage = el('stage'), holder = el('holder');
+const glc = el('gl'), inkc = el('ink');
+const ictx = inkc.getContext('2d');
+const statusEl = el('status');
+function say(m, e){ statusEl.textContent = m; statusEl.className = 'on' + (e ? ' err' : ''); }
+function clearSay(){ statusEl.className = ''; }
+
+/* ---------- parameters ---------- */
+const P = {
+  wGrad:1, wAni:0.35, wDark:0.5, wMot:1.2, mDecay:0.88, floor:0.03,
+  count:900, contour:0.45, rMin:3, rMax:34, turn:0.25,
+  drag:0.12, force:1.3, speed:2.2, wander:0.22, nScale:0.006, rest:0.18, life:140,
+  sep:1.1, ali:0.35, coh:0.15, nbr:16,
+  width:3.5, alpha:0.85, inkMode:0,
+  tIn:0.12, tOut:0.35, tCurve:1, wMin:0.05, wVel:0, wNib:0,
+  aIn:0.05, aOut:0.25, aCurve:1, aMin:0.05, aVel:0, aNib:0, nibAng:35,
+  steer:1, bleed:0, bleedR:14, spread:1.2,
+  zMode:0, zRate:0.35, zWind:1, zLum:0, zPersp:0.5, zFog:0.35, zVX:0.5, zVY:0.5,
+  lumA:0, lumInv:false, fade:0, sym:0,
+  dyeMix:0, dyeFeed:0.5, dyeMot:0, dyeAdv:1, dyeDis:0.006,
+  mForce:1.2, mSpeed:1, mFlow:0.5, mWake:0.6, mPush:0.6,
+  fluidOn:false, fInjFlow:1.2, fInjStruct:0.4, fInjNoise:0,
+  fVisc:0.06, fDissip:0.02, fVort:0.25, fIter:24, fCouple:1.4, ink:'#191a1f', paper:'#efe9dd', paperOn:true,
+  colOn:true, kr:5, gi:0.9, bloom:7, sat:1.25, post:1, wash:0.35,
+  view:0, scale:2,
+  cycleOn:false, frames:400, seed:2659,
+  speedA:2.2, easeSpeed:0, scatter:0, scatterA:0, easeScatter:0,
+  widthA:3.5, easeWidth:0, alphaA:0.85, easeAlpha:0,
+  shape:0, stampEvery:4, sizeA:3, sizeB:3, easeSize:0,
+  sizeMin:1, sizeMax:1, rotMode:0, rotAngle:0, fillMode:0, colOff:0
+};
+
+/* ---------- analysis buffers (low res — regions and movement, not detail) ---------- */
+const AW = 320, AH = 180;
+const acan = document.createElement('canvas'); acan.width = AW; acan.height = AH;
+const actx = acan.getContext('2d', {willReadFrequently:true});
+const N = AW * AH;
+const lum = new Float32Array(N), prevLum = new Float32Array(N);
+const gx = new Float32Array(N), gy = new Float32Array(N);
+const mag = new Float32Array(N), ori = new Float32Array(N), ani = new Float32Array(N);
+const motion = new Float32Array(N), dens = new Float32Array(N);
+const flowX = new Float32Array(N), flowY = new Float32Array(N);
+const rgb = new Float32Array(N * 3);
+let hasAnalysis = false, everAnalysed = false;
+
+function analyse(src, w, h){
+  actx.drawImage(src, 0, 0, AW, AH);
+  const d = actx.getImageData(0, 0, AW, AH).data;
+  for(let i = 0; i < N; i++){
+    const r = d[i*4]/255, g = d[i*4+1]/255, b = d[i*4+2]/255;
+    rgb[i*3] = r; rgb[i*3+1] = g; rgb[i*3+2] = b;
+    prevLum[i] = lum[i];
+    lum[i] = 0.2126*r + 0.7152*g + 0.0722*b;
+  }
+  // Sobel
+  for(let y = 1; y < AH-1; y++) for(let x = 1; x < AW-1; x++){
+    const i = y*AW + x;
+    const a=lum[i-AW-1], b=lum[i-AW], c=lum[i-AW+1];
+    const e=lum[i-1],                 f=lum[i+1];
+    const g2=lum[i+AW-1], h2=lum[i+AW], k=lum[i+AW+1];
+    gx[i] = (c + 2*f + k) - (a + 2*e + g2);
+    gy[i] = (g2 + 2*h2 + k) - (a + 2*b + c);
+    mag[i] = Math.hypot(gx[i], gy[i]) * 0.25;
+  }
+  // structure tensor, box-blurred, then closed-form eigen decomposition
+  const E = new Float32Array(N), F = new Float32Array(N), G = new Float32Array(N);
+  for(let i = 0; i < N; i++){ E[i] = gx[i]*gx[i]; F[i] = gx[i]*gy[i]; G[i] = gy[i]*gy[i]; }
+  box(E, 2); box(F, 2); box(G, 2);
+  for(let i = 0; i < N; i++){
+    const tr = E[i] + G[i];
+    const dd = Math.sqrt(Math.max(0, (E[i]-G[i])*(E[i]-G[i]) + 4*F[i]*F[i]));
+    const l1 = (tr + dd) * 0.5, l2 = (tr - dd) * 0.5;
+    ani[i] = tr > 1e-7 ? (l1 - l2) / (l1 + l2 + 1e-7) : 0;
+    // minor eigenvector points ALONG the edge — that is the direction to draw in
+    ori[i] = 0.5 * Math.atan2(2*F[i], E[i] - G[i]) + Math.PI * 0.5;
+  }
+  // motion, with decay so a trace lingers after movement stops
+  if(everAnalysed){
+    for(let i = 0; i < N; i++){
+      const It = lum[i] - prevLum[i];
+      const m = Math.abs(It) * 4;
+      motion[i] = Math.max(m, motion[i] * P.mDecay);
+      // normal flow: the component of motion the gradient can actually see.
+      // Cheap, directional, and enough to push strokes the way things moved.
+      const g2 = gx[i]*gx[i] + gy[i]*gy[i];
+      if(g2 > 1e-4){
+        const k = -It / g2 * 8;
+        const fx = Math.max(-3, Math.min(3, k * gx[i]));
+        const fy = Math.max(-3, Math.min(3, k * gy[i]));
+        flowX[i] = flowX[i]*P.mDecay + fx*(1-P.mDecay);
+        flowY[i] = flowY[i]*P.mDecay + fy*(1-P.mDecay);
+      } else {
+        flowX[i] *= P.mDecay; flowY[i] *= P.mDecay;
+      }
+    }
+  }
+  everAnalysed = true;
+  hasAnalysis = true;
+  buildDensity();
+  uploadField();
+}
+
+/* Encode orientation as the doubled angle so texture filtering interpolates it
+   correctly — averaging raw angles wraps badly at 0/180. */
+function uploadField(){
+  if(!gl || !fldTex) return;
+  for(let i = 0; i < N; i++){
+    const a2 = ori[i] * 2;
+    fldPix[i*4]   = (Math.cos(a2)*0.5+0.5) * 255;
+    fldPix[i*4+1] = (Math.sin(a2)*0.5+0.5) * 255;
+    fldPix[i*4+2] = ani[i] * 255;
+    fldPix[i*4+3] = 255;
+  }
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, fldTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, AW, AH, 0, gl.RGBA, gl.UNSIGNED_BYTE, fldPix);
+}
+
+function box(buf, r){
+  const tmp = new Float32Array(N);
+  for(let y = 0; y < AH; y++) for(let x = 0; x < AW; x++){
+    let s = 0, n = 0;
+    for(let k = -r; k <= r; k++){ const xx = x+k; if(xx<0||xx>=AW) continue; s += buf[y*AW+xx]; n++; }
+    tmp[y*AW+x] = s/n;
+  }
+  for(let y = 0; y < AH; y++) for(let x = 0; x < AW; x++){
+    let s = 0, n = 0;
+    for(let k = -r; k <= r; k++){ const yy = y+k; if(yy<0||yy>=AH) continue; s += tmp[yy*AW+x]; n++; }
+    buf[y*AW+x] = s/n;
+  }
+}
+
+function buildDensity(){
+  let mx = 1e-6;
+  for(let i = 0; i < N; i++){
+    const v = P.wGrad*mag[i] + P.wAni*ani[i] + P.wDark*(1-lum[i]) + P.wMot*motion[i];
+    dens[i] = v; if(v > mx) mx = v;
+  }
+  for(let i = 0; i < N; i++) dens[i] = Math.min(1, dens[i]/mx + P.floor);
+}
+function noSource(){
+  hasAnalysis = false;
+  for(let i = 0; i < N; i++){ dens[i] = 1; ani[i] = 0; mag[i] = 0; motion[i] = 0; }
+}
+
+/* sample the analysis grid in canvas coordinates */
+const ax = x => Math.min(AW-1, Math.max(0, Math.floor(x / W * AW)));
+const ay = y => Math.min(AH-1, Math.max(0, Math.floor(y / H * AH)));
+const densAt = (x,y) => dens[ay(y)*AW + ax(x)];
+const oriAt  = (x,y) => ori[ay(y)*AW + ax(x)];
+const aniAt  = (x,y) => ani[ay(y)*AW + ax(x)];
+const motAt  = (x,y) => motion[ay(y)*AW + ax(x)];
+
+/* ---------- gradient noise + curl, for wander and for the sourceless case ---------- */
+function h2(x, y){
+  let n = Math.sin(x*127.1 + y*311.7) * 43758.5453;
+  return n - Math.floor(n);
+}
+function vnoise(x, y){
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x-xi, yf = y-yi;
+  const u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf);
+  const a = h2(xi,yi), b = h2(xi+1,yi), c = h2(xi,yi+1), d = h2(xi+1,yi+1);
+  return (a*(1-u)+b*u)*(1-v) + (c*(1-u)+d*u)*v;
+}
+function curlAngle(x, y, s){
+  const e = 1.0;
+  const dx = vnoise((x+e)*s, y*s) - vnoise((x-e)*s, y*s);
+  const dy = vnoise(x*s, (y+e)*s) - vnoise(x*s, (y-e)*s);
+  return Math.atan2(-dx, dy);          // perpendicular to the gradient = divergence-free
+}
+
+
+/* ---------------- fluid ----------------
+   Stam's stable-fluids scheme on a coarse grid: inject forces, confine vorticity,
+   diffuse, make the field divergence-free, then advect it through itself.
+   The image drives it — optical flow pushes, and edge tangents stir. */
+const FW = 160, FH = 90, FN = FW * FH;
+const fu = new Float32Array(FN), fv = new Float32Array(FN);
+const fu0 = new Float32Array(FN), fv0 = new Float32Array(FN);
+const fp = new Float32Array(FN), fdiv = new Float32Array(FN), fcurl = new Float32Array(FN);
+const dr = new Float32Array(FN), dg = new Float32Array(FN), db = new Float32Array(FN);
+const dr0 = new Float32Array(FN), dg0 = new Float32Array(FN), db0 = new Float32Array(FN);
+const dyePix = new Uint8Array(FN*4);
+const FIX = (i,j) => i + j*FW;
+
+function fluidClear(){ fu.fill(0); fv.fill(0); }
+function dyeClear(){ dr.fill(0); dg.fill(0); db.fill(0); }
+
+/* Colour carried by the velocity field. Feed it from the image, let the fluid
+   drag it, and flat regions pull out into long smooth streaks — the gradients
+   come from advection, not from a blur. */
+function dyeStep(){
+  if(P.dyeMix <= 0) return;
+  if(P.dyeFeed > 0 && hasAnalysis){
+    for(let j = 0; j < FH; j++) for(let i = 0; i < FW; i++){
+      const k = FIX(i,j);
+      const aI = ((j/FH*AH)|0)*AW + ((i/FW*AW)|0);
+      // weight the feed toward movement so still areas keep the smear they have
+      const w = P.dyeFeed * (P.dyeMot > 0 ? Math.min(1, motion[aI]*P.dyeMot) : 1) * 0.25;
+      if(w <= 0) continue;
+      dr[k] += (rgb[aI*3]   - dr[k]) * w;
+      dg[k] += (rgb[aI*3+1] - dg[k]) * w;
+      db[k] += (rgb[aI*3+2] - db[k]) * w;
+    }
+  }
+  dr0.set(dr); dg0.set(dg); db0.set(db);
+  for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+    const k = FIX(i,j);
+    const x = i - fu[k]*P.dyeAdv, y = j - fv[k]*P.dyeAdv;
+    dr[k] = sampleF(dr0, x, y);
+    dg[k] = sampleF(dg0, x, y);
+    db[k] = sampleF(db0, x, y);
+  }
+  const d = 1 - P.dyeDis;
+  for(let k = 0; k < FN; k++){ dr[k] *= d; dg[k] *= d; db[k] *= d; }
+}
+function uploadDye(){
+  if(!gl || !dyeTex) return;
+  for(let k = 0; k < FN; k++){
+    dyePix[k*4]   = Math.max(0, Math.min(255, dr[k]*255));
+    dyePix[k*4+1] = Math.max(0, Math.min(255, dg[k]*255));
+    dyePix[k*4+2] = Math.max(0, Math.min(255, db[k]*255));
+    dyePix[k*4+3] = 255;
+  }
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, dyeTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, FW, FH, 0, gl.RGBA, gl.UNSIGNED_BYTE, dyePix);
+}
+
+function project(iter){
+  for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+    const k = FIX(i,j);
+    fdiv[k] = -0.5 * (fu[k+1] - fu[k-1] + fv[k+FW] - fv[k-FW]);
+    fp[k] = 0;
+  }
+  for(let n = 0; n < iter; n++)
+    for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+      const k = FIX(i,j);
+      fp[k] = (fdiv[k] + fp[k-1] + fp[k+1] + fp[k-FW] + fp[k+FW]) * 0.25;
+    }
+  for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+    const k = FIX(i,j);
+    fu[k] -= 0.5 * (fp[k+1] - fp[k-1]);
+    fv[k] -= 0.5 * (fp[k+FW] - fp[k-FW]);
+  }
+}
+function sampleF(buf, x, y){
+  x = Math.max(0.5, Math.min(FW-1.5, x)); y = Math.max(0.5, Math.min(FH-1.5, y));
+  const i = x|0, j = y|0, sx = x-i, sy = y-j, k = FIX(i,j);
+  return (buf[k]*(1-sx) + buf[k+1]*sx)*(1-sy) + (buf[k+FW]*(1-sx) + buf[k+FW+1]*sx)*sy;
+}
+function advect(){
+  fu0.set(fu); fv0.set(fv);
+  for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+    const k = FIX(i,j);
+    const x = i - fu0[k], y = j - fv0[k];      // semi-Lagrangian backtrace
+    fu[k] = sampleF(fu0, x, y);
+    fv[k] = sampleF(fv0, x, y);
+  }
+}
+function vorticity(eps){
+  if(eps <= 0) return;
+  for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+    const k = FIX(i,j);
+    fcurl[k] = (fv[k+1] - fv[k-1] - fu[k+FW] + fu[k-FW]) * 0.5;
+  }
+  for(let j = 2; j < FH-2; j++) for(let i = 2; i < FW-2; i++){
+    const k = FIX(i,j);
+    const gx = Math.abs(fcurl[k+1]) - Math.abs(fcurl[k-1]);
+    const gy = Math.abs(fcurl[k+FW]) - Math.abs(fcurl[k-FW]);
+    const m = Math.hypot(gx, gy) + 1e-5;
+    // push velocity back toward the vortex centre, restoring swirl the solver loses
+    fu[k] += eps * (gy/m) * fcurl[k];
+    fv[k] -= eps * (gx/m) * fcurl[k];
+  }
+}
+function diffuse(visc){
+  if(visc <= 0.001) return;
+  const a = visc;
+  fu0.set(fu); fv0.set(fv);
+  for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+    const k = FIX(i,j);
+    fu[k] = fu0[k]*(1-a) + (fu0[k-1]+fu0[k+1]+fu0[k-FW]+fu0[k+FW])*0.25*a;
+    fv[k] = fv0[k]*(1-a) + (fv0[k-1]+fv0[k+1]+fv0[k-FW]+fv0[k+FW])*0.25*a;
+  }
+}
+function fluidStep(){
+  if(!P.fluidOn) return;
+  // inject from the image
+  if(hasAnalysis && (P.fInjFlow > 0 || P.fInjStruct > 0)){
+    for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+      const k = FIX(i,j);
+      const aI = ((j/FH*AH)|0)*AW + ((i/FW*AW)|0);
+      if(P.fInjFlow > 0){
+        fu[k] += flowX[aI] * P.fInjFlow * 0.4;
+        fv[k] += flowY[aI] * P.fInjFlow * 0.4;
+      }
+      if(P.fInjStruct > 0){
+        /* Orientation is an axis, not a direction — cos(ori) alone picks one
+           consistent sign and translates the whole field. Modulating by a smooth
+           signed noise makes neighbouring regions push opposite ways, so edges
+           stir the fluid into counter-rotating cells instead of dragging it. */
+        const sgn = vnoise(i*0.055, j*0.055) * 2 - 1;
+        const w = ani[aI] * P.fInjStruct * 0.06 * sgn;
+        fu[k] += Math.cos(ori[aI]) * w;
+        fv[k] += Math.sin(ori[aI]) * w;
+      }
+    }
+  }
+  if(P.fInjNoise > 0){
+    for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+      const a = curlAngle(i*8, j*8, P.nScale*2);
+      const k = FIX(i,j);
+      fu[k] += Math.cos(a) * P.fInjNoise * 0.05;
+      fv[k] += Math.sin(a) * P.fInjNoise * 0.05;
+    }
+  }
+  vorticity(P.fVort);
+  diffuse(P.fVisc);
+  walls();
+  project(P.fIter);
+  advect();
+  walls();
+  project(P.fIter);
+  const d = 1 - P.fDissip;
+  for(let k = 0; k < FN; k++){ fu[k] *= d; fv[k] *= d; }
+  dyeStep();
+}
+// free-slip walls: no flow through the boundary, tangential flow preserved
+function walls(){
+  for(let i = 0; i < FW; i++){
+    fu[FIX(i,0)] = fu[FIX(i,1)]; fv[FIX(i,0)] = 0;
+    fu[FIX(i,FH-1)] = fu[FIX(i,FH-2)]; fv[FIX(i,FH-1)] = 0;
+  }
+  for(let j = 0; j < FH; j++){
+    fv[FIX(0,j)] = fv[FIX(1,j)]; fu[FIX(0,j)] = 0;
+    fv[FIX(FW-1,j)] = fv[FIX(FW-2,j)]; fu[FIX(FW-1,j)] = 0;
+  }
+}
+const fluidAt = (x,y,buf) => sampleF(buf, x/W*FW, y/H*FH);
+
+
+/* ---------- seeded randomness ----------
+   Every stochastic choice runs through this, so a seed reproduces a plate
+   exactly — which is what makes a preset a preset rather than a suggestion. */
+let _rngState = 12345;
+function seedRNG(n){ _rngState = (n >>> 0) || 1; }
+function rnd(){
+  _rngState |= 0; _rngState = (_rngState + 0x6D2B79F5) | 0;
+  let t = Math.imul(_rngState ^ (_rngState >>> 15), 1 | _rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/* ---------- cycle ----------
+   A finite run of frames layered on top of one another, with parameters
+   sweeping from a start value to an end value. The plate converges and stops
+   rather than running forever. */
+const EASES = ['Linear','In quad','Out quad','In-out quad','In cubic','Out cubic',
+               'In-out cubic','In sine','Out sine','In-out sine','In expo','Out expo'];
+function ease(k, t){
+  t = Math.min(1, Math.max(0, t));
+  switch(k){
+    case 1: return t*t;
+    case 2: return 1-(1-t)*(1-t);
+    case 3: return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+    case 4: return t*t*t;
+    case 5: return 1-Math.pow(1-t,3);
+    case 6: return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+    case 7: return 1-Math.cos(t*Math.PI/2);
+    case 8: return Math.sin(t*Math.PI/2);
+    case 9: return -(Math.cos(Math.PI*t)-1)/2;
+    case 10: return t===0?0:Math.pow(2,10*t-10);
+    case 11: return t===1?1:1-Math.pow(2,-10*t);
+    default: return t;
+  }
+}
+let frameIdx = 0, cycleDone = false;
+function cycleT(){ return P.cycleOn ? Math.min(1, frameIdx / Math.max(1, P.frames)) : 0; }
+function ramp(a, b, eKind){
+  if(!P.cycleOn) return b;
+  return a + (b - a) * ease(eKind, cycleT());
+}
+function cycleStatus(){
+  const e = el('vCycle'); if(!e) return;
+  e.textContent = !P.cycleOn ? 'Continuous'
+    : cycleDone ? 'Idle — plate complete'
+    : 'frame ' + frameIdx + ' / ' + P.frames;
+}
+function restartCycle(){
+  seedRNG(P.seed);
+  frameIdx = 0; cycleDone = false;
+  clearArt();
+  running = true;
+  el('bRun').textContent = 'Pause';
+  cycleStatus();
+}
+
+/* ---------- agents ---------- */
+let W = 1200, H = 800;
+let agents = [], paths = [], running = false, sliceZ = 0;
+const GRID = 24; let grid = new Map();
+const gkey = (x,y) => ((y/GRID)|0) * 4096 + ((x/GRID)|0);
+
+function rebuildGrid(){
+  grid.clear();
+  for(const a of agents){
+    if(a.resting) continue;
+    const k = gkey(a.x, a.y);
+    let b = grid.get(k); if(!b){ b = []; grid.set(k, b); }
+    b.push(a);
+  }
+}
+function neighbours(a, r){
+  const out = [];
+  const cx = (a.x/GRID)|0, cy = (a.y/GRID)|0, s = Math.ceil(r/GRID);
+  for(let j = -s; j <= s; j++) for(let i = -s; i <= s; i++){
+    const b = grid.get((cy+j)*4096 + (cx+i)); if(!b) continue;
+    for(const o of b){ if(o !== a) out.push(o); }
+  }
+  return out;
+}
+
+/* Variable-radius blue noise: spacing scales with density, so tone is carried
+   by how close the marks sit rather than by line weight. */
+function poissonPoint(tries){
+  for(let t = 0; t < (tries || 24); t++){
+    const x = rnd()*W, y = rnd()*H;
+    const d = densAt(x, y);
+    if(rnd() > d) continue;
+    const r = P.rMin + (1-d) * (P.rMax - P.rMin);
+    let ok = true;
+    for(const o of neighbours({x,y}, r)){
+      const dx = o.x-x, dy = o.y-y;
+      if(dx*dx + dy*dy < r*r){ ok = false; break; }
+    }
+    if(ok) return {x, y};
+  }
+  return {x: rnd()*W, y: rnd()*H};
+}
+/* Contour seeds: local maxima of gradient magnitude — one agent per edge,
+   rather than forty agents redundantly redrawing the same line. */
+function contourPoint(){
+  let best = null, bv = -1;
+  for(let t = 0; t < 40; t++){
+    const i = (rnd()*N)|0;
+    let v = mag[i] * (0.5 + ani[i]);
+    if(v > bv){ bv = v; best = i; }
+  }
+  const bx = (best % AW) / AW * W, by = ((best/AW)|0) / AH * H;
+  return {x: bx + (rnd()-0.5)*4, y: by + (rnd()-0.5)*4};
+}
+
+function makeAgent(force){
+  const isContour = hasAnalysis && rnd() < P.contour;
+  const p = (force === 'c' || isContour) ? contourPoint() : poissonPoint();
+  const rs = rnd();
+  return {
+    x:p.x, y:p.y, vx:0, vy:0, age:0, resting:false,
+    rseed: rs,
+    sizeMul: P.sizeMin + rs * Math.max(0, P.sizeMax - P.sizeMin),
+    // in slice mode a stroke keeps the depth of the moment it was born, so the
+    // drawing stacks time into layers instead of everything sharing one plane
+    z: P.zMode === 2 ? sliceZ : 0,
+    wait: rnd() * P.spread * 60,
+    kind: isContour ? 1 : 0,
+    life: P.life * (isContour ? 1 : 0.45) * (0.6 + rnd()*0.8),
+    path: [[p.x, p.y, 0, 0, P.zMode === 2 ? sliceZ : 0]]
+  };
+}
+function seedAll(){
+  agents = [];
+  rebuildGrid();
+  for(let i = 0; i < P.count; i++){ agents.push(makeAgent()); rebuildGrid(); }
+}
+function clearArt(){
+  paths = []; sliceZ = 0; frameIdx = 0; cycleDone = false;
+  ictx.clearRect(0, 0, inkc.width, inkc.height);
+  seedAll();
+  el('vPaths').textContent = '0 strokes';
+}
+
+function fieldAngle(a){
+  let ang, w = P.wander;
+  if(hasAnalysis){
+    const an = aniAt(a.x, a.y);
+    ang = oriAt(a.x, a.y);
+    // where structure is weak the field has no opinion, so lean on noise
+    w = P.wander + (1 - an) * (1 - P.wander) * 0.85;
+  } else {
+    ang = curlAngle(a.x, a.y, P.nScale);
+    w = 0;
+  }
+  if(w > 0){
+    const c = curlAngle(a.x, a.y, P.nScale);
+    // blend directions as vectors so they interpolate the short way round
+    const sx = Math.cos(ang)*(1-w) + Math.cos(c)*w;
+    const sy = Math.sin(ang)*(1-w) + Math.sin(c)*w;
+    ang = Math.atan2(sy, sx);
+  }
+  if(P.mFlow > 0 && hasAnalysis){
+    const i = ay(a.y)*AW + ax(a.x);
+    const fm = Math.hypot(flowX[i], flowY[i]);
+    if(fm > 0.02){
+      const k = Math.min(1, fm * 0.6) * P.mFlow;
+      const sx = Math.cos(ang)*(1-k) + (flowX[i]/fm)*k;
+      const sy = Math.sin(ang)*(1-k) + (flowY[i]/fm)*k;
+      ang = Math.atan2(sy, sx);
+    }
+  }
+  return ang;
+}
+
+function step(){
+  rebuildGrid();
+  const spdNow  = ramp(P.speedA, P.speed, P.easeSpeed);
+  const scatNow = ramp(P.scatterA, P.scatter, P.easeScatter);
+  const turnover = P.turn / 60;
+  for(let idx = 0; idx < agents.length; idx++){
+    const a = agents[idx];
+    if(a.wait > 0){ a.wait--; continue; }
+    if(a.resting){
+      if(hasAnalysis && P.mWake > 0 && motAt(a.x, a.y) * P.mWake > rnd()){
+        agents[idx] = makeAgent();                 // movement re-launches a settled agent
+      } else if(rnd() < turnover) agents[idx] = makeAgent();
+      continue;
+    }
+    const mv = hasAnalysis ? motAt(a.x, a.y) : 0;
+    const ang = fieldAngle(a);
+    const fF = P.force * (1 + mv * P.mForce);      // movement energises the field
+    let axx = Math.cos(ang) * fF, ayy = Math.sin(ang) * fF;
+
+    // optical flow as a real force: magnitude matters, not just direction
+    if(P.mPush > 0 && hasAnalysis){
+      const i = ay(a.y)*AW + ax(a.x);
+      axx += flowX[i] * P.mPush;
+      ayy += flowY[i] * P.mPush;
+    }
+    // the fluid carries agents along with it
+    if(P.fluidOn && P.fCouple > 0){
+      axx += fluidAt(a.x, a.y, fu) * P.fCouple;
+      ayy += fluidAt(a.x, a.y, fv) * P.fCouple;
+    }
+
+    // the field is an orientation, not a direction — keep going the way we were
+    if(a.vx*axx + a.vy*ayy < 0){ axx = -axx; ayy = -ayy; }
+
+    if(P.sep > 0 || P.ali > 0 || P.coh > 0){
+      const nb = neighbours(a, P.nbr);
+      let sx=0, sy=0, alx=0, aly=0, cx=0, cy=0, n=0;
+      for(const o of nb){
+        const dx = a.x-o.x, dy = a.y-o.y;
+        const d2 = dx*dx + dy*dy;
+        if(d2 > P.nbr*P.nbr || d2 < 1e-6) continue;
+        const d = Math.sqrt(d2);
+        sx += dx/d2; sy += dy/d2;
+        alx += o.vx; aly += o.vy;
+        cx += o.x; cy += o.y; n++;
+      }
+      if(n){
+        axx += sx * P.sep * 6; ayy += sy * P.sep * 6;
+        axx += (alx/n) * P.ali; ayy += (aly/n) * P.ali;
+        axx += (cx/n - a.x) * P.coh * 0.02; ayy += (cy/n - a.y) * P.coh * 0.02;
+      }
+    }
+
+    a.vx = a.vx * (1 - P.drag) + axx;
+    a.vy = a.vy * (1 - P.drag) + ayy;
+    if(scatNow > 0){                       // chaos layered on the smooth field
+      axx += (rnd()*2-1) * scatNow;
+      ayy += (rnd()*2-1) * scatNow;
+    }
+    const vmax = spdNow * (1 + mv * P.mSpeed);
+    const sp = Math.hypot(a.vx, a.vy);
+    if(sp > vmax){ a.vx = a.vx/sp*vmax; a.vy = a.vy/sp*vmax; }
+
+    a.x += a.vx; a.y += a.vy; a.age++;
+
+    if(a.x < 0 || a.y < 0 || a.x >= W || a.y >= H){ retire(a, idx); continue; }
+    if(P.zMode === 1){
+      const li = hasAnalysis ? lum[ay(a.y)*AW + ax(a.x)] : 0.5;
+      a.z += P.zWind * (1 + (li - 0.5) * 2 * P.zLum) * 0.02;
+      if(a.z < 0) a.z = 0;
+    }
+    a.path.push([a.x, a.y, sp, Math.atan2(a.vy, a.vx), a.z]);
+    if(P.view === 0) drawLive(a);
+    if(sp < P.rest || a.age > a.life) retire(a, idx);
+  }
+}
+const MAX_PATHS = 24000;     // keeps memory and SVG size bounded on long live runs
+function retire(a, idx){
+  if(a.path.length > 2){
+    paths.push({pts:a.path, kind:a.kind, rseed:a.rseed, sizeMul:a.sizeMul});
+    if(paths.length > MAX_PATHS){
+      // the canvas already holds these strokes; only the vector record is trimmed
+      paths.splice(0, paths.length - MAX_PATHS);
+    }
+  }
+  if(P.turn > 0 || paths.length < P.count) agents[idx] = makeAgent();
+  else a.resting = true;
+}
+
+/* ---------- ink rendering ---------- */
+
+/* ---------- shape stamps ----------
+   Instead of a connected polyline, an agent can drop a shape at intervals.
+   The mark becomes the unit rather than the trajectory. */
+const SHAPES = ['Line (continuous)','Circle','Square','Rectangle','Triangle',
+                'Blob','Line + dots','Cross','Arc'];
+const ROTMODES = ['None','Fixed angle','45° steps','90° steps','Random','Along heading'];
+function stampAngle(a, k){
+  switch(P.rotMode){
+    case 1: return P.rotAngle * Math.PI/180;
+    case 2: return Math.floor(a.rseed*8) * Math.PI/4;
+    case 3: return Math.floor(a.rseed*4) * Math.PI/2;
+    case 4: return a.rseed * Math.PI * 2;
+    case 5: return k[3] || 0;                 // the agent's own heading
+    default: return 0;
+  }
+}
+function drawStamp(ctx, a, k, sc, size, col, alpha){
+  const x = k[0]*sc, y = k[1]*sc, r = Math.max(0.2, size*sc);
+  const ang = stampAngle(a, k);
+  ctx.save();
+  ctx.translate(x, y);
+  if(ang) ctx.rotate(ang);
+  ctx.globalAlpha = Math.min(1, alpha);
+  const fill = P.fillMode !== 2, stroke = P.fillMode !== 1;
+  ctx.fillStyle = col; ctx.strokeStyle = col;
+  ctx.lineWidth = Math.max(0.2, ramp(P.widthA, P.width, P.easeWidth) * sc * 0.5);
+  const t = P.shape;
+  ctx.beginPath();
+  if(t === 1) ctx.arc(0, 0, r, 0, 6.2832);
+  else if(t === 2) ctx.rect(-r, -r, r*2, r*2);
+  else if(t === 3) ctx.rect(-r*1.8, -r*0.55, r*3.6, r*1.1);
+  else if(t === 4){ ctx.moveTo(0,-r); ctx.lineTo(r*0.9, r*0.7); ctx.lineTo(-r*0.9, r*0.7); ctx.closePath(); }
+  else if(t === 5){                                   // blob: a wobbled circle
+    for(let i = 0; i <= 8; i++){
+      const th = i/8 * 6.2832;
+      const rr = r * (0.62 + 0.5*Math.abs(Math.sin(th*1.5 + a.rseed*9.0)));
+      const px = Math.cos(th)*rr, py = Math.sin(th)*rr;
+      i ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+    }
+    ctx.closePath();
+  }
+  else if(t === 6){                                   // line with satellite dots
+    ctx.moveTo(-r*2,0); ctx.lineTo(r*2,0); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-r*1.4 + a.rseed*r, r*0.7, r*0.35, 0, 6.2832);
+    ctx.arc(r*1.2 - a.rseed*r, -r*0.6, r*0.28, 0, 6.2832);
+  }
+  else if(t === 7){ ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.moveTo(0,-r); ctx.lineTo(0,r); }
+  else if(t === 8) ctx.arc(0, 0, r, 0.4, 0.4 + 3.4);
+  if(t === 7 || t === 8) ctx.stroke();
+  else { if(fill) ctx.fill(); if(stroke && t !== 6) ctx.stroke(); else if(stroke) ctx.stroke(); }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+
+/* Agents move in a flat plane; the plane recedes. Each point carries its own z,
+   so a single stroke can start at full size and shrink toward the vanishing
+   point as it is drawn — ink blown away from the camera. */
+function project(pt, sc){
+  const x = pt[0], y = pt[1], z = pt[4] || 0;
+  if(!P.zMode || z === 0) return [x*sc, y*sc, 1];
+  const s = 1 / (1 + z * P.zPersp);
+  const vx = P.zVX * W, vy = P.zVY * H;
+  return [(vx + (x - vx) * s) * sc, (vy + (y - vy) * s) * sc, s];
+}
+/* Luminance as opacity: the source image decides how solid each mark is, so
+   stacked slices read as translucent shells rather than opaque overdraw. */
+function lumAlphaAt(pt){
+  if(!P.lumA || !hasAnalysis) return 1;
+  const l = lum[ay(pt[1])*AW + ax(pt[0])];
+  const v = P.lumInv ? 1 - l : l;
+  return 1 * (1 - P.lumA) + v * P.lumA;
+}
+function fogAt(pt){
+  const z = pt[4] || 0;
+  return (!P.zMode || z === 0) ? 1 : 1 / (1 + z * P.zFog);
+}
+/* Symmetry transforms, applied to already-projected points. */
+function symOps(){
+  const cx = W/2, cy = H/2, ops = [p => p];
+  if(P.sym === 1) ops.push(p => [2*cx - p[0], p[1], p[2]]);
+  else if(P.sym === 2) ops.push(p => [p[0], 2*cy - p[1], p[2]]);
+  else if(P.sym === 3){
+    ops.push(p => [2*cx - p[0], p[1], p[2]],
+             p => [p[0], 2*cy - p[1], p[2]],
+             p => [2*cx - p[0], 2*cy - p[1], p[2]]);
+  } else if(P.sym >= 4){
+    const n = P.sym === 4 ? 6 : 8;
+    for(let i = 1; i < n; i++){
+      const a = i * Math.PI * 2 / n, ca = Math.cos(a), sa = Math.sin(a);
+      ops.push(p => {
+        const dx = p[0]-cx, dy = p[1]-cy;
+        return [cx + dx*ca - dy*sa, cy + dx*sa + dy*ca, p[2]];
+      });
+    }
+  }
+  return ops;
+}
+
+
+/* Stroke shaping. Three independent contributions multiply together:
+   a manual profile along the stroke, a velocity term, and a nib term that
+   varies with heading the way a chisel-tip pen does. */
+function shapeAt(p, k, isW, totalOverride){
+  const n = totalOverride || p.pts.length;
+  const t = n > 1 ? Math.min(1, k/(n-1)) : 0;
+  let f = 1;
+  const tin = isW ? P.tIn : P.aIn, tout = isW ? P.tOut : P.aOut;
+  if(tin  > 0.001) f *= Math.min(1, t / tin);
+  if(tout > 0.001) f *= Math.min(1, (1-t) / tout);
+  f = Math.pow(f, isW ? P.tCurve : P.aCurve);
+
+  const sp = p.pts[k][2] || 0;
+  const vn = Math.min(1, sp / Math.max(0.001, P.speed));
+  const vAmt = isW ? P.wVel : P.aVel;
+  if(vAmt !== 0) f *= (1 + vAmt * (vn - 0.5) * 2);
+
+  const nibAmt = isW ? P.wNib : P.aNib;
+  if(nibAmt !== 0){
+    const d = Math.abs(Math.sin(p.pts[k][3] - P.nibAng * Math.PI/180));
+    f *= (1 - nibAmt) + nibAmt * d;
+  }
+  return Math.max(isW ? P.wMin : P.aMin, f);
+}
+
+function inkColour(a){
+  if(P.inkMode === 0) return P.ink;
+  const off = P.colOff;
+  const sx = a.pts[0][0] + (off ? ((a.rseed||0)*2-1) * off * W : 0);
+  const sy = a.pts[0][1] + (off ? (((a.rseed||0)*7919%1)*2-1) * off * H : 0);
+  const i = ay(sy)*AW + ax(sx);
+  const r = Math.round(rgb[i*3]*255*0.45), g = Math.round(rgb[i*3+1]*255*0.45),
+        b = Math.round(rgb[i*3+2]*255*0.45);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+function shapingOn(){
+  return P.tIn || P.tOut || P.wVel || P.wNib ||
+         P.aIn || P.aOut || P.aVel || P.aNib;
+}
+function drawInk(ctx, sc, from){
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const shaped = shapingOn();
+  const ops = symOps();
+  if(P.shape > 0){
+    for(let i = from || 0; i < paths.length; i++){
+      const p = paths[i];
+      const col = inkColour(p), total = p.pts.length;
+      const a = {rseed: p.rseed || 0, sizeMul: p.sizeMul || 1};
+      for(let k = Math.max(1, P.stampEvery); k < total; k += Math.max(1, P.stampEvery)){
+        const sz = ramp(P.sizeA, P.sizeB, P.easeSize) * a.sizeMul * shapeAt(p,k,true);
+        const al = ramp(P.alphaA, P.alpha, P.easeAlpha) * shapeAt(p,k,false) *
+                   fogAt(p.pts[k]) * lumAlphaAt(p.pts[k]);
+        if(al > 0.004 && sz > 0.05){
+          const q = project(p.pts[k], sc);
+          for(const op of ops){ const t = op(q);
+            drawStamp(ctx, a, [t[0]/sc, t[1]/sc, 0, p.pts[k][3]], sc, sz*(t[2]||1), col, al); }
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
+  for(let i = from || 0; i < paths.length; i++){
+    const p = paths[i];
+    const col = inkColour(p), base = ramp(P.widthA, P.width, P.easeWidth) * sc * (p.kind ? 1 : 0.75);
+    if(!shaped && !P.zMode && !P.lumA){
+      ctx.globalAlpha = ramp(P.alphaA, P.alpha, P.easeAlpha);
+      ctx.strokeStyle = col; ctx.lineWidth = base;
+      for(const op of ops){
+        ctx.beginPath();
+        let q = op(project(p.pts[0], sc));
+        ctx.moveTo(q[0], q[1]);
+        for(let k = 1; k < p.pts.length; k++){ q = op(project(p.pts[k], sc)); ctx.lineTo(q[0], q[1]); }
+        ctx.stroke();
+      }
+      continue;
+    }
+    // one segment at a time — width and opacity vary along the stroke
+    ctx.strokeStyle = col;
+    for(let k = 1; k < p.pts.length; k++){
+      const A = project(p.pts[k-1], sc), B = project(p.pts[k], sc);
+      const fg = (fogAt(p.pts[k-1]) + fogAt(p.pts[k])) * 0.5 *
+                 (lumAlphaAt(p.pts[k-1]) + lumAlphaAt(p.pts[k])) * 0.5;
+      const w = base * (shapeAt(p,k,true) + shapeAt(p,k-1,true)) * 0.5 * B[2];
+      const al = ramp(P.alphaA, P.alpha, P.easeAlpha) * (shapeAt(p,k,false) + shapeAt(p,k-1,false)) * 0.5 * fg;
+      if(al < 0.004 || w < 0.02) continue;
+      ctx.globalAlpha = Math.min(1, al);
+      ctx.lineWidth = w;
+      for(const op of ops){
+        const a1 = op(A), b1 = op(B);
+        ctx.beginPath(); ctx.moveTo(a1[0], a1[1]); ctx.lineTo(b1[0], b1[1]); ctx.stroke();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+/* A stroke is laid down segment by segment as the agent moves, rather than
+   appearing whole when it retires — that is the difference between ink flowing
+   and shapes popping into existence. */
+function drawLive(a){
+  const n = a.path.length;
+  if(P.shape > 0){
+    if(n < 1 || (n % Math.max(1, P.stampEvery)) !== 0) return;
+    const k = a.path[n-1];
+    const p = {pts:a.path, kind:a.kind};
+    const total = Math.max(4, Math.round(a.life));
+    const sz = ramp(P.sizeA, P.sizeB, P.easeSize) * a.sizeMul *
+               shapeAt(p, n-1, true, total);
+    const al = ramp(P.alphaA, P.alpha, P.easeAlpha) *
+               shapeAt(p, n-1, false, total) * fogAt(k) * lumAlphaAt(k);
+    if(al > 0.004 && sz > 0.05) drawStamp(ictx, a, k, 1, sz, inkColour(p), al);
+    return;
+  }
+  if(n < 2) return;
+  const p = {pts:a.path, kind:a.kind};
+  const total = Math.max(4, Math.round(a.life));
+  const base = ramp(P.widthA, P.width, P.easeWidth) * (a.kind ? 1 : 0.75);
+  const k = n - 1;
+  const w  = base * (shapeAt(p,k,true,total) + shapeAt(p,k-1,true,total)) * 0.5;
+  const al = ramp(P.alphaA, P.alpha, P.easeAlpha) * (shapeAt(p,k,false,total) + shapeAt(p,k-1,false,total)) * 0.5;
+  const A = project(a.path[k-1], 1), B = project(a.path[k], 1);
+  const fg = (fogAt(a.path[k-1]) + fogAt(a.path[k])) * 0.5 *
+             (lumAlphaAt(a.path[k-1]) + lumAlphaAt(a.path[k])) * 0.5;
+  const ww = w * B[2], aa = al * fg;
+  if(aa < 0.004 || ww < 0.02) return;
+  ictx.globalAlpha = Math.min(1, aa);
+  ictx.strokeStyle = inkColour(p);
+  ictx.lineWidth = ww;
+  ictx.lineCap = 'round'; ictx.lineJoin = 'round';
+  for(const op of symOps()){
+    const a1 = op(A), b1 = op(B);
+    ictx.beginPath(); ictx.moveTo(a1[0], a1[1]); ictx.lineTo(b1[0], b1[1]); ictx.stroke();
+  }
+  ictx.globalAlpha = 1;
+}
+
+let drawnUpTo = 0;
+function paintIncremental(){
+  drawInk(ictx, 1, drawnUpTo);
+  drawnUpTo = paths.length;
+  el('vPaths').textContent = paths.length + ' stroke' + (paths.length === 1 ? '' : 's') +
+    (paths.length >= MAX_PATHS ? ' (capped)' : '');
+}
+let repaintQueued = false;
+function repaintAll(){
+  if(repaintQueued) return;
+  repaintQueued = true;
+  requestAnimationFrame(() => {
+    repaintQueued = false;
+    ictx.clearRect(0, 0, inkc.width, inkc.height);
+    drawnUpTo = 0; paintIncremental();
+  });
+}
+
+/* ---------- colour pass (WebGL2) ---------- */
+const gl = glc.getContext('webgl2', {preserveDrawingBuffer:true});
+let prog = null, tex = null, fldTex = null, inkTex = null, dyeTex = null, U = {};
+const fldPix = new Uint8Array(AW*AH*4);
+const VS = `#version 300 es
+in vec2 p; out vec2 uv;
+void main(){ uv = p*0.5+0.5; uv.y = 1.0-uv.y; gl_Position = vec4(p,0,1); }`;
+const FS = `#version 300 es
+precision highp float;
+in vec2 uv; out vec4 o;
+uniform sampler2D T;      // source image
+uniform sampler2D FLD;    // structure field: RG = cos/sin of 2*angle, B = anisotropy
+uniform sampler2D INK;    // the ink layer, so colour can bleed along the strokes
+uniform sampler2D DYE;    // colour advected through the fluid
+uniform vec2 res;
+uniform float kr, gi, bloom, sat, post, wash, hasSrc, steer, bleed, bleedR, dyeMix;
+uniform vec3 paper;
+
+/* Anisotropic Kuwahara. The kernel is stretched ALONG the local edge tangent and
+   squeezed across it, so the colour smear follows the same directions the ink
+   strokes follow — that shared field is what ties the two layers together. */
+/* Same anisotropic sampling, run over the ink layer: the strokes get dragged
+   along the edge directions and darken the colour beneath them. */
+vec4 inkSmear(vec2 c, float r){
+  vec3 f = texture(FLD, c).rgb;
+  float ang = 0.5 * atan(f.g*2.0-1.0, f.r*2.0-1.0);
+  float an  = f.b * steer;
+  vec2 tang = vec2(cos(ang), sin(ang));
+  vec2 norm = vec2(-tang.y, tang.x);
+  vec4 acc = vec4(0.0); float n = 0.0;
+  for(int i = -6; i <= 6; i++){
+    float t = float(i)/6.0;
+    vec2 off = (tang * t * r * (1.0 + an*2.0) + norm * t * t * r * 0.15) / res;
+    float w = 1.0 - abs(t)*0.85;
+    acc += texture(INK, c + off) * w; n += w;
+  }
+  return acc / n;
+}
+
+vec3 kuwahara(vec2 c, float r){
+  if(r < 1.0) return texture(T, c).rgb;
+  vec3 f = texture(FLD, c).rgb;
+  float ang = 0.5 * atan(f.g*2.0-1.0, f.r*2.0-1.0);
+  float an  = f.b * steer;
+  vec2 tang = vec2(cos(ang), sin(ang));
+  vec2 norm = vec2(-tang.y, tang.x);
+  float along  = r * (1.0 + an * 1.6);      // longer along the edge
+  float across = r / (1.0 + an * 1.6);      // tighter across it
+  vec3 bm = vec3(0.0); float bv = 1e9;
+  for(int s = 0; s < 4; s++){
+    vec2 sg = vec2(s==0||s==3 ? 1.0 : -1.0, s<2 ? 1.0 : -1.0);
+    vec3 m = vec3(0.0), m2 = vec3(0.0); float n = 0.0;
+    for(int j = 0; j <= 5; j++) for(int i = 0; i <= 5; i++){
+      vec2 loc = vec2(float(i)/5.0 * along * sg.x, float(j)/5.0 * across * sg.y);
+      vec2 off = (tang * loc.x + norm * loc.y) / res;
+      vec3 cc = texture(T, c + off).rgb;
+      m += cc; m2 += cc*cc; n += 1.0;
+    }
+    m /= n; m2 = m2/n - m*m;
+    float v = m2.r + m2.g + m2.b;
+    if(v < bv){ bv = v; bm = m; }
+  }
+  return bm;
+}
+void main(){
+  vec3 c = hasSrc > 0.5 ? kuwahara(uv, kr) : paper;
+  if(dyeMix > 0.0){
+    vec3 d = texture(DYE, uv).rgb;
+    c = mix(c, d, dyeMix);
+  }
+  if(hasSrc > 0.5 && bloom > 0.0 && gi > 0.0){
+    vec3 b = vec3(0.0); float wsum = 0.0;
+    for(int i = 0; i < 12; i++){
+      float a = float(i) * 0.5236;
+      vec2 off = vec2(cos(a), sin(a)) * bloom / res;
+      vec3 s = kuwahara(uv + off, kr*0.5);
+      float l = dot(s, vec3(0.2126,0.7152,0.0722));
+      float w = smoothstep(0.45, 0.9, l);
+      b += s * w; wsum += 1.0;
+    }
+    c += b / wsum * gi;
+  }
+  float l = dot(c, vec3(0.2126,0.7152,0.0722));
+  c = mix(vec3(l), c, sat);
+  if(post > 1.5) c = floor(clamp(c,0.0,1.0) * post) / (post - 1.0);
+  c = mix(c, paper, wash);
+  if(bleed > 0.0){
+    vec4 sm = inkSmear(uv, bleedR);
+    c = mix(c, c * (1.0 - sm.a * 0.85) + sm.rgb * sm.a * 0.35, bleed);
+  }
+  o = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+function sh(t, s){ const x = gl.createShader(t); gl.shaderSource(x,s); gl.compileShader(x);
+  if(!gl.getShaderParameter(x, gl.COMPILE_STATUS)) say(gl.getShaderInfoLog(x), true); return x; }
+if(gl){
+  prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.bindAttribLocation(prog, 0, 'p');
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) say(gl.getProgramInfoLog(prog), true);
+  gl.useProgram(prog);
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  for(const n of ['T','FLD','INK','DYE','res','kr','gi','bloom','sat','post','wash','hasSrc','steer','bleed','bleedR','dyeMix','paper'])
+    U[n] = gl.getUniformLocation(prog, n);
+  const mk = u => { const t = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0+u); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return t; };
+  tex = mk(0); fldTex = mk(1); inkTex = mk(2); dyeTex = mk(3);
+  gl.uniform1i(U.T, 0); gl.uniform1i(U.FLD, 1); gl.uniform1i(U.INK, 2); gl.uniform1i(U.DYE, 3);
+}
+function hexv(h){
+  return [parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255];
+}
+function drawColour(){
+  if(!gl) return;
+  gl.viewport(0, 0, glc.width, glc.height);
+  gl.uniform2f(U.res, glc.width, glc.height);
+  gl.uniform1f(U.kr, P.colOn ? P.kr : 0);
+  gl.uniform1f(U.gi, P.colOn ? P.gi : 0);
+  gl.uniform1f(U.bloom, P.bloom);
+  gl.uniform1f(U.sat, P.colOn ? P.sat : 1);
+  gl.uniform1f(U.post, P.colOn ? P.post : 1);
+  gl.uniform1f(U.wash, P.colOn ? P.wash : 1);
+  gl.uniform1f(U.steer, P.steer);
+  gl.uniform1f(U.bleed, P.bleed);
+  gl.uniform1f(U.bleedR, P.bleedR);
+  gl.uniform1f(U.dyeMix, P.dyeMix);
+  if(P.dyeMix > 0) uploadDye();
+  if(P.bleed > 0){
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, inkTex);
+    try { gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE, inkc); } catch(e){}
+  }
+  gl.uniform1f(U.hasSrc, (srcEl && P.colOn) ? 1 : 0);
+  const pc = hexv(P.paperOn ? P.paper : '#000000');
+  gl.uniform3f(U.paper, pc[0], pc[1], pc[2]);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, fldTex);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, dyeTex);
+  if(srcEl){
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+    try { gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE, srcEl); } catch(e){}
+  }
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+/* Direction as hue, magnitude as brightness — the standard way to read a flow
+   field, and it stays legible whatever the velocities happen to be. */
+function hsv(h, s, v, out){
+  const i = Math.floor(h*6), f = h*6 - i;
+  const p = v*(1-s), q = v*(1-f*s), t = v*(1-(1-f)*s);
+  let r, g, b;
+  switch(i % 6){
+    case 0: r=v; g=t; b=p; break;  case 1: r=q; g=v; b=p; break;
+    case 2: r=p; g=v; b=t; break;  case 3: r=p; g=q; b=v; break;
+    case 4: r=t; g=p; b=v; break;  default: r=v; g=p; b=q;
+  }
+  out[0] = r*255; out[1] = g*255; out[2] = b*255;
+}
+
+/* debug views drawn straight onto the ink layer */
+const dbgC = [0,0,0];
+function drawDebug(){
+  const iw = inkc.width, ih = inkc.height;
+  const im = ictx.createImageData(iw, ih);
+  // autoscale the velocity view so it is readable no matter how fast the fluid is
+  let vmax = 1e-5;
+  if(P.view === 3){
+    for(let k = 0; k < FN; k++){
+      const m = fu[k]*fu[k] + fv[k]*fv[k];
+      if(m > vmax) vmax = m;
+    }
+    vmax = Math.sqrt(vmax);
+  }
+  for(let y = 0; y < ih; y++){
+    const fy = ((y/ih*FH)|0) * FW, ayy = ay(y)*AW;
+    for(let x = 0; x < iw; x++){
+      const i = (y*iw + x)*4;
+      let r = 0, g = 0, b = 0;
+      if(P.view === 3){
+        const k = fy + ((x/iw*FW)|0);
+        const uu = fu[k], vv = fv[k];
+        const mag = Math.hypot(uu, vv);
+        if(mag < vmax*0.004){ r = g = b = 16; }
+        else {
+          hsv((Math.atan2(vv, uu) / (Math.PI*2) + 1) % 1, 1, Math.min(1, mag/vmax), dbgC);
+          r = dbgC[0]; g = dbgC[1]; b = dbgC[2];
+        }
+      } else {
+        const j = ayy + ax(x);
+        if(P.view === 1){ r = g = b = dens[j]*255; }
+        else {
+          const a = ori[j];
+          r = (Math.cos(a)*0.5+0.5)*255; g = (Math.sin(a)*0.5+0.5)*255; b = ani[j]*255;
+        }
+      }
+      im.data[i] = r; im.data[i+1] = g; im.data[i+2] = b; im.data[i+3] = 255;
+    }
+  }
+  ictx.putImageData(im, 0, 0);
+}
+
+/* ---------- source ---------- */
+let srcEl = null, srcKind = 'none', vidEl = null;
+function setSize(w, h){
+  W = w; H = h;
+  const k = Math.min(1, 1100/Math.max(w,h));
+  glc.width = inkc.width = Math.round(w*k);
+  glc.height = inkc.height = Math.round(h*k);
+  W = glc.width; H = glc.height;
+  holder.style.width = W + 'px'; holder.style.height = H + 'px';
+  el('hud').textContent = W + ' × ' + H;
+  clearArt();
+}
+async function loadImage(file){
+  try {
+    const bmp = await createImageBitmap(file);
+    srcEl = bmp; srcKind = 'image';
+    el('vSrc').textContent = 'Image ' + bmp.width + '×' + bmp.height;
+    el('empty').classList.add('hide');
+    setSize(bmp.width, bmp.height);
+    analyse(bmp);
+    clearSay(); running = true; el('bRun').textContent = 'Pause';
+  } catch(e){ say('Could not decode that file. Browsers read jpg, png, webp, gif and bmp.', true); }
+}
+async function startCam(){
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({video:{width:1280, height:720}});
+    if(!vidEl){ vidEl = document.createElement('video'); vidEl.muted = true; vidEl.playsInline = true; }
+    vidEl.srcObject = st; await vidEl.play();
+    srcEl = vidEl; srcKind = 'cam';
+    el('vSrc').textContent = 'Webcam live';
+    el('empty').classList.add('hide');
+    setSize(1280, 720);
+    // a live feed wants motion and turnover; a still wants tone and convergence
+    P.wMot = 2.0; P.wDark = 0.2; P.turn = 0.6; P.life = 60;
+    ['rWMot','rWDark','rTurn','rLife'].forEach(i => el(i)._sync());
+    clearSay(); running = true; el('bRun').textContent = 'Pause';
+  } catch(e){
+    say('Webcam unavailable: ' + e.message +
+        '\nBrowsers only grant camera access over https:// or localhost.', true);
+  }
+}
+function useNoSource(){
+  srcEl = null; srcKind = 'none';
+  noSource();
+  el('vSrc').textContent = 'No source — curl noise';
+  el('empty').classList.add('hide');
+  setSize(1200, 800);
+  running = true; el('bRun').textContent = 'Pause';
+  clearSay();
+}
+
+/* ---------- loop ---------- */
+let frame = 0;
+function tick(){
+  if(running){
+    if(srcKind === 'cam' && vidEl.readyState >= 2 && (frame % 2 === 0)) analyse(vidEl);
+    if(P.zMode === 2) sliceZ += P.zRate / 60;
+    // fading the whole layer is how older slices recede: already-drawn ink
+    // cannot be moved, but it can be let go of
+    if(P.fade > 0){
+      ictx.globalCompositeOperation = 'destination-out';
+      ictx.fillStyle = 'rgba(0,0,0,' + P.fade + ')';
+      ictx.fillRect(0, 0, inkc.width, inkc.height);
+      ictx.globalCompositeOperation = 'source-over';
+    }
+    fluidStep();
+    step();
+    if(P.cycleOn && !cycleDone){
+      frameIdx++;
+      if(frameIdx >= P.frames){ cycleDone = true; running = false; el('bRun').textContent = 'Start'; }
+      if(frameIdx % 5 === 0 || cycleDone) cycleStatus();
+    }
+    if(P.view === 0) el('vPaths').textContent = paths.length + ' stroke' +
+        (paths.length === 1 ? '' : 's') + (paths.length >= MAX_PATHS ? ' (capped)' : '');
+    else drawDebug();
+    drawColour();
+    frame++;
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ---------- exports ---------- */
+function download(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.style.display = 'none';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 4000);
+}
+el('bPNG').addEventListener('click', () => {
+  const sc = P.scale;
+  const c = document.createElement('canvas');
+  c.width = W*sc; c.height = H*sc;
+  const x = c.getContext('2d');
+  x.drawImage(glc, 0, 0, c.width, c.height);
+  drawInk(x, sc, 0);
+  c.toBlob(b => download(b, 'plotter-' + c.width + 'x' + c.height + '.png'));
+});
+el('bSVG').addEventListener('click', () => {
+  const parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H +
+    '" viewBox="0 0 ' + W + ' ' + H + '">'];
+  if(P.paperOn) parts.push('<rect width="100%" height="100%" fill="' + P.paper + '"/>');
+  const shaped = shapingOn();
+  const svgOps = symOps();
+  const BANDS = 5;                     // quantised width bands keep the file plotter-usable
+  const groups = {};
+  const put = (col, band, pts) => {
+    const k = col + '|' + band;
+    (groups[k] = groups[k] || {col, band, runs:[]}).runs.push(pts);
+  };
+  for(const p of paths){
+    const col = inkColour(p);
+    if(!shaped){ put(col, BANDS-1, p.pts); continue; }
+    // split each stroke into runs of equal width band, so tapers survive as
+    // separate polylines rather than one <line> per segment
+    let run = [p.pts[0]], cur = -1;
+    for(let k = 1; k < p.pts.length; k++){
+      const f = shapeAt(p, k, true);
+      const band = Math.max(0, Math.min(BANDS-1, Math.round(f * (BANDS-1))));
+      if(band !== cur){
+        if(run.length > 1 && cur >= 0) put(col, cur, run);
+        run = [p.pts[k-1]]; cur = band;
+      }
+      run.push(p.pts[k]);
+    }
+    if(run.length > 1) put(col, Math.max(0,cur), run);
+  }
+  // one <g> per colour and width band — each group is a pen on a plotter
+  for(const k in groups){
+    const G = groups[k];
+    const w = (P.width * (G.band/(BANDS-1) || 1/(BANDS-1))).toFixed(2);
+    parts.push('<g fill="none" stroke="' + G.col + '" stroke-width="' + w +
+      '" stroke-opacity="' + P.alpha + '" stroke-linecap="round" stroke-linejoin="round">');
+    for(const pts of G.runs)
+      for(const op of svgOps)
+        parts.push('<polyline points="' +
+          pts.map(q => { const t = op(project(q, 1));
+                         return t[0].toFixed(1) + ',' + t[1].toFixed(1); }).join(' ') + '"/>');
+    parts.push('</g>');
+  }
+  parts.push('</svg>');
+  download(new Blob([parts.join('\n')], {type:'image/svg+xml'}), 'plotter.svg');
+});
+
+/* ---------- control binding ---------- */
+function editable(b, r, commit){
+  b.addEventListener('click', () => {
+    if(b._e) return; b._e = true;
+    const prev = b.textContent;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'numedit'; inp.value = r.value;
+    b.textContent = ''; b.appendChild(inp); inp.focus(); inp.select();
+    const done = ok => {
+      if(!b._e) return; b._e = false; b.textContent = prev;
+      if(!ok) return;
+      const v = parseFloat(inp.value); if(!isFinite(v)) return;
+      if(v > parseFloat(r.max)) r.max = String(v);
+      if(v < parseFloat(r.min)) r.min = String(v);
+      commit(v);
+    };
+    inp.addEventListener('keydown', e => { e.stopPropagation();
+      if(e.key === 'Enter'){ e.preventDefault(); done(true); }
+      else if(e.key === 'Escape'){ e.preventDefault(); done(false); } });
+    inp.addEventListener('blur', () => done(true));
+  });
+}
+function bind(rid, vid, key, fmt, after){
+  const r = el(rid), v = el(vid);
+  const show = () => { v.textContent = fmt(P[key]); };
+  const set = val => { P[key] = val; show(); if(after) after(); };
+  r.addEventListener('input', () => set(parseFloat(r.value)));
+  r._sync = () => { r.value = P[key]; show(); };
+  editable(v, r, val => { r.value = val; set(val); });
+  set(parseFloat(r.value));
+}
+const f2 = n => n.toFixed(2), f3 = n => n.toFixed(3), f0 = n => n.toFixed(0);
+const reDens = () => { if(hasAnalysis) buildDensity(); };
+
+bind('rWGrad','vWGrad','wGrad',f2,reDens);
+bind('rWAni','vWAni','wAni',f2,reDens);
+bind('rWDark','vWDark','wDark',f2,reDens);
+bind('rWMot','vWMot','wMot',f2,reDens);
+bind('rMDecay','vMDecay','mDecay',f3);
+bind('rFloor','vFloor','floor',f3,reDens);
+bind('rCount','vCount','count',f0);
+bind('rContour','vContour','contour',f2);
+bind('rRMin','vRMin','rMin',f2);
+bind('rRMax','vRMax','rMax',f0);
+bind('rTurn','vTurn','turn',f2);
+bind('rDrag','vDrag','drag',f3);
+bind('rForce','vForce','force',f2);
+bind('rSpeed','vSpeed','speed',f2);
+bind('rWander','vWander','wander',f2);
+bind('rNScale','vNScale','nScale',n=>n.toFixed(4));
+bind('rRest','vRest','rest',f2);
+bind('rLife','vLife','life',f0);
+bind('rSep','vSep','sep',f2);
+bind('rAli','vAli','ali',f2);
+bind('rCoh','vCoh','coh',f2);
+bind('rNbr','vNbr','nbr',f0);
+bind('rFrames','vFrames','frames',f0);
+bind('rSeed','vSeed','seed',f0);
+bind('rSpeedA','vSpeedA','speedA',f2);
+bind('rWidthA','vWidthA','widthA',f2,repaintAll);
+bind('rAlphaA','vAlphaA','alphaA',f2,repaintAll);
+bind('rScatterA','vScatterA','scatterA',f2);
+bind('rScatter','vScatter','scatter',f2);
+bind('rStampEvery','vStampEvery','stampEvery',f0,repaintAll);
+bind('rSizeA','vSizeA','sizeA',f2,repaintAll);
+bind('rSizeB','vSizeB','sizeB',f2,repaintAll);
+bind('rSizeMin','vSizeMin','sizeMin',f2);
+bind('rSizeMax','vSizeMax','sizeMax',f2);
+bind('rRotAngle','vRotAngle','rotAngle',n=>f0(n)+'°',repaintAll);
+bind('rColOff','vColOff','colOff',f3,repaintAll);
+bind('rWidth','vWidth','width',f2,repaintAll);
+bind('rAlpha','vAlpha','alpha',f2,repaintAll);
+bind('rTIn','vTIn','tIn',f2,repaintAll);
+bind('rTOut','vTOut','tOut',f2,repaintAll);
+bind('rTCurve','vTCurve','tCurve',f2,repaintAll);
+bind('rWVel','vWVel','wVel',f2,repaintAll);
+bind('rWNib','vWNib','wNib',f2,repaintAll);
+bind('rWMin','vWMin','wMin',f2,repaintAll);
+bind('rAIn','vAIn','aIn',f2,repaintAll);
+bind('rAOut','vAOut','aOut',f2,repaintAll);
+bind('rACurve','vACurve','aCurve',f2,repaintAll);
+bind('rAVel','vAVel','aVel',f2,repaintAll);
+bind('rANib','vANib','aNib',f2,repaintAll);
+bind('rAMin','vAMin','aMin',f2,repaintAll);
+bind('rNibAng','vNibAng','nibAng',n=>f0(n)+'°',repaintAll);
+bind('rZRate','vZRate','zRate',f2);
+bind('rZWind','vZWind','zWind',f2);
+bind('rZLum','vZLum','zLum',f2);
+bind('rZPersp','vZPersp','zPersp',f2,repaintAll);
+bind('rZFog','vZFog','zFog',f2,repaintAll);
+bind('rZVX','vZVX','zVX',f2,repaintAll);
+bind('rZVY','vZVY','zVY',f2,repaintAll);
+bind('rFade','vFade','fade',n=>n.toFixed(4));
+bind('rLumA','vLumA','lumA',f2,repaintAll);
+bind('rDyeMix','vDyeMix','dyeMix',f2);
+bind('rDyeFeed','vDyeFeed','dyeFeed',f2);
+bind('rDyeMot','vDyeMot','dyeMot',f2);
+bind('rDyeAdv','vDyeAdv','dyeAdv',f2);
+bind('rDyeDis','vDyeDis','dyeDis',n=>n.toFixed(4));
+bind('rSteer','vSteer','steer',f2);
+bind('rBleed','vBleed','bleed',f2);
+bind('rBleedR','vBleedR','bleedR',f0);
+bind('rSpread','vSpread','spread',f2);
+bind('rMForce','vMForce','mForce',f2);
+bind('rMSpeed','vMSpeed','mSpeed',f2);
+bind('rMFlow','vMFlow','mFlow',f2);
+bind('rMWake','vMWake','mWake',f2);
+bind('rMPush','vMPush','mPush',f2);
+bind('rFCouple','vFCouple','fCouple',f2);
+bind('rFInjF','vFInjF','fInjFlow',f2);
+bind('rFInjS','vFInjS','fInjStruct',f2);
+bind('rFInjN','vFInjN','fInjNoise',f2);
+bind('rFVisc','vFVisc','fVisc',f3);
+bind('rFVort','vFVort','fVort',f2);
+bind('rFDissip','vFDissip','fDissip',f3);
+bind('rFIter','vFIter','fIter',f0);
+bind('rKR','vKR','kr',f0);
+bind('rGI','vGI','gi',f2);
+bind('rBloom','vBloom','bloom',f2);
+bind('rSat','vSat','sat',f2);
+bind('rPost','vPost','post',n => n<1.5 ? 'off' : f0(n));
+bind('rWash','vWash','wash',f2);
+bind('rScale','vScale','scale',n => n + '×');
+
+el('sView').addEventListener('change', e => {
+  P.view = +e.target.value;
+  if(P.view === 0) repaintAll();
+  else if(P.view === 3 && !P.fluidOn)
+    say('Fluid velocity view: the fluid is switched off, so the field is empty. ' +
+        'Enable it in the Fluid section.');
+  else clearSay();
+});
+
+/* dropdowns built from the lists above */
+for(const id of ['sEaseSpeed','sEaseWidth','sEaseAlpha','sEaseScatter','sEaseSize'])
+  el(id).innerHTML = EASES.map((t,i)=>'<option value="'+i+'">'+t+'</option>').join('');
+el('sShape').innerHTML = SHAPES.map((t,i)=>'<option value="'+i+'">'+t+'</option>').join('');
+el('sRot').innerHTML = ROTMODES.map((t,i)=>'<option value="'+i+'">'+t+'</option>').join('');
+const easeMap = {sEaseSpeed:'easeSpeed', sEaseWidth:'easeWidth', sEaseAlpha:'easeAlpha',
+                 sEaseScatter:'easeScatter', sEaseSize:'easeSize'};
+for(const id in easeMap)
+  el(id).addEventListener('change', e => { P[easeMap[id]] = +e.target.value; repaintAll(); });
+el('sShape').addEventListener('change', e => { P.shape = +e.target.value; repaintAll(); });
+el('sFill').addEventListener('change', e => { P.fillMode = +e.target.value; repaintAll(); });
+el('sRot').addEventListener('change', e => { P.rotMode = +e.target.value; repaintAll(); });
+el('cCycleOn').addEventListener('change', e => { P.cycleOn = e.target.checked; cycleStatus(); });
+el('bRestart').addEventListener('click', restartCycle);
+el('bReseed').addEventListener('click', () => {
+  P.seed = 1 + Math.floor(Math.random()*9998);
+  el('rSeed').value = P.seed; el('vSeed').textContent = P.seed;
+  restartCycle();
+});
+seedRNG(P.seed);
+cycleStatus();
+
+el('sInk').addEventListener('change', e => { P.inkMode = +e.target.value; repaintAll(); });
+el('cInk').addEventListener('input', e => { P.ink = e.target.value; repaintAll(); });
+el('cPaper').addEventListener('input', e => { P.paper = e.target.value; });
+el('cPaperOn').addEventListener('change', e => { P.paperOn = e.target.checked; });
+el('cColOn').addEventListener('change', e => { P.colOn = e.target.checked; });
+el('fImg').addEventListener('change', e => { const f = e.target.files[0]; e.target.value=''; if(f) loadImage(f); });
+el('bCam').addEventListener('click', startCam);
+el('bNoSrc').addEventListener('click', useNoSource);
+el('bClear').addEventListener('click', clearArt);
+el('bFClear').addEventListener('click', fluidClear);
+el('bDyeClear').addEventListener('click', dyeClear);
+el('sZMode').addEventListener('change', e => { P.zMode = +e.target.value; repaintAll(); });
+el('sSym').addEventListener('change', e => { P.sym = +e.target.value; repaintAll(); });
+el('cLumInv').addEventListener('change', e => { P.lumInv = e.target.checked; repaintAll(); });
+el('cFluid').addEventListener('change', e => { P.fluidOn = e.target.checked; if(!P.fluidOn) fluidClear(); });
+el('bRun').addEventListener('click', () => {
+  running = !running; el('bRun').textContent = running ? 'Pause' : 'Start';
+});
+el('empty').addEventListener('click', () => el('fImg').click());
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault();
+  const f = e.dataTransfer.files[0]; if(f) loadImage(f); });
+for(const l of document.querySelectorAll('label.file'))
+  l.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault();
+    l.querySelector('input').click(); } });
+
+setSize(1200, 800);
+</script>
+</body>
+</html>

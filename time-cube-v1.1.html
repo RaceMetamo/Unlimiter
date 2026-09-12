@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Time Cube v1.1 — volumetric camera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#05080b;
+  --panel:#0b1116;
+  --panel-hi:#101820;
+  --rule:#1b2731;
+  --ink:#c7d3db;
+  --ink-dim:#6d7f8c;
+  --signal:#d9a441;
+  --warn:#c96a4a;
+  --font-ui:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,monospace;
+  /* consumed by modulation.js */
+  --mod-accent:#d9a441;
+  --mod-ink:#c7d3db;
+  --mod-dim:#6d7f8c;
+  --mod-line:#1b2731;
+  --mod-field:#101820;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--void);color:var(--ink);font-family:var(--font-ui);-webkit-font-smoothing:antialiased}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas.dragging{cursor:grabbing}
+
+#panel{
+  position:fixed;top:0;right:0;height:100%;width:302px;
+  background:color-mix(in srgb,var(--panel) 88%,transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-left:1px solid var(--rule);
+  overflow-y:auto;overscroll-behavior:contain;
+  font-size:13px;line-height:1.45;
+}
+#panel::-webkit-scrollbar{width:8px}
+#panel::-webkit-scrollbar-thumb{background:var(--rule)}
+
+.masthead{padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
+.masthead h1{font-size:16px;font-weight:600;letter-spacing:-0.01em}
+.masthead p{color:var(--ink-dim);font-size:12px;margin-top:4px;max-width:32ch}
+.masthead span{font-family:var(--font-num);font-size:11px;color:var(--ink-dim)}
+
+fieldset{border:0;border-bottom:1px solid var(--rule);padding:14px 20px 16px}
+legend{font-size:12px;font-weight:600;color:var(--ink-dim);padding:0;margin-bottom:10px;float:left;width:100%}
+.row{display:flex;align-items:center;gap:10px;margin:9px 0}
+.row label{flex:0 0 84px;color:var(--ink-dim);font-size:12px}
+.row .val{flex:0 0 52px;text-align:right;font-family:var(--font-num);font-size:11px;color:var(--signal)}
+.row .val.mod::after{content:'~';margin-left:3px;opacity:.75}
+.row .val.mod{color:#7fc8d8}
+
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:2px;background:var(--rule);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--ink);border:0;cursor:pointer;transition:background .12s}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--ink);border:0;cursor:pointer}
+input[type=range]:hover::-webkit-slider-thumb{background:var(--signal)}
+input[type=range]:focus-visible::-webkit-slider-thumb{background:var(--signal);box-shadow:0 0 0 3px rgba(217,164,65,.3)}
+
+select,button,.filebtn{font-family:var(--font-ui);font-size:12px;color:var(--ink);background:var(--panel-hi);border:1px solid var(--rule);border-radius:3px;padding:6px 8px;cursor:pointer}
+select{flex:1}
+select:focus-visible,button:focus-visible,.filebtn:focus-visible{outline:2px solid var(--signal);outline-offset:1px}
+button:hover,.filebtn:hover{border-color:var(--ink-dim)}
+button.on{background:var(--signal);border-color:var(--signal);color:#14100a;font-weight:600}
+.btnrow{display:flex;gap:6px;margin-top:12px}
+.btnrow button,.btnrow .filebtn{flex:1;text-align:center}
+input[type=file]{display:none}
+input[type=color]{width:28px;height:24px;padding:0;border:1px solid var(--rule);background:none;border-radius:3px;cursor:pointer}
+.seg{display:flex;flex:1}
+.seg button{border-radius:3px;flex:1}
+.note{font-size:10px;color:var(--ink-dim);line-height:1.5;margin-top:9px}
+
+#hud{position:fixed;left:16px;bottom:14px;font-family:var(--font-num);font-size:11px;color:var(--ink-dim);pointer-events:none;display:flex;gap:16px}
+#hud b{color:var(--signal);font-weight:500}
+
+#status{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(430px,72vw);text-align:center;padding:22px 26px;background:var(--panel);border:1px solid var(--rule);border-radius:4px}
+#status h2{font-size:15px;font-weight:600;margin-bottom:6px}
+#status p{color:var(--ink-dim);font-size:13px;margin-bottom:14px;white-space:pre-line}
+#status.err h2{color:var(--warn)}
+#status[hidden]{display:none}
+
+#toggle{position:fixed;top:12px;right:12px;z-index:20;display:none;background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:7px 11px;font-size:12px}
+@media (max-width:820px){
+  #panel{width:100%;height:58%;top:auto;bottom:0;border-left:0;border-top:1px solid var(--rule)}
+  #panel[hidden]{display:none}
+  #toggle{display:block}
+  #hud{bottom:auto;top:14px;left:14px;flex-direction:column;gap:2px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud">
+  <span>slices <b id="hudDepth">—</b></span>
+  <span>fps <b id="hudFps">—</b></span>
+  <span id="hudState"></span>
+</div>
+
+<button id="toggle">Controls</button>
+
+<div id="panel">
+  <div class="masthead">
+    <h1>Time Cube <span>v1.1</span></h1>
+    <p>Every captured frame becomes a slice. The stack is the sculpture.</p>
+  </div>
+
+  <fieldset>
+    <legend>Source</legend>
+    <div class="row">
+      <label for="resSel">Slice size</label>
+      <select id="resSel">
+        <option value="128">128 × 96</option>
+        <option value="192" selected>192 × 144</option>
+        <option value="256">256 × 192</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="mirror">Mirror</label>
+      <div class="seg"><button id="mirror" class="on">On</button></div>
+    </div>
+    <div class="btnrow">
+      <button id="useCam">Use camera</button>
+      <label class="filebtn" for="fileIn" tabindex="0">Open video</label>
+      <input type="file" id="fileIn" accept="video/*">
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Mask</legend>
+    <div class="row">
+      <label for="maskSel">Source</label>
+      <select id="maskSel">
+        <option value="0">Brightness</option>
+        <option value="2" selected>Motion</option>
+        <option value="1">Colour match</option>
+      </select>
+    </div>
+    <div class="row" id="keyRow" style="display:none">
+      <label for="keyCol">Target</label>
+      <input type="color" id="keyCol" value="#3fa9d8">
+      <span class="val"></span>
+    </div>
+    <div class="row">
+      <label for="thr">Threshold</label>
+      <input type="range" id="thr" min="0" max="1" step="0.005" value="0.12">
+      <span class="val" id="thrV"></span>
+    </div>
+    <div class="row">
+      <label for="soft">Softness</label>
+      <input type="range" id="soft" min="0.002" max="0.5" step="0.002" value="0.08">
+      <span class="val" id="softV"></span>
+    </div>
+    <div class="row">
+      <label for="gain">Gain</label>
+      <input type="range" id="gain" min="0.1" max="6" step="0.05" value="1.6">
+      <span class="val" id="gainV"></span>
+    </div>
+    <div class="row">
+      <label for="invert">Invert</label>
+      <div class="seg"><button id="invert">Off</button></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Time</legend>
+    <div class="row">
+      <label for="depthSel">History</label>
+      <select id="depthSel">
+        <option value="64">64 slices</option>
+        <option value="128" selected>128 slices</option>
+        <option value="192">192 slices</option>
+        <option value="256">256 slices</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="span">Depth</label>
+      <input type="range" id="span" min="0.15" max="3" step="0.01" value="1.1">
+      <span class="val" id="spanV"></span>
+    </div>
+    <div class="row">
+      <label for="skip">Capture 1 in</label>
+      <input type="range" id="skip" min="1" max="12" step="0.01" value="1">
+      <span class="val" id="skipV"></span>
+    </div>
+    <div class="btnrow">
+      <button id="freeze">Freeze</button>
+      <button id="clear">Clear</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Render</legend>
+    <div class="row">
+      <label for="projSel">Projection</label>
+      <select id="projSel">
+        <option value="0" selected>Brightest (MIP)</option>
+        <option value="1">Layered</option>
+        <option value="2">Additive</option>
+        <option value="3">Average</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="colSel">Colour</label>
+      <select id="colSel">
+        <option value="0" selected>From camera</option>
+        <option value="1">By age</option>
+        <option value="2">Monochrome</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="dens">Density</label>
+      <input type="range" id="dens" min="0.2" max="24" step="0.1" value="5">
+      <span class="val" id="densV"></span>
+    </div>
+    <div class="row">
+      <label for="expo">Exposure</label>
+      <input type="range" id="expo" min="0.2" max="4" step="0.02" value="1.2">
+      <span class="val" id="expoV"></span>
+    </div>
+    <div class="row">
+      <label for="steps">Quality</label>
+      <input type="range" id="steps" min="64" max="512" step="16" value="256">
+      <span class="val" id="stepsV"></span>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Space</legend>
+    <div class="row">
+      <label for="envOn">Environment</label>
+      <div class="seg"><button id="envOn" class="on">On</button></div>
+    </div>
+    <div class="row">
+      <label for="palSel">Palette</label>
+      <select id="palSel">
+        <option value="0" selected>Deep field</option>
+        <option value="1">Ember</option>
+        <option value="2">Ion</option>
+        <option value="3">Ash</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="nebula">Nebula</label>
+      <input type="range" id="nebula" min="0" max="2" step="0.01" value="0.55">
+      <span class="val" id="nebulaV"></span>
+    </div>
+    <div class="row">
+      <label for="stars">Stars</label>
+      <input type="range" id="stars" min="0" max="2" step="0.01" value="0.7">
+      <span class="val" id="starsV"></span>
+    </div>
+    <div class="row">
+      <label for="drift">Drift</label>
+      <input type="range" id="drift" min="0" max="0.5" step="0.002" value="0.06">
+      <span class="val" id="driftV"></span>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>View</legend>
+    <div class="row">
+      <label for="autoSpin">Auto-rotate</label>
+      <div class="seg"><button id="autoSpin" class="on">On</button></div>
+    </div>
+    <div class="row">
+      <label for="spin">Speed</label>
+      <input type="range" id="spin" min="-0.6" max="0.6" step="0.005" value="0.1">
+      <span class="val" id="spinV"></span>
+    </div>
+    <div class="row">
+      <label for="elBias">Tilt</label>
+      <input type="range" id="elBias" min="-1.2" max="1.2" step="0.01" value="0">
+      <span class="val" id="elBiasV"></span>
+    </div>
+    <div class="row">
+      <label for="box">Cage</label>
+      <div class="seg"><button id="box" class="on">On</button></div>
+    </div>
+    <div class="btnrow">
+      <button id="reset">Reset view</button>
+      <button id="snap">Save image</button>
+    </div>
+    <div class="note">Auto-rotate eases in a few seconds after you stop dragging.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Audio</legend>
+    <div id="audioMount"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Modulation</legend>
+    <div id="lfos"></div>
+    <div class="note">Rates default to one cycle per minute. Depth is a fraction of a safe swing per parameter, not of the full slider. Modulated parameters are marked and their sliders keep the base value.</div>
+    <div class="btnrow">
+      <button id="savePreset">Save preset</button>
+      <label class="filebtn" for="presetIn" tabindex="0">Load preset</label>
+      <input type="file" id="presetIn" accept="application/json,.json">
+    </div>
+  </fieldset>
+</div>
+
+<div id="status">
+  <h2>Point a camera at movement</h2>
+  <p>The tool needs camera access to build the volume. Nothing leaves this page.</p>
+  <button id="start">Start camera</button>
+</div>
+
+<script src="modulation.js"></script>
+<script>
+/* ------------------------------------------------------------------ *
+ * Time Cube v1.1 — volumetric time sculpture from a 2D camera feed.
+ * Each captured frame is masked on the GPU and written straight into
+ * one layer of a 3D texture used as a ring buffer, then raymarched
+ * against a procedural deep-field environment.
+ * ------------------------------------------------------------------ */
+
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', {antialias:false, preserveDrawingBuffer:true, alpha:false});
+
+const statusBox = document.getElementById('status');
+function fail(title, msg){
+  statusBox.hidden = false;
+  statusBox.classList.add('err');
+  statusBox.innerHTML = `<h2>${title}</h2><p>${msg}</p>`;
+}
+if(!gl){
+  fail('This browser can’t run the volume',
+       'Time Cube needs WebGL2 for 3D textures. Try Chrome, Edge, or Firefox on desktop.');
+  throw new Error('no webgl2');
+}
+if(typeof Modulation === 'undefined'){
+  fail('modulation.js is missing',
+       'Keep modulation.js in the same folder as this file. It carries the LFO and audio layer shared across the tool suite.');
+  throw new Error('no modulation.js');
+}
+
+/* ---------------------------------- math -------------------------- */
+const M = {
+  mul(a,b){ const o=new Float32Array(16);
+    for(let c=0;c<4;c++) for(let r=0;r<4;r++){ let s=0;
+      for(let k=0;k<4;k++) s += a[k*4+r]*b[c*4+k]; o[c*4+r]=s; }
+    return o; },
+  perspective(fovy,asp,n,f){ const t=1/Math.tan(fovy/2), o=new Float32Array(16);
+    o[0]=t/asp; o[5]=t; o[10]=(f+n)/(n-f); o[11]=-1; o[14]=2*f*n/(n-f); return o; },
+  lookAt(e,c,u){
+    let z=[e[0]-c[0],e[1]-c[1],e[2]-c[2]];
+    let l=Math.hypot(...z); z=z.map(v=>v/l);
+    let x=[u[1]*z[2]-u[2]*z[1], u[2]*z[0]-u[0]*z[2], u[0]*z[1]-u[1]*z[0]];
+    l=Math.hypot(...x)||1; x=x.map(v=>v/l);
+    const y=[z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
+    return new Float32Array([
+      x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+      -(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),
+      -(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),
+      -(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]), 1]); },
+  invert(m){
+    const o=new Float32Array(16), a=m;
+    const b00=a[0]*a[5]-a[1]*a[4], b01=a[0]*a[6]-a[2]*a[4], b02=a[0]*a[7]-a[3]*a[4],
+          b03=a[1]*a[6]-a[2]*a[5], b04=a[1]*a[7]-a[3]*a[5], b05=a[2]*a[7]-a[3]*a[6],
+          b06=a[8]*a[13]-a[9]*a[12], b07=a[8]*a[14]-a[10]*a[12], b08=a[8]*a[15]-a[11]*a[12],
+          b09=a[9]*a[14]-a[10]*a[13], b10=a[9]*a[15]-a[11]*a[13], b11=a[10]*a[15]-a[11]*a[14];
+    let d=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+    if(!d) return o; d=1/d;
+    o[0]=(a[5]*b11-a[6]*b10+a[7]*b09)*d;  o[1]=(a[2]*b10-a[1]*b11-a[3]*b09)*d;
+    o[2]=(a[13]*b05-a[14]*b04+a[15]*b03)*d; o[3]=(a[10]*b04-a[9]*b05-a[11]*b03)*d;
+    o[4]=(a[6]*b08-a[4]*b11-a[7]*b07)*d;  o[5]=(a[0]*b11-a[2]*b08+a[3]*b07)*d;
+    o[6]=(a[14]*b02-a[12]*b05-a[15]*b01)*d; o[7]=(a[8]*b05-a[10]*b02+a[11]*b01)*d;
+    o[8]=(a[4]*b10-a[5]*b08+a[7]*b06)*d;  o[9]=(a[1]*b08-a[0]*b10-a[3]*b06)*d;
+    o[10]=(a[12]*b04-a[13]*b02+a[15]*b00)*d; o[11]=(a[9]*b02-a[8]*b04-a[11]*b00)*d;
+    o[12]=(a[5]*b07-a[4]*b09-a[6]*b06)*d; o[13]=(a[0]*b09-a[1]*b07+a[2]*b06)*d;
+    o[14]=(a[13]*b01-a[12]*b03-a[14]*b00)*d; o[15]=(a[8]*b03-a[9]*b01+a[10]*b00)*d;
+    return o; }
+};
+const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
+const smoothstep = (a,b,x) => { const t = clamp((x-a)/(b-a), 0, 1); return t*t*(3-2*t); };
+
+/* ---------------------------------- shaders ----------------------- */
+const VS_FULL = `#version 300 es
+out vec2 vUv;
+void main(){
+  vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);
+  vUv = p; gl_Position = vec4(p*2.0-1.0, 0.0, 1.0);
+}`;
+
+const FS_MASK = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 frag;
+uniform sampler2D uCurr, uPrev;
+uniform int   uMode;      // 0 brightness, 1 colour, 2 motion
+uniform float uThr, uSoft, uGain;
+uniform vec3  uKey;
+uniform bool  uInvert, uMirror;
+
+float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
+
+void main(){
+  vec2 uv = vUv;
+  if(uMirror) uv.x = 1.0 - uv.x;
+  vec3 c = texture(uCurr, uv).rgb;
+  float m;
+  if(uMode == 0){
+    m = luma(c);
+  } else if(uMode == 1){
+    m = 1.0 - clamp(distance(c, uKey) / 1.4, 0.0, 1.0);
+  } else {
+    vec3 p = texture(uPrev, uv).rgb;
+    m = clamp(length(c - p) * 2.4, 0.0, 1.0);
+  }
+  float a = smoothstep(uThr - uSoft, uThr + uSoft, m);
+  if(uInvert) a = 1.0 - a;
+  frag = vec4(c, clamp(a * uGain, 0.0, 1.0));
+}`;
+
+const FS_VOL = `#version 300 es
+precision highp float;
+precision highp sampler3D;
+in vec2 vUv;
+out vec4 frag;
+
+uniform sampler3D uVol;
+uniform mat4  uInvVP;
+uniform vec3  uCam;
+uniform vec3  uHalf;
+uniform float uZOff;
+uniform int   uProj;      // 0 mip, 1 layered, 2 additive, 3 average
+uniform int   uColor;     // 0 camera, 1 age, 2 mono
+uniform float uDensity, uExposure, uSteps;
+uniform float uTime, uEnvOn, uNebula, uStars, uDrift;
+uniform vec3  uNebA, uNebB;
+
+/* ---------- procedural deep field ---------- */
+float hash13(vec3 p){
+  p = fract(p * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+float vnoise(vec3 x){
+  vec3 i = floor(x), f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash13(i + vec3(0,0,0)), hash13(i + vec3(1,0,0)), f.x),
+                 mix(hash13(i + vec3(0,1,0)), hash13(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(hash13(i + vec3(0,0,1)), hash13(i + vec3(1,0,1)), f.x),
+                 mix(hash13(i + vec3(0,1,1)), hash13(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+float fbm4(vec3 p){
+  float s = 0.0, a = 0.5;
+  for(int i = 0; i < 4; i++){ s += a * vnoise(p); p = p * 2.02 + vec3(1.7, 9.2, 4.3); a *= 0.5; }
+  return s;
+}
+/* One star cell per direction — points are far smaller than a cell,
+   so a single lookup is enough and costs one hash instead of 27. */
+float starLayer(vec3 rd, float scale, float thresh, float t){
+  vec3 p = rd * scale;
+  vec3 i = floor(p), f = fract(p);
+  float h = hash13(i);
+  if(h < thresh) return 0.0;
+  vec3 c = vec3(hash13(i + 3.7), hash13(i + 11.3), hash13(i + 19.1));
+  float s = smoothstep(0.34, 0.0, length(f - c) * 3.0);
+  float tw = 0.6 + 0.4 * sin(t * 5.0 + h * 63.0);
+  return s * tw * (h - thresh) / (1.0 - thresh);
+}
+vec3 environment(vec3 rd){
+  vec3 flat_ = mix(vec3(0.020,0.031,0.043), vec3(0.043,0.063,0.086), vUv.y);
+  if(uEnvOn < 0.5) return flat_;
+
+  float t = uTime * uDrift;
+  vec3 p = rd * 2.0;
+  vec2 w = vec2(fbm4(p + vec3(0.0, 0.0, t * 0.35)),
+                fbm4(p + vec3(4.7, 2.1, t * 0.22)));
+  float f = fbm4(p * 1.3 + vec3(w * 2.4, t * 0.1));
+  float d = smoothstep(0.36, 0.90, f);
+  float wisp = pow(smoothstep(0.45, 1.0, fbm4(p * 3.4 + vec3(w * 3.0, t * 0.15))), 2.0);
+
+  vec3 col = mix(uNebA, uNebB, clamp(w.x * 1.5, 0.0, 1.0));
+  vec3 neb = (col * d + col * wisp * 0.35 + uNebA * pow(d, 3.0) * 0.6) * uNebula;
+
+  float st = starLayer(rd,  62.0, 0.930, t) * 1.00
+           + starLayer(rd, 140.0, 0.880, t) * 0.55
+           + starLayer(rd, 265.0, 0.830, t) * 0.30;
+
+  return vec3(0.011,0.016,0.026) + neb + vec3(0.86,0.91,1.0) * st * uStars;
+}
+
+vec2 hitBox(vec3 ro, vec3 rd){
+  vec3 inv = 1.0 / rd;
+  vec3 t0 = (-uHalf - ro) * inv;
+  vec3 t1 = ( uHalf - ro) * inv;
+  vec3 lo = min(t0,t1), hi = max(t0,t1);
+  return vec2(max(max(lo.x,lo.y),lo.z), min(min(hi.x,hi.y),hi.z));
+}
+
+vec3 ageRamp(float a){          // a = 0 newest .. 1 oldest
+  vec3 hot  = vec3(1.00, 0.93, 0.72);
+  vec3 mid  = vec3(0.90, 0.28, 0.42);
+  vec3 cold = vec3(0.10, 0.22, 0.58);
+  return a < 0.5 ? mix(hot, mid, a*2.0) : mix(mid, cold, (a-0.5)*2.0);
+}
+
+void main(){
+  vec2 ndc = vUv * 2.0 - 1.0;
+  vec4 n = uInvVP * vec4(ndc, -1.0, 1.0); n /= n.w;
+  vec4 f = uInvVP * vec4(ndc,  1.0, 1.0); f /= f.w;
+  vec3 rd = normalize(f.xyz - n.xyz);
+  vec3 ro = uCam;
+
+  vec3 bg = environment(rd);
+  vec2 vig = vUv - 0.5;
+  bg *= 1.0 - 0.55 * dot(vig, vig);
+
+  vec2 t = hitBox(ro, rd);
+  t.x = max(t.x, 0.0);
+  if(t.y <= t.x){ frag = vec4(bg, 1.0); return; }
+
+  int steps = int(uSteps);
+  float dt = (t.y - t.x) / uSteps;
+
+  vec3  acc = vec3(0.0);
+  float accA = 0.0, wsum = 0.0, best = 0.0;
+  vec3  bestCol = vec3(0.0);
+
+  for(int i = 0; i < 512; i++){
+    if(i >= steps) break;
+    vec3 p = ro + rd * (t.x + (float(i) + 0.5) * dt);
+    vec3 uvw = p / (2.0 * uHalf) + 0.5;
+    float z = fract(uvw.z + uZOff);
+    vec4 s = texture(uVol, vec3(uvw.xy, z));
+
+    float age = 1.0 - uvw.z;
+    vec3 col = uColor == 0 ? s.rgb : (uColor == 1 ? ageRamp(age) : vec3(0.92,0.95,1.0));
+
+    if(uProj == 0){
+      if(s.a > best){ best = s.a; bestCol = col; }
+    } else {
+      float a = clamp(s.a * uDensity * dt * 40.0, 0.0, 1.0);
+      if(uProj == 1){
+        acc  += (1.0 - accA) * col * a;
+        accA += (1.0 - accA) * a;
+        if(accA > 0.995) break;
+      } else {
+        acc  += col * a;
+        wsum += a;
+      }
+    }
+  }
+
+  vec3 outc;
+  if(uProj == 0){
+    outc = bg + bestCol * best * uExposure;
+  } else if(uProj == 1){
+    outc = acc * uExposure + bg * (1.0 - accA);
+  } else if(uProj == 2){
+    outc = bg + acc * uExposure;
+  } else {
+    outc = bg + (acc / max(wsum, 1e-4)) * clamp(wsum, 0.0, 1.0) * uExposure;
+  }
+  frag = vec4(outc, 1.0);
+}`;
+
+const VS_BOX = `#version 300 es
+in vec3 aPos;
+uniform mat4 uVP;
+uniform vec3 uHalf;
+void main(){ gl_Position = uVP * vec4(aPos * uHalf, 1.0); }`;
+
+const FS_BOX = `#version 300 es
+precision mediump float;
+out vec4 frag;
+void main(){ frag = vec4(0.42, 0.52, 0.60, 0.30); }`;
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){ const info = gl.getActiveUniform(p,i); u[info.name] = gl.getUniformLocation(p, info.name); }
+  return {p, u};
+}
+
+const progMask = program(VS_FULL, FS_MASK);
+const progVol  = program(VS_FULL, FS_VOL);
+const progBox  = program(VS_BOX,  FS_BOX);
+
+const emptyVAO = gl.createVertexArray();
+
+const boxVAO = gl.createVertexArray();
+{
+  const c = [];
+  for(let i=0;i<8;i++) c.push([(i&1?1:-1)*0.5, (i&2?1:-1)*0.5, (i&4?1:-1)*0.5]);
+  const edges = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+  const data = new Float32Array(edges.flatMap(e => [...c[e[0]], ...c[e[1]]]));
+  gl.bindVertexArray(boxVAO);
+  const b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(progBox.p, 'aPos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+}
+
+/* ---------------------------------- state ------------------------- */
+/* P holds everything modulation can touch. S holds the rest. */
+const P = {
+  thr:0.12, soft:0.08, gain:1.6,
+  span:1.1, skip:1,
+  dens:5, expo:1.2,
+  nebula:0.55, stars:0.7, drift:0.06,
+  spin:0.10, elBias:0.0
+};
+
+const S = {
+  volW:192, volH:144, volD:128,
+  writeHead:0, filled:0, frameCount:0,
+  frozen:false, running:false,
+  mask:2, invert:false, mirror:true, key:[0.247,0.663,0.847],
+  proj:0, color:0, steps:256, cage:true,
+  envOn:true, pal:0, time:0,
+  autoSpin:true, idle:99,
+  az:0.62, el:0.34, dist:2.6
+};
+
+const PALETTES = [
+  [[0.55,0.12,0.42],[0.10,0.42,0.55]],   // deep field
+  [[0.62,0.24,0.08],[0.30,0.10,0.35]],   // ember
+  [[0.16,0.30,0.70],[0.45,0.15,0.62]],   // ion
+  [[0.28,0.30,0.34],[0.14,0.18,0.24]]    // ash
+];
+
+let volTex = null, fbo = gl.createFramebuffer(), vidTex = [null,null], vidCur = 0;
+
+function makeVolume(){
+  if(volTex) gl.deleteTexture(volTex);
+  volTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_3D, volTex);
+  gl.texStorage3D(gl.TEXTURE_3D, 1, gl.RGBA8, S.volW, S.volH, S.volD);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.REPEAT);
+  clearVolume();
+}
+function clearVolume(){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.viewport(0,0,S.volW,S.volH);
+  gl.clearColor(0,0,0,0);
+  for(let z=0; z<S.volD; z++){
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, volTex, 0, z);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  S.writeHead = 0; S.filled = 0;
+}
+function makeVidTex(){
+  for(let i=0;i<2;i++){
+    if(vidTex[i]) gl.deleteTexture(vidTex[i]);
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0,0,0,255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    vidTex[i] = t;
+  }
+}
+makeVidTex();
+makeVolume();
+
+/* ---------------------------------- video ------------------------- */
+const video = document.createElement('video');
+video.playsInline = true; video.muted = true; video.loop = true;
+let stream = null, sourceReady = false;
+
+async function startCamera(){
+  try{
+    if(stream) stream.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ideal:640}, height:{ideal:480}, facingMode:'user' }, audio:false });
+    video.srcObject = stream; video.src = '';
+    await video.play();
+    sourceReady = true; S.running = true;
+    statusBox.hidden = true;
+    clearVolume();
+  }catch(e){
+    fail('Camera blocked',
+      'The browser denied camera access. Allow it in the address-bar permission menu and press Start again, or open a video file instead.\n\nCamera access also needs https:// or localhost — serve the folder rather than opening the file from disk.');
+    statusBox.innerHTML += '<button id="start2">Start camera</button>';
+    document.getElementById('start2').onclick = startCamera;
+  }
+}
+function startFile(file){
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  video.src = URL.createObjectURL(file);
+  video.play().then(() => {
+    sourceReady = true; S.running = true;
+    statusBox.hidden = true;
+    clearVolume();
+  }).catch(() => fail('Can’t play that file', 'The browser couldn’t decode it. Try an MP4 or WebM.'));
+}
+
+/* ---------------------------------- modulation -------------------- */
+const TARGETS = {
+  thr:    {label:'Threshold',    span:0.12, min:0,    max:1},
+  soft:   {label:'Softness',     span:0.08, min:0.002,max:0.5},
+  gain:   {label:'Mask gain',    span:0.80, min:0.1,  max:6},
+  span:   {label:'Depth',        span:0.50, min:0.15, max:3},
+  skip:   {label:'Capture rate', span:2.50, min:1,    max:12},
+  dens:   {label:'Density',      span:3.00, min:0.2,  max:24},
+  expo:   {label:'Exposure',     span:0.50, min:0.2,  max:4},
+  nebula: {label:'Nebula',       span:0.40, min:0,    max:2},
+  stars:  {label:'Stars',        span:0.40, min:0,    max:2},
+  drift:  {label:'Drift',        span:0.06, min:0,    max:0.5},
+  spin:   {label:'Spin speed',   span:0.15, min:-0.6, max:0.6},
+  elBias: {label:'Tilt',         span:0.50, min:-1.2, max:1.2}
+};
+
+/* The module fires onChange while building its own UI, i.e. before `mod` is
+   assigned. This flag keeps markModulated out of the const's dead zone. */
+let modReady = false;
+
+const mod = new Modulation({
+  targets: TARGETS,
+  slots: 4,
+  defaults: [
+    {target:'thr',    wave:0, phase:0},
+    {target:'span',   wave:0, phase:90},
+    {target:'elBias', wave:0, phase:180},
+    {target:'dens',   wave:0, phase:270}
+  ],
+  mountLfo:   document.getElementById('lfos'),
+  mountAudio: document.getElementById('audioMount'),
+  // Clamp against the live sliders, whose ranges widen when a value is typed.
+  range: k => { const r = document.getElementById(k);
+                return r ? [parseFloat(r.min), parseFloat(r.max)]
+                         : [TARGETS[k].min, TARGETS[k].max]; },
+  onChange: markModulated,
+  onStatus: (msg, isErr) => { if(msg && isErr) notify('Audio input unavailable', msg); }
+});
+modReady = true;
+
+/* A recoverable message — unlike fail(), the tool keeps running behind it. */
+function notify(title, msg){
+  statusBox.hidden = false;
+  statusBox.classList.remove('err');
+  statusBox.innerHTML = `<h2>${title}</h2><p>${msg}</p><button id="dismiss">Dismiss</button>`;
+  document.getElementById('dismiss').onclick = () => { statusBox.hidden = true; };
+}
+
+function markModulated(){
+  if(!modReady) return;
+  for(const k in TARGETS){
+    const e = document.getElementById(k + 'V');
+    if(e) e.classList.remove('mod');
+  }
+  for(const k of mod.modulatedKeys()){
+    const e = document.getElementById(k + 'V');
+    if(e) e.classList.add('mod');
+  }
+}
+
+/* ---------------------------------- capture ----------------------- */
+function captureSlice(E){
+  vidCur ^= 1;
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.bindTexture(gl.TEXTURE_2D, vidTex[vidCur]);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, volTex, 0, S.writeHead);
+  gl.viewport(0, 0, S.volW, S.volH);
+  gl.disable(gl.BLEND);
+
+  gl.useProgram(progMask.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, vidTex[vidCur]);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, vidTex[vidCur^1]);
+  gl.uniform1i(progMask.u.uCurr, 0);
+  gl.uniform1i(progMask.u.uPrev, 1);
+  gl.uniform1i(progMask.u.uMode, S.mask);
+  gl.uniform1f(progMask.u.uThr, E.thr);
+  gl.uniform1f(progMask.u.uSoft, E.soft);
+  gl.uniform1f(progMask.u.uGain, E.gain);
+  gl.uniform3fv(progMask.u.uKey, S.key);
+  gl.uniform1i(progMask.u.uInvert, S.invert ? 1 : 0);
+  gl.uniform1i(progMask.u.uMirror, S.mirror ? 1 : 0);
+  gl.bindVertexArray(emptyVAO);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  S.writeHead = (S.writeHead + 1) % S.volD;
+  S.filled = Math.min(S.filled + 1, S.volD);
+}
+
+/* ---------------------------------- draw -------------------------- */
+let dpr = 1;
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const w = Math.round(window.innerWidth * dpr), h = Math.round(window.innerHeight * dpr);
+  if(canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+}
+
+function draw(E){
+  resize();
+  const aspect = canvas.width / canvas.height;
+  const halfX = 0.5 * (S.volW / S.volH), halfY = 0.5, halfZ = 0.5 * E.span;
+
+  const el = clamp(S.el + E.elBias, -1.45, 1.45);
+  const ce = Math.cos(el), se = Math.sin(el);
+  const eye = [S.dist * ce * Math.sin(S.az), S.dist * se, S.dist * ce * Math.cos(S.az)];
+  const view = M.lookAt(eye, [0,0,0], [0,1,0]);
+  const proj = M.perspective(50 * Math.PI/180, aspect, 0.05, 40);
+  const vp = M.mul(proj, view);
+  const invVP = M.invert(vp);
+  const pal = PALETTES[S.pal];
+
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.disable(gl.BLEND);
+  gl.useProgram(progVol.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_3D, volTex);
+  gl.uniform1i(progVol.u.uVol, 0);
+  gl.uniformMatrix4fv(progVol.u.uInvVP, false, invVP);
+  gl.uniform3fv(progVol.u.uCam, eye);
+  gl.uniform3f(progVol.u.uHalf, halfX, halfY, halfZ);
+  gl.uniform1f(progVol.u.uZOff, (S.writeHead + 0.5) / S.volD);
+  gl.uniform1i(progVol.u.uProj, S.proj);
+  gl.uniform1i(progVol.u.uColor, S.color);
+  gl.uniform1f(progVol.u.uDensity, E.dens);
+  gl.uniform1f(progVol.u.uExposure, E.expo);
+  gl.uniform1f(progVol.u.uSteps, S.steps);
+  gl.uniform1f(progVol.u.uTime, S.time);
+  gl.uniform1f(progVol.u.uEnvOn, S.envOn ? 1 : 0);
+  gl.uniform1f(progVol.u.uNebula, E.nebula);
+  gl.uniform1f(progVol.u.uStars, E.stars);
+  gl.uniform1f(progVol.u.uDrift, E.drift);
+  gl.uniform3fv(progVol.u.uNebA, pal[0]);
+  gl.uniform3fv(progVol.u.uNebB, pal[1]);
+  gl.bindVertexArray(emptyVAO);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  if(S.cage){
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.useProgram(progBox.p);
+    gl.uniformMatrix4fv(progBox.u.uVP, false, vp);
+    gl.uniform3f(progBox.u.uHalf, halfX*2, halfY*2, halfZ*2);
+    gl.bindVertexArray(boxVAO);
+    gl.drawArrays(gl.LINES, 0, 24);
+    gl.disable(gl.BLEND);
+  }
+  gl.bindVertexArray(null);
+}
+
+let last = performance.now(), fpsAcc = 0, fpsN = 0, lastE = null;
+const hudFps = document.getElementById('hudFps'),
+      hudDepth = document.getElementById('hudDepth'),
+      hudState = document.getElementById('hudState');
+
+const SPIN_DELAY = 3.5;
+
+function loop(now){
+  requestAnimationFrame(loop);
+  const dtms = now - last; last = now;
+  const dt = Math.min(0.1, dtms / 1000);
+  fpsAcc += dtms; fpsN++;
+  if(fpsN >= 20){ hudFps.textContent = Math.round(1000/(fpsAcc/fpsN)); fpsAcc = 0; fpsN = 0; }
+
+  S.time += dt;
+  S.idle += dt;
+  mod.tick(dt);
+  const E = mod.apply(P);
+  lastE = E;
+
+  const ease = S.autoSpin ? smoothstep(SPIN_DELAY, SPIN_DELAY + 1.5, S.idle) : 0;
+  S.az += E.spin * ease * dt;
+
+  if(S.running && sourceReady && !S.frozen && video.readyState >= 2){
+    S.frameCount++;
+    if(S.frameCount % Math.max(1, Math.round(E.skip)) === 0) captureSlice(E);
+  }
+  hudDepth.textContent = `${S.filled}/${S.volD}`;
+  hudState.textContent = S.frozen ? 'frozen' : (ease > 0.5 ? 'auto' : '');
+  draw(E);
+}
+requestAnimationFrame(loop);
+
+/* ---------------------------------- orbit ------------------------- */
+let dragging = false, lastX = 0, lastY = 0;
+function poke(){ S.idle = 0; }
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY; poke();
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if(!dragging) return;
+  poke();
+  S.az -= (e.clientX - lastX) * 0.006;
+  S.el = clamp(S.el + (e.clientY - lastY) * 0.006, -1.45, 1.45);
+  lastX = e.clientX; lastY = e.clientY;
+});
+const stopDrag = () => { dragging = false; poke(); canvas.classList.remove('dragging'); };
+canvas.addEventListener('pointerup', stopDrag);
+canvas.addEventListener('pointercancel', stopDrag);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault(); poke();
+  S.dist = clamp(S.dist * (1 + Math.sign(e.deltaY) * 0.09), 0.6, 9);
+}, {passive:false});
+
+/* ---------------------------------- ui ---------------------------- */
+const $ = id => document.getElementById(id);
+function slider(id, obj, key, fmt){
+  const el = $(id), out = $(id + 'V');
+  const sync = () => {
+    obj[key] = parseFloat(el.value);
+    if(out) out.textContent = fmt ? fmt(obj[key]) : obj[key].toFixed(2);
+  };
+  el.addEventListener('input', sync); sync();
+  return { sync, el };
+}
+function toggle(id, key, on = 'On', off = 'Off'){
+  const el = $(id);
+  const sync = () => { el.textContent = S[key] ? on : off; el.classList.toggle('on', !!S[key]); };
+  el.addEventListener('click', () => { S[key] = !S[key]; sync(); });
+  sync();
+}
+
+const SL = {};
+SL.thr    = slider('thr',    P, 'thr');
+SL.soft   = slider('soft',   P, 'soft',   v => v.toFixed(3));
+SL.gain   = slider('gain',   P, 'gain');
+SL.span   = slider('span',   P, 'span');
+SL.skip   = slider('skip',   P, 'skip',   v => v.toFixed(1));
+SL.dens   = slider('dens',   P, 'dens',   v => v.toFixed(1));
+SL.expo   = slider('expo',   P, 'expo');
+SL.nebula = slider('nebula', P, 'nebula');
+SL.stars  = slider('stars',  P, 'stars');
+SL.drift  = slider('drift',  P, 'drift',  v => v.toFixed(3));
+SL.spin   = slider('spin',   P, 'spin',   v => v.toFixed(3));
+SL.elBias = slider('elBias', P, 'elBias');
+SL.steps  = slider('steps',  S, 'steps',  v => v.toFixed(0));
+
+toggle('invert','invert');
+toggle('mirror','mirror');
+toggle('box','cage');
+toggle('envOn','envOn');
+toggle('autoSpin','autoSpin');
+toggle('freeze','frozen','Frozen','Freeze');
+
+$('maskSel').addEventListener('change', e => {
+  S.mask = parseInt(e.target.value);
+  $('keyRow').style.display = S.mask === 1 ? 'flex' : 'none';
+});
+$('keyCol').addEventListener('input', e => {
+  const h = e.target.value;
+  S.key = [parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255];
+});
+$('projSel').addEventListener('change', e => S.proj = parseInt(e.target.value));
+$('colSel').addEventListener('change',  e => S.color = parseInt(e.target.value));
+$('palSel').addEventListener('change',  e => S.pal = parseInt(e.target.value));
+$('resSel').addEventListener('change',  e => {
+  S.volW = parseInt(e.target.value); S.volH = Math.round(S.volW * 0.75); makeVolume();
+});
+$('depthSel').addEventListener('change', e => { S.volD = parseInt(e.target.value); makeVolume(); });
+
+$('clear').addEventListener('click', clearVolume);
+$('reset').addEventListener('click', () => { S.az = 0.62; S.el = 0.34; S.dist = 2.6; poke(); });
+$('useCam').addEventListener('click', startCamera);
+$('start').addEventListener('click', startCamera);
+$('fileIn').addEventListener('change', e => { if(e.target.files[0]) startFile(e.target.files[0]); });
+
+function download(blob, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$('snap').addEventListener('click', () => {
+  if(lastE) draw(lastE);
+  canvas.toBlob(b => download(b, `timecube-${Date.now()}.png`));
+});
+$('savePreset').addEventListener('click', () => {
+  const preset = {
+    tool:'time-cube', version:'1.1',
+    params:P,
+    view:{proj:S.proj, color:S.color, mask:S.mask, invert:S.invert, mirror:S.mirror,
+          key:S.key, pal:S.pal, envOn:S.envOn, cage:S.cage, autoSpin:S.autoSpin,
+          steps:S.steps, volD:S.volD, volW:S.volW},
+    modulation: mod.serialize()
+  };
+  download(new Blob([JSON.stringify(preset, null, 2)], {type:'application/json'}),
+           'time-cube-preset.json');
+});
+$('presetIn').addEventListener('change', e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const o = JSON.parse(r.result);
+      if(o.params) Object.assign(P, o.params);
+      if(o.view){
+        Object.assign(S, o.view);
+        if(o.view.volW) S.volH = Math.round(o.view.volW * 0.75);
+        makeVolume();
+      }
+      mod.load(o.modulation);
+      syncUI();
+    }catch(err){
+      fail('That preset didn’t load', 'The file isn’t valid Time Cube JSON. Save a fresh one to see the expected shape.');
+    }
+  };
+  r.readAsText(f);
+});
+document.querySelectorAll('.filebtn').forEach(l => {
+  l.addEventListener('keydown', e => {
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); $(l.htmlFor).click(); }
+  });
+});
+
+function syncUI(){
+  for(const k in SL){
+    const src = (k in P) ? P : S;
+    SL[k].el.value = src[k];
+    SL[k].el.dispatchEvent(new Event('input'));
+  }
+  $('maskSel').value = S.mask; $('projSel').value = S.proj;
+  $('colSel').value = S.color; $('palSel').value = S.pal;
+  $('depthSel').value = S.volD; $('resSel').value = S.volW;
+  $('keyRow').style.display = S.mask === 1 ? 'flex' : 'none';
+  ['invert','mirror','box','envOn','autoSpin'].forEach(id => {
+    const key = {box:'cage'}[id] || id;
+    const el = $(id);
+    el.textContent = S[key] ? 'On' : 'Off';
+    el.classList.toggle('on', !!S[key]);
+  });
+  markModulated();
+}
+
+$('toggle').addEventListener('click', () => {
+  const p = $('panel'); p.hidden = !p.hidden;
+  $('toggle').textContent = p.hidden ? 'Controls' : 'Hide';
+});
+addEventListener('keydown', e => {
+  if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if(e.code === 'Space'){ e.preventDefault(); $('freeze').click(); }
+  if(e.key === 'c' || e.key === 'C') clearVolume();
+  if(e.key === 'r' || e.key === 'R') $('autoSpin').click();
+});
+addEventListener('resize', resize);
+markModulated();
+</script>
+</body>
+</html>

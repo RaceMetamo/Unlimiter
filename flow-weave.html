@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow Weave</title>
+<style>
+  :root{--accent:#4fb0c6;--bg:#0e0e10;--panel:#17171a;--line:#2a2a2f;
+        --ink:#e6e4df;--dim:#8a8a92;--teal:#5f9ea0;}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);
+    font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    display:grid;grid-template-columns:1fr 300px;grid-template-rows:minmax(0,1fr);overflow:hidden}
+  @media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+    #rail{border-left:none;border-top:1px solid var(--line);max-height:52vh}}
+  #stage{position:relative;display:grid;place-content:safe center;padding:20px;
+    min-height:0;min-width:0;overflow:auto}
+  canvas{display:block;max-width:100%;max-height:100%;cursor:crosshair;touch-action:none;
+    box-shadow:0 0 0 1px var(--line),0 24px 60px -30px #000}
+  #hud{position:absolute;left:24px;bottom:24px;color:var(--dim);font-size:11px;
+    letter-spacing:.06em;pointer-events:none}
+  #rail{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:14px 14px 40px}
+  h1{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);
+    margin:2px 0 14px;font-weight:500}
+  h1 span{color:var(--dim);letter-spacing:.06em;display:block;text-transform:none;margin-top:3px}
+  #status{margin:0 0 12px;padding:8px 9px;font-size:11px;line-height:1.5;border:1px solid var(--line);
+    color:var(--dim);display:none;white-space:pre-wrap}
+  #status.on{display:block} #status.err{border-color:#a3543a;color:#e0a58c}
+  details.sec{border-top:1px solid var(--line)}
+  details.sec>summary{list-style:none;cursor:pointer;user-select:none;padding:11px 2px 10px;
+    font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--a,var(--accent));
+    display:flex;align-items:center;gap:8px}
+  details.sec>summary::-webkit-details-marker{display:none}
+  details.sec>summary::before{content:'\25B8';font-size:9px;opacity:.65;transition:transform .12s;display:inline-block}
+  details.sec[open]>summary::before{transform:rotate(90deg)}
+  details.sec[open]{padding-bottom:10px}
+  details.sec input[type=range]::-webkit-slider-thumb{background:var(--a,var(--accent))}
+  details.sec input[type=range]::-moz-range-thumb{background:var(--a,var(--accent))}
+  details.sec select:hover,details.sec button:hover,details.sec .file:hover{border-color:var(--a,var(--accent))}
+  details.sec .chk input{accent-color:var(--a,var(--accent))}
+  .sec-force{--a:#4fb0c6} .sec-fluid{--a:#7fd4e8} .sec-dye{--a:#b8e05f} .sec-part{--a:#d4708f} .sec-obs{--a:#a98bd0} .sec-heat{--a:#e2603c} .sec-paint{--a:#f2f0e8} .sec-mod{--a:#a98bd0}
+  .sec-surface{--a:#e2a13c} .sec-out{--a:#94a3ad}
+  label{display:block;margin:0 0 9px}
+  .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;
+    color:var(--dim);margin-bottom:3px}
+  .lab b{color:var(--ink);font-weight:400;font-variant-numeric:tabular-nums;cursor:text}
+  .lab b:hover{box-shadow:inset 0 -1px 0 var(--dim)}
+  input[type=range]{width:100%;height:16px;-webkit-appearance:none;appearance:none;background:none;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:1px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;
+    margin-top:-4px;border-radius:0;cursor:ew-resize}
+  input[type=range]::-moz-range-thumb{width:9px;height:9px;border:none;border-radius:0;cursor:ew-resize}
+  select,button,.file,input[type=color]{width:100%;background:#0c0c0e;color:var(--ink);
+    border:1px solid var(--line);padding:6px 8px;font:inherit;font-size:12px;border-radius:0;cursor:pointer}
+  input[type=color]{padding:2px;height:28px}
+  .file{display:block;text-align:center;margin-bottom:8px}.file input{display:none}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);margin-bottom:9px;cursor:pointer}
+  .note{font-size:10px;color:var(--dim);line-height:1.5;margin:-2px 0 10px}
+  .note em{color:var(--teal);font-style:normal}
+  .numedit{width:74px;background:#000;color:var(--accent);border:1px solid var(--accent);
+    font:inherit;font-size:11px;padding:0 3px;text-align:right}
+  .numedit:focus{outline:none}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas><div id="hud"></div></div>
+<div id="rail">
+  <h1>Flow Weave <b style="color:var(--dim);font-weight:400">v0.2</b>
+    <span>Metamo Industries · incompressible fluid, procedural dye</span></h1>
+  <div id="status"></div>
+
+  <details class="sec sec-force" open>
+    <summary>Forces</summary>
+    <div class="row"><button id="bCam">Webcam</button><button id="bClear">Reset</button></div>
+    <div style="height:6px"></div>
+    <div class="row">
+      <label class="file" tabindex="0" style="margin:0">Video file<input type="file" id="fVid" accept="video/*"></label>
+      <label class="file" tabindex="0" style="margin:0">Image<input type="file" id="fImg" accept="image/*"></label>
+    </div>
+    <div class="note"><em id="vSrc">No source</em> · A video file drives motion exactly as the webcam does, and either can also be used as the dye.</div>
+    <label><span class="lab">Webcam motion <b id="vCam"></b></span>
+      <input type="range" id="rCam" min="0" max="40" step="0.1" value="14"></label>
+    <label><span class="lab">Motion threshold <b id="vCamT"></b></span>
+      <input type="range" id="rCamT" min="0" max="0.15" step="0.001" value="0.012"></label>
+    <label><span class="lab">Brush <b id="vBrush"></b></span>
+      <input type="range" id="rBrush" min="0" max="60" step="0.5" value="26"></label>
+    <label><span class="lab">Brush size <b id="vBrushR"></b></span>
+      <input type="range" id="rBrushR" min="0.01" max="0.4" step="0.005" value="0.09"></label>
+    <label><span class="lab">Curl noise <b id="vCurl"></b></span>
+      <input type="range" id="rCurl" min="0" max="8" step="0.02" value="1.2"></label>
+    <label><span class="lab">Curl scale <b id="vCurlS"></b></span>
+      <input type="range" id="rCurlS" min="0.3" max="10" step="0.05" value="2"></label>
+    <label><span class="lab">Curl drift <b id="vCurlD"></b></span>
+      <input type="range" id="rCurlD" min="0" max="1" step="0.005" value="0.06"></label>
+    <div class="note">Forces push the velocity field; the fluid integrates them over time, so motion input is smoothed by the simulation rather than shown raw. <em>Threshold</em> rejects the small global luminance shifts that webcam auto-exposure produces.</div>
+  </details>
+
+  <details class="sec sec-fluid" open>
+    <summary>Fluid</summary>
+    <label><span class="lab">Velocity damping <b id="vVDis"></b></span>
+      <input type="range" id="rVDis" min="0" max="0.06" step="0.0005" value="0.006"></label>
+    <label><span class="lab">Vorticity <b id="vVort"></b></span>
+      <input type="range" id="rVort" min="0" max="6" step="0.02" value="1.6"></label>
+    <label><span class="lab">Pressure passes <b id="vIter"></b></span>
+      <input type="range" id="rIter" min="4" max="60" step="1" value="26"></label>
+    <label><span class="lab">Max speed <b id="vMaxV"></b></span>
+      <input type="range" id="rMaxV" min="4" max="200" step="1" value="55"></label>
+    <div class="note">Vorticity adds force proportional to curl, and curl grows with speed — unbounded, that feeds itself into noise. This caps both the confinement force and the velocity, so you can push vorticity and time step much harder before it breaks.</div>
+    <label><span class="lab">Time step <b id="vDt"></b></span>
+      <input type="range" id="rDt" min="0.2" max="3" step="0.01" value="1"></label>
+    <label><span class="lab">Sim resolution</span>
+      <select id="sSim">
+        <option value="256">256 — fastest</option>
+        <option value="384">384</option>
+        <option value="512" selected>512</option>
+        <option value="768">768 — finest</option>
+      </select></label>
+    <div class="note">The velocity field is solved coarse and interpolated, as in the gpu-io example. Dye runs at full resolution, so detail comes from the dye, not the solver.</div>
+  </details>
+
+  <details class="sec sec-paint" open>
+    <summary>Spray &amp; drips</summary>
+    <label class="chk"><input type="checkbox" id="cPaintOn" checked> Enable paint</label>
+    <label><span class="lab">Colour</span><input type="color" id="cSpray" value="#f2f0e8"></label>
+    <div class="row"><button id="bWipe">Wipe paint</button><button id="bDripNow">Soak</button></div>
+    <div style="height:8px"></div>
+    <label><span class="lab">Nozzle size <b id="vSprayR"></b></span>
+      <input type="range" id="rSprayR" min="0.005" max="0.35" step="0.002" value="0.06"></label>
+    <label><span class="lab">Density <b id="vSprayD"></b></span>
+      <input type="range" id="rSprayD" min="0.02" max="1" step="0.005" value="0.35"></label>
+    <label><span class="lab">Flow <b id="vSprayF"></b></span>
+      <input type="range" id="rSprayF" min="0.1" max="12" step="0.05" value="2.2"></label>
+    <label><span class="lab">Cap hardness <b id="vSprayH"></b></span>
+      <input type="range" id="rSprayH" min="0.4" max="8" step="0.05" value="2.2"></label>
+    <label><span class="lab">Splatter <b id="vSplat"></b></span>
+      <input type="range" id="rSplat" min="0" max="4" step="0.02" value="0.6"></label>
+    <div class="note">Deposition is stochastic — that speckle at the edge of the cone is what separates spray from an airbrush gradient. Low hardness is a fat cap, high is a skinny one.</div>
+    <label><span class="lab">Hold before running <b id="vHold"></b></span>
+      <input type="range" id="rHold" min="0.05" max="3" step="0.01" value="0.55"></label>
+    <label><span class="lab">Run speed <b id="vDripRate"></b></span>
+      <input type="range" id="rDripRate" min="0" max="1" step="0.005" value="0.55"></label>
+    <label><span class="lab">Bead <b id="vBead"></b></span>
+      <input type="range" id="rBead" min="0" max="2.5" step="0.01" value="0.5"></label>
+    <label><span class="lab">Wander <b id="vWander"></b></span>
+      <input type="range" id="rWander" min="0" max="8" step="0.05" value="1.2"></label>
+    <label><span class="lab">Drying <b id="vDry"></b></span>
+      <input type="range" id="rDry" min="0" max="0.08" step="0.0005" value="0.004"></label>
+    <label><span class="lab">Gravity angle <b id="vGravAng"></b></span>
+      <input type="range" id="rGravAng" min="-180" max="180" step="1" value="0"></label>
+    <label><span class="lab">Wet drag by fluid <b id="vWetDrag"></b></span>
+      <input type="range" id="rWetDrag" min="0" max="3" step="0.02" value="0.35"></label>
+    <div class="note">Run speed is capped at one cell per step — above that the transport amplifies instead of flowing. Paint runs only where more has built up than the wall can hold, so a run drains its source and tapers on its own. Solids act as ledges — drips pool on them rather than running off.</div>
+    <label><span class="lab">Filament deposit <b id="vPDep"></b></span>
+      <input type="range" id="rPDep" min="0" max="4" step="0.02" value="0"></label>
+    <label><span class="lab">Opacity <b id="vPaintMix"></b></span>
+      <input type="range" id="rPaintMix" min="0" max="4" step="0.02" value="1.6"></label>
+    <label><span class="lab">Wet sheen <b id="vGloss"></b></span>
+      <input type="range" id="rGloss" min="0" max="4" step="0.02" value="1.2"></label>
+  </details>
+
+  <details class="sec sec-heat">
+    <summary>Heat</summary>
+    <label><span class="lab">Buoyancy <b id="vBuoy"></b></span>
+      <input type="range" id="rBuoy" min="-6" max="12" step="0.05" value="0"></label>
+    <label><span class="lab">Weight <b id="vWeight"></b></span>
+      <input type="range" id="rWeight" min="0" max="4" step="0.02" value="0.4"></label>
+    <label><span class="lab">Cooling <b id="vCool"></b></span>
+      <input type="range" id="rCool" min="0" max="0.15" step="0.001" value="0.02"></label>
+    <label><span class="lab">Ambient <b id="vAmb"></b></span>
+      <input type="range" id="rAmb" min="-2" max="2" step="0.01" value="0"></label>
+    <label><span class="lab">Brush heat <b id="vBHeat"></b></span>
+      <input type="range" id="rBHeat" min="-20" max="20" step="0.1" value="0"></label>
+    <label><span class="lab">Motion heat <b id="vCHeat"></b></span>
+      <input type="range" id="rCHeat" min="-20" max="20" step="0.1" value="0"></label>
+    <div class="note">Off by default. Raise <em>Brush heat</em> or <em>Motion heat</em> to introduce heat, then <em>Buoyancy</em> to make it rise. Heat is advected like the dye. <em>Weight</em> pulls the hottest fluid back down, which is what makes a plume roll over into a mushroom rather than climbing forever. Negative brush heat draws cold, sinking fluid.</div>
+  </details>
+
+  <details class="sec sec-obs">
+    <summary>Obstacles</summary>
+    <label><span class="lab">Source</span>
+      <select id="sObs">
+        <option value="0">None</option>
+        <option value="1">Loaded image</option>
+        <option value="2">Webcam / video</option>
+      </select></label>
+    <label><span class="lab">Threshold <b id="vObsT"></b></span>
+      <input type="range" id="rObsT" min="0" max="1" step="0.005" value="0.5"></label>
+    <label><span class="lab">Edge softness <b id="vObsS"></b></span>
+      <input type="range" id="rObsS" min="0" max="0.4" step="0.005" value="0.06"></label>
+    <label class="chk"><input type="checkbox" id="cObsInv"> Invert (dark areas solid)</label>
+    <label><span class="lab">Fill colour</span><input type="color" id="cObsCol" value="#0d0f13"></label>
+    <div class="note">Solid regions the fluid cannot enter — no flow inside, zero pressure gradient at the faces, dye pushed aside. Feed in architectural photography and the building becomes the obstacle; use the webcam and your silhouette does.</div>
+  </details>
+
+  <details class="sec sec-dye" open>
+    <summary>Dye</summary>
+    <label><span class="lab">Source</span>
+      <select id="sDye">
+        <option value="0">Noise field</option>
+        <option value="1">Cellular</option>
+        <option value="2">Ornament grid</option>
+        <option value="3">Rings</option>
+        <option value="5">Stripes</option>
+        <option value="6">Checker</option>
+        <option value="7">Hex grid</option>
+        <option value="8">Voronoi cracks</option>
+        <option value="9">Truchet weave</option>
+        <option value="10">Interference</option>
+        <option value="11">Flow-aligned bands</option>
+        <option value="4">Image / webcam</option>
+      </select></label>
+    <label><span class="lab">Injection <b id="vInj"></b></span>
+      <input type="range" id="rInj" min="0" max="1" step="0.005" value="0.09"></label>
+    <label><span class="lab">Inject where moving <b id="vInjM"></b></span>
+      <input type="range" id="rInjM" min="0" max="8" step="0.05" value="0"></label>
+    <label><span class="lab">Pattern scale <b id="vScale"></b></span>
+      <input type="range" id="rScale" min="0.2" max="24" step="0.05" value="3"></label>
+    <label><span class="lab">Pattern drift <b id="vPDrift"></b></span>
+      <input type="range" id="rPDrift" min="0" max="2" step="0.01" value="0.1"></label>
+    <label><span class="lab">Rotation <b id="vPAng"></b></span>
+      <input type="range" id="rPAng" min="-180" max="180" step="1" value="0"></label>
+    <label><span class="lab">Stretch <b id="vPStretch"></b></span>
+      <input type="range" id="rPStretch" min="0.15" max="6" step="0.01" value="1"></label>
+    <label><span class="lab">Warp <b id="vPWarp"></b></span>
+      <input type="range" id="rPWarp" min="0" max="3" step="0.01" value="0"></label>
+    <label><span class="lab">Detail <b id="vPDetail"></b></span>
+      <input type="range" id="rPDetail" min="0" max="1" step="0.01" value="0.55"></label>
+    <label><span class="lab">Gain <b id="vPGain"></b></span>
+      <input type="range" id="rPGain" min="0.1" max="8" step="0.02" value="1"></label>
+    <label><span class="lab">Bias <b id="vPBias"></b></span>
+      <input type="range" id="rPBias" min="-0.5" max="0.5" step="0.005" value="0"></label>
+    <label><span class="lab">Steps <b id="vPSteps"></b></span>
+      <input type="range" id="rPSteps" min="1" max="16" step="1" value="1"></label>
+    <label class="chk"><input type="checkbox" id="cPInv"> Invert pattern</label>
+    <div class="note">Rotation, stretch and warp act on the coordinate; gain, bias and steps act on the value. Every generator goes through the same stage, so the controls behave the same whichever you pick. <em>Warp</em> pushes any pattern toward the organic.</div>
+    <label><span class="lab">Fade <b id="vDDis"></b></span>
+      <input type="range" id="rDDis" min="0" max="0.03" step="0.0002" value="0.0035"></label>
+    <div class="row3">
+      <input type="color" id="cA" value="#10233a">
+      <input type="color" id="cB" value="#e2603c">
+      <input type="color" id="cC" value="#7fd4e8"></div>
+    <div class="note">Colour is injected into the fluid and carried by it. Nothing resets, so there is no crossfade and no pulse — the gradients come from advection.</div>
+  </details>
+
+  <details class="sec sec-part" open>
+    <summary>Filaments</summary>
+    <label class="chk"><input type="checkbox" id="cPOn" checked> Enable particles</label>
+    <label><span class="lab">Count</span>
+      <select id="sPW">
+        <option value="128">16k</option>
+        <option value="256" selected>65k</option>
+        <option value="384">147k</option>
+        <option value="512">262k</option>
+      </select></label>
+    <label><span class="lab">Trail length <b id="vPFade"></b></span>
+      <input type="range" id="rPFade" min="0.002" max="0.4" step="0.002" value="0.045"></label>
+    <label><span class="lab">Lifetime <b id="vPLife"></b></span>
+      <input type="range" id="rPLife" min="10" max="600" step="5" value="110"></label>
+    <label><span class="lab">Speed <b id="vPSpeed"></b></span>
+      <input type="range" id="rPSpeed" min="0.05" max="4" step="0.01" value="1"></label>
+    <label><span class="lab">Point size <b id="vPSize"></b></span>
+      <input type="range" id="rPSize" min="0.5" max="8" step="0.1" value="1.6"></label>
+    <label><span class="lab">Intensity <b id="vPInt"></b></span>
+      <input type="range" id="rPInt" min="0" max="3" step="0.01" value="0.5"></label>
+    <label><span class="lab">Mix over dye <b id="vPMix"></b></span>
+      <input type="range" id="rPMix" min="0" max="2" step="0.01" value="1"></label>
+    <div class="note">Particles follow the velocity field and take their colour from the dye beneath them, leaving additive trails — filaments rather than washes. Short lifetimes and long trails give the wispy look; long lifetimes give continuous streamlines.</div>
+  </details>
+
+  <details class="sec sec-surface">
+    <summary>Surface</summary>
+    <label><span class="lab">Relief <b id="vRelief"></b></span>
+      <input type="range" id="rRelief" min="0" max="6" step="0.02" value="1.4"></label>
+    <label><span class="lab">Light angle <b id="vLightA"></b></span>
+      <input type="range" id="rLightA" min="0" max="360" step="1" value="135"></label>
+    <label><span class="lab">Specular <b id="vSpec"></b></span>
+      <input type="range" id="rSpec" min="0" max="3" step="0.01" value="0.6"></label>
+    <label><span class="lab">Contrast <b id="vCon"></b></span>
+      <input type="range" id="rCon" min="0.2" max="3" step="0.01" value="1.1"></label>
+    <label><span class="lab">Saturation <b id="vSat"></b></span>
+      <input type="range" id="rSat" min="0" max="2.5" step="0.01" value="1.15"></label>
+    <label><span class="lab">Posterize <b id="vPost"></b></span>
+      <input type="range" id="rPost" min="1" max="24" step="1" value="1"></label>
+    <div class="note">Height from dye luminance, differentiated into a normal and lit — the FluidNinja surface trick, applied to a real fluid.</div>
+  </details>
+
+  <details class="sec sec-mod">
+    <summary>Audio &amp; modulation</summary>
+    <div id="audioMount"></div>
+    <div id="lfos"></div>
+    <div class="note">Four slots, each driving any parameter from an LFO or an audio band. Audio is unipolar, so it only ever adds to the value you dialled in — silence gives you exactly your settings.</div>
+  </details>
+
+  <details class="sec sec-out">
+    <summary>Output</summary>
+    <label><span class="lab">View</span>
+      <select id="sView">
+        <option value="0">Composite</option>
+        <option value="1">Velocity</option>
+        <option value="2">Pressure</option>
+        <option value="3">Dye only</option>
+        <option value="4">Filaments only</option>
+        <option value="5">Obstacle mask</option>
+        <option value="6">Temperature</option>
+        <option value="7">Paint only</option>
+      </select></label>
+    <div class="row"><button id="bPNG">Save PNG</button><button id="bRec">● Record</button></div>
+    <div class="note"><em id="vRec">MP4 where supported, WebM otherwise.</em></div>
+  </details>
+</div>
+
+<script>
+/* ===== BEGIN modulation.js v1.0 (shared across the suite) ===== */
+/* =============================================================================
+   modulation.js — shared modulation layer for browser-based AV tools
+   v1.0 · classic script (no modules, no build step, works from file://)
+
+   Gives any tool: LFO slots, audio-reactive bands (mic or file), a rail UI,
+   and preset serialization. The host tool owns its parameters; this module
+   only reads them and returns a modulated copy.
+
+   ---------------------------------------------------------------- USAGE ----
+   <script src="modulation.js"><\/script>
+
+   const mod = new Modulation({
+     targets: {
+       power: { label: 'Power', span: 1.5, min: 0, max: 12 },
+       hue:   { label: 'Hue',   span: 60,  min: 0, max: 360 }
+     },
+     slots: 4,
+     mountLfo:   document.getElementById('lfos'),
+     mountAudio: document.getElementById('audio'),
+     onChange: () => draw(),                  // called when any control moves
+     onStatus: (msg, isErr) => say(msg, isErr)
+   });
+
+   function frame(dt){
+     mod.tick(dt);                            // advance clock, read audio
+     const E = mod.apply(PARAMS);             // modulated copy of your params
+     render(E);
+   }
+
+   mod.serialize()            -> plain object for your preset JSON
+   mod.load(obj)              -> restore
+   mod.isModulated('power')   -> true if a slot is driving it
+   mod.source('bass')         -> current band value, 0..1
+   mod.active                 -> true while audio is running
+
+   ------------------------------------------------------------- TARGETS ----
+   span   the +/- swing at depth 1. Set it to a musically useful amount for
+          THAT parameter, not to the slider range — small spans are usually
+          right, since most visual parameters break well before their maximum.
+   min/max optional clamp. Omit for no clamp. Pass a function via `range`
+          in the config if your limits change at runtime.
+
+   ---------------------------------------------------------------- STYLE ----
+   Inherits these CSS variables if the host defines them, else uses fallbacks:
+     --mod-accent  --mod-ink  --mod-dim  --mod-line  --mod-field
+   ========================================================================= */
+
+(function (global) {
+'use strict';
+
+const WAVES = ['Sine', 'Triangle', 'Sawtooth', 'Square', 'Noise'];
+const BANDS = [
+  { key: 'level', label: 'Level', lo: 20,   hi: 16000, gain: 1.6 },
+  { key: 'bass',  label: 'Bass',  lo: 20,   hi: 250,   gain: 1.0 },
+  { key: 'mid',   label: 'Mid',   lo: 250,  hi: 2000,  gain: 1.0 },
+  { key: 'high',  label: 'High',  lo: 2000, hi: 8000,  gain: 1.0 }
+];
+const AUDIO_BASE = 10;               // wave ids >= this select an audio band
+
+const CSS = `
+.mod-wrap{--a:var(--mod-accent,#e2a13c);--ink:var(--mod-ink,#e6e4df);
+  --dim:var(--mod-dim,#8a8a92);--line:var(--mod-line,#2a2a2f);--field:var(--mod-field,#0c0c0e)}
+.mod-wrap label{display:block;margin:0 0 9px}
+.mod-lab{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:11px;color:var(--dim);margin-bottom:3px}
+.mod-lab b{color:var(--ink);font-weight:400;font-variant-numeric:tabular-nums;cursor:text}
+.mod-lab b:hover{box-shadow:inset 0 -1px 0 var(--dim)}
+.mod-wrap input[type=range]{width:100%;height:16px;-webkit-appearance:none;appearance:none;
+  background:none;margin:0}
+.mod-wrap input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--line)}
+.mod-wrap input[type=range]::-moz-range-track{height:1px;background:var(--line)}
+.mod-wrap input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;
+  background:var(--a);margin-top:-4px;border-radius:0;cursor:ew-resize}
+.mod-wrap input[type=range]::-moz-range-thumb{width:9px;height:9px;background:var(--a);
+  border:none;border-radius:0;cursor:ew-resize}
+.mod-wrap select,.mod-wrap button,.mod-wrap .mod-file{width:100%;background:var(--field);
+  color:var(--ink);border:1px solid var(--line);padding:6px 8px;font:inherit;font-size:12px;
+  border-radius:0;cursor:pointer}
+.mod-wrap select:hover,.mod-wrap button:hover,.mod-wrap .mod-file:hover{border-color:var(--a)}
+.mod-file{display:block;text-align:center;margin-bottom:8px}
+.mod-file input{display:none}
+.mod-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.mod-note{font-size:10px;color:var(--dim);line-height:1.5;margin:-2px 0 10px}
+.mod-chk{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);
+  margin-bottom:9px;cursor:pointer}
+.mod-chk input{accent-color:var(--a)}
+.mod-meter{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.mod-meter span{font-size:10px;color:var(--dim);width:34px;letter-spacing:.06em}
+.mod-meter i{flex:1;height:5px;background:#0a0a0c;border:1px solid var(--line);display:block}
+.mod-meter u{display:block;height:100%;width:0;background:var(--a);text-decoration:none;
+  transition:width .04s linear}
+.mod-meter:first-child u{opacity:.65}
+.mod-meters{margin:2px 0 10px}
+details.mod-slot{border:1px solid var(--line);padding:0 8px;margin-bottom:7px}
+details.mod-slot.on{border-color:var(--a)}
+details.mod-slot>summary{list-style:none;cursor:pointer;user-select:none;padding:7px 0;
+  font-size:10px;letter-spacing:.1em;color:var(--dim);display:flex;align-items:center;gap:7px}
+details.mod-slot>summary::-webkit-details-marker{display:none}
+details.mod-slot>summary::before{content:'\\25B8';font-size:9px;opacity:.65;
+  transition:transform .12s ease;display:inline-block}
+details.mod-slot[open]>summary::before{transform:rotate(90deg)}
+details.mod-slot[open]{padding-bottom:6px}
+details.mod-slot.on>summary{color:var(--a)}
+.mod-wrap select{margin-bottom:6px}
+.mod-edit{width:74px;background:#000;color:var(--a);border:1px solid var(--a);
+  font:inherit;font-size:11px;padding:0 3px;text-align:right;border-radius:0}
+.mod-edit:focus{outline:none}
+`;
+
+let cssInjected = false;
+function injectCSS() {
+  if (cssInjected) return;
+  cssInjected = true;
+  const st = document.createElement('style');
+  st.textContent = CSS;
+  document.head.appendChild(st);
+}
+
+/* Click a readout to type an exact value. Typing outside the slider's range
+   widens the range rather than refusing — ranges are conveniences, not limits. */
+function makeEditable(b, r, commit) {
+  b.addEventListener('click', () => {
+    if (b._editing) return;
+    b._editing = true;
+    const prev = b.textContent;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'mod-edit'; inp.value = r.value;
+    b.textContent = ''; b.appendChild(inp);
+    inp.focus(); inp.select();
+    const done = ok => {
+      if (!b._editing) return;
+      b._editing = false;
+      b.textContent = prev;
+      if (!ok) return;
+      const v = parseFloat(String(inp.value).replace(/[^0-9eE+\-.]/g, ''));
+      if (!isFinite(v)) return;
+      if (v > parseFloat(r.max)) r.max = String(v);
+      if (v < parseFloat(r.min)) r.min = String(v);
+      commit(v);
+    };
+    inp.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); done(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); done(false); }
+    });
+    inp.addEventListener('blur', () => done(true));
+  });
+}
+
+function hash1(n) {
+  const s = Math.sin(n * 127.1) * 43758.5453;
+  return (s - Math.floor(s)) * 2 - 1;
+}
+
+/* ph is in cycles; returns -1..1 */
+function waveAt(kind, ph) {
+  const t = ph - Math.floor(ph);
+  switch (kind) {
+    case 0: return Math.sin(t * 2 * Math.PI);
+    case 1: return 4 * Math.abs(t - 0.5) - 1;
+    case 2: return t * 2 - 1;
+    case 3: return t < 0.5 ? 1 : -1;
+    default: {                                    // value noise, cubic-smoothed
+      const i = Math.floor(ph), f = ph - i, u = f * f * (3 - 2 * f);
+      return hash1(i) * (1 - u) + hash1(i + 1) * u;
+    }
+  }
+}
+
+function Modulation(cfg) {
+  if (!(this instanceof Modulation)) return new Modulation(cfg);
+  injectCSS();
+
+  const self = this;
+  const targets = cfg.targets || {};
+  const keys = Object.keys(targets);
+  if (!keys.length) throw new Error('Modulation: config.targets is empty.');
+
+  const slotCount = cfg.slots || 4;
+  const rawOnChange = cfg.onChange || function () {};
+  const onChange = function () { if (!booting) rawOnChange(); };
+  const onStatus  = cfg.onStatus || function () {};
+  const rangeOf   = cfg.range || function (k) {
+    const t = targets[k];
+    return [t && t.min != null ? t.min : -Infinity,
+            t && t.max != null ? t.max :  Infinity];
+  };
+
+  /* ---- state ---- */
+  let booting = true;            // no host callbacks until construction finishes
+  const slots = [];
+  for (let i = 0; i < slotCount; i++) {
+    const d = (cfg.defaults && cfg.defaults[i]) || {};
+    slots.push({
+      on:     d.on     || false,
+      target: d.target || keys[Math.min(i, keys.length - 1)],
+      wave:   d.wave   != null ? d.wave   : 0,
+      rate:   d.rate   != null ? d.rate   : 0.0167,   // one cycle per minute
+      depth:  d.depth  != null ? d.depth  : 0.25,
+      phase:  d.phase  != null ? d.phase  : i * 90
+    });
+  }
+
+  const bands = { level: 0, bass: 0, mid: 0, high: 0 };
+  let clock = 0;
+  let gain = cfg.audioGain != null ? cfg.audioGain : 1.6;
+  let release = cfg.audioRelease != null ? cfg.audioRelease : 0.12;
+
+  let AC = null, analyser = null, freq = null, micStream = null, mediaNode = null;
+  this.active = false;
+
+  /* ---- audio ---- */
+  function ensureAnalyser() {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (!analyser) {
+      analyser = AC.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.55;
+      freq = new Uint8Array(analyser.frequencyBinCount);
+    }
+    return AC;
+  }
+  function bandAvg(lo, hi) {
+    const nyq = AC.sampleRate / 2, n = freq.length;
+    const a = Math.max(0, Math.floor(lo / nyq * n));
+    const b = Math.min(n - 1, Math.ceil(hi / nyq * n));
+    if (b < a) return 0;
+    let sum = 0;
+    for (let i = a; i <= b; i++) sum += freq[i];
+    return sum / (b - a + 1) / 255;
+  }
+
+  this.startMic = async function () {
+    try {
+      ensureAnalyser(); await AC.resume();
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      AC.createMediaStreamSource(micStream).connect(analyser);   // not to output
+      self.active = true;
+      onStatus('', false);
+      if (cfg.onAudioStart) cfg.onAudioStart();
+    } catch (e) {
+      onStatus('Microphone unavailable: ' + e.message +
+        '\nBrowsers only grant mic access over https:// or localhost. Opening this ' +
+        'file directly from disk may be blocked — serve the folder locally if so.', true);
+    }
+  };
+
+  this.playFile = async function (file) {
+    try {
+      ensureAnalyser(); await AC.resume();
+      const a = ui.audioEl;
+      a.src = URL.createObjectURL(file);
+      a.style.display = 'block';
+      if (!mediaNode) mediaNode = AC.createMediaElementSource(a);   // once per element
+      mediaNode.connect(analyser);
+      analyser.connect(AC.destination);                            // so you can hear it
+      await a.play();
+      self.active = true;
+      onStatus('', false);
+      if (cfg.onAudioStart) cfg.onAudioStart();
+    } catch (e) {
+      onStatus('Could not play that audio file: ' + e.message, true);
+    }
+  };
+
+  this.stopAudio = function () {
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (mediaNode) { try { mediaNode.disconnect(analyser); } catch (e) {} }
+    if (ui.audioEl) ui.audioEl.pause();
+    self.active = false;
+    for (const k in bands) bands[k] = 0;
+    if (ui.meters) for (const k in ui.meters) ui.meters[k].style.width = '0%';
+    onStatus('', false);
+  };
+
+  /* Returns the analyser node so a host can mux audio into a recording. */
+  this.analyserNode = function () { return analyser; };
+  this.audioContext = function () { return AC; };
+
+  /* ---- per-frame ---- */
+  this.tick = function (dt) {
+    clock += dt;
+    if (!analyser || !self.active) return;
+    analyser.getByteFrequencyData(freq);
+    const rel = Math.min(1, dt / Math.max(0.01, release));  // fall rate; rise is instant
+    for (const B of BANDS) {
+      const v = Math.min(1, bandAvg(B.lo, B.hi) * B.gain * gain);
+      bands[B.key] = v > bands[B.key] ? v : bands[B.key] + (v - bands[B.key]) * rel;
+      if (ui.meters && ui.meters[B.key])
+        ui.meters[B.key].style.width = (bands[B.key] * 100).toFixed(1) + '%';
+    }
+  };
+
+  this.source = function (k) { return bands[k] || 0; };
+  this.clock  = function () { return clock; };
+  this.resetClock = function () { clock = 0; };
+
+  /* Returns a modulated copy of params. Never mutates the original. */
+  this.apply = function (params) {
+    const E = Object.assign({}, params);
+    for (const L of slots) {
+      if (!L.on) continue;
+      const T = targets[L.target];
+      if (!T || !(L.target in E)) continue;
+      const s = L.wave >= AUDIO_BASE
+        ? bands[BANDS[L.wave - AUDIO_BASE].key]                 // audio: unipolar 0..1
+        : waveAt(L.wave, clock * L.rate + L.phase / 360);       // LFO: bipolar -1..1
+      const r = rangeOf(L.target);
+      const v = E[L.target] + T.span * L.depth * s;
+      E[L.target] = Math.min(r[1], Math.max(r[0], v));
+    }
+    return E;
+  };
+
+  this.isModulated = function (key) {
+    for (const L of slots) if (L.on && L.target === key) return true;
+    return false;
+  };
+  this.modulatedKeys = function () {
+    const out = [];
+    for (const L of slots) if (L.on && out.indexOf(L.target) < 0) out.push(L.target);
+    return out;
+  };
+
+  /* ---- presets ---- */
+  this.serialize = function () {
+    return {
+      gain: gain, release: release,
+      slots: slots.map(L => ({ on: L.on, target: L.target, wave: L.wave,
+                               rate: L.rate, depth: L.depth, phase: L.phase }))
+    };
+  };
+  this.load = function (o) {
+    if (!o) return;
+    if (typeof o.gain === 'number') gain = o.gain;
+    if (typeof o.release === 'number') release = o.release;
+    const list = Array.isArray(o.slots) ? o.slots : (Array.isArray(o) ? o : []);
+    list.forEach((s, i) => { if (slots[i]) Object.assign(slots[i], s); });
+    syncAll();
+  };
+
+  /* ---- UI ---- */
+  const ui = { meters: null, audioEl: null, syncs: [] };
+
+  function slider(id, label, min, max, step, val, fmt, set) {
+    const wrap = document.createElement('label');
+    wrap.innerHTML = '<span class="mod-lab">' + label + ' <b></b></span>' +
+      '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '">';
+    const b = wrap.querySelector('b'), r = wrap.querySelector('input');
+    r.value = val;
+    const show = () => { b.textContent = fmt(parseFloat(r.value)); };
+    r.addEventListener('input', () => { set(parseFloat(r.value)); show(); onChange(); });
+    makeEditable(b, r, v => { r.value = v; set(v); show(); onChange(); });
+    wrap._sync = v => { r.value = v; show(); };
+    show();
+    return wrap;
+  }
+
+  function buildAudio(host) {
+    if (!host) return;
+    host.classList.add('mod-wrap');
+    const row = document.createElement('div');
+    row.className = 'mod-row';
+    const bMic = document.createElement('button'); bMic.textContent = 'Microphone';
+    const bStop = document.createElement('button'); bStop.textContent = 'Stop';
+    row.append(bMic, bStop);
+    host.appendChild(row);
+
+    const fileLab = document.createElement('label');
+    fileLab.className = 'mod-file'; fileLab.tabIndex = 0;
+    fileLab.textContent = 'Audio file';
+    const fin = document.createElement('input');
+    fin.type = 'file'; fin.accept = 'audio/*';
+    fileLab.appendChild(fin);
+    host.appendChild(fileLab);
+
+    const aud = document.createElement('audio');
+    aud.controls = true;
+    aud.style.cssText = 'width:100%;height:32px;display:none';
+    host.appendChild(aud);
+    ui.audioEl = aud;
+
+    const mBox = document.createElement('div');
+    mBox.className = 'mod-meters';
+    ui.meters = {};
+    for (const B of BANDS) {
+      const m = document.createElement('div');
+      m.className = 'mod-meter';
+      m.innerHTML = '<span>' + B.label + '</span><i><u></u></i>';
+      mBox.appendChild(m);
+      ui.meters[B.key] = m.querySelector('u');
+    }
+    host.appendChild(mBox);
+
+    const gs = slider('g', 'Gain', 0.2, 6, 0.01, gain, v => v.toFixed(2), v => { gain = v; });
+    const rs = slider('r', 'Release', 0.01, 0.6, 0.005, release,
+                      v => v.toFixed(3) + 's', v => { release = v; });
+    host.append(gs, rs);
+    ui.syncs.push(() => { gs._sync(gain); rs._sync(release); });
+
+    const note = document.createElement('div');
+    note.className = 'mod-note';
+    note.textContent = 'Bands rise instantly and fall at the Release rate. ' +
+      'Pick them as sources in a slot below; audio is unipolar, so it only ever ' +
+      'adds to a parameter\'s base value.';
+    host.appendChild(note);
+
+    bMic.addEventListener('click', () => self.startMic());
+    bStop.addEventListener('click', () => self.stopAudio());
+    fin.addEventListener('change', e => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (f) self.playFile(f);
+    });
+    fileLab.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fin.click(); }
+    });
+  }
+
+  function buildSlots(host) {
+    if (!host) return;
+    host.classList.add('mod-wrap');
+    slots.forEach((L, i) => {
+      const d = document.createElement('details');
+      d.className = 'mod-slot';
+
+      const sum = document.createElement('summary');
+      const ttl = document.createElement('span');
+      sum.appendChild(ttl);
+      d.appendChild(sum);
+
+      const body = document.createElement('div');
+
+      const chk = document.createElement('label');
+      chk.className = 'mod-chk';
+      chk.innerHTML = '<input type="checkbox"> Enabled';
+      const on = chk.querySelector('input');
+      body.appendChild(chk);
+
+      const tg = document.createElement('select');
+      tg.innerHTML = keys.map(k =>
+        '<option value="' + k + '">' + (targets[k].label || k) + '</option>').join('');
+      body.appendChild(tg);
+
+      const wv = document.createElement('select');
+      wv.innerHTML =
+        '<optgroup label="LFO">' + WAVES.map((w, j) =>
+          '<option value="' + j + '">' + w + '</option>').join('') + '</optgroup>' +
+        '<optgroup label="Audio">' + BANDS.map((b, j) =>
+          '<option value="' + (AUDIO_BASE + j) + '">' + b.label + '</option>').join('') +
+        '</optgroup>';
+      body.appendChild(wv);
+
+      const rateS = slider('rate', 'Rate', 0.002, 0.4, 0.001, L.rate,
+        v => v < 0.017 ? (1 / v).toFixed(0) + 's cycle' : v.toFixed(3) + ' Hz',
+        v => { L.rate = v; });
+      const depthS = slider('depth', 'Depth', 0, 1, 0.01, L.depth,
+        v => (v * 100).toFixed(0) + '%', v => { L.depth = v; });
+      const phaseS = slider('phase', 'Phase', 0, 360, 1, L.phase,
+        v => v.toFixed(0) + '\u00b0', v => { L.phase = v; });
+      body.append(rateS, depthS, phaseS);
+
+      d.appendChild(body);
+      host.appendChild(d);
+
+      // Never touches open/closed state — only a summary click can collapse a slot.
+      const refresh = () => {
+        d.classList.toggle('on', L.on);
+        const src = L.wave >= AUDIO_BASE
+          ? BANDS[L.wave - AUDIO_BASE].label : WAVES[L.wave];
+        const tl = targets[L.target] ? (targets[L.target].label || L.target) : L.target;
+        ttl.textContent = 'LFO ' + (i + 1) + (L.on ? ' \u00b7 ' + tl + ' \u2190 ' + src
+                                                   : ' \u00b7 off');
+        const isAudio = L.wave >= AUDIO_BASE;
+        rateS.style.opacity  = isAudio ? 0.35 : 1;   // rate and phase are meaningless
+        phaseS.style.opacity = isAudio ? 0.35 : 1;   // when an audio band drives the slot
+        onChange();
+      };
+      on.addEventListener('change', e => { L.on = e.target.checked; refresh(); });
+      tg.addEventListener('change', e => { L.target = e.target.value; refresh(); });
+      wv.addEventListener('change', e => { L.wave = +e.target.value; refresh(); });
+      [rateS, depthS, phaseS].forEach(s =>
+        s.querySelector('input').addEventListener('input', refresh));
+
+      ui.syncs.push(() => {
+        on.checked = L.on; tg.value = L.target; wv.value = L.wave;
+        rateS._sync(L.rate); depthS._sync(L.depth); phaseS._sync(L.phase);
+        refresh();
+      });
+      refresh();
+    });
+  }
+
+  function syncAll() { ui.syncs.forEach(f => f()); }
+  this.sync = syncAll;
+
+  buildAudio(cfg.mountAudio);
+  buildSlots(cfg.mountLfo);
+  syncAll();
+  booting = false;               // host may now be called back safely
+}
+
+Modulation.WAVES = WAVES;
+Modulation.BANDS = BANDS;
+Modulation.version = '1.0';
+
+global.Modulation = Modulation;
+
+})(typeof window !== 'undefined' ? window : this);
+
+/* ===== END modulation.js ===== */
+</script>
+<script>
+const el = id => document.getElementById(id);
+const cv = el('c'), statusEl = el('status');
+function say(m,e){ statusEl.textContent=m; statusEl.className='on'+(e?' err':''); }
+function clearSay(){ statusEl.className=''; }
+const gl = cv.getContext('webgl2', {preserveDrawingBuffer:true, antialias:false});
+let ok = !!gl;
+if(!gl) say('This browser has no WebGL2.', true);
+const extF = gl && (gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
+if(gl && !extF){ ok = false; say('This GPU cannot render to float textures, which the solver needs.', true); }
+
+const P = {
+  cam:14, camT:0.012, brush:26, brushR:0.09, curl:1.2, curlS:2, curlD:0.06,
+  vdis:0.006, vort:1.6, iter:26, dt:1, sim:512, maxV:55,
+  dye:0, pang:0, pstretch:1, pwarp:0, pdetail:0.55, pgain:1, pbias:0, psteps:1, pinv:false,
+  inj:0.09, injM:0, scale:3, pdrift:0.1, ddis:0.0035,
+  cA:'#10233a', cB:'#e2603c', cC:'#7fd4e8',
+  paintOn:true, sprayCol:'#f2f0e8', sprayR:0.06, sprayD:0.35, sprayF:2.2, sprayH:2.2, splat:0.6,
+  hold:0.55, dripRate:0.55, bead:0.5, wander:1.2, dry:0.004, gravAng:0, wetDrag:0.35,
+  paintMix:1.6, gloss:1.2, pDep:0,
+  buoy:0, weight:0.4, cool:0.02, ambient:0, bHeat:0, cHeat:0,
+  obs:0, obsT:0.5, obsS:0.06, obsInv:false, obsCol:'#0d0f13',
+  pOn:true, pw:256, pLife:110, pSpeed:1, pSize:1.6, pFade:0.045, pInt:0.5, pMix:1,
+  relief:1.4, lightA:135, spec:0.6, con:1.1, sat:1.15, post:1,
+  view:0
+};
+
+/* ---------------- plumbing ---------------- */
+const VS = `#version 300 es
+in vec2 p; out vec2 uv;
+void main(){ uv = p*0.5+0.5; gl_Position = vec4(p,0,1); }`;
+
+const LIB = `
+float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float h31(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
+float vn3(vec3 x){
+  vec3 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f);
+  return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x), mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x), f.y),
+             mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x), mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x), f.y), f.z);
+}
+float fbm(vec3 p){ float a=0.5,s=0.0; for(int i=0;i<4;i++){ s+=a*vn3(p); p*=2.03; a*=0.5; } return s; }
+float fbmN(vec3 p, float oct){
+  float a=0.5, s=0.0, n=0.0;
+  for(int i=0;i<6;i++){ if(float(i)>=oct) break; s+=a*vn3(p); n+=a; p*=2.03; a*=0.5; }
+  return n>0.0 ? s/n*0.75+0.12 : 0.5;
+}
+`;
+
+function sh(t,src){
+  const x=gl.createShader(t); gl.shaderSource(x,src); gl.compileShader(x);
+  if(!gl.getShaderParameter(x,gl.COMPILE_STATUS)){
+    const log=gl.getShaderInfoLog(x)||'', m=log.match(/ERROR:\s*\d+:(\d+)/);
+    say('Shader error:\n'+log.trim()+(m?'\n> '+(src.split('\n')[+m[1]-1]||'').trim():''), true);
+    ok=false;
+  }
+  return x;
+}
+function makeProg(fs, names){
+  const p=gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, VS));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p,0,'p'); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ say('Link: '+gl.getProgramInfoLog(p), true); ok=false; }
+  const u={}; for(const n of names) u[n]=gl.getUniformLocation(p,n);
+  return {p,u};
+}
+function fbo(w,h){
+  const t=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  const f=gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  return {t,f,w,h};
+}
+function pair(w,h){ return {a:fbo(w,h), b:fbo(w,h), swap(){ const t=this.a; this.a=this.b; this.b=t; }}; }
+function bindTex(tex,unit){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,tex); }
+function draw(target){
+  if(target){ gl.bindFramebuffer(gl.FRAMEBUFFER,target.f); gl.viewport(0,0,target.w,target.h); }
+  else { gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,cv.width,cv.height); }
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+
+/* ---------------- solver shaders ---------------- */
+const FS_FORCE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D VEL, CAM, CAMP, TEMP;
+uniform vec2 texel;
+uniform float dt, camAmt, camT, brushAmt, brushR, curlAmt, curlScale, curlDrift, time, hasCam;
+uniform float buoy, weight, ambient;
+uniform vec4 brush;
+${LIB}
+vec2 curlF(vec2 p, float z, float sc){
+  float e=0.02;
+  float a=fbm(vec3((p+vec2(0,e))*sc,z)), b=fbm(vec3((p-vec2(0,e))*sc,z));
+  float c=fbm(vec3((p+vec2(e,0))*sc,z)), d=fbm(vec3((p-vec2(e,0))*sc,z));
+  return vec2(a-b, -(c-d))/(2.0*e);
+}
+float L(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }
+void main(){
+  vec2 v = texture(VEL, uv).xy;
+  // buoyancy: warm fluid rises, and its own mass drags it back down
+  if(buoy != 0.0 || weight != 0.0){
+    float t = texture(TEMP, uv).x - ambient;
+    v.y += (t * buoy - max(t, 0.0) * weight) * dt;
+  }
+  if(curlAmt > 0.0) v += curlF(uv, time*curlDrift, curlScale) * curlAmt * dt * 0.02;
+  if(brushAmt > 0.0 && length(brush.zw) > 0.0){
+    float d = distance(uv, brush.xy);
+    v += brush.zw * exp(-(d*d)/(brushR*brushR)) * brushAmt * dt;
+  }
+  if(hasCam > 0.5 && camAmt > 0.0){
+    float c0=L(texture(CAM,uv).rgb), p0=L(texture(CAMP,uv).rgb);
+    // Auto-exposure shifts the WHOLE frame, which reads as motion everywhere and
+    // flickers. Subtracting the frame-average difference removes that bias.
+    float cm=L(textureLod(CAM,vec2(0.5),9.0).rgb), pm=L(textureLod(CAMP,vec2(0.5),9.0).rgb);
+    float It = (c0-cm) - (p0-pm);
+    if(abs(It) > camT){
+      float gx=L(texture(CAM,uv+vec2(texel.x,0)).rgb)-L(texture(CAM,uv-vec2(texel.x,0)).rgb);
+      float gy=L(texture(CAM,uv+vec2(0,texel.y)).rgb)-L(texture(CAM,uv-vec2(0,texel.y)).rgb);
+      float g2=gx*gx+gy*gy;
+      if(g2 > 1e-4) v += clamp(-It/g2*vec2(gx,gy), -0.5, 0.5) * camAmt * dt * 0.02;
+    }
+  }
+  o = vec4(v,0,1);
+}`;
+
+const FS_ADVECT = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D VEL, SRC;
+uniform vec2 texel; uniform float dt, dissipation;
+void main(){
+  vec2 v = texture(VEL, uv).xy;
+  vec2 p = uv - v * dt * texel;          // semi-Lagrangian backtrace
+  o = texture(SRC, p) * (1.0 - dissipation);
+}`;
+
+const FS_DIVERGENCE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D VEL, OBS; uniform vec2 texel;
+void main(){
+  float l = texture(VEL, uv-vec2(texel.x,0)).x;
+  float r = texture(VEL, uv+vec2(texel.x,0)).x;
+  float b = texture(VEL, uv-vec2(0,texel.y)).y;
+  float t = texture(VEL, uv+vec2(0,texel.y)).y;
+  // a solid cell carries no flow, so its contribution to divergence is zero
+  if(texture(OBS, uv-vec2(texel.x,0)).x > 0.5) l = 0.0;
+  if(texture(OBS, uv+vec2(texel.x,0)).x > 0.5) r = 0.0;
+  if(texture(OBS, uv-vec2(0,texel.y)).x > 0.5) b = 0.0;
+  if(texture(OBS, uv+vec2(0,texel.y)).x > 0.5) t = 0.0;
+  o = vec4(0.5*((r-l)+(t-b)), 0, 0, 1);
+}`;
+
+const FS_PRESSURE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D PRESS, DIV, OBS; uniform vec2 texel;
+void main(){
+  float c = texture(PRESS,uv).x;
+  float l=texture(PRESS,uv-vec2(texel.x,0)).x, r=texture(PRESS,uv+vec2(texel.x,0)).x;
+  float b=texture(PRESS,uv-vec2(0,texel.y)).x, t=texture(PRESS,uv+vec2(0,texel.y)).x;
+  // zero pressure gradient into a solid: reuse the centre value at that face
+  if(texture(OBS, uv-vec2(texel.x,0)).x > 0.5) l = c;
+  if(texture(OBS, uv+vec2(texel.x,0)).x > 0.5) r = c;
+  if(texture(OBS, uv-vec2(0,texel.y)).x > 0.5) b = c;
+  if(texture(OBS, uv+vec2(0,texel.y)).x > 0.5) t = c;
+  o = vec4((l+r+b+t - texture(DIV,uv).x) * 0.25, 0, 0, 1);
+}`;
+
+const FS_GRADIENT = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D PRESS, VEL, OBS; uniform vec2 texel; uniform float maxV;
+void main(){
+  float l=texture(PRESS,uv-vec2(texel.x,0)).x, r=texture(PRESS,uv+vec2(texel.x,0)).x;
+  float b=texture(PRESS,uv-vec2(0,texel.y)).x, t=texture(PRESS,uv+vec2(0,texel.y)).x;
+  vec2 v = texture(VEL,uv).xy - vec2(r-l, t-b) * 0.5;
+  // free-slip walls
+  if(uv.x < texel.x || uv.x > 1.0-texel.x) v.x = 0.0;
+  if(uv.y < texel.y || uv.y > 1.0-texel.y) v.y = 0.0;
+  if(texture(OBS, uv).x > 0.5) v = vec2(0.0);   // no-slip inside a solid
+  float sp = length(v);
+  if(sp > maxV) v = v/sp*maxV;          // CFL-ish cap: keeps the backtrace sane
+  o = vec4(v,0,1);
+}`;
+
+const FS_VORT = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D VEL; uniform vec2 texel; uniform float eps, dt, maxForce;
+float curlAt(vec2 p){
+  float t=texture(VEL,p+vec2(0,texel.y)).x, b=texture(VEL,p-vec2(0,texel.y)).x;
+  float r=texture(VEL,p+vec2(texel.x,0)).y, l=texture(VEL,p-vec2(texel.x,0)).y;
+  return 0.5*((r-l)-(t-b));
+}
+void main(){
+  vec2 v = texture(VEL,uv).xy;
+  if(eps > 0.0){
+    float c = curlAt(uv);
+    float gx = abs(curlAt(uv+vec2(texel.x,0))) - abs(curlAt(uv-vec2(texel.x,0)));
+    float gy = abs(curlAt(uv+vec2(0,texel.y))) - abs(curlAt(uv-vec2(0,texel.y)));
+    vec2 n = vec2(gx,gy) / (length(vec2(gx,gy)) + 1e-5);
+    vec2 f = vec2(n.y, -n.x) * c * eps * dt;   // push back toward the vortex core
+    v += clamp(f, -maxForce, maxForce);        // bounded, or it runs away
+  }
+  o = vec4(v,0,1);
+}`;
+
+/* dye: advected at full resolution and topped up from a procedural source */
+const FS_DYE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D VEL, DYE, IMG, CAM, CAMP, OBS;
+uniform vec2 texel, simTexel;
+uniform float dt, dissipation, inj, injMotion, scale, pdrift, time, hasImg, hasCam, aspect;
+uniform float pang, pstretch, pwarp, pgain, pbias, psteps, pinv, pdetail;
+uniform int src;
+uniform vec3 colA, colB, colC;
+${LIB}
+float cellular(vec2 p){
+  vec2 i=floor(p), f=fract(p); float d=8.0;
+  for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){
+    vec2 g=vec2(float(x),float(y));
+    vec2 pt=g+vec2(h21(i+g), h21(i+g+17.3));
+    d=min(d,length(pt-f));
+  }
+  return d;
+}
+/* nearest and second-nearest, so the difference gives the cell walls */
+vec2 cell2(vec2 p){
+  vec2 i=floor(p), f=fract(p); float d1=8.0, d2=8.0;
+  for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){
+    vec2 g=vec2(float(x),float(y));
+    vec2 pt=g+vec2(h21(i+g), h21(i+g+17.3));
+    float d=length(pt-f);
+    if(d<d1){ d2=d1; d1=d; } else if(d<d2) d2=d;
+  }
+  return vec2(d1,d2);
+}
+float ornament(vec2 p){
+  vec2 c=fract(p)-0.5, m=abs(c);
+  float dia=1.0-smoothstep(0.22,0.26,m.x+m.y);
+  float ring=1.0-smoothstep(0.30,0.335,length(c));
+  float inner=1.0-smoothstep(0.16,0.185,length(c));
+  float bars=1.0-smoothstep(0.44,0.47,max(m.x,m.y));
+  return clamp(max(dia, ring-inner)*0.85 + bars*0.15, 0.0, 1.0);
+}
+float stripes(vec2 p, float duty){
+  float t = fract(p.x);
+  // soft-edged band, so stretch and rotation stay antialiased
+  return 1.0 - smoothstep(duty - 0.05, duty + 0.05, t);
+}
+float checker(vec2 p){
+  vec2 c = floor(p);
+  return mod(c.x + c.y, 2.0);
+}
+/* hexagonal lattice — distance to the nearest cell centre */
+float hexGrid(vec2 p){
+  vec2 s = vec2(1.0, 1.7320508);
+  vec2 a = mod(p, s) - s*0.5;
+  vec2 b = mod(p - s*0.5, s) - s*0.5;
+  vec2 g = dot(a,a) < dot(b,b) ? a : b;
+  return 1.0 - smoothstep(0.22, 0.5, length(g));
+}
+/* Truchet: a quarter arc per cell, flipped at random — endless woven curves */
+float truchet(vec2 p, float pdetail){
+  vec2 i = floor(p), f = fract(p);
+  if(h21(i) > 0.5) f.x = 1.0 - f.x;
+  float d = min(length(f - vec2(0.0,1.0)), length(f - vec2(1.0,0.0)));
+  // the arc itself is where the distance is near 0.5, so keep a narrow band
+  return 1.0 - smoothstep(0.04, 0.04 + 0.10*(0.2+pdetail), abs(d - 0.5));
+}
+/* several plane waves summed — moire and interference */
+float interfere(vec2 p, float n){
+  float s = 0.0;
+  for(int i=0;i<6;i++){
+    if(float(i) >= n) break;
+    float a = float(i) * 2.399963;
+    s += sin(dot(p, vec2(cos(a), sin(a))) * 6.2831853);
+  }
+  return 0.5 + 0.5 * s / max(1.0, n);
+}
+float L(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }
+
+/* One shaping stage shared by every generator: place, rotate, stretch, warp the
+   coordinate, then gain, bias, quantise and invert the value it returns. */
+vec2 patUV(vec2 uv){
+  vec2 p = vec2(uv.x*aspect, uv.y) - vec2(aspect,1.0)*0.5;
+  float ca = cos(pang), sa = sin(pang);
+  p = vec2(p.x*ca - p.y*sa, p.x*sa + p.y*ca);
+  p *= vec2(1.0/max(0.05,pstretch), pstretch);
+  p *= scale;
+  if(pwarp > 0.0){
+    float e = 0.35;
+    vec2 w = vec2(fbm(vec3(p*0.45 + 13.0, time*pdrift*0.5)),
+                  fbm(vec3(p*0.45 - 7.0,  time*pdrift*0.5))) - 0.5;
+    p += w * pwarp * 4.0;
+  }
+  return p;
+}
+float shape(float f){
+  f = (f - 0.5) * pgain + 0.5 + pbias;
+  if(psteps > 1.5) f = floor(clamp(f,0.0,1.0) * psteps) / (psteps - 1.0);
+  if(pinv > 0.5) f = 1.0 - f;
+  return clamp(f, 0.0, 1.0);
+}
+vec3 ramp(float v){
+  v = clamp(v,0.0,1.0);
+  return v < 0.5 ? mix(colA, colB, v*2.0) : mix(colB, colC, (v-0.5)*2.0);
+}
+void main(){
+  vec2 v = texture(VEL, uv).xy;
+  vec2 p = uv - v * dt * simTexel;
+  vec3 d = texture(DYE, p).rgb * (1.0 - dissipation);
+
+  float w = inj;
+  if(injMotion > 0.0 && hasCam > 0.5){
+    float m = abs(L(texture(CAM,uv).rgb) - L(texture(CAMP,uv).rgb));
+    w *= clamp(m * injMotion, 0.0, 1.0);
+  }
+  if(w > 0.0){
+    vec3 c;
+    vec2 sp = vec2(uv.x*aspect, uv.y) * scale;
+    if(src == 4){
+      // prefer the live feed, fall back to a loaded still, grey only if neither
+      vec3 src4 = hasCam > 0.5 ? texture(CAM, uv).rgb
+                : (hasImg > 0.5 ? texture(IMG, uv).rgb : vec3(0.5));
+      c = pinv > 0.5 ? vec3(1.0) - src4 : src4;
+      c = (c - 0.5) * pgain + 0.5 + pbias;
+    }
+    else {
+      vec2 sp = patUV(uv);
+      float f;
+      if(src == 0)      f = fbmN(vec3(sp, time*pdrift), 1.0 + pdetail*5.0);
+      else if(src == 1) f = 1.0 - cellular(sp + time*pdrift);
+      else if(src == 2) f = ornament(sp);
+      else if(src == 3) f = 0.5 + 0.5*sin(length(sp)*3.0 - time*pdrift*6.0);
+      else if(src == 5) f = stripes(sp, 0.25 + pdetail*0.5);
+      else if(src == 6) f = checker(sp);
+      else if(src == 7) f = hexGrid(sp);
+      else if(src == 8){ vec2 d = cell2(sp + time*pdrift);
+                         f = 1.0 - smoothstep(0.0, 0.14, d.y - d.x); }   // cell walls
+      else if(src == 9) f = truchet(sp, pdetail);
+      else if(src == 10) f = interfere(sp, 3.0 + pdetail*3.0);
+      else if(src == 11){
+        // bands aligned to the flow itself, so the pattern follows the fluid
+        vec2 v = texture(VEL, uv).xy;
+        float a = atan(v.y, v.x);
+        vec2 rp = vec2(sp.x*cos(a) - sp.y*sin(a), sp.x*sin(a) + sp.y*cos(a));
+        f = 0.5 + 0.5*sin(rp.y*6.2831853 + length(v)*0.15);
+      }
+      else f = fbm(vec3(sp, time*pdrift));
+      c = ramp(shape(f));
+    }
+    d = mix(d, c, clamp(w, 0.0, 1.0));
+  }
+  d *= 1.0 - smoothstep(0.35, 0.65, texture(OBS, uv).x);
+  o = vec4(d, 1.0);
+}`;
+
+const FS_RENDER = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D DYE, VEL, PRESS, TRAIL, OBS, TEMP, PAINT;
+uniform vec2 texel;
+uniform float relief, lightA, spec, con, sat, post, trailMix;
+uniform vec3 obsCol;
+uniform float paintMix, gloss, wetPoint;
+uniform int view;
+void main(){
+  if(view == 1){
+    vec2 v = texture(VEL, uv).xy;
+    float m = length(v);
+    o = vec4(clamp(0.5 + v*0.06, 0.0, 1.0), clamp(m*0.1, 0.0, 1.0), 1.0);
+    return;
+  }
+  if(view == 2){
+    float pr = texture(PRESS, uv).x;
+    o = vec4(clamp(0.5 + pr*6.0, 0.0, 1.0), clamp(0.5 - pr*6.0, 0.0, 1.0), 0.6, 1.0);
+    return;
+  }
+  vec3 c = texture(DYE, uv).rgb;
+  vec3 tr = texture(TRAIL, uv).rgb;
+  if(view == 3){ o = vec4(clamp(c,0.0,1.0), 1.0); return; }
+  if(view == 4){ o = vec4(clamp(tr,0.0,1.0), 1.0); return; }
+  if(view == 5){ o = vec4(vec3(texture(OBS, uv).x), 1.0); return; }
+  if(view == 7){ vec4 pn = texture(PAINT, uv); o = vec4(pn.rgb * clamp(pn.a,0.0,1.0), 1.0); return; }
+  if(view == 6){
+    float t = texture(TEMP, uv).x;
+    o = vec4(clamp(vec3(t*0.7, t*0.25, -t*0.5) + 0.05, 0.0, 1.0), 1.0);
+    return;
+  }
+  c = c + tr * trailMix;
+
+  float h = dot(c, vec3(0.299,0.587,0.114));
+  vec3 n = normalize(vec3(-dFdx(h)*relief*60.0, -dFdy(h)*relief*60.0, 1.0));
+  float la = radians(lightA);
+  vec3 Ld = normalize(vec3(cos(la), sin(la), 0.65));
+  float diff = clamp(dot(n, Ld)*0.5 + 0.5, 0.0, 1.0);
+  vec3 H = normalize(Ld + vec3(0,0,1));
+  float s = pow(clamp(dot(n,H),0.0,1.0), 42.0) * spec;
+  c = c * (0.4 + 0.85*diff) + s;
+  c = (c - 0.5)*con + 0.5;
+  float l = dot(c, vec3(0.299,0.587,0.114));
+  c = mix(vec3(l), c, sat);
+  if(post > 1.5) c = floor(clamp(c,0.0,1.0)*post)/(post-1.0);
+  c = mix(c, obsCol, smoothstep(0.35, 0.65, texture(OBS, uv).x));
+  if(paintMix > 0.0){
+    vec4 pn = texture(PAINT, uv);
+    float cov = clamp(pn.a * paintMix, 0.0, 1.0);
+    // still-wet paint catches the light; dry paint is flat
+    float wet = smoothstep(wetPoint, wetPoint*2.0, pn.a);
+    vec3 pc = pn.rgb + s * gloss * wet;
+    c = mix(c, pc, cov);
+  }
+  o = vec4(clamp(c,0.0,1.0), 1.0);
+}`;
+
+
+
+
+
+/* ---- paint: deposition, gravity runs and drying ----
+   Rather than tracking individual drips, paint accumulates in a buffer and any
+   cell holding more than the surface can carry runs downhill into the next.
+   Tapering falls out of that: a run drains its own source, so it thins as it
+   goes and stops when the reservoir is spent. */
+const FS_PAINT = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D PAINT, VEL, OBS;
+uniform vec2 texel, simTexel;
+uniform float dt, hold, dripRate, wander, dry, gravAng, wetDrag, time, bead;
+uniform float sprayOn, sprayR, sprayDensity, sprayFlow, sprayHard, splat;
+uniform vec4 brush;
+uniform vec3 sprayCol;
+float hp(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+void main(){
+  vec2 g = vec2(sin(gravAng), -cos(gravAng));       // gravity direction in uv space
+  vec4 c = texture(PAINT, uv);
+
+  // wet paint is dragged along by the fluid before gravity acts on it
+  if(wetDrag > 0.0){
+    vec2 v = texture(VEL, uv).xy;
+    c = texture(PAINT, uv - v * dt * simTexel * wetDrag);
+  }
+
+  // a little lateral wander so runs are not perfectly vertical
+  float jx = (hp(vec2(uv.x*1013.0, floor(time*8.0))) - 0.5) * wander;
+  vec2 upstream   = uv - g * texel + vec2(jx * texel.x, 0.0);
+  vec2 downstream = uv + g * texel;
+
+  vec4 a = texture(PAINT, upstream);
+  float k = min(1.0, dripRate * dt);        // CFL: never move more than the excess
+  // surface tension: a front advancing into dry wall holds more paint, which is
+  // what gives a run its bead at the leading edge
+  float dryAhead = 1.0 - smoothstep(0.0, hold, texture(PAINT, downstream).a);
+  float holdC = hold + bead * dryAhead;
+  float outFlow = max(0.0, c.a - holdC) * k;
+  float inFlow  = max(0.0, a.a - hold) * k;
+  // a solid below is a ledge — paint pools on it instead of running off
+  if(texture(OBS, downstream).x > 0.5) outFlow = 0.0;
+
+  float na = c.a - outFlow + inFlow;
+  vec3 nc = na > 1e-4 ? (c.rgb * max(0.0, c.a - outFlow) + a.rgb * inFlow) / na : c.rgb;
+  na *= (1.0 - dry * dt);
+
+  if(sprayOn > 0.5){
+    float d = distance(uv, brush.xy) / max(1e-4, sprayR);
+    float fall = pow(clamp(1.0 - d, 0.0, 1.0), sprayHard);
+    // stochastic deposition is what separates spray from an airbrush gradient
+    float rnd = hp(uv * 1731.0 + time * 37.0);
+    float add = 0.0;
+    if(rnd < fall * sprayDensity) add = sprayFlow * dt * fall;
+    if(splat > 0.0 && rnd > 1.0 - fall * splat * 0.004) add += sprayFlow * dt * 12.0;
+    if(add > 0.0){
+      nc = mix(nc, sprayCol, clamp(add / (na + add + 1e-4), 0.0, 1.0));
+      na += add;
+    }
+  }
+  o = vec4(nc, clamp(na, 0.0, 6.0));
+}`;
+
+/* ---- temperature: one more advected scalar, and a force that lifts it ---- */
+const FS_TEMP = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D VEL, TEMP, CAM, CAMP, OBS;
+uniform vec2 simTexel;
+uniform float dt, cool, brushHeat, brushR, camHeat, hasCam, ambient;
+uniform vec4 brush;
+float L(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }
+void main(){
+  vec2 v = texture(VEL, uv).xy;
+  float t = texture(TEMP, uv - v * dt * simTexel).x;
+  t = mix(ambient, t, 1.0 - cool);              // relax back toward ambient
+  if(brushHeat != 0.0 && length(brush.zw) > 0.0){
+    float d = distance(uv, brush.xy);
+    t += exp(-(d*d)/(brushR*brushR)) * brushHeat * dt * 0.1;
+  }
+  if(hasCam > 0.5 && camHeat != 0.0){
+    float m = abs(L(texture(CAM,uv).rgb) - L(texture(CAMP,uv).rgb));
+    t += m * camHeat * dt * 0.5;
+  }
+  if(texture(OBS, uv).x > 0.5) t = ambient;     // solids hold no heat
+  o = vec4(clamp(t, -4.0, 8.0), 0.0, 0.0, 1.0);
+}`;
+
+/* ---- obstacles: solid regions the fluid must flow around ---- */
+const FS_OBST = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D IMG, CAM;
+uniform float mode, thresh, soft, invert;
+float L(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }
+void main(){
+  if(mode < 0.5){ o = vec4(0.0); return; }
+  float v = mode > 1.5 ? L(texture(CAM, uv).rgb) : L(texture(IMG, uv).rgb);
+  float m = smoothstep(thresh - soft - 0.001, thresh + soft + 0.001, v);
+  if(invert > 0.5) m = 1.0 - m;
+  o = vec4(m, 0.0, 0.0, 1.0);
+}`;
+
+/* ---- particles: Lagrangian markers carried by the velocity field ---- */
+const FS_PUPDATE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D POS, VEL;
+uniform vec2 simTexel; uniform float dt, life, time, speedScale;
+float h21p(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+void main(){
+  vec4 d = texture(POS, uv);
+  vec2 p = d.xy; float age = d.z;
+  if(age <= 0.0){                                  // (re)seed
+    p = vec2(h21p(uv + time), h21p(uv + time + 7.3));
+    age = life * (0.35 + 0.65*h21p(uv - time));
+  } else {
+    vec2 v = texture(VEL, p).xy;
+    p += v * dt * simTexel * speedScale;
+    age -= 1.0;
+    if(p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) age = 0.0;
+  }
+  o = vec4(p, age, d.w);
+}`;
+
+/* Points are positioned by reading the particle texture in the vertex shader,
+   so nothing ever leaves the GPU. */
+const VS_POINTS = `#version 300 es
+uniform sampler2D POS, DYE;
+uniform int PW; uniform float psize, life;
+out vec3 vcol; out float vfade;
+void main(){
+  int id = gl_VertexID;
+  ivec2 c = ivec2(id % PW, id / PW);
+  vec4 d = texelFetch(POS, c, 0);
+  vcol = texture(DYE, d.xy).rgb;
+  float a = d.z / max(1.0, life);
+  vfade = smoothstep(0.0, 0.15, a) * smoothstep(1.0, 0.75, a);  // fade in and out
+  gl_Position = vec4(d.xy*2.0-1.0, 0.0, 1.0);
+  gl_PointSize = psize;
+}`;
+const FS_POINTS = `#version 300 es
+precision highp float; in vec3 vcol; in float vfade; out vec4 o;
+uniform float intensity, asPaint, depAmt;
+uniform vec3 depCol;
+void main(){
+  vec2 d = gl_PointCoord - 0.5;
+  float m = smoothstep(0.5, 0.0, length(d));
+  if(asPaint > 0.5){
+    float a = depAmt * m * vfade;
+    o = vec4(depCol * a, a);          // premultiplied, for additive accumulation
+    return;
+  }
+  o = vec4(vcol * intensity, 1.0) * m * vfade;
+}`;
+const FS_FADE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D SRC; uniform float k;
+void main(){ o = texture(SRC, uv) * k; }`;
+
+let pForce,pAdv,pDiv,pPress,pGrad,pVort,pDye,pRender,pPUp,pPoints,pFade;
+let parts=null, trails=null, obst=null, temp=null, paint=null, pObst=null, pTemp=null, pPaint=null, PW=256, PN=65536;
+let vel,press,dye,divg, camPair=[null,null], camSwap=0, imgTex=null;
+let SW=512, SH=288, DW=1024, DH=576;
+let hasCam=false, hasImg=false, vid=null;
+
+function texRGBA(w,h){
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  return t;
+}
+if(ok){
+  pForce  = makeProg(FS_FORCE, ['VEL','CAM','CAMP','texel','dt','camAmt','camT','brushAmt','brushR','curlAmt','curlScale','curlDrift','time','hasCam','brush','TEMP','buoy','weight','ambient']);
+  pAdv    = makeProg(FS_ADVECT, ['VEL','SRC','texel','dt','dissipation']);
+  pDiv    = makeProg(FS_DIVERGENCE, ['VEL','OBS','texel']);
+  pPress  = makeProg(FS_PRESSURE, ['PRESS','DIV','OBS','texel']);
+  pGrad   = makeProg(FS_GRADIENT, ['PRESS','VEL','OBS','texel','maxV']);
+  pVort   = makeProg(FS_VORT, ['VEL','texel','eps','dt','maxForce']);
+  pDye    = makeProg(FS_DYE, ['VEL','DYE','IMG','CAM','CAMP','texel','simTexel','dt','dissipation','inj','injMotion','scale','pdrift','time','hasImg','hasCam','aspect','src','colA','colB','colC','OBS','pang','pstretch','pwarp','pgain','pbias','psteps','pinv','pdetail']);
+  pRender = makeProg(FS_RENDER, ['DYE','VEL','PRESS','TRAIL','texel','relief','lightA','spec','con','sat','post','view','trailMix','OBS','obsCol','TEMP','PAINT','paintMix','gloss','wetPoint']);
+  pPUp    = makeProg(FS_PUPDATE, ['POS','VEL','simTexel','dt','life','time','speedScale']);
+  pFade   = makeProg(FS_FADE, ['SRC','k']);
+  pObst   = makeProg(FS_OBST, ['IMG','CAM','mode','thresh','soft','invert']);
+  pPaint  = makeProg(FS_PAINT, ['PAINT','VEL','OBS','texel','simTexel','dt','hold','dripRate','wander','dry','gravAng','wetDrag','time','bead','sprayOn','sprayR','sprayDensity','sprayFlow','sprayHard','splat','brush','sprayCol']);
+  pTemp   = makeProg(FS_TEMP, ['VEL','TEMP','CAM','CAMP','OBS','simTexel','dt','cool','brushHeat','brushR','camHeat','hasCam','ambient','brush']);
+  {
+    const pr=gl.createProgram();
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS_POINTS));
+    gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS_POINTS));
+    gl.linkProgram(pr);
+    if(!gl.getProgramParameter(pr,gl.LINK_STATUS)){ say('Points link: '+gl.getProgramInfoLog(pr),true); ok=false; }
+    const u={}; for(const n of ['POS','DYE','PW','psize','life','intensity','asPaint','depAmt','depCol']) u[n]=gl.getUniformLocation(pr,n);
+    pPoints={p:pr,u};
+  }
+  const vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+  const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  camPair=[texRGBA(4,4), texRGBA(4,4)];
+  imgTex=texRGBA(4,4);
+}
+
+function allocate(){
+  const ar = cv.width/cv.height;
+  SW = P.sim; SH = Math.max(4, Math.round(P.sim/ar));
+  DW = Math.min(1600, cv.width); DH = Math.max(4, Math.round(DW/ar));
+  vel = pair(SW,SH); press = pair(SW,SH); divg = fbo(SW,SH); dye = pair(DW,DH);
+  PW = P.pw; PN = PW*PW;
+  parts = pair(PW,PW); trails = pair(DW,DH); obst = fbo(SW,SH); temp = pair(SW,SH); paint = pair(DW,DH);
+  el('hud').textContent = 'sim ' + SW + '×' + SH + '   dye ' + DW + '×' + DH;
+}
+function setSize(w,h){
+  const k = Math.min(1, 1200/Math.max(w,h));
+  cv.width = Math.round(w*k); cv.height = Math.round(h*k);
+  if(ok) allocate();
+}
+if(ok) setSize(1280,720);
+
+/* ---------------- input ---------------- */
+let brush=[0,0,0,0], last=null, dragging=false;
+function pt(e){ const r=cv.getBoundingClientRect();
+  return [(e.clientX-r.left)/r.width, 1-(e.clientY-r.top)/r.height]; }
+cv.addEventListener('pointerdown', e=>{ dragging=true; last=pt(e); cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e=>{ if(!dragging) return; const p=pt(e);
+  if(last) brush=[p[0],p[1],(p[0]-last[0])*8,(p[1]-last[1])*8]; last=p; });
+cv.addEventListener('pointerup', ()=>{ dragging=false; last=null; brush=[0,0,0,0]; });
+
+el('bCam').addEventListener('click', async () => {
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720}});
+    if(!vid){ vid=document.createElement('video'); vid.muted=true; vid.playsInline=true; }
+    if(vid.src){ URL.revokeObjectURL(vid.src); vid.removeAttribute('src'); vid.load(); }
+    vid.srcObject=st; vid.loop=false; await vid.play();
+    hasCam=true; el('vSrc').textContent='Webcam live'; clearSay();
+  }catch(e){ say('Webcam unavailable: '+e.message+
+    '\nBrowsers only grant camera access over https:// or localhost.', true); }
+});
+el('bClear').addEventListener('click', ()=>{ if(ok) allocate(); });
+el('fVid').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    if(!vid){ vid=document.createElement('video'); vid.muted=true; vid.playsInline=true; }
+    if(vid.srcObject){ vid.srcObject.getTracks().forEach(t=>t.stop()); vid.srcObject=null; }
+    vid.src=URL.createObjectURL(f); vid.loop=true;
+    await vid.play();
+    hasCam=true;                                  // a file is just another moving source
+    el('vSrc').textContent='Video: '+f.name;
+    setSize(vid.videoWidth||1280, vid.videoHeight||720);
+    clearSay();
+  }catch(err){ say('Could not play that video: '+err.message, true); }
+});
+el('fImg').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const bmp=await createImageBitmap(f);
+    gl.bindTexture(gl.TEXTURE_2D,imgTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,bmp);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    hasImg=true; el('vSrc').textContent='Image '+bmp.width+'×'+bmp.height;
+    setSize(bmp.width,bmp.height); clearSay();
+  }catch(err){ say('Could not decode that image.', true); }
+});
+
+/* ---------------- frame ---------------- */
+const t0=performance.now();
+function frame(){
+  if(ok){
+    const now = performance.now();
+    const time = (now - t0)/1000;
+    if(mod){ mod.tick(Math.min(0.1, (now - lastT)/1000)); E = mod.apply(P); }
+    lastT = now;
+    const st=[1/SW,1/SH], dt=E.dt;
+
+    if(hasCam && vid.readyState>=2){
+      camSwap=1-camSwap;
+      gl.bindTexture(gl.TEXTURE_2D,camPair[camSwap]);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,vid);
+           gl.generateMipmap(gl.TEXTURE_2D); }catch(e){}
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    }
+
+    // 0. obstacle mask
+    gl.useProgram(pObst.p);
+    bindTex(imgTex,0); gl.uniform1i(pObst.u.IMG,0);
+    bindTex(camPair[camSwap],1); gl.uniform1i(pObst.u.CAM,1);
+    gl.uniform1f(pObst.u.mode, E.obs === 2 ? (hasCam?2:0) : (E.obs === 1 ? (hasImg?1:0) : 0));
+    gl.uniform1f(pObst.u.thresh, E.obsT);
+    gl.uniform1f(pObst.u.soft, E.obsS);
+    gl.uniform1f(pObst.u.invert, E.obsInv?1:0);
+    draw(obst);
+
+    // 1. temperature
+    gl.useProgram(pTemp.p);
+    bindTex(vel.a.t,0); gl.uniform1i(pTemp.u.VEL,0);
+    bindTex(temp.a.t,1); gl.uniform1i(pTemp.u.TEMP,1);
+    bindTex(camPair[camSwap],2); gl.uniform1i(pTemp.u.CAM,2);
+    bindTex(camPair[1-camSwap],3); gl.uniform1i(pTemp.u.CAMP,3);
+    bindTex(obst.t,4); gl.uniform1i(pTemp.u.OBS,4);
+    gl.uniform2f(pTemp.u.simTexel,st[0],st[1]);
+    gl.uniform1f(pTemp.u.dt,dt);
+    gl.uniform1f(pTemp.u.cool,E.cool);
+    gl.uniform1f(pTemp.u.brushHeat,E.bHeat);
+    gl.uniform1f(pTemp.u.brushR,E.brushR);
+    gl.uniform1f(pTemp.u.camHeat,E.cHeat);
+    gl.uniform1f(pTemp.u.hasCam,hasCam?1:0);
+    gl.uniform1f(pTemp.u.ambient,E.ambient);
+    gl.uniform4f(pTemp.u.brush,brush[0],brush[1],brush[2],brush[3]);
+    draw(temp.b); temp.swap();
+
+    // 2. forces
+    gl.useProgram(pForce.p);
+    bindTex(vel.a.t,0); gl.uniform1i(pForce.u.VEL,0);
+    bindTex(camPair[camSwap],1); gl.uniform1i(pForce.u.CAM,1);
+    bindTex(camPair[1-camSwap],2); gl.uniform1i(pForce.u.CAMP,2);
+    gl.uniform2f(pForce.u.texel,st[0],st[1]);
+    gl.uniform1f(pForce.u.dt,dt);
+    gl.uniform1f(pForce.u.camAmt,E.cam);
+    gl.uniform1f(pForce.u.camT,E.camT);
+    gl.uniform1f(pForce.u.brushAmt,E.brush);
+    gl.uniform1f(pForce.u.brushR,E.brushR);
+    gl.uniform1f(pForce.u.curlAmt,E.curl);
+    gl.uniform1f(pForce.u.curlScale,E.curlS);
+    gl.uniform1f(pForce.u.curlDrift,E.curlD);
+    gl.uniform1f(pForce.u.time,time);
+    gl.uniform1f(pForce.u.hasCam,hasCam?1:0);
+    gl.uniform4f(pForce.u.brush,brush[0],brush[1],brush[2],brush[3]);
+    bindTex(temp.a.t,3); gl.uniform1i(pForce.u.TEMP,3);
+    gl.uniform1f(pForce.u.buoy,E.buoy);
+    gl.uniform1f(pForce.u.weight,E.weight);
+    gl.uniform1f(pForce.u.ambient,E.ambient);
+    draw(vel.b); vel.swap();
+    brush[2]=brush[3]=0;
+
+    // 2. vorticity confinement
+    if(E.vort>0){
+      gl.useProgram(pVort.p);
+      bindTex(vel.a.t,0); gl.uniform1i(pVort.u.VEL,0);
+      gl.uniform2f(pVort.u.texel,st[0],st[1]);
+      gl.uniform1f(pVort.u.eps,E.vort); gl.uniform1f(pVort.u.dt,dt);
+      gl.uniform1f(pVort.u.maxForce,E.maxV*0.15);
+      draw(vel.b); vel.swap();
+    }
+
+    // 3. advect velocity through itself
+    gl.useProgram(pAdv.p);
+    bindTex(vel.a.t,0); gl.uniform1i(pAdv.u.VEL,0);
+    bindTex(vel.a.t,1); gl.uniform1i(pAdv.u.SRC,1);
+    gl.uniform2f(pAdv.u.texel,st[0],st[1]);
+    gl.uniform1f(pAdv.u.dt,dt);
+    gl.uniform1f(pAdv.u.dissipation,E.vdis);
+    draw(vel.b); vel.swap();
+
+    // 4. divergence
+    gl.useProgram(pDiv.p);
+    bindTex(vel.a.t,0); gl.uniform1i(pDiv.u.VEL,0);
+    bindTex(obst.t,1); gl.uniform1i(pDiv.u.OBS,1);
+    gl.uniform2f(pDiv.u.texel,st[0],st[1]);
+    draw(divg);
+
+    // 5. pressure — Jacobi
+    gl.bindFramebuffer(gl.FRAMEBUFFER,press.a.f);
+    gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(pPress.p);
+    gl.uniform2f(pPress.u.texel,st[0],st[1]);
+    bindTex(divg.t,1); gl.uniform1i(pPress.u.DIV,1);
+    bindTex(obst.t,2); gl.uniform1i(pPress.u.OBS,2);
+    for(let i=0;i<E.iter;i++){
+      bindTex(press.a.t,0); gl.uniform1i(pPress.u.PRESS,0);
+      draw(press.b); press.swap();
+    }
+
+    // 6. subtract pressure gradient -> divergence-free
+    gl.useProgram(pGrad.p);
+    bindTex(press.a.t,0); gl.uniform1i(pGrad.u.PRESS,0);
+    bindTex(vel.a.t,1); gl.uniform1i(pGrad.u.VEL,1);
+    bindTex(obst.t,2); gl.uniform1i(pGrad.u.OBS,2);
+    gl.uniform2f(pGrad.u.texel,st[0],st[1]);
+    gl.uniform1f(pGrad.u.maxV,E.maxV);
+    draw(vel.b); vel.swap();
+
+    // 7. dye: advected at full resolution, topped up from the pattern
+    gl.useProgram(pDye.p);
+    bindTex(vel.a.t,0); gl.uniform1i(pDye.u.VEL,0);
+    bindTex(dye.a.t,1); gl.uniform1i(pDye.u.DYE,1);
+    bindTex(imgTex,2); gl.uniform1i(pDye.u.IMG,2);
+    bindTex(camPair[camSwap],3); gl.uniform1i(pDye.u.CAM,3);
+    bindTex(camPair[1-camSwap],4); gl.uniform1i(pDye.u.CAMP,4);
+    bindTex(obst.t,5); gl.uniform1i(pDye.u.OBS,5);
+    gl.uniform2f(pDye.u.texel,1/DW,1/DH);
+    gl.uniform2f(pDye.u.simTexel,st[0],st[1]);
+    gl.uniform1f(pDye.u.dt,dt);
+    gl.uniform1f(pDye.u.dissipation,E.ddis);
+    gl.uniform1f(pDye.u.inj,E.inj);
+    gl.uniform1f(pDye.u.injMotion,E.injM);
+    gl.uniform1f(pDye.u.scale,E.scale);
+    gl.uniform1f(pDye.u.pdrift,E.pdrift);
+    gl.uniform1f(pDye.u.pang,E.pang*Math.PI/180);
+    gl.uniform1f(pDye.u.pstretch,E.pstretch);
+    gl.uniform1f(pDye.u.pwarp,E.pwarp);
+    gl.uniform1f(pDye.u.pdetail,E.pdetail);
+    gl.uniform1f(pDye.u.pgain,E.pgain);
+    gl.uniform1f(pDye.u.pbias,E.pbias);
+    gl.uniform1f(pDye.u.psteps,E.psteps);
+    gl.uniform1f(pDye.u.pinv,E.pinv?1:0);
+    gl.uniform1f(pDye.u.time,time);
+    gl.uniform1f(pDye.u.hasImg,hasImg?1:0);
+    gl.uniform1f(pDye.u.hasCam,hasCam?1:0);
+    gl.uniform1f(pDye.u.aspect,cv.width/cv.height);
+    gl.uniform1i(pDye.u.src,E.dye);
+    const A=hex(E.cA),B=hex(E.cB),C=hex(E.cC);
+    gl.uniform3f(pDye.u.colA,A[0],A[1],A[2]);
+    gl.uniform3f(pDye.u.colB,B[0],B[1],B[2]);
+    gl.uniform3f(pDye.u.colC,C[0],C[1],C[2]);
+    draw(dye.b); dye.swap();
+
+    // 8. particles: advect, then stamp onto a decaying trail buffer
+    if(E.pOn){
+      gl.useProgram(pPUp.p);
+      bindTex(parts.a.t,0); gl.uniform1i(pPUp.u.POS,0);
+      bindTex(vel.a.t,1); gl.uniform1i(pPUp.u.VEL,1);
+      gl.uniform2f(pPUp.u.simTexel,st[0],st[1]);
+      gl.uniform1f(pPUp.u.dt,dt);
+      gl.uniform1f(pPUp.u.life,E.pLife);
+      gl.uniform1f(pPUp.u.time,time);
+      gl.uniform1f(pPUp.u.speedScale,E.pSpeed);
+      draw(parts.b); parts.swap();
+
+      gl.useProgram(pFade.p);
+      bindTex(trails.a.t,0); gl.uniform1i(pFade.u.SRC,0);
+      gl.uniform1f(pFade.u.k, 1.0 - E.pFade);
+      draw(trails.b);
+
+      gl.useProgram(pPoints.p);
+      bindTex(parts.a.t,0); gl.uniform1i(pPoints.u.POS,0);
+      bindTex(dye.a.t,1); gl.uniform1i(pPoints.u.DYE,1);
+      gl.uniform1i(pPoints.u.PW,PW);
+      gl.uniform1f(pPoints.u.psize,E.pSize);
+      gl.uniform1f(pPoints.u.life,E.pLife);
+      gl.uniform1f(pPoints.u.intensity,E.pInt);
+      gl.bindFramebuffer(gl.FRAMEBUFFER,trails.b.f);
+      gl.viewport(0,0,trails.b.w,trails.b.h);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.drawArrays(gl.POINTS, 0, PN);
+      gl.disable(gl.BLEND);
+      trails.swap();
+    }
+
+    // 9. paint: spray deposition, gravity runs, drying
+    if(P.paintOn){
+      gl.useProgram(pPaint.p);
+      bindTex(paint.a.t,0); gl.uniform1i(pPaint.u.PAINT,0);
+      bindTex(vel.a.t,1); gl.uniform1i(pPaint.u.VEL,1);
+      bindTex(obst.t,2); gl.uniform1i(pPaint.u.OBS,2);
+      gl.uniform2f(pPaint.u.texel,1/DW,1/DH);
+      gl.uniform2f(pPaint.u.simTexel,st[0],st[1]);
+      gl.uniform1f(pPaint.u.dt,dt);
+      gl.uniform1f(pPaint.u.hold,E.hold);
+      gl.uniform1f(pPaint.u.dripRate,E.dripRate);
+      gl.uniform1f(pPaint.u.wander,E.wander);
+      gl.uniform1f(pPaint.u.dry,E.dry);
+      gl.uniform1f(pPaint.u.gravAng,E.gravAng*Math.PI/180);
+      gl.uniform1f(pPaint.u.wetDrag,E.wetDrag);
+      gl.uniform1f(pPaint.u.bead,E.bead);
+      gl.uniform1f(pPaint.u.time,time);
+      gl.uniform1f(pPaint.u.sprayOn, dragging ? 1 : 0);
+      gl.uniform1f(pPaint.u.sprayR,E.sprayR);
+      gl.uniform1f(pPaint.u.sprayDensity,E.sprayD);
+      gl.uniform1f(pPaint.u.sprayFlow,E.sprayF);
+      gl.uniform1f(pPaint.u.sprayHard,E.sprayH);
+      gl.uniform1f(pPaint.u.splat,E.splat);
+      gl.uniform4f(pPaint.u.brush,brush[0],brush[1],brush[2],brush[3]);
+      const SC=hex(P.sprayCol);
+      gl.uniform3f(pPaint.u.sprayCol,SC[0],SC[1],SC[2]);
+      draw(paint.b); paint.swap();
+
+      // particles can lay paint down too — fluid-driven spatter
+      if(P.pOn && E.pDep > 0){
+        gl.useProgram(pPoints.p);
+        bindTex(parts.a.t,0); gl.uniform1i(pPoints.u.POS,0);
+        bindTex(dye.a.t,1); gl.uniform1i(pPoints.u.DYE,1);
+        gl.uniform1i(pPoints.u.PW,PW);
+        gl.uniform1f(pPoints.u.psize,E.pSize);
+        gl.uniform1f(pPoints.u.life,E.pLife);
+        gl.uniform1f(pPoints.u.intensity,E.pInt);
+        gl.uniform1f(pPoints.u.asPaint,1);
+        gl.uniform1f(pPoints.u.depAmt,E.pDep*0.01);
+        gl.uniform3f(pPoints.u.depCol,SC[0],SC[1],SC[2]);
+        gl.bindFramebuffer(gl.FRAMEBUFFER,paint.a.f);
+        gl.viewport(0,0,paint.a.w,paint.a.h);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+        gl.drawArrays(gl.POINTS, 0, PN);
+        gl.disable(gl.BLEND);
+      }
+    }
+
+    // 10. present
+    gl.useProgram(pRender.p);
+    bindTex(dye.a.t,0); gl.uniform1i(pRender.u.DYE,0);
+    bindTex(vel.a.t,1); gl.uniform1i(pRender.u.VEL,1);
+    bindTex(press.a.t,2); gl.uniform1i(pRender.u.PRESS,2);
+    bindTex(trails ? trails.a.t : dye.a.t,3); gl.uniform1i(pRender.u.TRAIL,3);
+    gl.uniform1f(pRender.u.trailMix, E.pOn ? E.pMix : 0);
+    bindTex(obst.t,4); gl.uniform1i(pRender.u.OBS,4);
+    bindTex(temp.a.t,5); gl.uniform1i(pRender.u.TEMP,5);
+    bindTex(paint.a.t,6); gl.uniform1i(pRender.u.PAINT,6);
+    gl.uniform1f(pRender.u.paintMix, P.paintOn ? E.paintMix : 0);
+    gl.uniform1f(pRender.u.gloss, E.gloss);
+    gl.uniform1f(pRender.u.wetPoint, E.hold);
+    const O=hex(E.obsCol); gl.uniform3f(pRender.u.obsCol,O[0],O[1],O[2]);
+    gl.uniform2f(pRender.u.texel,1/cv.width,1/cv.height);
+    gl.uniform1f(pRender.u.relief,E.relief);
+    gl.uniform1f(pRender.u.lightA,E.lightA);
+    gl.uniform1f(pRender.u.spec,E.spec);
+    gl.uniform1f(pRender.u.con,E.con);
+    gl.uniform1f(pRender.u.sat,E.sat);
+    gl.uniform1f(pRender.u.post,E.post);
+    gl.uniform1i(pRender.u.view,E.view);
+    draw(null);
+  }
+  requestAnimationFrame(frame);
+}
+function hex(h){ return [parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255]; }
+requestAnimationFrame(frame);
+
+/* ---------------- controls ---------------- */
+function editable(b,r,commit){
+  b.addEventListener('click',()=>{
+    if(b._e) return; b._e=true;
+    const prev=b.textContent, inp=document.createElement('input');
+    inp.type='text'; inp.className='numedit'; inp.value=r.value;
+    b.textContent=''; b.appendChild(inp); inp.focus(); inp.select();
+    const done=okv=>{ if(!b._e) return; b._e=false; b.textContent=prev;
+      if(!okv) return; const v=parseFloat(inp.value); if(!isFinite(v)) return;
+      if(v>parseFloat(r.max)) r.max=String(v); if(v<parseFloat(r.min)) r.min=String(v);
+      commit(v); };
+    inp.addEventListener('keydown',e=>{ e.stopPropagation();
+      if(e.key==='Enter'){ e.preventDefault(); done(true); }
+      else if(e.key==='Escape'){ e.preventDefault(); done(false); }});
+    inp.addEventListener('blur',()=>done(true));
+  });
+}
+function bind(rid,vid,key,fmt){
+  const r=el(rid), v=el(vid);
+  const show=()=>{ v.textContent=fmt(P[key]); };
+  r.addEventListener('input',()=>{ P[key]=parseFloat(r.value); show(); });
+  editable(v,r,val=>{ r.value=val; P[key]=val; show(); });
+  P[key]=parseFloat(r.value); show();
+}
+const f2=n=>n.toFixed(2), f0=n=>n.toFixed(0), f3=n=>n.toFixed(3), f4=n=>n.toFixed(4);
+bind('rCam','vCam','cam',f2); bind('rCamT','vCamT','camT',f3);
+bind('rBrush','vBrush','brush',f2); bind('rBrushR','vBrushR','brushR',f3);
+bind('rCurl','vCurl','curl',f2); bind('rCurlS','vCurlS','curlS',f2); bind('rCurlD','vCurlD','curlD',f3);
+bind('rVDis','vVDis','vdis',f4); bind('rVort','vVort','vort',f2);
+bind('rMaxV','vMaxV','maxV',f0);
+bind('rIter','vIter','iter',f0); bind('rDt','vDt','dt',f2);
+bind('rPAng','vPAng','pang',n=>f0(n)+'°');
+bind('rPStretch','vPStretch','pstretch',f2);
+bind('rPWarp','vPWarp','pwarp',f2);
+bind('rPDetail','vPDetail','pdetail',f2);
+bind('rPGain','vPGain','pgain',f2);
+bind('rPBias','vPBias','pbias',f3);
+bind('rPSteps','vPSteps','psteps',n=>n<1.5?'off':f0(n));
+el('cPInv').addEventListener('change',e=>P.pinv=e.target.checked);
+bind('rInj','vInj','inj',f3); bind('rInjM','vInjM','injM',f2);
+bind('rScale','vScale','scale',f2); bind('rPDrift','vPDrift','pdrift',f2);
+bind('rDDis','vDDis','ddis',f4);
+bind('rSprayR','vSprayR','sprayR',f3); bind('rSprayD','vSprayD','sprayD',f2);
+bind('rSprayF','vSprayF','sprayF',f2); bind('rSprayH','vSprayH','sprayH',f2);
+bind('rSplat','vSplat','splat',f2);
+bind('rHold','vHold','hold',f2); bind('rDripRate','vDripRate','dripRate',f2);
+bind('rBead','vBead','bead',f2);
+bind('rWander','vWander','wander',f2); bind('rDry','vDry','dry',f4);
+bind('rGravAng','vGravAng','gravAng',n=>f0(n)+'°'); bind('rWetDrag','vWetDrag','wetDrag',f2);
+bind('rPDep','vPDep','pDep',f2); bind('rPaintMix','vPaintMix','paintMix',f2);
+bind('rGloss','vGloss','gloss',f2);
+el('cPaintOn').addEventListener('change',e=>P.paintOn=e.target.checked);
+el('cSpray').addEventListener('input',e=>P.sprayCol=e.target.value);
+el('bWipe').addEventListener('click',()=>{ if(!ok) return;
+  for(const b of [paint.a,paint.b]){ gl.bindFramebuffer(gl.FRAMEBUFFER,b.f);
+    gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); });
+el('bDripNow').addEventListener('click',()=>{ P.hold=Math.max(0.05,P.hold*0.4);
+  el('rHold')._sync && el('rHold')._sync(); el('rHold').value=P.hold;
+  el('vHold').textContent=P.hold.toFixed(2); });
+bind('rBuoy','vBuoy','buoy',f2);
+bind('rWeight','vWeight','weight',f2);
+bind('rCool','vCool','cool',f3);
+bind('rAmb','vAmb','ambient',f2);
+bind('rBHeat','vBHeat','bHeat',f2);
+bind('rCHeat','vCHeat','cHeat',f2);
+bind('rObsT','vObsT','obsT',f2);
+bind('rObsS','vObsS','obsS',f3);
+el('sObs').addEventListener('change',e=>P.obs=+e.target.value);
+el('cObsInv').addEventListener('change',e=>P.obsInv=e.target.checked);
+el('cObsCol').addEventListener('input',e=>P.obsCol=e.target.value);
+bind('rPFade','vPFade','pFade',f3);
+bind('rPLife','vPLife','pLife',f0);
+bind('rPSpeed','vPSpeed','pSpeed',f2);
+bind('rPSize','vPSize','pSize',f2);
+bind('rPInt','vPInt','pInt',f2);
+bind('rPMix','vPMix','pMix',f2);
+el('cPOn').addEventListener('change',e=>P.pOn=e.target.checked);
+el('sPW').addEventListener('change',e=>{ P.pw=+e.target.value; if(ok) allocate(); });
+bind('rRelief','vRelief','relief',f2); bind('rLightA','vLightA','lightA',n=>f0(n)+'°');
+bind('rSpec','vSpec','spec',f2); bind('rCon','vCon','con',f2); bind('rSat','vSat','sat',f2);
+bind('rPost','vPost','post',n=>n<1.5?'off':f0(n));
+el('sView').addEventListener('change',e=>P.view=+e.target.value);
+el('sDye').addEventListener('change',e=>P.dye=+e.target.value);
+el('sSim').addEventListener('change',e=>{ P.sim=+e.target.value; if(ok) allocate(); });
+for(const l of document.querySelectorAll('label.file'))
+  l.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault();
+    l.querySelector('input').click(); }});
+el('cA').addEventListener('input',e=>P.cA=e.target.value);
+el('cB').addEventListener('input',e=>P.cB=e.target.value);
+el('cC').addEventListener('input',e=>P.cC=e.target.value);
+
+/* ---------------- modulation ---------------- */
+const MOD_TARGETS = {
+  cam:{label:'Webcam motion', span:6},      brush:{label:'Brush', span:10},
+  curl:{label:'Curl noise', span:1.5},      curlS:{label:'Curl scale', span:1.5},
+  vort:{label:'Vorticity', span:1.2},       dt:{label:'Time step', span:0.4},
+  vdis:{label:'Velocity damping', span:0.01},
+  inj:{label:'Dye injection', span:0.08},   scale:{label:'Pattern scale', span:3},
+  pdrift:{label:'Pattern drift', span:0.3},
+  pang:{label:'Pattern rotation', span:45}, pstretch:{label:'Pattern stretch', span:0.8},
+  pwarp:{label:'Pattern warp', span:0.6}, pgain:{label:'Pattern gain', span:1},
+  pbias:{label:'Pattern bias', span:0.15}, psteps:{label:'Pattern steps', span:4},
+  pdetail:{label:'Pattern detail', span:0.3}, ddis:{label:'Dye fade', span:0.004},
+  buoy:{label:'Buoyancy', span:3},          cool:{label:'Cooling', span:0.02},
+  bHeat:{label:'Brush heat', span:5},       cHeat:{label:'Motion heat', span:5},
+  obsT:{label:'Obstacle threshold', span:0.15},
+  pFade:{label:'Trail length', span:0.06},  pSpeed:{label:'Filament speed', span:0.6},
+  pInt:{label:'Filament intensity', span:0.6}, pSize:{label:'Point size', span:1.5},
+  sprayF:{label:'Spray flow', span:2}, sprayR:{label:'Nozzle size', span:0.04},
+  splat:{label:'Splatter', span:1}, dripRate:{label:'Run speed', span:1},
+  hold:{label:'Hold', span:0.3}, wetDrag:{label:'Wet drag', span:0.6},
+  pDep:{label:'Filament deposit', span:1},
+  relief:{label:'Relief', span:1},          lightA:{label:'Light angle', span:60},
+  spec:{label:'Specular', span:0.5},        con:{label:'Contrast', span:0.3},
+  sat:{label:'Saturation', span:0.4},       post:{label:'Posterize', span:5}
+};
+const MOD_RID = {
+  cam:'rCam', brush:'rBrush', curl:'rCurl', curlS:'rCurlS', vort:'rVort', dt:'rDt',
+  vdis:'rVDis', inj:'rInj', scale:'rScale', pdrift:'rPDrift', ddis:'rDDis',
+  buoy:'rBuoy', cool:'rCool', bHeat:'rBHeat', cHeat:'rCHeat', obsT:'rObsT',
+  pFade:'rPFade', pSpeed:'rPSpeed', pInt:'rPInt', pSize:'rPSize',
+  sprayF:'rSprayF', sprayR:'rSprayR', splat:'rSplat', dripRate:'rDripRate',
+  bead:'rBead', hold:'rHold', wetDrag:'rWetDrag', pDep:'rPDep',
+  relief:'rRelief', lightA:'rLightA', spec:'rSpec', con:'rCon', sat:'rSat', post:'rPost'
+};
+let mod = null, E = P, lastT = performance.now();
+if(typeof Modulation !== 'undefined'){
+  mod = new Modulation({
+    targets: MOD_TARGETS,
+    slots: 4,
+    defaults: [
+      {target:'inj',  wave:11, depth:0.6},   // bass
+      {target:'vort', wave:12, depth:0.5},   // mid
+      {target:'pInt', wave:13, depth:0.4},   // high
+      {target:'curl', wave:0,  depth:0.3}
+    ],
+    mountLfo: el('lfos'), mountAudio: el('audioMount'),
+    range: k => { const r = el(MOD_RID[k]); return [parseFloat(r.min), parseFloat(r.max)]; },
+    onStatus: (m,e) => { if(m) say(m,e); else clearSay(); }
+  });
+}
+
+/* ---------------- output ---------------- */
+function download(blob,name){
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); },4000);
+}
+el('bPNG').addEventListener('click',()=>cv.toBlob(b=>download(b,'flow-weave-'+cv.width+'x'+cv.height+'.png')));
+let rec=null,chunks=[];
+el('bRec').addEventListener('click',()=>{
+  if(rec){ rec.stop(); return; }
+  const want=['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9','video/webm'];
+  const mime=want.find(m=>window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+  if(!mime) return say('This browser cannot record video.',true);
+  rec=new MediaRecorder(cv.captureStream(60),{mimeType:mime,videoBitsPerSecond:40e6});
+  chunks=[];
+  rec.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  rec.onstop=()=>{ download(new Blob(chunks,{type:mime}),'flow-weave.'+(mime.includes('mp4')?'mp4':'webm'));
+    rec=null; el('bRec').textContent='● Record'; el('vRec').textContent='Saved.'; };
+  rec.start(); el('bRec').textContent='■ Stop'; el('vRec').textContent='Recording…';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TBG Facade — generative fold</title>
+<style>
+  :root{
+    --bg:#07080d;
+    --panel-bg:#101218;
+    --panel-bg-2:#14161e;
+    --border:#22252f;
+    --text:#e7e9f0;
+    --text-dim:#8d93a3;
+    --accent:#3a6bff;
+    --accent-dim:#1c2f6e;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  #stage{position:fixed;inset:0;display:block;touch-action:none;}
+
+  #panel{
+    position:fixed;top:0;right:0;height:100%;width:308px;max-width:86vw;
+    background:var(--panel-bg);border-left:1px solid var(--border);
+    color:var(--text);overflow-y:auto;z-index:10;
+    transition:transform .25s ease;
+    scrollbar-width:thin;scrollbar-color:#2a2d38 var(--panel-bg);
+  }
+  #panel.hidden{transform:translateX(100%);}
+  #panel::-webkit-scrollbar{width:8px;}
+  #panel::-webkit-scrollbar-thumb{background:#2a2d38;border-radius:4px;}
+
+  .panel-inner{padding:18px 18px 32px;}
+  header h1{font-size:15px;margin:0 0 2px;font-weight:600;letter-spacing:.01em;}
+  header p{font-size:12px;color:var(--text-dim);margin:0 0 14px;line-height:1.4;}
+
+  section{border-top:1px solid var(--border);padding:14px 0;}
+  section:first-of-type{border-top:none;}
+  section h2{font-size:11px;font-weight:600;text-transform:none;color:var(--text-dim);
+    margin:0 0 10px;letter-spacing:.01em;}
+
+  .row{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:12px;}
+  .row > span{flex:0 0 118px;color:var(--text);}
+  .row input[type=range]{flex:1;min-width:0;}
+  .row output{flex:0 0 40px;text-align:right;font-variant-numeric:tabular-nums;
+    color:var(--text-dim);font-size:11px;}
+  .row select{flex:1;background:var(--panel-bg-2);color:var(--text);border:1px solid var(--border);
+    border-radius:5px;padding:5px 6px;font-size:12px;}
+  .row input[type=text]{flex:1;background:var(--panel-bg-2);color:var(--text);
+    border:1px solid var(--border);border-radius:5px;padding:5px 7px;font-size:12px;}
+  .row.check{justify-content:space-between;}
+  .row.check span{flex:1 1 auto;}
+  .row.hidden{display:none;}
+  section.hidden{display:none;}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:#2a2d38;
+    border-radius:2px;outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+    border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #0c0d12;}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid #0c0d12;}
+
+  input[type=checkbox]{width:32px;height:18px;-webkit-appearance:none;appearance:none;
+    background:#2a2d38;border-radius:10px;position:relative;cursor:pointer;outline:none;
+    transition:background .15s;flex:0 0 auto;}
+  input[type=checkbox]:checked{background:var(--accent-dim);}
+  input[type=checkbox]::before{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;
+    border-radius:50%;background:#7a7f8f;transition:transform .15s,background .15s;}
+  input[type=checkbox]:checked::before{transform:translateX(14px);background:var(--accent);}
+
+  input[type=color]{width:34px;height:26px;border:1px solid var(--border);border-radius:5px;
+    background:none;padding:2px;cursor:pointer;}
+  .swatches{display:flex;gap:8px;margin-bottom:10px;}
+
+  button{background:var(--panel-bg-2);color:var(--text);border:1px solid var(--border);
+    border-radius:6px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;}
+  button:hover{border-color:#39404f;}
+  button.ghost{background:transparent;}
+  button#recordBtn.active{background:#5a1220;border-color:#a02b3f;color:#ffd9de;}
+  .btnrow{display:flex;gap:8px;margin:8px 0;}
+
+  p.status{font-size:11px;color:var(--text-dim);margin:8px 0 0;}
+  p.hint{font-size:11px;color:var(--text-dim);margin:16px 0 0;line-height:1.5;}
+
+  #showPanelBtn{position:fixed;top:14px;right:14px;z-index:11;width:36px;height:36px;
+    border-radius:50%;border:1px solid var(--border);background:var(--panel-bg);color:var(--text);
+    font-size:15px;cursor:pointer;display:none;align-items:center;justify-content:center;}
+  #showPanelBtn.visible{display:flex;}
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<div id="panel">
+  <div class="panel-inner">
+    <header>
+      <h1>TBG Facade</h1>
+      <p>Generative fold study for The Bridge Gallery — rounded facade panels shifting like folded paper.</p>
+    </header>
+
+    <section>
+      <h2>Layout</h2>
+      <label class="row"><span>Mode</span>
+        <select id="layout">
+          <option value="field">Field</option>
+          <option value="emblem">Emblem</option>
+        </select>
+      </label>
+      <label class="row"><span>Panels per strip</span><input type="range" id="panelsPerStrip" min="3" max="12" step="1"><output></output></label>
+      <label class="row" id="rowsRow"><span>Rows</span><input type="range" id="rows" min="1" max="10" step="1"><output></output></label>
+      <label class="row"><span>Panel width</span><input type="range" id="panelWidth" min="40" max="260" step="2"><output></output></label>
+      <label class="row"><span>Panel height</span><input type="range" id="baseHeight" min="40" max="320" step="2"><output></output></label>
+      <label class="row"><span>Zigzag angle</span><input type="range" id="zigzagAngle" min="0" max="70" step="1"><output></output></label>
+      <label class="row"><span>Corner roundness</span><input type="range" id="cornerRadius" min="0" max="40" step="1"><output></output></label>
+      <label class="row" id="rowSpacingRow"><span>Row spacing</span><input type="range" id="rowSpacing" min="40" max="320" step="2"><output></output></label>
+      <label class="row" id="rowPhaseRow"><span>Row phase offset</span><input type="range" id="rowPhaseOffset" min="0" max="3" step="0.05"><output></output></label>
+      <label class="row check" id="mirrorRow"><span>Mirror alternate rows</span><input type="checkbox" id="mirrorAlternateRows"></label>
+    </section>
+
+    <section>
+      <h2>Fold motion</h2>
+      <label class="row"><span>Fold amplitude</span><input type="range" id="foldAmplitude" min="0" max="60" step="1"><output></output></label>
+      <label class="row"><span>Fold speed</span><input type="range" id="foldSpeed" min="0" max="2" step="0.01"><output></output></label>
+      <label class="row"><span>Wave spread</span><input type="range" id="wavePhase" min="0" max="2" step="0.01"><output></output></label>
+      <label class="row check"><span>Idle drift</span><input type="checkbox" id="idleDrift"></label>
+    </section>
+
+    <section>
+      <h2>Camera &amp; light</h2>
+      <label class="row"><span>Camera yaw</span><input type="range" id="camYaw" min="-90" max="90" step="1"><output></output></label>
+      <label class="row"><span>Camera tilt</span><input type="range" id="camTilt" min="0" max="1.2" step="0.01"><output></output></label>
+      <label class="row"><span>Zoom</span><input type="range" id="zoom" min="0.4" max="2.5" step="0.01"><output></output></label>
+      <label class="row"><span>Light angle</span><input type="range" id="lightAngle" min="-180" max="180" step="1"><output></output></label>
+    </section>
+
+    <section>
+      <h2>Colour</h2>
+      <div class="swatches">
+        <input type="color" id="stop0" title="Shadow"><input type="color" id="stop1" title="Deep"><input type="color" id="stop2" title="Mid"><input type="color" id="stop3" title="Lit">
+      </div>
+      <div class="btnrow"><button id="resetPalette" class="ghost">Use brand palette</button></div>
+      <label class="row"><span>Background</span>
+        <select id="bgMode"><option value="dark">Dark</option><option value="light">Light</option><option value="custom">Custom</option></select>
+      </label>
+      <label class="row" id="bgColorRow"><span>Background colour</span><input type="color" id="bgColor"></label>
+    </section>
+
+    <section>
+      <h2>Audio reactivity</h2>
+      <label class="row check"><span>Enable microphone</span><input type="checkbox" id="audioEnabled"></label>
+      <label class="row"><span>Drives</span>
+        <select id="audioTarget">
+          <option value="fold">Fold amount</option>
+          <option value="speed">Fold speed</option>
+          <option value="brightness">Brightness</option>
+          <option value="all">All</option>
+        </select>
+      </label>
+      <label class="row"><span>Sensitivity</span><input type="range" id="audioSensitivity" min="0" max="3" step="0.05"><output></output></label>
+      <label class="row"><span>Smoothing</span><input type="range" id="audioSmoothing" min="0" max="0.95" step="0.01"><output></output></label>
+      <p class="status" id="audioStatus">Microphone off</p>
+    </section>
+
+    <section id="wordmarkSection">
+      <h2>Wordmark</h2>
+      <label class="row check"><span>Show text</span><input type="checkbox" id="wordmarkEnabled"></label>
+      <label class="row"><span>Text</span><input type="text" id="wordmarkText" maxlength="48"></label>
+      <label class="row"><span>Size</span><input type="range" id="wordmarkSize" min="10" max="80" step="1"><output></output></label>
+      <label class="row"><span>Colour</span><input type="color" id="wordmarkColor"></label>
+    </section>
+
+    <section>
+      <h2>Output</h2>
+      <div class="btnrow">
+        <button id="randomize">Randomise</button>
+        <button id="resetAll" class="ghost">Reset</button>
+      </div>
+      <div class="btnrow">
+        <button id="snapshot">Save PNG</button>
+        <button id="recordBtn">Start recording</button>
+      </div>
+      <div class="btnrow">
+        <button id="fullscreenBtn" class="ghost">Fullscreen</button>
+      </div>
+      <p class="hint">Press H to hide this panel, F for fullscreen. Recordings download as .webm.</p>
+    </section>
+  </div>
+</div>
+
+<button id="showPanelBtn" title="Show controls">☰</button>
+
+<script>
+(function(){
+  "use strict";
+
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+
+  const DEFAULTS = {
+    layout:'field',
+    panelsPerStrip:7,
+    rows:5,
+    panelWidth:130,
+    baseHeight:150,
+    zigzagAngle:32,
+    cornerRadius:10,
+    rowSpacing:170,
+    rowPhaseOffset:0.7,
+    mirrorAlternateRows:true,
+    foldAmplitude:16,
+    foldSpeed:0.35,
+    wavePhase:0.55,
+    idleDrift:true,
+    camYaw:30,
+    camTilt:0.5,
+    zoom:1,
+    lightAngle:-35,
+    colorStops:['#0a0d33','#12179c','#1b2fe0','#2f6bff'],
+    bgMode:'dark',
+    bgColor:'#07080d',
+    audioEnabled:false,
+    audioTarget:'fold',
+    audioSensitivity:1.1,
+    audioSmoothing:0.75,
+    wordmarkEnabled:false,
+    wordmarkText:'THE BRIDGE GALLERY',
+    wordmarkSize:26,
+    wordmarkColor:'#f2f4fa',
+    seed:42
+  };
+
+  const state = JSON.parse(JSON.stringify(DEFAULTS));
+  const audio = { bass:0, mid:0, treble:0, envelope:0 };
+
+  // ---------- math helpers ----------
+  function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+  function hash(seed,i,ch){
+    const x = Math.sin(seed*12.9898 + i*78.233 + ch*37.719 + 4.1)*43758.5453;
+    return x - Math.floor(x);
+  }
+  function rand(a,b){ return a + Math.random()*(b-a); }
+
+  function hexToRgb(hex){
+    hex = hex.replace('#','');
+    if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const num = parseInt(hex,16);
+    return { r:(num>>16)&255, g:(num>>8)&255, b:num&255 };
+  }
+  function lerpColor(hexA,hexB,t){
+    const a = hexToRgb(hexA), b = hexToRgb(hexB);
+    return `rgb(${Math.round(lerp(a.r,b.r,t))},${Math.round(lerp(a.g,b.g,t))},${Math.round(lerp(a.b,b.b,t))})`;
+  }
+  function rampColor(t){
+    const stops = state.colorStops;
+    const n = stops.length-1;
+    t = clamp(t,0,1);
+    const seg = Math.min(n-1, Math.floor(t*n));
+    const localT = t*n - seg;
+    return lerpColor(stops[seg], stops[seg+1], localT);
+  }
+
+  function roundedPolygonPath(context, pts, r){
+    const n = pts.length;
+    context.beginPath();
+    for(let i=0;i<n;i++){
+      const prev = pts[(i-1+n)%n];
+      const cur = pts[i];
+      const next = pts[(i+1)%n];
+      const d1 = Math.max(dist(prev,cur), 0.0001);
+      const d2 = Math.max(dist(cur,next), 0.0001);
+      const rr = Math.max(0, Math.min(r, d1/2, d2/2));
+      const v1 = { x:(prev.x-cur.x)/d1, y:(prev.y-cur.y)/d1 };
+      const v2 = { x:(next.x-cur.x)/d2, y:(next.y-cur.y)/d2 };
+      const a = { x:cur.x+v1.x*rr, y:cur.y+v1.y*rr };
+      const b = { x:cur.x+v2.x*rr, y:cur.y+v2.y*rr };
+      if(i===0) context.moveTo(a.x,a.y); else context.lineTo(a.x,a.y);
+      context.quadraticCurveTo(cur.x,cur.y,b.x,b.y);
+    }
+    context.closePath();
+  }
+
+  function project(pt, cam){
+    const c = Math.cos(cam.yawRad), s = Math.sin(cam.yawRad);
+    const sx = pt.x*c - pt.z*s;
+    const depth = pt.x*s + pt.z*c;
+    const sy = -pt.y + depth*cam.tilt;
+    return { x: sx*cam.zoom + cam.originX, y: sy*cam.zoom + cam.originY, depth };
+  }
+
+  // ---------- scene construction ----------
+  function buildStrips(){
+    const strips = [];
+    const totalW = state.panelWidth*state.panelsPerStrip;
+    if(state.layout==='emblem'){
+      strips.push({ x:-totalW/2, y:-state.baseHeight*0.4, z:0, heading:0, dirSign:1, phaseOffset:0 });
+      return strips;
+    }
+    const rows = state.rows;
+    const repeats = [-1,0,1];
+    for(let r=0;r<rows;r++){
+      const rowY = (r-(rows-1)/2)*state.rowSpacing;
+      const dirSign = (state.mirrorAlternateRows && r%2===1) ? -1 : 1;
+      for(const rep of repeats){
+        strips.push({
+          x: -totalW/2 + rep*totalW,
+          y: rowY, z:0, heading:0, dirSign,
+          phaseOffset: r*state.rowPhaseOffset + rep*0.37
+        });
+      }
+    }
+    return strips;
+  }
+
+  function buildStripPanels(strip, t){
+    const panels = [];
+    let phi = strip.heading;
+    let pos = { x:strip.x, y:strip.y, z:strip.z };
+    const N = state.panelsPerStrip;
+    const stripSeed = state.seed + strip.y*0.013 + strip.x*0.007;
+    for(let i=0;i<N;i++){
+      const sign = (i%2===0) ? 1 : -1;
+      const jf = 0.6 + hash(stripSeed,i,0)*0.9;
+      const jp = hash(stripSeed,i,1)*Math.PI*2;
+      const wave = Math.sin(t*state.foldSpeed*jf + i*state.wavePhase + jp + strip.phaseOffset);
+
+      let audioAdd = 0, speedMul = 1;
+      if(state.audioEnabled){
+        if(state.audioTarget==='fold' || state.audioTarget==='all'){
+          audioAdd = audio.envelope*state.audioSensitivity*22*Math.sin(t*2.6 + i*0.7);
+        }
+        if(state.audioTarget==='speed' || state.audioTarget==='all'){
+          speedMul = 1 + audio.envelope*state.audioSensitivity;
+        }
+      }
+
+      const thetaDeg = sign*state.zigzagAngle + state.foldAmplitude*wave*speedMul + audioAdd;
+      const theta = thetaDeg*Math.PI/180*strip.dirSign;
+      phi += theta;
+      const dir = { x:Math.cos(phi), z:Math.sin(phi) };
+
+      const hp = 0.55 + 0.45*Math.sin(Math.PI*(i+0.5)/N) + (hash(stripSeed,i,2)-0.5)*0.3;
+      const h = Math.max(20, state.baseHeight*hp);
+
+      const next = { x:pos.x+dir.x*state.panelWidth, y:pos.y, z:pos.z+dir.z*state.panelWidth };
+      const corners3d = [
+        { x:pos.x, y:pos.y, z:pos.z },
+        { x:next.x, y:next.y, z:next.z },
+        { x:next.x, y:next.y+h, z:next.z },
+        { x:pos.x, y:pos.y+h, z:pos.z }
+      ];
+      panels.push({ corners3d, normal:{ x:-dir.z, z:dir.x } });
+      pos = next;
+    }
+    return panels;
+  }
+
+  function drawWordmark(cam){
+    const totalW = state.panelWidth*state.panelsPerStrip*cam.zoom;
+    const x = cam.originX - totalW*0.075;
+    const y = cam.originY + state.baseHeight*0.55*cam.zoom;
+    ctx.save();
+    ctx.font = `700 ${state.wordmarkSize}px -apple-system,Helvetica,Arial,sans-serif`;
+    ctx.fillStyle = state.wordmarkColor;
+    ctx.textBaseline = 'top';
+    ctx.fillText(state.wordmarkText, x, y);
+    ctx.restore();
+  }
+
+  // ---------- render loop ----------
+  function resizeIfNeeded(){
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    const w = Math.floor(window.innerWidth*dpr), h = Math.floor(window.innerHeight*dpr);
+    if(canvas.width!==w || canvas.height!==h){
+      canvas.width = w; canvas.height = h;
+      canvas.style.width = window.innerWidth+'px';
+      canvas.style.height = window.innerHeight+'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+  }
+
+  function render(now){
+    const t = now/1000;
+    resizeIfNeeded();
+    updateAudio();
+
+    ctx.fillStyle = state.bgColor;
+    ctx.fillRect(0,0,window.innerWidth,window.innerHeight);
+
+    const cam = {
+      yawRad: (state.camYaw + (state.idleDrift ? Math.sin(t*0.05)*4 : 0))*Math.PI/180,
+      tilt: state.camTilt,
+      zoom: state.zoom*(window.innerHeight/900),
+      originX: window.innerWidth/2,
+      originY: window.innerHeight/2
+    };
+    const light = {
+      x: Math.cos(state.lightAngle*Math.PI/180),
+      z: Math.sin(state.lightAngle*Math.PI/180)
+    };
+
+    const strips = buildStrips();
+    let allPanels = [];
+    for(const s of strips) allPanels = allPanels.concat(buildStripPanels(s, t));
+
+    for(const p of allPanels){
+      p.screen = p.corners3d.map(c => project(c, cam));
+      p.depth = (p.screen[0].depth + p.screen[1].depth + p.screen[2].depth + p.screen[3].depth)/4;
+      let dot = p.normal.x*light.x + p.normal.z*light.z;
+      let bt = (dot+1)/2;
+      if(state.audioEnabled && (state.audioTarget==='brightness' || state.audioTarget==='all')){
+        bt = clamp(bt + audio.envelope*state.audioSensitivity*0.3, 0, 1);
+      }
+      p.color = rampColor(bt);
+      p.edgeColor = rampColor(clamp(bt-0.28,0,1));
+    }
+
+    allPanels.sort((a,b) => b.depth - a.depth);
+
+    for(const p of allPanels){
+      roundedPolygonPath(ctx, p.screen, state.cornerRadius*cam.zoom*0.5);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+      ctx.lineWidth = Math.max(1, cam.zoom*0.7);
+      ctx.strokeStyle = p.edgeColor;
+      ctx.stroke();
+    }
+
+    if(state.layout==='emblem' && state.wordmarkEnabled) drawWordmark(cam);
+
+    requestAnimationFrame(render);
+  }
+
+  // ---------- audio ----------
+  let audioCtx=null, analyser=null, dataArray=null, micStream=null;
+
+  async function enableAudio(){
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      const src = audioCtx.createMediaStreamSource(micStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = state.audioSmoothing;
+      src.connect(analyser);
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      state.audioEnabled = true;
+      document.getElementById('audioStatus').textContent = 'Microphone connected';
+    }catch(err){
+      state.audioEnabled = false;
+      document.getElementById('audioStatus').textContent = 'Microphone error: '+err.message;
+    }
+  }
+
+  function disableAudio(){
+    if(micStream) micStream.getTracks().forEach(tr => tr.stop());
+    if(audioCtx) audioCtx.close();
+    audioCtx=null; analyser=null; micStream=null;
+    state.audioEnabled = false;
+    document.getElementById('audioStatus').textContent = 'Microphone off';
+  }
+
+  function updateAudio(){
+    if(!state.audioEnabled || !analyser){
+      audio.envelope = lerp(audio.envelope, 0, 0.08);
+      return;
+    }
+    analyser.getByteFrequencyData(dataArray);
+    const n = dataArray.length;
+    const bassEnd = Math.floor(n*0.12), midEnd = Math.floor(n*0.5);
+    let bass=0, mid=0, treb=0;
+    for(let i=0;i<bassEnd;i++) bass+=dataArray[i];
+    for(let i=bassEnd;i<midEnd;i++) mid+=dataArray[i];
+    for(let i=midEnd;i<n;i++) treb+=dataArray[i];
+    bass /= (bassEnd*255 || 1);
+    mid /= ((midEnd-bassEnd)*255 || 1);
+    treb /= ((n-midEnd)*255 || 1);
+    audio.bass = bass; audio.mid = mid; audio.treble = treb;
+    const raw = bass*0.5 + mid*0.35 + treb*0.15;
+    audio.envelope = lerp(audio.envelope, raw, 0.35);
+  }
+
+  // ---------- recording / snapshot ----------
+  let recorder=null, chunks=[];
+  function pickMime(){
+    const options = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+    for(const o of options){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(o)) return o; }
+    return '';
+  }
+  function startRecording(){
+    const stream = canvas.captureStream(30);
+    const mime = pickMime();
+    recorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type:'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `tbg-facade-${Date.now()}.webm`; a.click();
+      URL.revokeObjectURL(url);
+    };
+    recorder.start();
+  }
+  function stopRecording(){ if(recorder && recorder.state!=='inactive') recorder.stop(); }
+  function toggleRecording(){
+    const btn = document.getElementById('recordBtn');
+    if(recorder && recorder.state==='recording'){
+      stopRecording();
+      btn.textContent = 'Start recording';
+      btn.classList.remove('active');
+    } else {
+      startRecording();
+      btn.textContent = 'Stop recording';
+      btn.classList.add('active');
+    }
+  }
+  function saveSnapshot(){
+    const a = document.createElement('a');
+    a.download = `tbg-facade-${Date.now()}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  }
+  function toggleFullscreen(){
+    if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); }
+    else { document.exitFullscreen(); }
+  }
+
+  // ---------- UI wiring ----------
+  const SLIDER_IDS = ['panelsPerStrip','rows','panelWidth','baseHeight','zigzagAngle','cornerRadius',
+    'rowSpacing','rowPhaseOffset','foldAmplitude','foldSpeed','wavePhase','camYaw','camTilt','zoom',
+    'lightAngle','audioSensitivity','audioSmoothing','wordmarkSize'];
+  const CHECK_IDS = ['mirrorAlternateRows','idleDrift','wordmarkEnabled'];
+  const SELECT_IDS = ['layout','audioTarget','bgMode'];
+
+  function formatVal(v){ return Number.isInteger(v) ? String(v) : v.toFixed(2); }
+
+  function initSliders(){
+    SLIDER_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      const out = el.nextElementSibling;
+      el.value = state[id];
+      out.textContent = formatVal(state[id]);
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        state[id] = v;
+        out.textContent = formatVal(v);
+      });
+    });
+  }
+  function syncAllSlidersFromState(){
+    SLIDER_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      el.value = state[id];
+      el.nextElementSibling.textContent = formatVal(state[id]);
+    });
+  }
+
+  function syncBgMode(){
+    if(state.bgMode==='dark') state.bgColor = '#07080d';
+    else if(state.bgMode==='light') state.bgColor = '#f5f6fa';
+    document.getElementById('bgColorRow').classList.toggle('hidden', state.bgMode!=='custom');
+    document.getElementById('bgColor').value = state.bgColor;
+  }
+  function syncLayoutVisibility(){
+    const isField = state.layout==='field';
+    ['rowsRow','rowSpacingRow','rowPhaseRow','mirrorRow'].forEach(id => {
+      document.getElementById(id).classList.toggle('hidden', !isField);
+    });
+    document.getElementById('wordmarkSection').classList.toggle('hidden', isField);
+  }
+
+  function randomize(){
+    state.seed = Math.floor(Math.random()*100000);
+    state.zigzagAngle = Math.round(rand(15,50));
+    state.foldAmplitude = Math.round(rand(5,35));
+    state.foldSpeed = +rand(0.12,0.9).toFixed(2);
+    state.wavePhase = +rand(0.2,1.4).toFixed(2);
+    state.panelsPerStrip = Math.round(rand(4,10));
+    if(state.layout==='field') state.rows = Math.round(rand(2,7));
+    state.cornerRadius = Math.round(rand(0,24));
+    state.lightAngle = Math.round(rand(-180,180));
+    syncAllSlidersFromState();
+  }
+
+  function resetAll(){
+    Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)));
+    syncAllSlidersFromState();
+    CHECK_IDS.forEach(id => { document.getElementById(id).checked = state[id]; });
+    SELECT_IDS.forEach(id => { document.getElementById(id).value = state[id]; });
+    [0,1,2,3].forEach(i => { document.getElementById('stop'+i).value = state.colorStops[i]; });
+    document.getElementById('wordmarkText').value = state.wordmarkText;
+    document.getElementById('wordmarkColor').value = state.wordmarkColor;
+    syncBgMode();
+    syncLayoutVisibility();
+  }
+
+  let panelHidden = false;
+  function setPanelHidden(hidden){
+    panelHidden = hidden;
+    document.getElementById('panel').classList.toggle('hidden', hidden);
+    document.getElementById('showPanelBtn').classList.toggle('visible', hidden);
+  }
+
+  function init(){
+    initSliders();
+
+    CHECK_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      el.checked = state[id];
+      el.addEventListener('change', () => { state[id] = el.checked; });
+    });
+
+    SELECT_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      el.value = state[id];
+      el.addEventListener('change', () => {
+        state[id] = el.value;
+        if(id==='layout') syncLayoutVisibility();
+        if(id==='bgMode') syncBgMode();
+      });
+    });
+
+    document.getElementById('audioEnabled').addEventListener('change', async (e) => {
+      if(e.target.checked){ await enableAudio(); e.target.checked = state.audioEnabled; }
+      else { disableAudio(); }
+    });
+
+    document.getElementById('audioSmoothing').addEventListener('input', () => {
+      if(analyser) analyser.smoothingTimeConstant = state.audioSmoothing;
+    });
+
+    const wtEl = document.getElementById('wordmarkText');
+    wtEl.value = state.wordmarkText;
+    wtEl.addEventListener('input', () => { state.wordmarkText = wtEl.value || DEFAULTS.wordmarkText; });
+
+    [0,1,2,3].forEach(i => {
+      const el = document.getElementById('stop'+i);
+      el.value = state.colorStops[i];
+      el.addEventListener('input', () => { state.colorStops[i] = el.value; });
+    });
+
+    const bgColorEl = document.getElementById('bgColor');
+    bgColorEl.addEventListener('input', () => { state.bgColor = bgColorEl.value; });
+
+    const wcEl = document.getElementById('wordmarkColor');
+    wcEl.value = state.wordmarkColor;
+    wcEl.addEventListener('input', () => { state.wordmarkColor = wcEl.value; });
+
+    document.getElementById('randomize').addEventListener('click', randomize);
+    document.getElementById('resetAll').addEventListener('click', resetAll);
+    document.getElementById('resetPalette').addEventListener('click', () => {
+      state.colorStops = [...DEFAULTS.colorStops];
+      [0,1,2,3].forEach(i => { document.getElementById('stop'+i).value = state.colorStops[i]; });
+    });
+    document.getElementById('snapshot').addEventListener('click', saveSnapshot);
+    document.getElementById('recordBtn').addEventListener('click', toggleRecording);
+    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    document.getElementById('showPanelBtn').addEventListener('click', () => setPanelHidden(false));
+
+    window.addEventListener('keydown', (e) => {
+      const tag = e.target.tagName;
+      if(tag==='INPUT' || tag==='SELECT' || tag==='TEXTAREA') return;
+      if(e.key==='h' || e.key==='H') setPanelHidden(!panelHidden);
+      if(e.key==='f' || e.key==='F') toggleFullscreen();
+    });
+
+    syncBgMode();
+    syncLayoutVisibility();
+    requestAnimationFrame(render);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
