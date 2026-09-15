@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ouroboros — recursive feedback engine</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px;position:relative}
+  #gl{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#000;cursor:crosshair}
+  #dropHint{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(20,22,24,.86);z-index:50;font-size:16px;color:var(--accent);border:2px dashed var(--accent)}
+  body.dragging #dropHint{display:flex}
+
+  #panel{width:352px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  .group{border-bottom:1px solid var(--line)}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:28px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:56px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--accent);margin-top:-4.5px;border:none}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:none}
+  select,input[type=text]{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-size:12px;font-family:inherit}
+  input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.warm{border-color:#4a3a34;color:#f0a68e}
+  button.on{border-color:var(--accent);color:var(--accent)}
+  .btnrow{display:flex;gap:6px;padding:6px 0}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
+    border-top:1px solid var(--line);margin-top:8px}
+  #footer{border-top:1px solid var(--line);padding:12px 16px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Ouroboros <span>— recursive feedback engine</span></h1>
+    <div id="status">starting</div>
+  </div>
+  <div id="canvasWrap"><canvas id="gl"></canvas></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+    <details class="group" open>
+      <summary>Presets<span class="chev"></span></summary>
+      <div class="body">
+        <div class="row"><label>Preset</label><div class="ctl"><select id="presetSel"></select></div></div>
+        <div class="btnrow"><button id="bSeed">Seed</button><button id="bFlash">Flash</button><button id="bWipe" class="warm">Wipe</button></div>
+        <div class="btnrow"><button id="bExportPreset">Export preset</button><button id="bImportPreset">Import preset</button></div>
+        <div class="note">A feedback loop needs something to chew on. Seed drops a pattern in, Flash injects a burst, or just drag on the canvas to paint light into it.</div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Loop transform<span class="chev"></span></summary>
+      <div class="body" id="g-xform"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Warp<span class="chev"></span></summary>
+      <div class="body" id="g-warp"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Colour in the loop<span class="chev"></span></summary>
+      <div class="body" id="g-color"></div>
+    </details>
+
+    <details class="group">
+      <summary>Mirror<span class="chev"></span></summary>
+      <div class="body" id="g-mirror"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Input<span class="chev"></span></summary>
+      <div class="body" id="g-input"></div>
+    </details>
+
+    <details class="group">
+      <summary>Display<span class="chev"></span></summary>
+      <div class="body" id="g-display"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+  </div>
+
+  <div id="footer">
+    <div class="btnrow">
+      <button class="primary" id="bPNG">PNG</button>
+      <button class="primary" id="bRec">● Record</button>
+    </div>
+  </div>
+</div>
+
+<div id="dropHint">Drop an image or a video file</div>
+<input type="file" id="fMedia" accept="image/*,video/*" class="hidden">
+<input type="file" id="fPreset" accept="application/json,.json" class="hidden">
+
+<script src="unlimiter-drive.js"></script>
+<script>
+"use strict";
+
+/* ============================ parameters ============================ */
+const DEFAULTS = {
+  // loop transform
+  zoom: 1.006, rot: 0.15, driftX: 0, driftY: 0, cx: 0.5, cy: 0.5,
+  // warp
+  twist: 0, barrel: 0, swirlAmp: 0, swirlFreq: 3,
+  noiseAmp: 0, noiseScale: 2.2, noiseSpeed: 0.12,
+  selfWarp: 0, blur: 0.45, sharp: 0,
+  // colour
+  decay: 0.985, hue: 0.6, sat: 1.01, con: 1.0, lift: 0.0,
+  rgbSplit: 0, posterize: 0, invert: 0,
+  // mirror
+  mirrorMode: 0, kaleidoN: 6, mirrorMix: 1,
+  // input
+  inMix: 0.35, inMode: 1, inZoom: 1, inRot: 0, inKey: 0, inKeySoft: 0.25,
+  inEdge: 0, edgeMode: 0,
+  // display
+  exposure: 1, gamma: 1, vignette: 0.15, satOut: 1,
+  // brush
+  brushR: 0.06, brushStr: 1.2, brushCol: "#ffeccc"
+};
+let P = Object.assign({}, DEFAULTS);
+let Q = P;
+let userSlot = null;
+
+const PRESETS = {
+  "Slow bloom": {},
+  "Tunnel": { zoom:1.028, rot:0.05, decay:0.972, blur:0.7, inMix:0.5, inMode:1,
+    hue:0.3, twist:0, vignette:0.3, edgeMode:0 },
+  "Wormhole": { zoom:1.05, rot:1.6, twist:0.9, decay:0.965, blur:1.1, sat:1.05,
+    hue:2.2, inMix:0.4, mirrorMode:0, vignette:0.35 },
+  "Kaleido drift": { zoom:1.004, rot:0.08, mirrorMode:4, kaleidoN:6, decay:0.985,
+    blur:0.5, hue:1.1, inMix:0.3, noiseAmp:0.004, noiseScale:3 },
+  "Smear": { zoom:1.0, rot:0, driftX:1.4, driftY:0.4, decay:0.99, blur:0.9,
+    inMix:0.55, inMode:3, sat:1.02, edgeMode:2 },
+  "Boil": { zoom:0.998, rot:-0.3, noiseAmp:0.012, noiseScale:4.5, noiseSpeed:0.5,
+    decay:0.98, blur:0.6, inMix:0.3, selfWarp:0.01, hue:1.6 },
+  "Chrome trails": { zoom:1.012, rot:0.4, rgbSplit:0.004, decay:0.982, blur:0.3,
+    sat:1.06, inMix:0.4, inMode:1, con:1.06 },
+  "Etch": { zoom:1.002, rot:0, decay:0.94, sharp:0.9, blur:0, posterize:6,
+    inMix:0.7, inMode:4, con:1.2, inEdge:1 },
+  "Liquid mirror": { zoom:1.0, rot:0, selfWarp:0.045, decay:0.99, blur:0.8,
+    mirrorMode:3, inMix:0.35, hue:0.4, sat:1.03 }
+};
+
+/* ============================ drive ============================ */
+const Drive = (window.UnlimiterDrive)
+  ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
+  : null;
+const NO_MOD = new Set([]);
+let GRP="";
+function registerMod(key,label,min,max){
+  if(!Drive || NO_MOD.has(key)) return;
+  Drive.registerTarget(key, GRP ? GRP+" — "+label : label, min, max);
+}
+
+/* ============================ control builders ============================ */
+const bound={}, rows={};
+function row(parent,label,nodes,key){
+  const r=document.createElement("div"); r.className="row";
+  const l=document.createElement("label"); l.textContent=label;
+  const c=document.createElement("div"); c.className="ctl";
+  nodes.forEach(n=>c.appendChild(n));
+  r.appendChild(l); r.appendChild(c); parent.appendChild(r);
+  if(key) rows[key]=r;
+  return r;
+}
+function note(p,t){const d=document.createElement("div");d.className="note";d.textContent=t;p.appendChild(d);}
+function subhead(p,t){const d=document.createElement("div");d.className="subhead";d.textContent=t;p.appendChild(d);}
+function fmt(v,step){
+  if(step>=1) return String(Math.round(v));
+  const dec=Math.max(0,Math.round(-Math.log10(step)));
+  return v.toFixed(Math.min(dec,4));
+}
+function slider(parent,key,label,min,max,step,suffix){
+  const i=document.createElement("input");
+  i.type="range"; i.min=min; i.max=max; i.step=step; i.value=P[key];
+  const v=document.createElement("span"); v.className="val";
+  const show=()=>v.textContent=fmt(Number(P[key]),step)+(suffix||"");
+  show();
+  i.addEventListener("input",()=>{P[key]=Number(i.value);show();});
+  bound[key]=()=>{i.value=P[key];show();};
+  registerMod(key,label,min,max);
+  return row(parent,label,[i,v],key);
+}
+function select(parent,key,label,opts){
+  const s=document.createElement("select");
+  opts.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;s.appendChild(o);});
+  s.value=P[key];
+  s.addEventListener("change",()=>{P[key]=isNaN(+s.value)?s.value:+s.value;vis();});
+  bound[key]=()=>{s.value=P[key];};
+  return row(parent,label,[s],key);
+}
+function check(parent,key,label){
+  const c=document.createElement("input"); c.type="checkbox"; c.checked=!!P[key];
+  c.addEventListener("change",()=>{P[key]=c.checked?1:0;});
+  bound[key]=()=>{c.checked=!!P[key];};
+  return row(parent,label,[c],key);
+}
+function colorPick(parent,key,label){
+  const c=document.createElement("input"); c.type="color"; c.value=P[key];
+  c.addEventListener("input",()=>{P[key]=c.value;});
+  bound[key]=()=>{c.value=P[key];};
+  return row(parent,label,[c],key);
+}
+
+/* ============================ panel ============================ */
+GRP="Transform";
+const gX=document.getElementById("g-xform");
+slider(gX,"zoom","Zoom / frame",0.94,1.06,0.0005,"");
+slider(gX,"rot","Rotate / frame",-6,6,0.01,"°");
+slider(gX,"driftX","Drift X",-8,8,0.02,"");
+slider(gX,"driftY","Drift Y",-8,8,0.02,"");
+slider(gX,"cx","Centre X",0,1,0.002,"");
+slider(gX,"cy","Centre Y",0,1,0.002,"");
+note(gX,"Zoom is applied once per frame and compounds. 1.000 holds still; a thousandth either side is already a slow tunnel.");
+
+GRP="Warp";
+const gW=document.getElementById("g-warp");
+slider(gW,"twist","Twist",-3,3,0.005,"");
+slider(gW,"barrel","Barrel",-1,1,0.002,"");
+slider(gW,"swirlAmp","Ripple",0,0.08,0.0002,"");
+slider(gW,"swirlFreq","Ripple freq",0.5,24,0.1,"");
+slider(gW,"noiseAmp","Noise",0,0.05,0.0002,"");
+slider(gW,"noiseScale","Noise scale",0.3,12,0.05,"");
+slider(gW,"noiseSpeed","Noise drift",0,2,0.005,"");
+slider(gW,"selfWarp","Self warp",0,0.12,0.0005,"");
+subhead(gW,"Loop filter");
+slider(gW,"blur","Blur",0,3,0.01,"");
+slider(gW,"sharp","Sharpen",0,2,0.01,"");
+note(gW,"Self warp displaces the sample by the previous frame's own brightness gradient — the image starts pulling on itself, which is where feedback stops looking geometric.");
+
+GRP="Colour";
+const gC=document.getElementById("g-color");
+slider(gC,"decay","Decay",0.9,1.02,0.0005,"");
+slider(gC,"lift","Lift",-0.02,0.02,0.0002,"");
+slider(gC,"hue","Hue shift",-8,8,0.02,"°");
+slider(gC,"sat","Saturation",0.9,1.1,0.0005,"");
+slider(gC,"con","Contrast",0.9,1.15,0.0005,"");
+slider(gC,"rgbSplit","RGB split",0,0.02,0.0001,"");
+slider(gC,"posterize","Posterise",0,16,1,"");
+check(gC,"invert","Invert each pass");
+note(gC,"Decay below 1 makes the loop die out, above 1 makes it bloom until it clips. The interesting territory is the last thousandth before 1.");
+
+GRP="Mirror";
+const gM=document.getElementById("g-mirror");
+select(gM,"mirrorMode","Mode",[[0,"None"],[1,"Horizontal"],[2,"Vertical"],[3,"Quad"],[4,"Kaleidoscope"]]);
+slider(gM,"kaleidoN","Segments",2,16,1,"");
+slider(gM,"mirrorMix","Amount",0,1,0.01,"");
+
+GRP="Input";
+const gI=document.getElementById("g-input");
+const srcRow=document.createElement("div"); srcRow.className="btnrow";
+const bCam=document.createElement("button"); bCam.textContent="Webcam";
+const bFile=document.createElement("button"); bFile.textContent="Image / video";
+const bNone=document.createElement("button"); bNone.textContent="None";
+srcRow.append(bCam,bFile,bNone); gI.appendChild(srcRow);
+const srcLbl=document.createElement("div"); srcLbl.className="note"; srcLbl.textContent="No input";
+gI.appendChild(srcLbl);
+slider(gI,"inMix","Amount",0,1,0.005,"");
+select(gI,"inMode","Blend",[[0,"Mix"],[1,"Add"],[2,"Screen"],[3,"Lighten"],[4,"Difference"],[5,"Multiply"]]);
+slider(gI,"inZoom","Input zoom",0.3,3,0.005,"");
+slider(gI,"inRot","Input rotate",-180,180,0.5,"°");
+slider(gI,"inKey","Luma key",0,1,0.005,"");
+slider(gI,"inKeySoft","Key softness",0.01,0.6,0.005,"");
+check(gI,"inEdge","Edges only");
+select(gI,"edgeMode","Frame edges",[[0,"Clamp"],[1,"Mirror"],[2,"Wrap"]]);
+subhead(gI,"Brush");
+slider(gI,"brushR","Size",0.005,0.4,0.002,"");
+slider(gI,"brushStr","Strength",0,4,0.02,"");
+colorPick(gI,"brushCol","Colour");
+
+GRP="Display";
+const gD=document.getElementById("g-display");
+slider(gD,"exposure","Exposure",0.2,3,0.005,"");
+slider(gD,"gamma","Gamma",0.4,2.2,0.005,"");
+slider(gD,"satOut","Saturation",0,2,0.005,"");
+slider(gD,"vignette","Vignette",0,1,0.005,"");
+GRP="";
+
+function vis(){
+  const show=(k,on)=>{ if(rows[k]) rows[k].classList.toggle("hidden",!on); };
+  show("kaleidoN", +P.mirrorMode===4);
+  show("mirrorMix", +P.mirrorMode!==0);
+  show("inKeySoft", P.inKey>0);
+}
+
+/* ============================ GL ============================ */
+const cv=document.getElementById("gl");
+const statusEl=document.getElementById("status");
+const gl=cv.getContext("webgl2",{antialias:false,preserveDrawingBuffer:false,premultipliedAlpha:false});
+if(!gl){ statusEl.textContent="WebGL2 unavailable"; }
+
+const VERT = `#version 300 es
+void main(){
+  vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);
+  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0);
+}`;
+
+const FEED = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+
+uniform sampler2D uPrev, uIn;
+uniform vec2 uRes;
+uniform float uAspect, uTime;
+uniform int uHasIn;
+
+uniform float uZoom, uRot, uTwist, uBarrel, uSwirlAmp, uSwirlFreq;
+uniform vec2 uDrift, uCenter;
+uniform float uNoiseAmp, uNoiseScale, uNoiseSpeed, uSelfWarp, uBlur, uSharp;
+uniform float uDecay, uLift, uHue, uSat, uCon, uRgbSplit, uPoster;
+uniform int uInvert, uEdge, uMirror, uKaleidoN;
+uniform float uMirrorMix;
+uniform float uInMix, uInZoom, uInRot, uInKey, uInKeySoft;
+uniform int uInMode, uInEdge;
+uniform vec2 uBrush;            // xy position, -1 = inactive
+uniform float uBrushR, uBrushStr;
+uniform vec3 uBrushCol;
+
+const float TAU = 6.28318530718;
+
+float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){
+  vec2 i=floor(p), f=fract(p);
+  f=f*f*(3.0-2.0*f);
+  float a=hash(i), b=hash(i+vec2(1,0)), c=hash(i+vec2(0,1)), d=hash(i+vec2(1,1));
+  return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+}
+
+vec2 toC(vec2 uv){ return (uv - uCenter) * vec2(uAspect,1.0); }
+vec2 fromC(vec2 c){ return c / vec2(uAspect,1.0) + uCenter; }
+
+vec2 edgeUV(vec2 uv){
+  if(uEdge==1) return 1.0 - abs(1.0 - mod(uv, 2.0));   // mirror
+  if(uEdge==2) return fract(uv);                        // wrap
+  return clamp(uv, 0.0, 1.0);
+}
+vec2 inEdgeUV(vec2 uv){
+  if(uInEdge==1) return 1.0 - abs(1.0 - mod(uv, 2.0));
+  return uv;
+}
+
+vec3 hueRot(vec3 c, float deg){
+  float a = radians(deg);
+  float s = sin(a), co = cos(a);
+  mat3 m = mat3(
+    0.299+0.701*co+0.168*s, 0.587-0.587*co+0.330*s, 0.114-0.114*co-0.497*s,
+    0.299-0.299*co-0.328*s, 0.587+0.413*co+0.035*s, 0.114-0.114*co+0.292*s,
+    0.299-0.300*co+1.250*s, 0.587-0.588*co-1.050*s, 0.114+0.886*co-0.203*s);
+  return c * m;
+}
+float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
+
+vec3 samplePrev(vec2 uv){
+  if(uBlur <= 0.001) return texture(uPrev, edgeUV(uv)).rgb;
+  vec2 px = uBlur / uRes;
+  vec3 s = texture(uPrev, edgeUV(uv)).rgb * 4.0;
+  s += texture(uPrev, edgeUV(uv+vec2( px.x,0))).rgb * 2.0;
+  s += texture(uPrev, edgeUV(uv+vec2(-px.x,0))).rgb * 2.0;
+  s += texture(uPrev, edgeUV(uv+vec2(0, px.y))).rgb * 2.0;
+  s += texture(uPrev, edgeUV(uv+vec2(0,-px.y))).rgb * 2.0;
+  s += texture(uPrev, edgeUV(uv+px)).rgb;
+  s += texture(uPrev, edgeUV(uv-px)).rgb;
+  s += texture(uPrev, edgeUV(uv+vec2(px.x,-px.y))).rgb;
+  s += texture(uPrev, edgeUV(uv-vec2(px.x,-px.y))).rgb;
+  return s / 16.0;
+}
+
+// one step of the loop transform, in centred space
+vec2 loopWarp(vec2 c, float scale, float rotDeg){
+  float r = length(c);
+  float ang = radians(rotDeg + uTwist * r * 57.2958);
+  float s = sin(ang), co = cos(ang);
+  c = mat2(co,-s,s,co) * c;
+  c /= max(0.0001, scale);
+  if(abs(uBarrel) > 0.0001){
+    float rr = length(c);
+    c *= 1.0 + uBarrel * rr * rr;
+  }
+  if(uSwirlAmp > 0.00001){
+    c += vec2(sin(c.y*uSwirlFreq + uTime*0.7), sin(c.x*uSwirlFreq - uTime*0.6)) * uSwirlAmp;
+  }
+  if(uNoiseAmp > 0.00001){
+    float t = uTime * uNoiseSpeed;
+    float nx = vnoise(c*uNoiseScale + vec2(t, 0.0)) - 0.5;
+    float ny = vnoise(c*uNoiseScale + vec2(0.0, t) + 31.7) - 0.5;
+    c += vec2(nx, ny) * uNoiseAmp * 2.0;
+  }
+  return c;
+}
+
+vec2 mirrorC(vec2 c){
+  if(uMirror==0) return c;
+  vec2 m = c;
+  if(uMirror==1) m.x = abs(m.x);
+  else if(uMirror==2) m.y = abs(m.y);
+  else if(uMirror==3) m = abs(m);
+  else if(uMirror==4){
+    float a = atan(m.y, m.x);
+    float r = length(m);
+    float seg = TAU / float(max(2,uKaleidoN));
+    a = mod(a, seg);
+    a = abs(a - seg*0.5);
+    m = vec2(cos(a), sin(a)) * r;
+  }
+  return mix(c, m, uMirrorMix);
+}
+
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec2 c = toC(uv);
+  c = mirrorC(c);
+
+  // self warp: push the sample along the previous frame's brightness gradient
+  if(uSelfWarp > 0.00001){
+    vec2 px = 1.5 / uRes;
+    float l1 = luma(texture(uPrev, edgeUV(uv+vec2(px.x,0))).rgb);
+    float l2 = luma(texture(uPrev, edgeUV(uv-vec2(px.x,0))).rgb);
+    float l3 = luma(texture(uPrev, edgeUV(uv+vec2(0,px.y))).rgb);
+    float l4 = luma(texture(uPrev, edgeUV(uv-vec2(0,px.y))).rgb);
+    c += vec2(l1-l2, l3-l4) * uSelfWarp * 10.0;
+  }
+
+  vec3 prev;
+  if(uRgbSplit > 0.00001){
+    // each channel travels a slightly different distance per pass
+    vec2 cr = loopWarp(c, uZoom*(1.0+uRgbSplit), uRot*(1.0+uRgbSplit*8.0));
+    vec2 cg = loopWarp(c, uZoom, uRot);
+    vec2 cb = loopWarp(c, uZoom*(1.0-uRgbSplit), uRot*(1.0-uRgbSplit*8.0));
+    prev = vec3(
+      samplePrev(fromC(cr) - uDrift/uRes).r,
+      samplePrev(fromC(cg) - uDrift/uRes).g,
+      samplePrev(fromC(cb) - uDrift/uRes).b);
+  } else {
+    vec2 cc = loopWarp(c, uZoom, uRot);
+    prev = samplePrev(fromC(cc) - uDrift/uRes);
+  }
+
+  if(uSharp > 0.001){
+    vec2 px = 1.6 / uRes;
+    vec3 soft = (texture(uPrev, edgeUV(uv+vec2(px.x,0))).rgb
+               + texture(uPrev, edgeUV(uv-vec2(px.x,0))).rgb
+               + texture(uPrev, edgeUV(uv+vec2(0,px.y))).rgb
+               + texture(uPrev, edgeUV(uv-vec2(0,px.y))).rgb) * 0.25;
+    prev += (prev - soft) * uSharp;
+  }
+
+  // colour through one pass of the loop
+  prev *= uDecay;
+  prev += uLift;
+  if(abs(uHue) > 0.0001) prev = hueRot(prev, uHue);
+  if(abs(uSat-1.0) > 0.0001){ float l = luma(prev); prev = mix(vec3(l), prev, uSat); }
+  if(abs(uCon-1.0) > 0.0001) prev = (prev - 0.5) * uCon + 0.5;
+  if(uPoster >= 2.0) prev = floor(prev * uPoster) / uPoster;
+  if(uInvert==1) prev = 1.0 - prev;
+
+  // live input
+  if(uHasIn==1 && uInMix > 0.0005){
+    float a = radians(uInRot);
+    float s = sin(a), co = cos(a);
+    vec2 ic = toC(uv);
+    ic = mat2(co,-s,s,co) * ic / max(0.05, uInZoom);
+    vec2 iuv = inEdgeUV(fromC(ic));
+    vec3 src;
+    if(uInEdge==1){
+      vec2 px = 1.0 / uRes;
+      vec3 a0 = texture(uIn, iuv).rgb;
+      vec3 ax = texture(uIn, iuv+vec2(px.x,0)).rgb;
+      vec3 ay = texture(uIn, iuv+vec2(0,px.y)).rgb;
+      src = vec3(length(a0-ax) + length(a0-ay)) * 2.0;
+    } else {
+      src = texture(uIn, iuv).rgb;
+    }
+    if(iuv.x<0.0||iuv.x>1.0||iuv.y<0.0||iuv.y>1.0) src = vec3(0.0);
+    float k = 1.0;
+    if(uInKey > 0.001) k = smoothstep(uInKey, uInKey+uInKeySoft, luma(src));
+    float amt = uInMix * k;
+    if(uInMode==0) prev = mix(prev, src, amt);
+    else if(uInMode==1) prev += src * amt;
+    else if(uInMode==2) prev = 1.0 - (1.0-prev)*(1.0-src*amt);
+    else if(uInMode==3) prev = max(prev, src*amt);
+    else if(uInMode==4) prev = mix(prev, abs(prev-src), amt);
+    else prev = mix(prev, prev*src, amt);
+  }
+
+  // brush
+  if(uBrush.x >= 0.0 && uBrushStr > 0.001){
+    vec2 bc = toC(uBrush);
+    float d = length(toC(uv) - bc);
+    float f = exp(-pow(d/max(0.002,uBrushR), 2.0) * 3.0);
+    prev += uBrushCol * f * uBrushStr * 0.35;
+  }
+
+  fragColor = vec4(clamp(prev, 0.0, 12.0), 1.0);
+}`;
+
+const SHOW = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform sampler2D uTex;
+uniform vec2 uRes;
+uniform float uExp, uGamma, uSatOut, uVig;
+float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec3 c = texture(uTex, uv).rgb * uExp;
+  if(abs(uSatOut-1.0) > 0.001){ float l = luma(c); c = mix(vec3(l), c, uSatOut); }
+  c = pow(max(c, 0.0), vec3(1.0/max(0.05,uGamma)));
+  if(uVig > 0.001){
+    vec2 d = uv - 0.5;
+    c *= 1.0 - uVig * dot(d,d) * 2.4;
+  }
+  fragColor = vec4(clamp(c,0.0,1.0), 1.0);
+}`;
+
+function compile(src,type){
+  const sh=gl.createShader(type);
+  gl.shaderSource(sh,src); gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(sh));
+    statusEl.textContent="shader error — see console";
+    return null;
+  }
+  return sh;
+}
+function program(fs){
+  const p=gl.createProgram();
+  gl.attachShader(p,compile(VERT,gl.VERTEX_SHADER));
+  gl.attachShader(p,compile(fs,gl.FRAGMENT_SHADER));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(p)); return null; }
+  return p;
+}
+let progFeed=null, progShow=null, vao=null;
+let texA=null,texB=null,fboA=null,fboB=null,texIn=null, SW=0, SH=0, flip=0;
+let useFloat=false;
+
+function makeTex(w,h,float){
+  const t=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  if(float) gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+  else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  return t;
+}
+function makeFBO(tex){
+  const f=gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+  return f;
+}
+function allocate(w,h){
+  SW=w; SH=h;
+  [texA,texB].forEach(t=>{ if(t) gl.deleteTexture(t); });
+  [fboA,fboB].forEach(f=>{ if(f) gl.deleteFramebuffer(f); });
+  texA=makeTex(SW,SH,useFloat); texB=makeTex(SW,SH,useFloat);
+  fboA=makeFBO(texA); fboB=makeFBO(texB);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  flip=0;
+  seedPattern();
+}
+function resize(){
+  const wrap=document.getElementById("canvasWrap");
+  const dpr=Math.min(1.5, window.devicePixelRatio||1);
+  const w=Math.max(320,Math.floor((wrap.clientWidth-44)*dpr));
+  const h=Math.max(240,Math.floor((wrap.clientHeight-44)*dpr));
+  const long=Math.max(w,h), cap=1600;
+  const k=long>cap?cap/long:1;
+  cv.width=Math.floor(w*k); cv.height=Math.floor(h*k);
+  cv.style.width=Math.floor(cv.width/dpr)+"px";
+  cv.style.height=Math.floor(cv.height/dpr)+"px";
+  allocate(cv.width,cv.height);
+}
+
+/* ---- seeding: a feedback loop needs something to eat ---- */
+const seedCv=document.createElement("canvas");
+function seedPattern(){
+  seedCv.width=SW; seedCv.height=SH;
+  const x=seedCv.getContext("2d");
+  x.fillStyle="#000"; x.fillRect(0,0,SW,SH);
+  const cx=SW/2, cy=SH/2, R=Math.min(SW,SH)*0.32;
+  for(let i=0;i<7;i++){
+    const g=x.createRadialGradient(cx,cy,0,cx,cy,R*(1-i*0.11));
+    const hue=(i*38+20)%360;
+    g.addColorStop(0,`hsla(${hue},85%,65%,0.9)`);
+    g.addColorStop(1,`hsla(${hue},85%,45%,0)`);
+    x.fillStyle=g;
+    x.beginPath();
+    x.arc(cx+Math.cos(i*1.7)*R*0.25, cy+Math.sin(i*1.7)*R*0.25, R*(1-i*0.11), 0, Math.PI*2);
+    x.fill();
+  }
+  x.globalCompositeOperation="lighter";
+  for(let i=0;i<5;i++){
+    x.strokeStyle=`hsla(${i*60+180},80%,70%,0.55)`;
+    x.lineWidth=Math.max(2,SW*0.004);
+    x.beginPath();
+    x.arc(cx,cy,R*(0.3+i*0.16),0,Math.PI*2);
+    x.stroke();
+  }
+  uploadToBuffer(seedCv);
+}
+function uploadToBuffer(srcCanvasOrImage){
+  const t=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,srcCanvasOrImage);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  // blit it into the current buffer via the display program
+  gl.bindFramebuffer(gl.FRAMEBUFFER, flip?fboB:fboA);
+  gl.viewport(0,0,SW,SH);
+  gl.useProgram(progShow);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.uniform1i(gl.getUniformLocation(progShow,"uTex"),0);
+  gl.uniform2f(gl.getUniformLocation(progShow,"uRes"),SW,SH);
+  gl.uniform1f(gl.getUniformLocation(progShow,"uExp"),1);
+  gl.uniform1f(gl.getUniformLocation(progShow,"uGamma"),1);
+  gl.uniform1f(gl.getUniformLocation(progShow,"uSatOut"),1);
+  gl.uniform1f(gl.getUniformLocation(progShow,"uVig"),0);
+  gl.bindVertexArray(vao);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.deleteTexture(t);
+}
+function wipe(){
+  [fboA,fboB].forEach(f=>{
+    gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+    gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  });
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+}
+let flashT=0;
+
+/* ---- input ---- */
+let vid=null, camStream=null, hasIn=false, inIsVideo=false, inImage=null;
+function ensureInTex(){ if(!texIn) texIn=makeTex(2,2,false); }
+async function startCam(){
+  stopInput();
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720}});
+    vid=document.createElement("video");
+    vid.srcObject=camStream; vid.playsInline=true; vid.muted=true; vid.loop=true;
+    await vid.play();
+    hasIn=true; inIsVideo=true; srcLbl.textContent="Webcam";
+  }catch(e){
+    srcLbl.textContent = location.protocol==="file:"
+      ? "webcam blocked on file:// — serve over localhost or https"
+      : "webcam unavailable";
+  }
+}
+function stopInput(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  if(vid){ vid.pause(); vid=null; }
+  inImage=null; hasIn=false; inIsVideo=false;
+  srcLbl.textContent="No input";
+}
+function loadMedia(f){
+  stopInput();
+  const url=URL.createObjectURL(f);
+  if(f.type.startsWith("video")){
+    vid=document.createElement("video");
+    vid.src=url; vid.loop=true; vid.muted=true; vid.playsInline=true;
+    vid.play().then(()=>{ hasIn=true; inIsVideo=true; srcLbl.textContent=f.name; });
+  } else {
+    const im=new Image();
+    im.onload=()=>{ inImage=im; hasIn=true; inIsVideo=false; srcLbl.textContent=f.name; uploadInput(im); };
+    im.src=url;
+  }
+}
+function uploadInput(src){
+  ensureInTex();
+  gl.bindTexture(gl.TEXTURE_2D,texIn);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,src); }catch(e){}
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+}
+
+/* ---- brush ---- */
+let brush={x:-1,y:-1,down:false};
+function canvasUV(e){
+  const r=cv.getBoundingClientRect();
+  return [ (e.clientX-r.left)/r.width, 1-(e.clientY-r.top)/r.height ];
+}
+cv.addEventListener("pointerdown",e=>{ brush.down=true; const u=canvasUV(e); brush.x=u[0]; brush.y=u[1]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove",e=>{ if(!brush.down) return; const u=canvasUV(e); brush.x=u[0]; brush.y=u[1]; });
+cv.addEventListener("pointerup",()=>{ brush.down=false; brush.x=-1; });
+cv.addEventListener("pointercancel",()=>{ brush.down=false; brush.x=-1; });
+
+/* ============================ frame ============================ */
+const t0=performance.now();
+let frames=0, fpsT=performance.now(), fps=0;
+function U(p,n){ return gl.getUniformLocation(p,n); }
+const hex2rgb=h=>{const n=parseInt(h.slice(1),16);return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255];};
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if(!gl||!progFeed) return;
+  Q = Drive ? Drive.resolve(P) : P;
+  const time=(now-t0)/1000;
+
+  if(inIsVideo && vid && vid.readyState>=2) uploadInput(vid);
+
+  const srcTex = flip?texB:texA;
+  const dstFbo = flip?fboA:fboB;
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER,dstFbo);
+  gl.viewport(0,0,SW,SH);
+  gl.useProgram(progFeed);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,srcTex);
+  gl.uniform1i(U(progFeed,"uPrev"),0);
+  ensureInTex();
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,texIn);
+  gl.uniform1i(U(progFeed,"uIn"),1);
+  gl.uniform1i(U(progFeed,"uHasIn"), hasIn?1:0);
+  gl.uniform2f(U(progFeed,"uRes"),SW,SH);
+  gl.uniform1f(U(progFeed,"uAspect"),SW/SH);
+  gl.uniform1f(U(progFeed,"uTime"),time);
+
+  gl.uniform1f(U(progFeed,"uZoom"),Q.zoom);
+  gl.uniform1f(U(progFeed,"uRot"),Q.rot);
+  gl.uniform2f(U(progFeed,"uDrift"),Q.driftX,Q.driftY);
+  gl.uniform2f(U(progFeed,"uCenter"),Q.cx,Q.cy);
+  gl.uniform1f(U(progFeed,"uTwist"),Q.twist);
+  gl.uniform1f(U(progFeed,"uBarrel"),Q.barrel);
+  gl.uniform1f(U(progFeed,"uSwirlAmp"),Q.swirlAmp);
+  gl.uniform1f(U(progFeed,"uSwirlFreq"),Q.swirlFreq);
+  gl.uniform1f(U(progFeed,"uNoiseAmp"),Q.noiseAmp);
+  gl.uniform1f(U(progFeed,"uNoiseScale"),Q.noiseScale);
+  gl.uniform1f(U(progFeed,"uNoiseSpeed"),Q.noiseSpeed);
+  gl.uniform1f(U(progFeed,"uSelfWarp"),Q.selfWarp);
+  gl.uniform1f(U(progFeed,"uBlur"),Q.blur);
+  gl.uniform1f(U(progFeed,"uSharp"),Q.sharp);
+
+  let decay=Q.decay, lift=Q.lift;
+  if(flashT>0){ lift += 0.25*flashT; flashT=Math.max(0,flashT-0.08); }
+  gl.uniform1f(U(progFeed,"uDecay"),decay);
+  gl.uniform1f(U(progFeed,"uLift"),lift);
+  gl.uniform1f(U(progFeed,"uHue"),Q.hue);
+  gl.uniform1f(U(progFeed,"uSat"),Q.sat);
+  gl.uniform1f(U(progFeed,"uCon"),Q.con);
+  gl.uniform1f(U(progFeed,"uRgbSplit"),Q.rgbSplit);
+  gl.uniform1f(U(progFeed,"uPoster"),Q.posterize);
+  gl.uniform1i(U(progFeed,"uInvert"),Q.invert?1:0);
+  gl.uniform1i(U(progFeed,"uEdge"),+Q.edgeMode);
+  gl.uniform1i(U(progFeed,"uMirror"),+Q.mirrorMode);
+  gl.uniform1i(U(progFeed,"uKaleidoN"),Math.round(Q.kaleidoN));
+  gl.uniform1f(U(progFeed,"uMirrorMix"),Q.mirrorMix);
+
+  gl.uniform1f(U(progFeed,"uInMix"),Q.inMix);
+  gl.uniform1i(U(progFeed,"uInMode"),+Q.inMode);
+  gl.uniform1f(U(progFeed,"uInZoom"),Q.inZoom);
+  gl.uniform1f(U(progFeed,"uInRot"),Q.inRot);
+  gl.uniform1f(U(progFeed,"uInKey"),Q.inKey);
+  gl.uniform1f(U(progFeed,"uInKeySoft"),Q.inKeySoft);
+  gl.uniform1i(U(progFeed,"uInEdge"),Q.inEdge?1:0);
+
+  gl.uniform2f(U(progFeed,"uBrush"), brush.down?brush.x:-1, brush.y);
+  gl.uniform1f(U(progFeed,"uBrushR"),Q.brushR);
+  gl.uniform1f(U(progFeed,"uBrushStr"),Q.brushStr);
+  const bc=hex2rgb(P.brushCol);
+  gl.uniform3f(U(progFeed,"uBrushCol"),bc[0],bc[1],bc[2]);
+
+  gl.bindVertexArray(vao);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+
+  // display
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.viewport(0,0,cv.width,cv.height);
+  gl.useProgram(progShow);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, flip?texA:texB);
+  gl.uniform1i(U(progShow,"uTex"),0);
+  gl.uniform2f(U(progShow,"uRes"),cv.width,cv.height);
+  gl.uniform1f(U(progShow,"uExp"),Q.exposure);
+  gl.uniform1f(U(progShow,"uGamma"),Q.gamma);
+  gl.uniform1f(U(progShow,"uSatOut"),Q.satOut);
+  gl.uniform1f(U(progShow,"uVig"),Q.vignette);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+
+  if(Drive) Drive.pushFrame(cv);     // preserveDrawingBuffer is off
+
+  flip=1-flip;
+  frames++;
+  if(now-fpsT>500){ fps=Math.round(frames*1000/(now-fpsT)); frames=0; fpsT=now;
+    statusEl.textContent=`${fps} fps · ${SW}×${SH}`
+      + (Drive && Drive.state.midi.clockOk ? ` · ${Drive.bpm.toFixed(0)} bpm` : ""); }
+}
+
+/* ============================ presets & files ============================ */
+const presetSel=document.getElementById("presetSel");
+Object.keys(PRESETS).forEach(k=>{
+  const o=document.createElement("option");o.value=k;o.textContent=k;presetSel.appendChild(o);
+});
+["*Random values","*User preset"].forEach(k=>{
+  const o=document.createElement("option");o.value=k;o.textContent=k;presetSel.appendChild(o);
+});
+function syncUI(){ Object.keys(bound).forEach(k=>bound[k]&&bound[k]()); vis(); }
+function randomise(){
+  const r=Math.random, pick=a=>a[Math.floor(r()*a.length)];
+  P=Object.assign({},DEFAULTS,{
+    zoom: 1 + (r()*2-1)*0.03,
+    rot: (r()*2-1)*2.2,
+    driftX:(r()*2-1)*2, driftY:(r()*2-1)*2,
+    cx:0.5+(r()*2-1)*0.25, cy:0.5+(r()*2-1)*0.25,
+    twist:(r()*2-1)*0.9, barrel:(r()*2-1)*0.3,
+    swirlAmp: r()<0.5?0:r()*0.02, swirlFreq:1+r()*10,
+    noiseAmp: r()<0.5?0:r()*0.012, noiseScale:0.5+r()*6, noiseSpeed:r()*0.6,
+    selfWarp: r()<0.6?0:r()*0.05,
+    blur: r()*1.2, sharp: r()<0.7?0:r()*0.8,
+    decay: 0.955+r()*0.05, hue:(r()*2-1)*3, sat:0.98+r()*0.06, con:0.98+r()*0.1,
+    rgbSplit: r()<0.6?0:r()*0.006, posterize: r()<0.8?0:2+Math.floor(r()*10),
+    mirrorMode: pick([0,0,0,1,2,3,4]), kaleidoN:2+Math.floor(r()*10),
+    inMix: 0.15+r()*0.5, inMode: pick([0,1,1,2,3,4]),
+    vignette: r()*0.4, exposure:0.8+r()*0.6,
+    brushCol:P.brushCol
+  });
+}
+function applyPreset(n){
+  if(n==="*Random values") randomise();
+  else if(n==="*User preset"){ if(userSlot) P=Object.assign({},DEFAULTS,userSlot); }
+  else P=Object.assign({},DEFAULTS,PRESETS[n]||{});
+  syncUI();
+}
+presetSel.addEventListener("change",()=>applyPreset(presetSel.value));
+document.getElementById("bSeed").addEventListener("click",seedPattern);
+document.getElementById("bWipe").addEventListener("click",wipe);
+document.getElementById("bFlash").addEventListener("click",()=>{ flashT=1; });
+document.getElementById("bExportPreset").addEventListener("click",()=>{
+  const out=Object.assign({},P);
+  if(Drive) out._drive=Drive.serialize();
+  download(new Blob([JSON.stringify(out,null,2)],{type:"application/json"}),"ouroboros-preset.json");
+});
+const fPreset=document.getElementById("fPreset");
+document.getElementById("bImportPreset").addEventListener("click",()=>fPreset.click());
+fPreset.addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+    const j=JSON.parse(r.result);
+    if(Drive && j._drive) Drive.load(j._drive);
+    delete j._drive;
+    P=Object.assign({},DEFAULTS,j);
+    userSlot=JSON.parse(JSON.stringify(P));
+    presetSel.value="*User preset"; syncUI();
+  }catch(err){ statusEl.textContent="that file isn't a preset"; } };
+  r.readAsText(f); e.target.value="";
+});
+
+const fMedia=document.getElementById("fMedia");
+bCam.addEventListener("click",startCam);
+bFile.addEventListener("click",()=>fMedia.click());
+bNone.addEventListener("click",stopInput);
+fMedia.addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadMedia(f); e.target.value=""; });
+
+let dragDepth=0;
+window.addEventListener("dragenter",e=>{e.preventDefault();dragDepth++;document.body.classList.add("dragging");});
+window.addEventListener("dragleave",e=>{e.preventDefault();if(--dragDepth<=0)document.body.classList.remove("dragging");});
+window.addEventListener("dragover",e=>e.preventDefault());
+window.addEventListener("drop",e=>{
+  e.preventDefault(); dragDepth=0; document.body.classList.remove("dragging");
+  const f=e.dataTransfer.files[0];
+  if(f && (f.type.startsWith("image/")||f.type.startsWith("video/"))) loadMedia(f);
+});
+
+function download(blob,name){
+  const url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+document.getElementById("bPNG").addEventListener("click",()=>{
+  cv.toBlob(b=>download(b,"ouroboros-"+cv.width+"x"+cv.height+".png"));
+});
+let rec=null, chunks=[];
+const bRec=document.getElementById("bRec");
+bRec.addEventListener("click",()=>{
+  if(rec){ rec.stop(); return; }
+  const want=["video/mp4;codecs=avc1.42E01E","video/mp4","video/webm;codecs=vp9","video/webm"];
+  const mime=want.find(m=>window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+  if(!mime){ statusEl.textContent="this browser can't record"; return; }
+  const stream=cv.captureStream(60);
+  const ac=Drive&&Drive.audioContext(), an=Drive&&Drive.analyserNode();
+  if(ac&&an){
+    try{ const dest=ac.createMediaStreamDestination(); an.connect(dest);
+      dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t)); }catch(e){}
+  }
+  chunks=[];
+  rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:40e6});
+  rec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+  rec.onstop=()=>{
+    const ext=mime.indexOf("mp4")>=0?"mp4":"webm";
+    if(chunks.length) download(new Blob(chunks,{type:mime}),"ouroboros."+ext);
+    rec=null; bRec.textContent="● Record"; bRec.classList.remove("on");
+  };
+  rec.start();
+  bRec.textContent="■ Stop"; bRec.classList.add("on");
+});
+
+window.addEventListener("keydown",e=>{
+  if(e.target.matches("input,select,textarea")) return;
+  if(e.key==="s"||e.key==="S") seedPattern();
+  if(e.key==="f"||e.key==="F") flashT=1;
+  if(e.key==="w"||e.key==="W") wipe();
+});
+
+/* ============================ boot ============================ */
+if(gl){
+  useFloat = !!gl.getExtension("EXT_color_buffer_float");
+  progFeed=program(FEED); progShow=program(SHOW);
+  vao=gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+  resize();
+  let rt=0;
+  window.addEventListener("resize",()=>{ clearTimeout(rt); rt=setTimeout(resize,200); });
+  requestAnimationFrame(frame);
+}
+const drivePanel=document.getElementById("g-drive");
+if(Drive){ Drive.mountPanel(drivePanel); }
+else {
+  drivePanel.innerHTML='<div class="note">unlimiter-drive.js was not found. It must sit in the same '
+    +'folder, served over http://localhost or https — the microphone and WebMIDI are blocked on file:// URLs.</div>';
+}
+vis();
+</script>
+</body>
+</html>

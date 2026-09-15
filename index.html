@@ -149,6 +149,9 @@
    Tool registry. Add a tool by adding a line here.
    --------------------------------------------------------------- */
 const TOOLS = [
+  { file:"ouroboros.html", name:"Ouroboros", motif:"ouro",
+    desc:"Recursive video feedback. Each frame is transformed, warped and coloured, then fed back in as the next frame's source. The oldest trick in video art, running on a GPU.",
+    tags:["webcam","feedback","realtime","drive"] },
   { file:"anchor.html", name:"Anchor", motif:"anchor",
     desc:"Turns type, point clouds or images into ordered anchor points, then stamps shapes on every one of them. Exports real vector.",
     tags:["typography","point clouds","svg","drive"] },
@@ -219,6 +222,21 @@ const MOTIF = {
         g.arc(x,y,1.6+pass*0.22,0,TAU);
         g.stroke();
       }
+    }
+  },
+  ouro(g,w,h,t){
+    const cx=w/2, cy=h/2;
+    for(let i=22;i>=0;i--){
+      const k=i+t*2.2;
+      const s2=Math.pow(0.86,i)*Math.min(w,h)*0.9;
+      const a=k*0.19;
+      g.save();
+      g.translate(cx+Math.cos(k*0.35)*i*1.4, cy+Math.sin(k*0.35)*i*0.9);
+      g.rotate(a);
+      g.strokeStyle=`hsla(${(i*14+t*40)%360},72%,${28+i*2.4}%,${0.28+i*0.028})`;
+      g.lineWidth=1.4;
+      g.strokeRect(-s2/2,-s2/2,s2,s2*0.66);
+      g.restore();
     }
   },
   sediment(g,w,h,t){
