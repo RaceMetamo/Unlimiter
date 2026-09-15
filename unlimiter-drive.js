@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.0";
+const VERSION = "1.1";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -100,6 +100,7 @@ function create(opts){
       {shape:"snh",  free:false, div:"1/4",   hz:1,    phase:0, val:0, sh:0, shLast:-1}
     ],
     matrix:[],
+    master:1,
     learn:null,
     randBeat:0, lastBeatInt:-1
   };
@@ -375,7 +376,7 @@ function create(opts){
     const keys=Object.keys(targets);
     S.matrix.push({
       target: keys[0]||"", source:"audio.low", depth:0.4,
-      mode:"add", smooth:0.3, sm:null
+      mode:"add", smooth:0.3, on:true, sm:null
     });
     buildMatrix();
   }
@@ -383,6 +384,7 @@ function create(opts){
     if(!S.matrix.length) return base;
     const out=Object.assign({},base);
     for(const r of S.matrix){
+      if(r.on===false) continue;
       const t=targets[r.target];
       if(!t) continue;
       let v=sourceValue(r.source);
@@ -390,15 +392,16 @@ function create(opts){
       v=r.sm;
       const span=t.max-t.min;
       const b=Number(out[r.target])||0;
+      const depth=r.depth*S.master;
       let nv;
-      if(r.mode==="scale") nv = b*(1+r.depth*v);
-      else nv = b + r.depth*span*v;
+      if(r.mode==="scale") nv = b*(1+depth*v);
+      else nv = b + depth*span*v;
       out[r.target]=clamp(nv,t.min,t.max);
     }
     return out;
   }
   function isLive(){
-    if(!S.matrix.length) return false;
+    if(!S.matrix.length || S.master<=0) return false;
     return S.audio.on || S.midi.clockOk || S.midi.on || S.matrix.some(r=>r.source.startsWith("lfo.")||r.source.startsWith("clock.")||r.source==="random.beat");
   }
 
@@ -538,6 +541,18 @@ function create(opts){
 
     /* --- matrix --- */
     sub(host,"Mod matrix");
+    ui.masterSld=sld(host,"Drive amount",()=>S.master,v=>S.master=v,0,1,0.01,v=>v.toFixed(2));
+    const prow2=el("div","brow");
+    ui.panicBtn=el("button",null,"Bypass all");
+    ui.panicBtn.addEventListener("click",()=>{
+      S.master = S.master>0 ? 0 : 1;
+      ui.masterSld.input.value=S.master; ui.masterSld.show();
+      ui.panicBtn.classList.toggle("on",S.master===0);
+      ui.panicBtn.textContent = S.master===0 ? "Bypassed" : "Bypass all";
+      if(opts.onChange) opts.onChange();
+    });
+    prow2.appendChild(ui.panicBtn); host.appendChild(prow2);
+    note(host,"Drive amount scales every route at once — the one control to reach for when something is wrong in the room.");
     ui.matrixWrap=el("div"); host.appendChild(ui.matrixWrap);
     const brow=el("div","brow");
     const addBtn=el("button",null,"Add route");
@@ -602,6 +617,11 @@ function create(opts){
       tsel.value=r.target;
       tsel.addEventListener("change",()=>{ r.target=tsel.value; r.sm=null; });
       head.appendChild(tsel);
+      const mute=el("button","x",r.on===false?"○":"●");
+      mute.title="Mute this route";
+      if(r.on!==false) mute.classList.add("on");
+      mute.addEventListener("click",()=>{ r.on=(r.on===false); r.sm=null; buildMatrix(); if(opts.onChange)opts.onChange(); });
+      head.appendChild(mute);
       const x=el("button","x","×");
       x.addEventListener("click",()=>{ S.matrix.splice(idx,1); buildMatrix(); if(opts.onChange)opts.onChange(); });
       head.appendChild(x);
@@ -703,6 +723,16 @@ function create(opts){
       targets[key]={key,label,min:Number(min),max:Number(max)};
       return this;
     },
+    // bulk form: [{key,label,min,max}, ...] or {key:[label,min,max], ...}
+    registerTargets(list){
+      if(Array.isArray(list)) list.forEach(t=>this.registerTarget(t.key,t.label,t.min,t.max));
+      else for(const k in list){ const v=list[k]; this.registerTarget(k,v[0],v[1],v[2]); }
+      buildMatrix();
+      return this;
+    },
+    get targets(){ return targets; },
+    get master(){ return S.master; },
+    set master(v){ S.master=clamp(v,0,1); },
     clearTargets(){ for(const k in targets) delete targets[k]; },
     resolve, sourceValue, isLive,
     get beatPhase(){ return beatPhase(); },
@@ -714,7 +744,8 @@ function create(opts){
     rebuildMatrix:buildMatrix,
     serialize(){
       return {
-        matrix:S.matrix.map(r=>({target:r.target,source:r.source,depth:r.depth,mode:r.mode,smooth:r.smooth})),
+        master:S.master,
+        matrix:S.matrix.map(r=>({target:r.target,source:r.source,depth:r.depth,mode:r.mode,smooth:r.smooth,on:r.on!==false})),
         lfos:S.lfos.map(L=>({shape:L.shape,free:L.free,div:L.div,hz:L.hz})),
         audio:{gain:S.audio.gain,xoverLo:S.audio.xoverLo,xoverHi:S.audio.xoverHi,
                attack:S.audio.attack,release:S.audio.release,smoothing:S.audio.smoothing,
@@ -724,7 +755,8 @@ function create(opts){
     },
     load(o){
       if(!o) return;
-      if(o.matrix){ S.matrix=o.matrix.map(r=>Object.assign({sm:null},r)); }
+      if(typeof o.master==="number") S.master=o.master;
+      if(o.matrix){ S.matrix=o.matrix.map(r=>Object.assign({on:true,sm:null},r)); }
       if(o.lfos) o.lfos.forEach((L,i)=>{ if(S.lfos[i]) Object.assign(S.lfos[i],L); });
       if(o.audio) Object.assign(S.audio,o.audio);
       if(o.bpm) S.clock.bpm=o.bpm;
