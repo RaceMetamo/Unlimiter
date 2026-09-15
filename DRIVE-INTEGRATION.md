@@ -12,7 +12,7 @@ tenth tool works like the first.
 | sediment | yes | modulation is painted into the accumulation, not just displayed |
 | drive-check | n/a | it *is* the drive |
 | flow-field-plotter | — | |
-| flow-weave | — | GPU; resolve once per sim step, not per particle |
+| flow-weave | — | GPU: resolve once per sim step, and use `Drive.pushFrame()` for output |
 | melted-world | — | |
 | time-cube | — | currently on `modulation.js` — port and retire |
 | worldseed | — | currently on `modulation.js` — port and retire |
@@ -160,6 +160,36 @@ if(Drive){
 
 The fallback matters: a tool must still work as a standalone generator if someone
 opens it without the module alongside.
+
+---
+
+## The output window
+
+`getOutputCanvas` tells the drive which canvas OBS should capture. For a 2D tool
+that is all you need — the output window pulls frames on its own clock.
+
+**WebGL tools need one extra line.** A WebGL canvas usually reads back blank
+outside its own draw call, because the drawing buffer is cleared once the frame
+is presented. Two ways round it:
+
+```js
+// option A — let the tool push, inside its own render
+function render(){
+  ...draw...
+  if(Drive) Drive.pushFrame(glCanvas);   // last line of the draw
+}
+```
+
+`pushFrame` suppresses the pull loop automatically; there is no mode to set. If
+the tool stops pushing, the pull loop resumes half a second later.
+
+```js
+// option B — keep the buffer around
+const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true });
+```
+
+Option A is better: option B costs a little performance on every frame whether or
+not the output window is open.
 
 ---
 

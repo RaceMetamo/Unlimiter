@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.1";
+const VERSION = "1.2";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -406,7 +406,21 @@ function create(opts){
   }
 
   /* ---------------- output window ---------------- */
-  let outWin=null;
+  let outWin=null, outCtx=null, outCv=null, lastPush=0;
+
+  // WebGL canvases can read back blank outside their own draw call unless the
+  // context was made with preserveDrawingBuffer. Such tools call pushFrame()
+  // at the end of their render instead; that suppresses the pull loop below.
+  function pushFrame(src){
+    if(!outWin || outWin.closed || !outCtx || !src || !src.width) return;
+    if(outCv.width!==src.width || outCv.height!==src.height){
+      outCv.width=src.width; outCv.height=src.height;
+    }
+    outCtx.drawImage(src,0,0);
+    lastPush=performance.now();
+  }
+  function outputOpen(){ return !!(outWin && !outWin.closed); }
+
   function openOutput(getCanvas){
     if(outWin && !outWin.closed){ outWin.focus(); return; }
     outWin=window.open("","UnlimiterOutput","width=1280,height=720");
@@ -419,17 +433,21 @@ function create(opts){
     outWin.document.close();
     const oc=outWin.document.getElementById("o");
     const octx=oc.getContext("2d");
+    outCv=oc; outCtx=octx;
     outWin.document.body.addEventListener("click",()=>{
       const el=outWin.document.documentElement;
       if(outWin.document.fullscreenElement) outWin.document.exitFullscreen();
       else el.requestFullscreen&&el.requestFullscreen();
     });
     (function loop(){
-      if(!outWin||outWin.closed){ outWin=null; return; }
-      const src=getCanvas&&getCanvas();
-      if(src&&src.width){
-        if(oc.width!==src.width||oc.height!==src.height){ oc.width=src.width; oc.height=src.height; }
-        octx.drawImage(src,0,0);
+      if(!outWin||outWin.closed){ outWin=null; outCtx=null; outCv=null; return; }
+      // if the host is pushing frames itself, stay out of the way
+      if(performance.now()-lastPush > 500){
+        const src=getCanvas&&getCanvas();
+        if(src&&src.width){
+          if(oc.width!==src.width||oc.height!==src.height){ oc.width=src.width; oc.height=src.height; }
+          octx.drawImage(src,0,0);
+        }
       }
       outWin.requestAnimationFrame(loop);
     })();
@@ -740,7 +758,7 @@ function create(opts){
     get bpm(){ return S.clock.bpm; },
     get audio(){ return S.audio; },
     get state(){ return S; },
-    mountPanel, openOutput, tap,
+    mountPanel, openOutput, pushFrame, outputOpen, tap,
     rebuildMatrix:buildMatrix,
     serialize(){
       return {
