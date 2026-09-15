@@ -25,6 +25,10 @@
   #head h1{margin:0;font-size:19px;font-weight:600;letter-spacing:-0.02em;color:var(--ink-bright)}
   #head p{margin:3px 0 10px;color:var(--ink-dim);font-size:11.5px;max-width:36ch}
   #modes{display:flex;gap:4px}
+  #link{display:none;align-items:center;gap:8px;margin:0 0 8px;padding:5px 8px;border-radius:3px;
+    background:rgba(255,180,84,.12);border:1px solid rgba(255,180,84,.4);font-size:11px;color:var(--hot)}
+  #link span{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #link button{padding:2px 7px;font-size:10.5px}
   #modes button{flex:1;padding:5px}
   #modes button[aria-pressed=true]{background:var(--hot);border-color:var(--hot);color:#16110a;font-weight:600}
   #scroll{overflow-y:auto;overscroll-behavior:contain;flex:1 1 auto;padding-bottom:40px}
@@ -74,6 +78,10 @@
   .item{display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--line);
     border-radius:3px;margin-bottom:5px;background:rgba(150,180,200,.04)}
   .item.on{border-color:var(--hot)}
+  .item.kid{background:rgba(150,180,200,.02);border-style:dashed}
+  .item.kid .nm{color:var(--ink)}
+  .subhead{color:var(--ink-dim);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+    margin:10px 0 2px;padding-top:7px;border-top:1px solid var(--line)}
   .item .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-bright)}
   .item .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
   .item button{padding:3px 6px;font-size:10.5px}
@@ -81,6 +89,16 @@
   .save input{flex:1 1 auto;min-width:0}
 
   #toggle{position:fixed;top:12px;right:12px;z-index:6;padding:6px 10px}
+  .meter{height:6px;border:1px solid var(--line);border-radius:3px;overflow:hidden;margin:6px 0 2px;background:rgba(150,180,200,.06)}
+  .meter i{display:block;height:100%;width:0;background:var(--hot);transition:width .05s linear}
+  #recdot{position:fixed;left:14px;top:14px;z-index:7;display:none;align-items:center;gap:7px;
+    padding:5px 10px;border-radius:14px;background:rgba(11,16,21,.82);color:#ffd7d0;font-size:11.5px}
+  #recdot b{width:9px;height:9px;border-radius:50%;background:#ff4a3d;animation:pulse 1.1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  #labels{position:fixed;inset:0;z-index:3;pointer-events:none}
+  #labels span{position:absolute;transform:translate(-50%,-160%);white-space:nowrap;
+    font-size:11px;letter-spacing:.03em;color:rgba(200,216,226,.82);text-shadow:0 1px 3px rgba(0,0,0,.9)}
+  #labels span.star{color:var(--hot);font-size:12px;font-weight:600}
   #hud{position:fixed;left:14px;bottom:12px;z-index:4;color:var(--ink-dim);font-size:11px;pointer-events:none;max-width:44ch}
   @media (max-width:720px){
     #ui{width:100%;height:64%;top:auto;bottom:0;border-left:none;border-top:1px solid var(--line)}
@@ -95,6 +113,7 @@
   <div id="head">
     <h1>Worldseed</h1>
     <p>Build a planet from noise, tectonics and flow paint. Save it, then put it in orbit.</p>
+    <div id="link"></div>
     <div id="modes">
       <button id="mPlanet" aria-pressed="true">Planet</button>
       <button id="mSystem" aria-pressed="false">System</button>
@@ -102,6 +121,8 @@
   </div>
   <div id="scroll"></div>
 </aside>
+<div id="labels"></div>
+<div id="recdot"><b></b><span id="rectime">0:00</span></div>
 <button id="toggle">Hide panel</button>
 <div id="hud">Drag to orbit, scroll to zoom.</div>
 
@@ -118,7 +139,7 @@ const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2',{antialias:false,alpha:false,depth:true,preserveDrawingBuffer:true});
 if(!gl){ document.body.innerHTML='<p style="padding:24px;font:14px sans-serif;color:#aec0cc">This tool needs WebGL2.</p>'; throw new Error('no webgl2'); }
 const hasFloatRT = !!gl.getExtension('EXT_color_buffer_float');
-const MAX_PLATES=24, MAX_CRATERS=16, MAX_BODIES=8;
+const MAX_PLATES=24, MAX_CRATERS=16, MAX_BODIES=16, BODY_ACC=768;
 
 /* ── parameter schema ─────────────────────────────────────── */
 const SCHEMA=[
@@ -128,6 +149,14 @@ const SCHEMA=[
  {g:'Shape', id:'ridge',l:'Ridged / rounded',min:0,max:1,step:0.001,v:0.45},
  {g:'Shape', id:'sea',l:'Sea level',min:-0.4,max:0.5,step:0.001,v:-0.02},
  {g:'Shape', id:'snow',l:'Polar ice',min:0,max:1,step:0.001,v:0.55},
+
+ {g:'Body shape', id:'oblate',l:'Polar flattening',min:0,max:0.6,step:0.002,v:0},
+ {g:'Body shape', id:'elong',l:'Equatorial stretch',min:0,max:1.2,step:0.002,v:0},
+ {g:'Body shape', id:'lump',l:'Lumpiness',min:0,max:0.6,step:0.002,v:0},
+ {g:'Body shape', id:'lumpScale',l:'Lump scale',min:0.3,max:4,step:0.01,v:1.2},
+ {g:'Body shape', id:'lobe',l:'Second lobe distance',min:0,max:0.9,step:0.002,v:0},
+ {g:'Body shape', id:'lobeSize',l:'Second lobe size',min:0.3,max:1.2,step:0.002,v:0.8},
+ {g:'Body shape', id:'neck',l:'Neck softness',min:0.02,max:0.6,step:0.002,v:0.22},
 
  {g:'Tectonics', id:'plateN',l:'Plates',min:0,max:24,step:1,v:9,int:true},
  {g:'Tectonics', id:'plateAmp',l:'Plate elevation',min:0,max:0.8,step:0.002,v:0.34},
@@ -144,6 +173,43 @@ const SCHEMA=[
  {g:'Impacts', id:'craterN',l:'Craters',min:0,max:16,step:1,v:0,int:true},
  {g:'Impacts', id:'craterSize',l:'Crater spread',min:0.02,max:0.45,step:0.002,v:0.14},
  {g:'Impacts', id:'craterDepth',l:'Crater depth',min:0,max:0.5,step:0.002,v:0.12},
+
+ {g:'Rings', id:'ringOn',l:'Show rings',min:0,max:1,step:1,v:0,int:true,chk:true},
+ {g:'Rings', id:'ringInner',l:'Inner radius',min:1.02,max:3,step:0.005,v:1.38},
+ {g:'Rings', id:'ringOuter',l:'Outer radius',min:1.1,max:5,step:0.005,v:2.3},
+ {g:'Rings', id:'ringOpacity',l:'Density',min:0,max:1,step:0.005,v:0.75},
+ {g:'Rings', id:'ringBands',l:'Band count',min:1,max:40,step:0.1,v:9},
+ {g:'Rings', id:'ringGap',l:'Gap contrast',min:0,max:1,step:0.005,v:0.45},
+
+ {g:'Face', id:'faceOn',l:'Give it a face',min:0,max:1,step:1,v:0,int:true,chk:true},
+ {g:'Face', id:'faceSize',l:'Face size',min:0.15,max:1.3,step:0.005,v:0.6},
+ {g:'Face', id:'faceLat',l:'Face latitude',min:-1.4,max:1.4,step:0.005,v:0.12},
+ {g:'Face', id:'faceLon',l:'Face longitude',min:-3.14,max:3.14,step:0.005,v:0},
+ {g:'Face', id:'eyeSpace',l:'Eye spacing',min:0.1,max:1,step:0.005,v:0.42},
+ {g:'Face', id:'eyeSize',l:'Eye size',min:0.04,max:0.5,step:0.002,v:0.19},
+ {g:'Face', id:'eyeTall',l:'Eye squash',min:0.35,max:2.2,step:0.005,v:1.15},
+ {g:'Face', id:'pupil',l:'Pupil travel',min:0,max:1,step:0.005,v:0.45},
+ {g:'Face', id:'lookFollow',l:'Eyes follow the camera',min:0,max:1,step:1,v:1,int:true,chk:true},
+ {g:'Face', id:'lookX',l:'Look sideways',min:-1,max:1,step:0.005,v:0},
+ {g:'Face', id:'lookY',l:'Look up / down',min:-1,max:1,step:0.005,v:0},
+ {g:'Face', id:'blink',l:'Seconds between blinks',min:0,max:12,step:0.1,v:4.5},
+ {g:'Face', id:'browOn',l:'Eyebrows',min:0,max:1,step:1,v:1,int:true,chk:true},
+ {g:'Face', id:'brow',l:'Brow angle',min:-1,max:1,step:0.005,v:0.25},
+ {g:'Face', id:'brt',l:'Brow height',min:0,max:0.5,step:0.002,v:0.13},
+ {g:'Face', id:'mouthY',l:'Mouth height',min:-0.5,max:0.6,step:0.005,v:0},
+ {g:'Face', id:'mouthW',l:'Mouth width',min:0.08,max:1.2,step:0.005,v:0.42},
+ {g:'Face', id:'mouthH',l:'Mouth depth',min:0.05,max:1,step:0.005,v:0.34},
+ {g:'Face', id:'mouthOpen',l:'Mouth open',min:0,max:1.3,step:0.005,v:0.35},
+ {g:'Face', id:'mouthCurve',l:'Frown ↔ smile',min:-1,max:1,step:0.005,v:0.7},
+ {g:'Face', id:'faceGlow',l:'Glow in the dark',min:0,max:1,step:0.005,v:0},
+
+ {g:'Voice', id:'sing',l:'Sing along with the mic',min:0,max:1,step:1,v:0,int:true,chk:true},
+ {g:'Voice', id:'singSrc',l:'Listens to',min:0,max:3,step:1,v:0,int:true,sel:['Everything','Low (bass)','Mid (voice)','High (cymbals)']},
+ {g:'Voice', id:'singAmount',l:'How wide it opens',min:0,max:1.5,step:0.005,v:0.75},
+ {g:'Voice', id:'singSmooth',l:'Smoothing',min:0,max:1,step:0.005,v:0.4},
+ {g:'Voice', id:'singVowel',l:'Vowel shaping',min:0,max:1,step:0.005,v:0.5},
+ {g:'Voice', id:'singBrow',l:'Eyebrow lift',min:0,max:1,step:0.005,v:0.35},
+ {g:'Voice', id:'singBounce',l:'Bounce to the beat',min:0,max:0.25,step:0.002,v:0.04},
 
  {g:'Warp', id:'warpAmp',l:'Warp strength',min:0,max:1.2,step:0.001,v:0.38},
  {g:'Warp', id:'warpFreq',l:'Warp scale',min:0.1,max:4,step:0.01,v:0.9},
@@ -172,10 +238,11 @@ const SCHEMA=[
 
  {g:'Stage', id:'lightYaw',l:'Sun direction',min:-3.2,max:3.2,step:0.005,v:-0.9},
  {g:'Stage', id:'lightPit',l:'Sun elevation',min:-1.5,max:1.5,step:0.005,v:0.35},
- {g:'Stage', id:'spin',l:'Spin speed',min:-0.4,max:0.4,step:0.001,v:0.05}
+ {g:'Stage', id:'spin',l:'Spin speed',min:-0.4,max:0.4,step:0.001,v:0.05},
+ {g:'Stage', id:'tilt',l:'Axial tilt',min:-1.2,max:1.2,step:0.005,v:0.18}
 ];
 const DEF=id=>SCHEMA.find(s=>s.id===id);
-const COLOR_NAMES={deep:'Deep water',shallow:'Shallows',low:'Lowland',mid:'Midland',high:'Peaks',atmo:'Atmosphere',flowA:'Stroke A',flowB:'Stroke B'};
+const COLOR_NAMES={deep:'Deep water',shallow:'Shallows',low:'Lowland',mid:'Midland',high:'Peaks',atmo:'Atmosphere',flowA:'Stroke A',flowB:'Stroke B',ringA:'Ring inner',ringB:'Ring outer',eyeW:'Eye white',ink:'Face ink'};
 
 /* the live world being edited */
 const P={}; SCHEMA.forEach(s=>P[s.id]=s.v);
@@ -183,7 +250,7 @@ const S={
   seed:Math.floor(Math.random()*9999), facet:false, autoRot:true, paintOn:true,
   subdiv:6, pCount:30000, accumSize:2048, resScale:1,
   colors:{deep:'#0a2a44',shallow:'#1d6f8e',low:'#3f6b4a',mid:'#8c7b45',high:'#6e5545',
-          atmo:'#5fc8ff',flowA:'#ffd9a0',flowB:'#ff7a4d'}
+          atmo:'#5fc8ff',flowA:'#ffd9a0',flowB:'#ff7a4d',ringA:'#d8c9ad',ringB:'#8f7f6b',eyeW:'#fdfaf2',ink:'#15100f'}
 };
 function snapshot(){ return JSON.parse(JSON.stringify({p:P,seed:S.seed,facet:S.facet,colors:S.colors})); }
 function restore(w){
@@ -296,6 +363,62 @@ float terrainBase(vec3 d){
   return h;
 }`;
 
+const RINGFN=`
+float ringDensity(float t,float bands,float gap,float sd){
+  float v=0.0,a=0.6,f=max(bands,1.0);
+  for(int i=0;i<4;i++){ v+=a*(0.5+0.5*sin((t*f+sd*0.37+float(i)*2.3)*6.2831853)); f*=1.87; a*=0.6; }
+  v/=1.35;
+  float d=smoothstep(gap*0.55,0.92,v);
+  d*=smoothstep(0.0,0.05,t)*smoothstep(1.0,0.93,t);
+  return clamp(d,0.0,1.0);
+}`;
+
+const FACEFN=`
+vec2 rot2(vec2 p,float a){ float c=cos(a),s=sin(a); return vec2(p.x*c-p.y*s, p.x*s+p.y*c); }
+float sdEll(vec2 p,vec2 r){ r=max(r,vec2(0.004)); return (length(p/r)-1.0)*min(r.x,r.y); }
+vec4 faceLayer(vec3 d,float t){
+  if(uFaceOn<0.5) return vec4(0.0);
+  vec3 F=vec3(cos(uFaceLat)*sin(uFaceLon), sin(uFaceLat), cos(uFaceLat)*cos(uFaceLon));
+  if(dot(d,F)<0.05) return vec4(0.0);
+  vec3 up=abs(F.y)>0.98?vec3(1.0,0.0,0.0):vec3(0.0,1.0,0.0);
+  vec3 T=normalize(cross(up,F)); vec3 B=cross(F,T);
+  vec2 p=vec2(dot(d,T),dot(d,B))/max(uFaceSize,0.02);
+  if(abs(p.x)>1.7||abs(p.y)>1.7) return vec4(0.0);
+  float blink=0.0;
+  if(uBlink>0.05){
+    float ph=fract(t/uBlink);
+    blink=smoothstep(0.0,0.05,ph)*smoothstep(0.11,0.06,ph);
+  }
+  const float aa=0.014;
+  vec3 col=vec3(0.0); float a=0.0;
+  for(int i=0;i<2;i++){
+    float sx=(i==0)?-1.0:1.0;
+    vec2 ec=vec2(sx*uEyeSpace,0.26);
+    vec2 er=vec2(uEyeSize, uEyeSize*uEyeTall*(1.0-blink*0.93));
+    float e=sdEll(p-ec,er);
+    float m=smoothstep(aa,-aa,e);
+    col=mix(col,cEyeW,m); a=max(a,m);
+    vec2 pc=ec+uFaceLook*uPupil*uEyeSize*vec2(1.0,uEyeTall);
+    float pu=sdEll(p-pc,vec2(uEyeSize*0.44,uEyeSize*0.44*max(uEyeTall,0.6))*(1.0-blink));
+    float pm=smoothstep(aa,-aa,pu)*m;
+    col=mix(col,cInk,pm);
+    float ol=smoothstep(aa,0.0,abs(e)-0.008);
+    col=mix(col,cInk,ol); a=max(a,ol);
+    if(uBrowOn>0.5){
+      vec2 bp=rot2(p-vec2(sx*uEyeSpace, 0.26+uEyeSize*uEyeTall+uBrowT), -sx*uBrow);
+      float br=smoothstep(aa,-aa, max(abs(bp.x)-uEyeSize*1.15, abs(bp.y)-0.035));
+      col=mix(col,cInk,br); a=max(a,br);
+    }
+  }
+  vec2 mp=(p-vec2(0.0,-0.34+uMouthY))/vec2(max(uMouthW,0.02),max(uMouthH,0.02));
+  float lip=-uMouthCurve*(1.0-mp.x*mp.x)*0.55;
+  float bot=lip-max(uMouthOpen,0.06)*(1.0-mp.x*mp.x*0.75);
+  float mm=smoothstep(1.0,0.94,abs(mp.x))
+          *smoothstep(0.0,-0.05,mp.y-lip)*smoothstep(0.0,0.05,mp.y-bot);
+  col=mix(col,cInk,mm); a=max(a,mm);
+  return vec4(col,clamp(a,0.0,1.0));
+}`;
+
 const FSQUAD_VS=`#version 300 es
 precision highp float; out vec2 vUV;
 void main(){ vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2)); vUV=p; gl_Position=vec4(p*2.0-1.0,0.0,1.0); }`;
@@ -304,15 +427,45 @@ const PLANET_VS=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPos;
 uniform mat4 uVP,uModel; uniform float uAmp,uSea,uCarve; uniform sampler2D uAccum;
+uniform float uOblate,uElong,uLump,uLumpScale,uLobe,uLobeSize,uNeck;
 out vec3 vWorld,vN,vObj; out float vH;
 ${NOISE}
 ${TERRAIN}
+float rayLobe(vec3 d,vec3 c,float R){
+  float b=dot(d,c); float disc=b*b-dot(c,c)+R*R;
+  if(disc<0.0) return -1e3;
+  return b+sqrt(disc);
+}
+float smax(float a,float b,float k){
+  float h=clamp(0.5+0.5*(a-b)/max(k,1e-4),0.0,1.0);
+  return mix(b,a,h)+k*h*(1.0-h);
+}
+float baseRadius(vec3 d){
+  float r=1.0;
+  if(uLobe>0.002){
+    vec3 ax=vec3(1.0,0.0,0.0);
+    float t1=rayLobe(d,ax*uLobe,1.0);
+    float t2=rayLobe(d,-ax*uLobe,uLobeSize);
+    r=smax(t1,t2,uNeck);
+  }
+  if(uLump>0.0){
+    vec3 q=d*uLumpScale+vec3(uSeed*0.21,-uSeed*0.13,uSeed*0.07);
+    r+=uLump*(0.68*snoise(q)+0.32*snoise(q*2.17+vec3(4.1)));
+  }
+  return max(r,0.15);
+}
 float heightAt(vec3 d){
   float h=terrainBase(d);
   if(uCarve!=0.0) h+=uCarve*clamp(texture(uAccum,sphUV(d)).g,0.0,2.0);
   return h;
 }
-vec3 surfAt(vec3 d,out float h){ h=heightAt(d); return d*(1.0+uAmp*max(h-uSea,0.0)); }
+vec3 surfAt(vec3 d,out float h){
+  h=heightAt(d);
+  vec3 p=d*(baseRadius(d)+uAmp*max(h-uSea,0.0));
+  p.y*=1.0-uOblate;
+  p.x*=1.0+uElong;
+  return p;
+}
 void main(){
   vec3 d=normalize(aPos); float h; vec3 p=surfAt(d,h);
   vec3 up=abs(d.y)>0.99?vec3(1.0,0.0,0.0):vec3(0.0,1.0,0.0);
@@ -328,12 +481,39 @@ void main(){
 const PLANET_FS=`#version 300 es
 precision highp float;
 in vec3 vWorld,vN,vObj; in float vH;
-uniform vec3 uCam,uLight,cDeep,cShallow,cLow,cMid,cHigh,cAtmo,uSun;
+uniform vec3 uCam,uLight,cDeep,cShallow,cLow,cMid,cHigh,cAtmo,uSun,uLight2,uSun2;
+uniform float uTwo;
 uniform float uSea,uRim,uPaint,uCel,uFacet,uSpec,uSnow;
+uniform float uRingOn,uRingIn,uRingOut,uRingOpacity,uRingBands,uRingGap,uRingSeed;
+uniform vec3 uRingAxis,uCenter;
+uniform float uFaceOn,uFaceSize,uFaceLat,uFaceLon,uEyeSpace,uEyeSize,uEyeTall,uPupil,
+              uBlink,uBrowOn,uBrow,uBrowT,uMouthY,uMouthW,uMouthH,uMouthOpen,uMouthCurve,uFaceGlow,uTime;
+uniform vec2 uFaceLook;
+uniform vec3 cEyeW,cInk;
 uniform sampler2D uAccum;
 layout(location=0) out vec4 oColor;
 layout(location=1) out vec4 oNorm;
 vec2 sphUV(vec3 d){ return vec2(atan(d.z,d.x)*0.15915494+0.5, acos(clamp(d.y,-1.0,1.0))*0.31830989); }
+${RINGFN}
+${FACEFN}
+float shadeLam(vec3 n,vec3 L,float nl){
+  float lam=pow(clamp(nl*0.5+0.5,0.0,1.0),1.7);
+  if(uCel>1.5) lam=clamp(floor(lam*uCel)/max(uCel-1.0,1.0),0.0,1.0);
+  if(uRingOn>0.5&&uRingOpacity>0.0){
+    vec3 rel=vWorld-uCenter; float dn=dot(L,uRingAxis);
+    if(abs(dn)>1e-4){
+      float tt=-dot(rel,uRingAxis)/dn;
+      if(tt>0.0){
+        float rr=length(rel+L*tt);
+        if(rr>uRingIn&&rr<uRingOut){
+          float rd=ringDensity((rr-uRingIn)/max(uRingOut-uRingIn,1e-4),uRingBands,uRingGap,uRingSeed);
+          lam*=1.0-clamp(rd*uRingOpacity,0.0,0.93);
+        }
+      }
+    }
+  }
+  return lam;
+}
 void main(){
   vec3 n=normalize(vN);
   if(uFacet>0.5){ vec3 fn=normalize(cross(dFdx(vWorld),dFdy(vWorld))); if(dot(fn,n)<0.0) fn=-fn; n=fn; }
@@ -346,14 +526,24 @@ void main(){
     float sn=smoothstep(0.62,0.9,t*0.6+abs(vObj.y)*uSnow);
     col=mix(col,vec3(0.94,0.96,0.99),sn*uSnow);
   }
-  vec3 L=normalize(uLight); vec3 V=normalize(uCam-vWorld);
-  float nl=dot(n,L); float lam=clamp(nl*0.5+0.5,0.0,1.0); lam=pow(lam,1.7);
-  if(uCel>1.5){ lam=clamp(floor(lam*uCel)/max(uCel-1.0,1.0),0.0,1.0); }
-  float sp=pow(max(dot(n,normalize(V+L)),0.0),72.0)*water*uSpec*step(0.0,nl);
-  vec3 outc=col*(0.09+0.98*lam)*uSun+sp*uSun;
-  if(uPaint>0.0){ vec3 pc=texture(uAccum,sphUV(vObj)).rgb; outc+=pc*uPaint*(0.25+0.75*lam); }
+  vec4 fc=faceLayer(vObj,uTime);
+  col=mix(col,fc.rgb,fc.a);
+  vec3 V=normalize(uCam-vWorld);
+  vec3 L1=normalize(uLight), L2=normalize(uLight2);
+  float nl1=dot(n,L1), nl2=dot(n,L2);
+  float lam1=shadeLam(n,L1,nl1);
+  float lam2=(uTwo>0.5)?shadeLam(n,L2,nl2):0.0;
+  float sp=pow(max(dot(n,normalize(V+L1)),0.0),72.0)*step(0.0,nl1);
+  if(uTwo>0.5) sp+=pow(max(dot(n,normalize(V+L2)),0.0),72.0)*step(0.0,nl2);
+  sp*=water*uSpec*(1.0-fc.a);
+  vec3 lit=uSun*lam1+((uTwo>0.5)?uSun2*lam2:vec3(0.0));
+  float lamA=clamp(lam1+lam2,0.0,1.0);
+  float nlA=max(nl1,(uTwo>0.5)?nl2:-1.0);
+  vec3 outc=col*(vec3(0.09)+0.98*lit)+sp*uSun;
+  if(uPaint>0.0){ vec3 pc=texture(uAccum,sphUV(vObj)).rgb; outc+=pc*uPaint*(0.25+0.75*lamA)*(1.0-fc.a); }
+  outc+=fc.rgb*fc.a*uFaceGlow*0.9;
   float fres=pow(1.0-clamp(dot(n,V),0.0,1.0),3.0);
-  outc+=cAtmo*fres*uRim*clamp(nl*0.55+0.5,0.0,1.0);
+  outc+=cAtmo*fres*uRim*clamp(nlA*0.55+0.5,0.0,1.0);
   oColor=vec4(outc,1.0);
   oNorm=vec4(n*0.5+0.5,1.0);
 }`;
@@ -385,16 +575,114 @@ void main(){
 
 const ORBIT_VS=`#version 300 es
 precision highp float;
-uniform mat4 uVP; uniform float uR,uIncl,uN;
+uniform mat4 uVP; uniform float uR,uIncl,uN; uniform vec3 uCenter;
 void main(){
   float t=float(gl_VertexID)/uN*6.2831853;
   vec3 p=vec3(cos(t)*uR, sin(t)*uR*sin(uIncl), sin(t)*uR*cos(uIncl));
-  gl_Position=uVP*vec4(p,1.0);
+  gl_Position=uVP*vec4(p+uCenter,1.0);
 }`;
 const ORBIT_FS=`#version 300 es
 precision highp float; uniform vec3 uCol;
 layout(location=0) out vec4 oColor; layout(location=1) out vec4 oNorm;
 void main(){ oColor=vec4(uCol,1.0); oNorm=vec4(0.5,0.5,1.0,0.5); }`;
+
+const BELT_VS=`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+uniform mat4 uVP;
+uniform float uR,uWidth,uIncl,uSize,uSizeVar,uSpeed,uTime,uLump,uSeed,uSpin;
+out vec3 vWorld,vN; out float vSh;
+${NOISE}
+float h11(float n){ return fract(sin(n*12.9898+uSeed*0.017)*43758.5453123); }
+mat3 rotM(vec3 a,float ang){
+  float c=cos(ang),s=sin(ang),t=1.0-c;
+  return mat3(t*a.x*a.x+c, t*a.x*a.y+s*a.z, t*a.x*a.z-s*a.y,
+              t*a.x*a.y-s*a.z, t*a.y*a.y+c, t*a.y*a.z+s*a.x,
+              t*a.x*a.z+s*a.y, t*a.y*a.z-s*a.x, t*a.z*a.z+c);
+}
+vec3 rockSurf(vec3 d,float sd){
+  float r=1.0+uLump*(0.65*snoise(d*1.7+vec3(sd))+0.35*snoise(d*3.9+vec3(sd*1.7)));
+  return d*max(r,0.2);
+}
+void main(){
+  float id=float(gl_InstanceID);
+  float a1=h11(id*1.13),a2=h11(id*2.71+5.0),a3=h11(id*3.37+11.0),a4=h11(id*4.91+17.0),a5=h11(id*5.53+23.0);
+  float rr=max(uR+(a1-0.5)*uWidth,0.2);
+  float ang=a2*6.2831853+uTime*uSpeed*pow(max(uR,0.1)/rr,1.5);
+  float inc=(a3-0.5)*uIncl;
+  vec3 c=vec3(cos(ang)*rr, sin(ang)*rr*sin(inc)+(a4-0.5)*uWidth*0.16, sin(ang)*rr*cos(inc));
+  float sz=uSize*(0.3+a5*uSizeVar);
+  vec3 ax=normalize(vec3(a1-0.5,a3-0.5,a5-0.5)+vec3(0.001,0.002,0.003));
+  mat3 R=rotM(ax,uTime*uSpin*(0.4+a2)+a4*6.2831853);
+  vec3 d=normalize(aPos); float sd=id*0.37;
+  vec3 p0=rockSurf(d,sd);
+  vec3 up=abs(d.y)>0.99?vec3(1.0,0.0,0.0):vec3(0.0,1.0,0.0);
+  vec3 t=normalize(cross(d,up)),b=cross(d,t); const float e=0.02;
+  vec3 n=normalize(cross(rockSurf(normalize(d+t*e),sd)-p0,rockSurf(normalize(d+b*e),sd)-p0));
+  if(dot(n,d)<0.0) n=-n;
+  vec3 wp=c+R*(p0*sz);
+  vWorld=wp; vN=normalize(R*n); vSh=a5;
+  gl_Position=uVP*vec4(wp,1.0);
+}`;
+const BELT_FS=`#version 300 es
+precision highp float;
+in vec3 vWorld,vN; in float vSh;
+uniform vec3 cA,cB,uSun,uSun2,uS1,uS2;
+uniform float uTwo;
+layout(location=0) out vec4 oColor;
+layout(location=1) out vec4 oNorm;
+void main(){
+  vec3 n=normalize(vN);
+  float lam1=pow(clamp(dot(n,normalize(uS1-vWorld))*0.5+0.5,0.0,1.0),1.6);
+  vec3 lit=uSun*lam1;
+  if(uTwo>0.5) lit+=uSun2*pow(clamp(dot(n,normalize(uS2-vWorld))*0.5+0.5,0.0,1.0),1.6);
+  vec3 col=mix(cA,cB,vSh)*(vec3(0.07)+lit);
+  oColor=vec4(col,1.0);
+  oNorm=vec4(n*0.5+0.5,1.0);
+}`;
+
+const RING_VS=`#version 300 es
+precision highp float;
+uniform mat4 uVP,uModel; uniform float uIn,uOut,uSegs;
+out vec3 vWorld; out float vT;
+void main(){
+  int id=gl_VertexID; float seg=float(id>>1); float side=float(id&1);
+  float a=seg/uSegs*6.2831853;
+  float r=mix(uIn,uOut,side);
+  vec4 wp=uModel*vec4(cos(a)*r,0.0,sin(a)*r,1.0);
+  vWorld=wp.xyz; vT=side;
+  gl_Position=uVP*wp;
+}`;
+const RING_FS=`#version 300 es
+precision highp float;
+in vec3 vWorld; in float vT;
+uniform vec3 uCam,uLight,uCenter,cRingA,cRingB,uSun,uLight2,uSun2;
+uniform float uOpacity,uBands,uGap,uRingSeed,uPlanetR,uTwo;
+layout(location=0) out vec4 oColor;
+layout(location=1) out vec4 oNorm;
+${RINGFN}
+void main(){
+  float d=ringDensity(vT,uBands,uGap,uRingSeed);
+  if(d<=0.004) discard;
+  vec3 col=mix(cRingA,cRingB,clamp(vT*0.7+d*0.3,0.0,1.0));
+  vec3 rel=vWorld-uCenter;
+  float c=dot(rel,rel)-uPlanetR*uPlanetR;
+  vec3 Vv=normalize(uCam-vWorld);
+  vec3 L1=normalize(uLight);
+  float b1=dot(rel,L1);
+  float sh1=(b1<0.0&&(b1*b1-c)>0.0)?0.18:1.0;
+  vec3 lit=uSun*(0.3+0.85*sh1)*(0.75+0.6*abs(dot(Vv,L1)));
+  if(uTwo>0.5){
+    vec3 L2=normalize(uLight2);
+    float b2=dot(rel,L2);
+    float sh2=(b2<0.0&&(b2*b2-c)>0.0)?0.18:1.0;
+    lit+=uSun2*(0.3+0.85*sh2)*(0.75+0.6*abs(dot(Vv,L2)));
+  }
+  col*=lit;
+  float a=clamp(d*uOpacity,0.0,1.0);
+  oColor=vec4(col*a,a);
+  oNorm=vec4(vec3(0.5,0.5,1.0)*a,0.5*a);
+}`;
 
 const UPDATE_VS=`#version 300 es
 precision highp float;
@@ -474,10 +762,10 @@ const POST_FS=`#version 300 es
 precision highp float;
 in vec2 vUV;
 uniform sampler2D uColor,uNorm;
-uniform vec2 uPx,uGlowPos;
+uniform vec2 uPx,uGlowPos[2];
 uniform int uK;
-uniform float uOutline,uStars,uSat,uContrast,uAspect,uTanF,uGlowAmt,uGlowRad;
-uniform vec3 uRight,uUp,uFwd,uSpace,uInk,uGlowCol;
+uniform float uOutline,uStars,uSat,uContrast,uAspect,uTanF,uGlowAmt[2],uGlowRad[2];
+uniform vec3 uRight,uUp,uFwd,uSpace,uInk,uGlowCol[2];
 vec3 kuwahara(vec2 uv){
   if(uK<=0) return texture(uColor,uv).rgb;
   vec3 bm=vec3(0.0); float bv=1e9;
@@ -517,15 +805,16 @@ vec3 starfield(vec2 uv){
 out vec4 o;
 void main(){
   float a=texture(uNorm,vUV).a;
-  float mask=step(0.25,a), gate=step(0.75,a);
+  float cov=clamp(a*2.0,0.0,1.0), gate=step(0.75,a);
   vec3 col=kuwahara(vUV);
   vec3 bg=uSpace+starfield(vUV)*uStars;
-  col=mix(bg,col,mask);
+  col=mix(bg,col,cov);
   col=mix(col,uInk,clamp(edge(vUV)*uOutline*gate,0.0,1.0));
-  if(uGlowAmt>0.0){
-    vec2 gd=(vUV-uGlowPos)*vec2(uAspect,1.0);
-    float dd=length(gd);
-    col+=uGlowCol*uGlowAmt*(exp(-dd/max(uGlowRad,0.002))*0.85+0.2/(1.0+dd*dd*220.0));
+  for(int i=0;i<2;i++){
+    if(uGlowAmt[i]>0.0){
+      float dd=length((vUV-uGlowPos[i])*vec2(uAspect,1.0));
+      col+=uGlowCol[i]*uGlowAmt[i]*(exp(-dd/max(uGlowRad[i],0.002))*0.85+0.2/(1.0+dd*dd*220.0));
+    }
   }
   float lum=dot(col,vec3(0.2126,0.7152,0.0722));
   col=mix(vec3(lum),col,uSat);
@@ -549,6 +838,8 @@ function U(p,n){ if(!(n in p._u)) p._u[n]=gl.getUniformLocation(p,n); return p._
 const pPlanet=prog(PLANET_VS,PLANET_FS);
 const pStar=prog(STAR_VS,STAR_FS);
 const pOrbit=prog(ORBIT_VS,ORBIT_FS);
+const pRing=prog(RING_VS,RING_FS);
+const pBelt=prog(BELT_VS,BELT_FS);
 const pUpdate=prog(UPDATE_VS,'#version 300 es\nprecision highp float;out vec4 o;void main(){o=vec4(1.0);}',['vState','vVel']);
 const pDraw=prog(DRAW_VS,DRAW_FS);
 const pFade=prog(FSQUAD_VS,FADE_FS);
@@ -584,7 +875,7 @@ function makeSphere(level){
   gl.bindVertexArray(null); gl.bindBuffer(gl.ARRAY_BUFFER,null);
   return {vao,vb,ib,count:idx.length};
 }
-let mesh=null, meshSys=null;
+let mesh=null, meshSys=null, meshRock=null;
 function buildSphere(level){
   if(mesh){ gl.deleteVertexArray(mesh.vao); gl.deleteBuffer(mesh.vb); gl.deleteBuffer(mesh.ib); }
   mesh=makeSphere(level);
@@ -709,45 +1000,129 @@ function deriveGeo(seed,plateN,craterN,craterSize){
 
 /* ── library, system, persistence ─────────────────────────── */
 let library=[];
-const star={color:'#ffd9a0',color2:'#ff8a3c',radius:1.1,intensity:1.5,glow:0.55,glowRad:0.16,gran:0.5};
-let bodies=[];   // {name, world, orbit:{r,speed,phase,incl}, scale, tilt, spin, accum}
-let focusIdx=-1, selIdx=-1;
+const star={name:'Sol',color:'#ffd9a0',color2:'#ff8a3c',radius:1.1,intensity:1.5,glow:0.55,glowRad:0.16,gran:0.5};
+const star2={name:'Companion',color:'#bfd8ff',color2:'#6f9bd8',radius:0.7,intensity:1.1,glow:0.4,glowRad:0.12,gran:0.55};
+const binary={on:false,sep:3.4,ratio:0.38,speed:0.28,incl:0.1,phase:0};
+const secondLight={on:0,dir:[0,0,1],sun:[0,0,0]};
+function starPositions(){
+  if(!binary.on) return [[0,0,0],[0,0,0]];
+  const a=binary.phase,i=binary.incl;
+  const d=[Math.cos(a),Math.sin(a)*Math.sin(i),Math.sin(a)*Math.cos(i)];
+  const r1=binary.sep*binary.ratio, r2=binary.sep*(1-binary.ratio);
+  return [[d[0]*r1,d[1]*r1,d[2]*r1],[-d[0]*r2,-d[1]*r2,-d[2]*r2]];
+}
+function projectPt(VP,p){
+  return [VP[0]*p[0]+VP[4]*p[1]+VP[8]*p[2]+VP[12],
+          VP[1]*p[0]+VP[5]*p[1]+VP[9]*p[2]+VP[13],
+          VP[3]*p[0]+VP[7]*p[1]+VP[11]*p[2]+VP[15]];
+}
+let bodies=[];   // {name, world, orbit:{r,speed,phase,incl}, scale, spin, parent, accum}
+let belts=[];    // procedurally instanced asteroid belts
+const MAX_BELTS=3;
+function newBelt(){
+  return {r:9,width:2.4,count:240,size:0.05,sizeVar:1.3,incl:0.18,speed:0.12,spin:0.6,
+          lump:0.45,seed:Math.floor(Math.random()*9999),cA:'#8d8478',cB:'#413b36'};
+}
+let focusIdx=-1, selIdx=-1, linkIdx=-1, linkTimer=0, saveT=0;
+function saveSystemSoon(){ clearTimeout(saveT); saveT=setTimeout(saveSystem,800); }
+function syncLink(withPaint){
+  if(linkIdx<0) return;
+  const b=bodies[linkIdx];
+  if(!b){ linkIdx=-1; return; }
+  b.world=snapshot();
+  if(withPaint) copyTex(accum.tex,bodyAccum(b),BODY_ACC,BODY_ACC/2);
+  saveSystemSoon();
+}
 
 function store(k,v){ try{ localStorage.setItem('worldseed.'+k,JSON.stringify(v)); }catch(e){} }
 function load(k){ try{ const s=localStorage.getItem('worldseed.'+k); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveLibrary(){ store('library',library); }
 function saveSystem(){
-  store('system',{star,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,tilt:b.tilt,spin:b.spin}))});
+  store('system',{star,star2,binary,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))});
+}
+function migrate(w){
+  if(!w||!w.p) return w;
+  SCHEMA.forEach(s=>{ if(w.p[s.id]===undefined) w.p[s.id]=s.v; });
+  if(!w.colors) w.colors={};
+  for(const k in S.colors) if(!w.colors[k]) w.colors[k]=S.colors[k];
+  return w;
 }
 function loadPersisted(){
-  const L=load('library'); if(Array.isArray(L)) library=L;
+  const L=load('library'); if(Array.isArray(L)) library=L.map(migrate);
   const Sy=load('system');
   if(Sy&&Sy.star){ Object.assign(star,Sy.star);
-    bodies=(Sy.bodies||[]).map(b=>({...b,accum:null})); }
+    if(Sy.star2) Object.assign(star2,Sy.star2);
+    if(Sy.binary) Object.assign(binary,Sy.binary);
+    if(Array.isArray(Sy.belts)) belts=Sy.belts;
+    bodies=(Sy.bodies||[]).map(b=>{
+      const nb={...b,accum:null,parent:(b.parent===undefined?-1:b.parent)};
+      migrate(nb.world);
+      if(b.tilt!==undefined&&nb.world&&nb.world.p&&nb.world.p.tilt===undefined) nb.world.p.tilt=b.tilt;
+      return nb; }); }
 }
 
-function addBodyFromCurrent(name,copyPaint){
-  if(bodies.length>=MAX_BODIES){ hud('System is full at '+MAX_BODIES+' planets.'); return; }
-  const t=accumTex(1024,512);
+function addBodyFromCurrent(name,copyPaint,parent){
+  if(bodies.length>=MAX_BODIES){ hud('System is full at '+MAX_BODIES+' bodies.'); return; }
+  const t=accumTex(BODY_ACC,BODY_ACC/2);
   if(copyPaint===false){
     gl.bindFramebuffer(gl.FRAMEBUFFER,scratch);
     gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
     gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-    gl.viewport(0,0,1024,512); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0,0,BODY_ACC,BODY_ACC/2); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-  } else copyTex(accum.tex,t,1024,512);
+  } else copyTex(accum.tex,t,BODY_ACC,BODY_ACC/2);
   const n=bodies.length;
-  bodies.push({name:name||('Planet '+(n+1)), world:snapshot(),
-    orbit:{r:4+n*2.6, speed:0.22/Math.pow(1+n*0.6,1.5), phase:Math.random()*6.28, incl:(Math.random()-0.5)*0.25},
-    scale:0.28, tilt:(Math.random()-0.5)*0.5, spin:0.25, accum:t});
+  const par=(parent===undefined?-1:parent);
+  const host=(par>=0&&bodies[par])?bodies[par]:null;
+  bodies.push({name:name||(host?(host.name+' moon '):'Planet ')+(n+1), world:snapshot(), parent:par,
+    orbit: host
+      ? {r:host.scale*2.6, speed:1.4+Math.random()*0.8, phase:Math.random()*6.28, incl:(Math.random()-0.5)*0.5}
+      : {r:4+n*2.6, speed:0.22/Math.pow(1+n*0.6,1.5), phase:Math.random()*6.28, incl:(Math.random()-0.5)*0.25},
+    scale: host?host.scale*0.3:0.28, spin:0.25, accum:t});
+  if(copyPaint!==false) linkIdx=bodies.length-1;
   saveSystem(); buildUI();
 }
+const MOON_NUM=['I','II','III','IV','V','VI','VII','VIII'];
+function randomMoon(parentIdx){
+  const host=bodies[parentIdx]; if(!host) return;
+  const keep=snapshot();
+  const src=BUILTIN['Dead moon'];
+  for(const k in src.p) if(k in P) P[k]=src.p[k];
+  Object.assign(S.colors,src.colors);
+  S.seed=Math.floor(Math.random()*9999);
+  const r=Math.random;
+  P.craterN=4+Math.floor(r()*12); P.craterSize=0.08+r()*0.28; P.craterDepth=0.08+r()*0.28;
+  P.lump=r()<0.7?0.06+r()*0.3:0; P.lumpScale=0.7+r()*2.2;
+  P.oblate=r()*0.22; P.elong=r()<0.4?r()*0.5:0;
+  P.lobe=r()<0.22?0.25+r()*0.45:0; P.lobeSize=0.5+r()*0.5;
+  P.amp=0.05+r()*0.12; P.plateN=Math.floor(r()*5); P.ringOn=0;
+  const hp=host.world.p;
+  if(num(hp.faceOn,0)>0.5){
+    ['faceSize','faceLat','faceLon','eyeSpace','eyeSize','eyeTall','pupil','lookFollow','blink',
+     'browOn','brow','brt','mouthY','mouthW','mouthH','mouthOpen','mouthCurve','faceGlow']
+      .forEach(k=>{ if(hp[k]!==undefined) P[k]=hp[k]; });
+    const moods=Object.keys(MOODS), pick=MOODS[moods[Math.floor(r()*moods.length)]];
+    for(const k in pick) if(k in P) P[k]=pick[k];
+    P.faceOn=1; P.faceSize=Math.min(1.2,num(P.faceSize,0.6)*(0.9+r()*0.35));
+    P.sing=num(hp.sing,0); P.singSrc=3; P.singAmount=num(hp.singAmount,0.75);
+    P.singBounce=num(hp.singBounce,0.04); P.singVowel=num(hp.singVowel,0.5);
+    S.colors.eyeW=host.world.colors.eyeW||S.colors.eyeW;
+    S.colors.ink=host.world.colors.ink||S.colors.ink;
+  } else { P.faceOn=0; P.sing=0; }
+  const tint=0.4+r()*0.45;
+  const g=v=>'#'+[0,1,2].map(()=>Math.round(Math.min(255,Math.max(12,v*255*(0.85+0.3*Math.random())))).toString(16).padStart(2,'0')).join('');
+  S.colors.deep=g(tint*0.28); S.colors.shallow=g(tint*0.42);
+  S.colors.low=g(tint*0.58); S.colors.mid=g(tint*0.74); S.colors.high=g(tint*0.92);
+  const n=bodies.filter(b=>b.parent===parentIdx).length;
+  addBodyFromCurrent(host.name+' '+(MOON_NUM[n]||String(n+1)),false,parentIdx);
+  restore(keep); buildUI();
+}
 function bodyAccum(b){
-  if(!b.accum){ b.accum=accumTex(1024,512);
+  if(!b.accum){ b.accum=accumTex(BODY_ACC,BODY_ACC/2);
     gl.bindFramebuffer(gl.FRAMEBUFFER,scratch);
     gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,b.accum,0);
     gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-    gl.viewport(0,0,1024,512); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0,0,BODY_ACC,BODY_ACC/2); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   }
   return b.accum;
@@ -775,17 +1150,44 @@ async function initAudio(){
     const ac=new (window.AudioContext||window.webkitAudioContext)();
     const an=ac.createAnalyser(); an.fftSize=1024; an.smoothingTimeConstant=0.75;
     ac.createMediaStreamSource(stream).connect(an);
-    audio={an,data:new Uint8Array(an.frequencyBinCount),bands:[0,0,0]};
+    audio={an,stream,ctx:ac,data:new Uint8Array(an.frequencyBinCount),
+      time:new Uint8Array(an.fftSize),bands:[0,0,0],
+      fast:[0,0,0,0],slow:[0,0,0,0],bright:0.35};
     return true;
   }catch(e){ return false; }
 }
 function readAudio(){
   if(!audio) return;
   audio.an.getByteFrequencyData(audio.data);
+  audio.an.getByteTimeDomainData(audio.time);
   const N=audio.data.length;
   const avg=(a,b)=>{let s=0;for(let i=a;i<b;i++)s+=audio.data[i];return s/((b-a)*255);};
-  const t=[avg(1,Math.floor(N*0.06)),avg(Math.floor(N*0.06),Math.floor(N*0.25)),avg(Math.floor(N*0.25),Math.floor(N*0.7))];
-  for(let i=0;i<3;i++) audio.bands[i]=audio.bands[i]*0.6+t[i]*0.4;
+  const lo=avg(1,Math.floor(N*0.06)), md=avg(Math.floor(N*0.06),Math.floor(N*0.25)), hi=avg(Math.floor(N*0.25),Math.floor(N*0.7));
+  for(let i=0;i<3;i++) audio.bands[i]=audio.bands[i]*0.6+[lo,md,hi][i]*0.4;
+  let sum=0;
+  for(let i=0;i<audio.time.length;i++){ const v=(audio.time[i]-128)/128; sum+=v*v; }
+  const lvl=Math.min(1,Math.sqrt(sum/audio.time.length)*3.4);
+  const src=[lvl,lo,md,hi];
+  for(let i=0;i<4;i++){
+    const t=src[i];
+    audio.fast[i]= t>audio.fast[i] ? t : audio.fast[i]*0.70+t*0.30;
+    audio.slow[i]= t>audio.slow[i] ? audio.slow[i]*0.45+t*0.55 : audio.slow[i]*0.88+t*0.12;
+  }
+  const tot=lo+md+hi+1e-4;
+  audio.bright=audio.bright*0.82+((md*0.45+hi)/tot)*0.18;
+}
+function singState(w){
+  if(!audio||num(w.sing,0)<0.5) return {open:0,wide:1,brow:0,bounce:0};
+  const i=Math.max(0,Math.min(3,Math.round(num(w.singSrc,0))));
+  const sm=num(w.singSmooth,0.4);
+  const v=audio.fast[i]*(1-sm)+audio.slow[i]*sm;
+  const vow=num(w.singVowel,0.5);
+  return {
+    open:v*num(w.singAmount,0.75),
+    wide:Math.max(0.5,Math.min(1.7,1+vow*(audio.bright-0.4)*1.4)),
+    brow:v*num(w.singBrow,0.35)*0.7,
+    bounce:v*num(w.singBounce,0.04)
+  };
 }
 const MP={};
 function applyMods(t){
@@ -830,6 +1232,27 @@ function setTerrain(p,w,seed){
   gl.uniform1f(U(p,'uRiverFreq'),w.riverFreq); gl.uniform1f(U(p,'uTerrace'),w.terrace);
   gl.uniform1f(U(p,'uTerraceN'),w.terraceN); gl.uniform1f(U(p,'uCraterDepth'),w.craterDepth);
 }
+function num(v,d){ return (typeof v==='number'&&isFinite(v))?v:d; }
+function colOf(c,k,d){ return (c&&c[k])?c[k]:d; }
+function modelScale(m){ return Math.hypot(m[0],m[1],m[2])||1; }
+function vcross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function vnorm(a){ const l=Math.hypot(...a)||1; return [a[0]/l,a[1]/l,a[2]/l]; }
+function m3apply(m,v){ const s=modelScale(m);
+  return [(m[0]*v[0]+m[4]*v[1]+m[8]*v[2])/s,(m[1]*v[0]+m[5]*v[1]+m[9]*v[2])/s,(m[2]*v[0]+m[6]*v[1]+m[10]*v[2])/s]; }
+function faceLookVec(w,model,eye){
+  const la=num(w.faceLat,0), lo=num(w.faceLon,0);
+  if(num(w.lookFollow,1)<0.5) return [num(w.lookX,0),num(w.lookY,0)];
+  const F=[Math.cos(la)*Math.sin(lo),Math.sin(la),Math.cos(la)*Math.cos(lo)];
+  const up=Math.abs(F[1])>0.98?[1,0,0]:[0,1,0];
+  const T=vnorm(vcross(up,F)), B=vcross(F,T);
+  const Tw=m3apply(model,T), Bw=m3apply(model,B);
+  const c=vnorm([eye[0]-model[12],eye[1]-model[13],eye[2]-model[14]]);
+  let x=c[0]*Tw[0]+c[1]*Tw[1]+c[2]*Tw[2];
+  let y=c[0]*Bw[0]+c[1]*Bw[1]+c[2]*Bw[2];
+  const l=Math.hypot(x,y); if(l>1){ x/=l; y/=l; }
+  return [x,y];
+}
+function modelAxis(m){ const a=[m[4],m[5],m[6]]; const l=Math.hypot(...a)||1; return [a[0]/l,a[1]/l,a[2]/l]; }
 function drawPlanet(w,seed,colors,facet,model,light,accTex,eye,time,geo,sun){
   gl.useProgram(pPlanet);
   gl.uniformMatrix4fv(U(pPlanet,'uModel'),false,model);
@@ -842,13 +1265,80 @@ function drawPlanet(w,seed,colors,facet,model,light,accTex,eye,time,geo,sun){
   gl.uniform1f(U(pPlanet,'uFacet'),facet?1:0);
   gl.uniform3fv(U(pPlanet,'uCam'),new Float32Array(eye));
   gl.uniform3fv(U(pPlanet,'uLight'),new Float32Array(light));
+  gl.uniform1f(U(pPlanet,'uTwo'),secondLight.on);
+  gl.uniform3fv(U(pPlanet,'uLight2'),new Float32Array(secondLight.dir));
+  gl.uniform3fv(U(pPlanet,'uSun2'),new Float32Array(secondLight.sun));
   gl.uniform3fv(U(pPlanet,'uSun'),new Float32Array(sun||[1,1,1]));
   gl.uniform3fv(U(pPlanet,'cDeep'),hex(colors.deep)); gl.uniform3fv(U(pPlanet,'cShallow'),hex(colors.shallow));
   gl.uniform3fv(U(pPlanet,'cLow'),hex(colors.low)); gl.uniform3fv(U(pPlanet,'cMid'),hex(colors.mid));
   gl.uniform3fv(U(pPlanet,'cHigh'),hex(colors.high)); gl.uniform3fv(U(pPlanet,'cAtmo'),hex(colors.atmo));
+  gl.uniform1f(U(pPlanet,'uOblate'),num(w.oblate,0)); gl.uniform1f(U(pPlanet,'uElong'),num(w.elong,0));
+  gl.uniform1f(U(pPlanet,'uLump'),num(w.lump,0)); gl.uniform1f(U(pPlanet,'uLumpScale'),num(w.lumpScale,1.2));
+  gl.uniform1f(U(pPlanet,'uLobe'),num(w.lobe,0)); gl.uniform1f(U(pPlanet,'uLobeSize'),num(w.lobeSize,0.8));
+  gl.uniform1f(U(pPlanet,'uNeck'),num(w.neck,0.22));
+  const sc=modelScale(model);
+  gl.uniform1f(U(pPlanet,'uRingOn'),num(w.ringOn,0)>0.5?1:0);
+  gl.uniform1f(U(pPlanet,'uRingIn'),num(w.ringInner,1.38)*sc);
+  gl.uniform1f(U(pPlanet,'uRingOut'),Math.max(num(w.ringOuter,2.3),num(w.ringInner,1.38)+0.02)*sc);
+  gl.uniform1f(U(pPlanet,'uRingOpacity'),num(w.ringOpacity,0.75));
+  gl.uniform1f(U(pPlanet,'uRingBands'),num(w.ringBands,9));
+  gl.uniform1f(U(pPlanet,'uRingGap'),num(w.ringGap,0.45));
+  gl.uniform1f(U(pPlanet,'uRingSeed'),seed);
+  gl.uniform3fv(U(pPlanet,'uRingAxis'),new Float32Array(modelAxis(model)));
+  gl.uniform3fv(U(pPlanet,'uCenter'),new Float32Array([model[12],model[13],model[14]]));
+  gl.uniform1f(U(pPlanet,'uFaceOn'),num(w.faceOn,0)>0.5?1:0);
+  gl.uniform1f(U(pPlanet,'uFaceSize'),num(w.faceSize,0.6));
+  gl.uniform1f(U(pPlanet,'uFaceLat'),num(w.faceLat,0)); gl.uniform1f(U(pPlanet,'uFaceLon'),num(w.faceLon,0));
+  gl.uniform1f(U(pPlanet,'uEyeSpace'),num(w.eyeSpace,0.42)); gl.uniform1f(U(pPlanet,'uEyeSize'),num(w.eyeSize,0.19));
+  gl.uniform1f(U(pPlanet,'uEyeTall'),num(w.eyeTall,1.15)); gl.uniform1f(U(pPlanet,'uPupil'),num(w.pupil,0.45));
+  gl.uniform1f(U(pPlanet,'uBlink'),num(w.blink,4.5));
+  const sg=singState(w);
+  gl.uniform1f(U(pPlanet,'uBrowOn'),num(w.browOn,1)>0.5?1:0);
+  gl.uniform1f(U(pPlanet,'uBrow'),num(w.brow,0.25)+sg.brow);
+  gl.uniform1f(U(pPlanet,'uBrowT'),num(w.brt,0.13)+sg.brow*0.12);
+  gl.uniform1f(U(pPlanet,'uMouthY'),num(w.mouthY,0)); gl.uniform1f(U(pPlanet,'uMouthW'),num(w.mouthW,0.42)*sg.wide);
+  gl.uniform1f(U(pPlanet,'uMouthH'),num(w.mouthH,0.34));
+  gl.uniform1f(U(pPlanet,'uMouthOpen'),Math.min(1.4,num(w.mouthOpen,0.35)+sg.open));
+  gl.uniform1f(U(pPlanet,'uMouthCurve'),num(w.mouthCurve,0.7)); gl.uniform1f(U(pPlanet,'uFaceGlow'),num(w.faceGlow,0));
+  const fl=faceLookVec(w,model,eye);
+  gl.uniform2f(U(pPlanet,'uFaceLook'),fl[0],fl[1]);
+  gl.uniform3fv(U(pPlanet,'cEyeW'),hex(colOf(colors,'eyeW','#fdfaf2')));
+  gl.uniform3fv(U(pPlanet,'cInk'),hex(colOf(colors,'ink','#15100f')));
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,accTex); gl.uniform1i(U(pPlanet,'uAccum'),0);
   gl.bindVertexArray(geo.vao);
   gl.drawElements(gl.TRIANGLES,geo.count,gl.UNSIGNED_INT,0);
+}
+
+const RING_SEGS=192;
+let curVP=null;
+function drawRing(w,colors,ringModel,light,eye,sun,planetR,seed){
+  if(num(w.ringOn,0)<0.5||num(w.ringOpacity,0.75)<=0) return;
+  const sc=modelScale(ringModel);
+  gl.useProgram(pRing);
+  gl.uniformMatrix4fv(U(pRing,'uVP'),false,curVP);
+  gl.uniformMatrix4fv(U(pRing,'uModel'),false,ringModel);
+  gl.uniform1f(U(pRing,'uIn'),num(w.ringInner,1.38));
+  gl.uniform1f(U(pRing,'uOut'),Math.max(num(w.ringOuter,2.3),num(w.ringInner,1.38)+0.02));
+  gl.uniform1f(U(pRing,'uSegs'),RING_SEGS);
+  gl.uniform1f(U(pRing,'uOpacity'),num(w.ringOpacity,0.75));
+  gl.uniform1f(U(pRing,'uBands'),num(w.ringBands,9));
+  gl.uniform1f(U(pRing,'uGap'),num(w.ringGap,0.45));
+  gl.uniform1f(U(pRing,'uRingSeed'),seed);
+  gl.uniform1f(U(pRing,'uPlanetR'),planetR*sc);
+  gl.uniform3fv(U(pRing,'uCam'),new Float32Array(eye));
+  gl.uniform3fv(U(pRing,'uLight'),new Float32Array(light));
+  gl.uniform1f(U(pRing,'uTwo'),secondLight.on);
+  gl.uniform3fv(U(pRing,'uLight2'),new Float32Array(secondLight.dir));
+  gl.uniform3fv(U(pRing,'uSun2'),new Float32Array(secondLight.sun));
+  gl.uniform3fv(U(pRing,'uSun'),new Float32Array(sun||[1,1,1]));
+  gl.uniform3fv(U(pRing,'uCenter'),new Float32Array([ringModel[12],ringModel[13],ringModel[14]]));
+  gl.uniform3fv(U(pRing,'cRingA'),hex(colOf(colors,'ringA','#d8c9ad')));
+  gl.uniform3fv(U(pRing,'cRingB'),hex(colOf(colors,'ringB','#8f7f6b')));
+  gl.disable(gl.CULL_FACE); gl.depthMask(false);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  gl.bindVertexArray(emptyVAO);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,(RING_SEGS+1)*2);
+  gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.CULL_FACE);
 }
 
 /* ── main loop ────────────────────────────────────────────── */
@@ -880,10 +1370,20 @@ function endScene(la,glow){
   gl.uniform3fv(U(pPost,'uFwd'),new Float32Array([-la.z[0],-la.z[1],-la.z[2]]));
   gl.uniform3fv(U(pPost,'uSpace'),new Float32Array([0.014,0.018,0.026]));
   gl.uniform3fv(U(pPost,'uInk'),new Float32Array([0.02,0.03,0.045]));
-  gl.uniform1f(U(pPost,'uGlowAmt'),glow?glow.amt:0);
-  gl.uniform1f(U(pPost,'uGlowRad'),glow?glow.rad:0.1);
-  gl.uniform2f(U(pPost,'uGlowPos'),glow?glow.pos[0]:0,glow?glow.pos[1]:0);
-  gl.uniform3fv(U(pPost,'uGlowCol'),new Float32Array(glow?glow.col:[0,0,0]));
+  const gl_amt=new Float32Array(2), gl_rad=new Float32Array([0.1,0.1]),
+        gl_pos=new Float32Array(4), gl_col=new Float32Array(6);
+  const gs=Array.isArray(glow)?glow:(glow?[glow]:[]);
+  for(let i=0;i<2;i++){
+    const g=gs[i];
+    if(!g) continue;
+    gl_amt[i]=g.amt; gl_rad[i]=g.rad;
+    gl_pos[i*2]=g.pos[0]; gl_pos[i*2+1]=g.pos[1];
+    gl_col[i*3]=g.col[0]; gl_col[i*3+1]=g.col[1]; gl_col[i*3+2]=g.col[2];
+  }
+  gl.uniform1fv(U(pPost,'uGlowAmt[0]'),gl_amt);
+  gl.uniform1fv(U(pPost,'uGlowRad[0]'),gl_rad);
+  gl.uniform2fv(U(pPost,'uGlowPos[0]'),gl_pos);
+  gl.uniform3fv(U(pPost,'uGlowCol[0]'),gl_col);
   gl.bindVertexArray(emptyVAO); gl.drawArrays(gl.TRIANGLES,0,3);
   gl.bindVertexArray(null);
 }
@@ -928,6 +1428,10 @@ function render(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   const time=(now-t0)/1000;
   readAudio(); applyMods(time);
+  if(meterEl){
+    const i=Math.max(0,Math.min(3,Math.round(P.singSrc||0)));
+    meterEl.style.width=((audio?audio.fast[i]:0)*100).toFixed(1)+'%';
+  }
   cam.dist+=(cam.tDist-cam.dist)*0.12;
   for(let i=0;i<3;i++) cam.target[i]+=(cam.tTarget[i]-cam.target[i])*0.1;
 
@@ -938,13 +1442,27 @@ function render(now){
                cam.target[1]+Math.sin(cam.pitch)*cam.dist,
                cam.target[2]+Math.cos(cam.pitch)*Math.cos(cam.yaw)*cam.dist];
     const la=lookAt(eye,cam.target,[0,1,0]);
-    const VP=mul(persp(0.86,W/H,0.05,60),la.m);
+    const VP=mul(persp(0.86,W/H,0.05,60),la.m); curVP=VP;
     beginScene();
     gl.useProgram(pPlanet); gl.uniformMatrix4fv(U(pPlanet,'uVP'),false,VP);
     const w={}; SCHEMA.forEach(s=>w[s.id]=MP[s.id]);
     if(!S.paintOn){ w.paint=0; w.carve=0; }
     const L=[Math.cos(MP.lightPit)*Math.sin(MP.lightYaw),Math.sin(MP.lightPit),Math.cos(MP.lightPit)*Math.cos(MP.lightYaw)];
-    drawPlanet(w,S.seed,S.colors,S.facet,rotY(spinAngle),L,accum.tex,eye,time,mesh,[1,1,1]);
+    if(linkIdx>=0){
+      if(!bodies[linkIdx]){ linkIdx=-1; buildUI(); }
+      else {
+        bodies[linkIdx].world=snapshot();
+        linkTimer+=dt;
+        if(linkTimer>0.6){ linkTimer=0; syncLink(true); }
+      }
+    }
+    secondLight.on=0; secondLight.sun=[0,0,0];
+    const bnc=1+singState(w).bounce;
+    const tiltM=mul(rotZ(MP.tilt),trs([0,0,0],bnc));
+    drawPlanet(w,S.seed,S.colors,S.facet,mul(mul(rotZ(MP.tilt),rotY(spinAngle)),trs([0,0,0],bnc)),
+               L,accum.tex,eye,time,mesh,[1,1,1]);
+    drawRing(w,S.colors,tiltM,L,eye,[1,1,1],1+MP.amp,S.seed);
+    updateLabels(null,null);
     endScene(la,null);
   } else {
     // advance orbits
@@ -956,63 +1474,172 @@ function render(now){
                cam.target[2]+Math.cos(cam.pitch)*Math.cos(cam.yaw)*cam.dist];
     const la=lookAt(eye,cam.target,[0,1,0]);
     const proj=persp(0.86,W/H,0.02,400);
-    const VP=mul(proj,la.m);
+    const VP=mul(proj,la.m); curVP=VP;
     beginScene();
 
-    // star
+    // stars
+    if(binary.on) binary.phase+=binary.speed*dt;
+    const SP=starPositions();
     gl.useProgram(pStar);
     gl.uniformMatrix4fv(U(pStar,'uVP'),false,VP);
-    gl.uniformMatrix4fv(U(pStar,'uModel'),false,trs([0,0,0],star.radius));
     gl.uniform3fv(U(pStar,'uCam'),new Float32Array(eye));
-    gl.uniform3fv(U(pStar,'cStar'),hex(star.color)); gl.uniform3fv(U(pStar,'cStar2'),hex(star.color2));
-    gl.uniform1f(U(pStar,'uTime'),time); gl.uniform1f(U(pStar,'uGran'),star.gran);
-    gl.uniform1f(U(pStar,'uInt'),star.intensity);
+    gl.uniform1f(U(pStar,'uTime'),time);
     gl.bindVertexArray(meshSys.vao);
-    gl.drawElements(gl.TRIANGLES,meshSys.count,gl.UNSIGNED_INT,0);
+    const drawStar=(st,pos)=>{
+      gl.uniformMatrix4fv(U(pStar,'uModel'),false,trs(pos,st.radius));
+      gl.uniform3fv(U(pStar,'cStar'),hex(st.color)); gl.uniform3fv(U(pStar,'cStar2'),hex(st.color2));
+      gl.uniform1f(U(pStar,'uGran'),st.gran); gl.uniform1f(U(pStar,'uInt'),st.intensity);
+      gl.drawElements(gl.TRIANGLES,meshSys.count,gl.UNSIGNED_INT,0);
+    };
+    drawStar(star,SP[0]);
+    if(binary.on) drawStar(star2,SP[1]);
 
     // orbit rings
     if(S.rings!==false){
       gl.useProgram(pOrbit);
       gl.uniformMatrix4fv(U(pOrbit,'uVP'),false,VP);
-      gl.uniform3fv(U(pOrbit,'uCol'),new Float32Array([0.10,0.14,0.19]));
       gl.uniform1f(U(pOrbit,'uN'),192);
       gl.bindVertexArray(emptyVAO);
+      if(binary.on){
+        gl.uniform3fv(U(pOrbit,'uCol'),new Float32Array([0.16,0.14,0.11]));
+        gl.uniform3fv(U(pOrbit,'uCenter'),new Float32Array([0,0,0]));
+        gl.uniform1f(U(pOrbit,'uIncl'),binary.incl);
+        gl.uniform1f(U(pOrbit,'uR'),binary.sep*binary.ratio); gl.drawArrays(gl.LINE_LOOP,0,192);
+        gl.uniform1f(U(pOrbit,'uR'),binary.sep*(1-binary.ratio)); gl.drawArrays(gl.LINE_LOOP,0,192);
+      }
       for(const b of bodies){
+        const par=parentOf(b);
+        const c=par?bodyPos(par):[0,0,0];
+        gl.uniform3fv(U(pOrbit,'uCol'),new Float32Array(par?[0.13,0.13,0.16]:[0.10,0.14,0.19]));
+        gl.uniform3fv(U(pOrbit,'uCenter'),new Float32Array(c));
         gl.uniform1f(U(pOrbit,'uR'),b.orbit.r); gl.uniform1f(U(pOrbit,'uIncl'),b.orbit.incl);
         gl.drawArrays(gl.LINE_LOOP,0,192);
       }
     }
 
+    const sunCol=hex(star.color).map(v=>0.35+v*star.intensity*0.75);
+    const sunCol2=hex(star2.color).map(v=>0.35+v*star2.intensity*0.75);
+    secondLight.on=binary.on?1:0; secondLight.sun=binary.on?sunCol2:[0,0,0];
+
+    // asteroid belts
+    if(belts.length){
+      gl.useProgram(pBelt);
+      gl.uniformMatrix4fv(U(pBelt,'uVP'),false,VP);
+      gl.uniform1f(U(pBelt,'uTime'),time);
+      gl.uniform3fv(U(pBelt,'uSun'),new Float32Array(sunCol));
+      gl.bindVertexArray(meshRock.vao);
+      for(const bl of belts){
+        gl.uniform1f(U(pBelt,'uR'),num(bl.r,9)); gl.uniform1f(U(pBelt,'uWidth'),num(bl.width,2.4));
+        gl.uniform1f(U(pBelt,'uIncl'),num(bl.incl,0.18)); gl.uniform1f(U(pBelt,'uSize'),num(bl.size,0.05));
+        gl.uniform1f(U(pBelt,'uSizeVar'),num(bl.sizeVar,1.3)); gl.uniform1f(U(pBelt,'uSpeed'),num(bl.speed,0.12));
+        gl.uniform1f(U(pBelt,'uSpin'),num(bl.spin,0.6)); gl.uniform1f(U(pBelt,'uLump'),num(bl.lump,0.45));
+        gl.uniform1f(U(pBelt,'uSeed'),num(bl.seed,1));
+        gl.uniform3fv(U(pBelt,'cA'),hex(bl.cA||'#8d8478')); gl.uniform3fv(U(pBelt,'cB'),hex(bl.cB||'#413b36'));
+        gl.uniform3fv(U(pBelt,'uSun2'),new Float32Array(sunCol2));
+        gl.uniform1f(U(pBelt,'uTwo'),binary.on?1:0);
+        gl.uniform3fv(U(pBelt,'uS1'),new Float32Array(SP[0]));
+        gl.uniform3fv(U(pBelt,'uS2'),new Float32Array(SP[1]));
+        gl.drawElementsInstanced(gl.TRIANGLES,meshRock.count,gl.UNSIGNED_INT,0,Math.max(1,Math.round(num(bl.count,240))));
+      }
+    }
+
     // planets
     gl.useProgram(pPlanet); gl.uniformMatrix4fv(U(pPlanet,'uVP'),false,VP);
-    const sunCol=hex(star.color).map(v=>0.35+v*star.intensity*0.75);
+    const rings=[];
     for(const b of bodies){
       const pos=bodyPos(b);
-      const L=[-pos[0],-pos[1],-pos[2]];
-      const ln=Math.hypot(...L)||1;
-      const model=mul(mul(trs(pos,1),rotZ(b.tilt)),mul(rotY(b._spin||0),trs([0,0,0],b.scale)));
+      const L=[SP[0][0]-pos[0],SP[0][1]-pos[1],SP[0][2]-pos[2]];
+      const ln=Math.hypot(...L)||1; const Ln=[L[0]/ln,L[1]/ln,L[2]/ln];
+      if(binary.on){
+        const D=[SP[1][0]-pos[0],SP[1][1]-pos[1],SP[1][2]-pos[2]];
+        const dl=Math.hypot(...D)||1;
+        secondLight.dir=[D[0]/dl,D[1]/dl,D[2]/dl];
+      }
+      const bsc=b.scale*(1+singState(b.world.p).bounce);
+      const base=mul(mul(trs(pos,1),rotZ(bTilt(b))),trs([0,0,0],bsc));
+      const model=mul(mul(trs(pos,1),rotZ(bTilt(b))),mul(rotY(b._spin||0),trs([0,0,0],bsc)));
       drawPlanet(b.world.p,b.world.seed,b.world.colors,b.world.facet,model,
-                 [L[0]/ln,L[1]/ln,L[2]/ln],bodyAccum(b),eye,time,meshSys,sunCol);
+                 Ln,bodyAccum(b),eye,time,meshSys,sunCol);
+      if(num(b.world.p.ringOn,0)>0.5)
+        rings.push({b,base,Ln,L2:secondLight.dir.slice(),d:dist2(pos,eye)});
+    }
+    rings.sort((x,y)=>y.d-x.d);
+    for(const r of rings){
+      if(binary.on) secondLight.dir=r.L2;
+      drawRing(r.b.world.p,r.b.world.colors,r.base,r.Ln,eye,sunCol,1+num(r.b.world.p.amp,0.1),r.b.world.seed);
     }
 
     // star glow in screen space
-    const cp=[VP[12],VP[13],VP[14],VP[15]];
-    let glow=null;
-    if(cp[3]>0.0001){
-      const nx=cp[0]/cp[3], ny=cp[1]/cp[3];
-      glow={amt:star.glow*star.intensity,rad:star.glowRad,pos:[nx*0.5+0.5,ny*0.5+0.5],col:hex(star.color)};
-    }
-    endScene(la,glow);
+    const glows=[];
+    const addGlow=(st,pos)=>{
+      const cp=projectPt(VP,pos);
+      if(cp[2]>0.0001) glows.push({amt:st.glow*st.intensity,rad:st.glowRad,
+        pos:[cp[0]/cp[2]*0.5+0.5,cp[1]/cp[2]*0.5+0.5],col:hex(st.color)});
+      else glows.push(null);
+    };
+    addGlow(star,SP[0]);
+    if(binary.on) addGlow(star2,SP[1]);
+    updateLabels(VP,SP);
+    endScene(la,glows);
   }
 }
-function bodyPos(b){
+function bodyOrder(){
+  const out=[], seen=new Set();
+  const add=(i,lvl)=>{
+    if(seen.has(i)||lvl>3) return;
+    seen.add(i); out.push({i,lvl});
+    bodies.forEach((o,j)=>{ if(j!==i&&(o.parent===undefined?-1:o.parent)===i) add(j,lvl+1); });
+  };
+  bodies.forEach((b,i)=>{ const p=(b.parent===undefined?-1:b.parent);
+    if(p<0||p>=bodies.length||p===i) add(i,0); });
+  bodies.forEach((b,i)=>{ if(!seen.has(i)) add(i,0); });
+  return out;
+}
+function parentOf(b){
+  const i=(b.parent===undefined?-1:b.parent);
+  if(i<0||i>=bodies.length) return null;
+  const p=bodies[i]; return p===b?null:p;
+}
+function bTilt(b){ return num(b.world&&b.world.p?b.world.p.tilt:undefined, num(b.tilt,0)); }
+function dist2(a,b){ const x=a[0]-b[0],y=a[1]-b[1],z=a[2]-b[2]; return x*x+y*y+z*z; }
+function bodyPos(b,depth){
+  depth=depth||0;
   const a=b.orbit.phase,r=b.orbit.r,i=b.orbit.incl;
-  return [Math.cos(a)*r, Math.sin(a)*r*Math.sin(i), Math.sin(a)*r*Math.cos(i)];
+  const p=[Math.cos(a)*r, Math.sin(a)*r*Math.sin(i), Math.sin(a)*r*Math.cos(i)];
+  const par=parentOf(b);
+  if(par&&depth<4){ const q=bodyPos(par,depth+1); p[0]+=q[0]; p[1]+=q[1]; p[2]+=q[2]; }
+  return p;
+}
+const labelsEl=document.getElementById('labels');
+function updateLabels(VP,SP){
+  if(!VP||S.labels===false||mode!=='system'){ labelsEl.style.display='none'; return; }
+  labelsEl.style.display='block';
+  const sp=SP||[[0,0,0],[0,0,0]];
+  const items=[{n:star.name||'Star',p:sp[0],s:true}];
+  if(binary.on) items.push({n:star2.name||'Companion',p:sp[1],s:true});
+  bodies.forEach(b=>items.push({n:b.name,p:bodyPos(b)}));
+  while(labelsEl.children.length<items.length){
+    const sp=document.createElement('span'); labelsEl.appendChild(sp);
+  }
+  for(let i=0;i<labelsEl.children.length;i++){
+    const sp=labelsEl.children[i];
+    if(i>=items.length){ sp.style.display='none'; continue; }
+    const it=items[i];
+    const x=VP[0]*it.p[0]+VP[4]*it.p[1]+VP[8]*it.p[2]+VP[12];
+    const y=VP[1]*it.p[0]+VP[5]*it.p[1]+VP[9]*it.p[2]+VP[13];
+    const wv=VP[3]*it.p[0]+VP[7]*it.p[1]+VP[11]*it.p[2]+VP[15];
+    if(wv<=0.001){ sp.style.display='none'; continue; }
+    sp.style.display='block'; sp.textContent=it.n;
+    sp.className=it.s?'star':'';
+    sp.style.left=((x/wv*0.5+0.5)*canvas.clientWidth)+'px';
+    sp.style.top=((1-(y/wv*0.5+0.5))*canvas.clientHeight)+'px';
+  }
 }
 function loop(now){ render(now); requestAnimationFrame(loop); }
 
 /* ── export ───────────────────────────────────────────────── */
 function saveFrame(scale){
+  if(rec){ hud('Stop the recording before saving a still.'); return; }
   const prev=S.resScale;
   resize(Math.min(scale,4)); render(performance.now());
   canvas.toBlob(b=>{ const a=document.createElement('a');
@@ -1020,6 +1647,57 @@ function saveFrame(scale){
     a.download=`worldseed_${mode}_${Date.now()}.png`; a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href),4000);
     S.resScale=prev; resize(); },'image/png');
+}
+let rec=null,recChunks=[],recStart=0,recTimer=null;
+function recMime(){
+  const list=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  for(const m of list) if(window.MediaRecorder&&MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+async function toggleRecord(){
+  if(rec){ stopRecord(); return; }
+  if(!window.MediaRecorder||!canvas.captureStream){ hud('This browser cannot record video. Try Chrome or Edge.'); return; }
+  const mime=recMime();
+  if(!mime){ hud('No supported video format for recording here.'); return; }
+  await initAudio();
+  const cs=canvas.captureStream(30);
+  if(audio&&audio.stream){
+    if(audio.ctx&&audio.ctx.state==='suspended') audio.ctx.resume();
+    audio.stream.getAudioTracks().forEach(t=>cs.addTrack(t));
+  }
+  try{ rec=new MediaRecorder(cs,{mimeType:mime,videoBitsPerSecond:14000000}); }
+  catch(e){ hud('Recording could not start.'); rec=null; return; }
+  recChunks=[];
+  rec.ondataavailable=e=>{ if(e.data&&e.data.size) recChunks.push(e.data); };
+  rec.onstop=()=>{
+    const blob=new Blob(recChunks,{type:mime.split(';')[0]});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='worldseed_'+Date.now()+(mime.indexOf('mp4')>=0?'.mp4':'.webm');
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),8000);
+    hud('Saved the recording to your downloads.');
+  };
+  rec.start(250);
+  recStart=performance.now();
+  const dot=document.getElementById('recdot'); dot.style.display='flex';
+  recTimer=setInterval(()=>{
+    const t=Math.floor((performance.now()-recStart)/1000);
+    document.getElementById('rectime').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+  },500);
+  buildUI();
+}
+function stopRecord(){
+  if(!rec) return;
+  try{ rec.stop(); }catch(e){}
+  rec=null; clearInterval(recTimer);
+  document.getElementById('recdot').style.display='none';
+  buildUI();
+}
+function recordButton(parent){
+  const b=el('button',null,rec?'■ Stop recording':'● Record video');
+  if(rec) b.style.borderColor='#ff4a3d';
+  b.onclick=toggleRecord; parent.appendChild(b); return b;
 }
 function downloadJSON(obj,name){
   const b=new Blob([JSON.stringify(obj,null,1)],{type:'application/json'});
@@ -1030,13 +1708,16 @@ function importJSON(file){
   const r=new FileReader();
   r.onload=()=>{ try{
     const d=JSON.parse(r.result);
-    if(Array.isArray(d)) { library=library.concat(d); saveLibrary(); hud('Imported '+d.length+' presets.'); }
+    if(Array.isArray(d)) { library=library.concat(d.map(migrate)); saveLibrary(); hud('Imported '+d.length+' presets.'); }
     else if(d.library||d.system){
-      if(d.library) library=library.concat(d.library);
+      if(d.library) library=library.concat(d.library.map(migrate));
       if(d.system){ Object.assign(star,d.system.star||{});
-        bodies=(d.system.bodies||[]).map(b=>({...b,accum:null})); }
+        if(d.system.star2) Object.assign(star2,d.system.star2);
+        if(d.system.binary) Object.assign(binary,d.system.binary);
+        if(Array.isArray(d.system.belts)) belts=d.system.belts;
+        bodies=(d.system.bodies||[]).map(b=>{ const nb={...b,accum:null,parent:(b.parent===undefined?-1:b.parent)}; migrate(nb.world); return nb; }); }
       saveLibrary(); saveSystem(); hud('Imported world file.');
-    } else if(d.p){ restore(d); clearAccum(); hud('Loaded planet.'); }
+    } else if(d.p){ restore(migrate(d)); clearAccum(); hud('Loaded planet.'); }
     buildUI();
   }catch(e){ hud('That file could not be read as Worldseed data.'); } };
   r.readAsText(file);
@@ -1053,9 +1734,10 @@ const BUILTIN={
    curlMix:0.5,pSpeed:0.04,paint:0.5},
    colors:{deep:'#10314d',shallow:'#5aa6c9',low:'#b9d6e2',mid:'#dfeaf0',high:'#ffffff',atmo:'#9fdcff',flowA:'#cfe9ff',flowB:'#7fb6e8'}},
  'Gas giant':{p:{amp:0.02,freq:0.9,ridge:0.15,sea:-0.4,warpAmp:0.9,warpFreq:0.7,warpIter:3,snow:0,
-   plateN:0,shelf:0,rivers:0,craterN:0,terrace:0,
+   plateN:0,shelf:0,rivers:0,craterN:0,terrace:0,tilt:0.32,
+   ringOn:1,ringInner:1.45,ringOuter:2.6,ringOpacity:0.8,ringBands:11,ringGap:0.5,
    curlMix:0.85,curlFreq:1.1,pSpeed:0.12,pLife:9,pAlpha:0.06,paint:1.8,fade:0.006},
-   colors:{deep:'#4a2a18',shallow:'#8c5a2c',low:'#c69a5e',mid:'#e8cf9e',high:'#f6e6c8',atmo:'#ffbf7a',flowA:'#fff0cf',flowB:'#c4713a'}},
+   colors:{deep:'#4a2a18',shallow:'#8c5a2c',low:'#c69a5e',mid:'#e8cf9e',high:'#f6e6c8',atmo:'#ffbf7a',flowA:'#fff0cf',flowB:'#c4713a',ringA:'#e8d7b4',ringB:'#9a7f5e'}},
  'Cinder':{p:{amp:0.18,freq:2.6,ridge:0.9,sea:-0.12,warpAmp:0.7,warpFreq:1.9,warpIter:2,snow:0,
    plateN:15,plateAmp:0.45,plateRidge:0.7,plateTrench:0.6,plateSharp:34,shelf:0.3,rivers:0.2,craterN:0,
    curlMix:0.15,pSpeed:0.03,paint:1.4,pAlpha:0.13},
@@ -1064,10 +1746,28 @@ const BUILTIN={
    plateN:3,plateAmp:0.12,plateRidge:0.15,plateTrench:0.1,shelf:0.15,rivers:0,terrace:0.25,terraceN:12,
    craterN:16,craterSize:0.22,craterDepth:0.32,curlMix:0.6,pSpeed:0.02,paint:0.25,pAlpha:0.05},
    colors:{deep:'#15171a',shallow:'#2a2e33',low:'#4a4a49',mid:'#6d6a65',high:'#8f8b84',atmo:'#7b8894',flowA:'#c9c6bd',flowB:'#6b6862'}},
+ 'Rubble pile':{p:{amp:0.1,freq:2.8,ridge:0.6,sea:-0.45,warpAmp:0.3,warpFreq:1.5,warpIter:1,snow:0,
+   plateN:0,shelf:0.1,rivers:0,terrace:0.15,terraceN:8,craterN:12,craterSize:0.2,craterDepth:0.22,
+   lump:0.34,lumpScale:1.4,oblate:0.12,elong:0.35,lobe:0,
+   curlMix:0.5,pSpeed:0.02,paint:0.3,pAlpha:0.05,rim:0.15},
+   colors:{deep:'#191512',shallow:'#2c2621',low:'#5a4f43',mid:'#7d6f5e',high:'#9c8d78',atmo:'#6a6258',flowA:'#c8bba4',flowB:'#6a5f52'}},
+ 'Contact binary':{p:{amp:0.07,freq:3.2,ridge:0.5,sea:-0.45,warpAmp:0.25,warpFreq:1.8,warpIter:1,snow:0,
+   plateN:0,shelf:0,rivers:0,craterN:10,craterSize:0.16,craterDepth:0.18,terrace:0.2,terraceN:10,
+   lump:0.12,lumpScale:2.1,lobe:0.62,lobeSize:0.74,neck:0.26,oblate:0.06,
+   curlMix:0.45,pSpeed:0.02,paint:0.35,pAlpha:0.05,rim:0.1,spin:0.12},
+   colors:{deep:'#1a1210',shallow:'#301f18',low:'#6b4a38',mid:'#8f6a4d',high:'#b08a66',atmo:'#a8674a',flowA:'#e0c2a0',flowB:'#7a5238'}},
  'Shattered':{p:{amp:0.22,freq:1.1,ridge:0.7,sea:-0.08,warpAmp:0.95,warpFreq:0.6,warpIter:3,snow:0.2,
    plateN:24,plateAmp:0.6,plateRidge:0.85,plateTrench:0.8,plateSharp:52,shelf:0.75,rivers:0.28,riverFreq:5,
    terrace:0.35,terraceN:7,craterN:0,curlMix:0.1,pSpeed:0.045,paint:1.1},
    colors:{deep:'#1b0f2e',shallow:'#4b2f7a',low:'#5c4a6b',mid:'#a07fa8',high:'#e0d3e8',atmo:'#b07dff',flowA:'#ffd6f2',flowB:'#8a4fff'}}
+};
+const MOODS={
+ 'Delighted':{mouthCurve:0.85,mouthOpen:0.45,mouthW:0.46,mouthH:0.36,brow:0.3,brt:0.16,eyeTall:1.2,eyeSize:0.2,pupil:0.45,browOn:1},
+ 'Shocked':{mouthCurve:-0.1,mouthOpen:0.95,mouthW:0.24,mouthH:0.42,brow:0.55,brt:0.26,eyeTall:1.7,eyeSize:0.24,pupil:0.3,browOn:1},
+ 'Unimpressed':{mouthCurve:-0.35,mouthOpen:0.06,mouthW:0.5,mouthH:0.3,brow:-0.35,brt:0.1,eyeTall:0.6,eyeSize:0.2,pupil:0.6,browOn:1},
+ 'Sleepy':{mouthCurve:0.15,mouthOpen:0.5,mouthW:0.2,mouthH:0.3,brow:0.15,brt:0.09,eyeTall:0.42,eyeSize:0.2,pupil:0.2,browOn:1},
+ 'Furious':{mouthCurve:-0.8,mouthOpen:0.5,mouthW:0.5,mouthH:0.38,brow:-0.75,brt:0.06,eyeTall:0.9,eyeSize:0.21,pupil:0.7,browOn:1},
+ 'Goofy':{mouthCurve:0.9,mouthOpen:0.8,mouthW:0.55,mouthH:0.4,brow:0.45,brt:0.2,eyeTall:1.5,eyeSize:0.23,pupil:0.9,browOn:1,eyeSpace:0.5}
 };
 function applyPreset(src,keepSeed){
   for(const k in src.p) if(k in P) P[k]=src.p[k];
@@ -1079,6 +1779,7 @@ function applyPreset(src,keepSeed){
 
 /* ── UI ───────────────────────────────────────────────────── */
 const scrollEl=document.getElementById('scroll');
+let meterEl=null;
 const OPEN={};
 function fmt(d,v){ return d.int?String(Math.round(v)):(Math.abs(v)<1?v.toFixed(3):v.toFixed(2)); }
 function el(tag,cls,html){ const e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
@@ -1105,12 +1806,29 @@ function checkbox(parent,label,get,set){
   const l=el('label','chk'); const c=document.createElement('input'); c.type='checkbox'; c.checked=get();
   c.onchange=()=>set(c.checked); l.append(c,document.createTextNode(label)); parent.appendChild(l); return c;
 }
+function updateLinkBar(){
+  const bar=document.getElementById('link');
+  bar.innerHTML='';
+  if(mode!=='planet'||linkIdx<0||!bodies[linkIdx]){ bar.style.display='none'; return; }
+  bar.style.display='flex';
+  const t=document.createElement('span');
+  t.textContent='Live editing '+bodies[linkIdx].name;
+  const bs=document.createElement('button'); bs.textContent='Back';
+  bs.title='Return to the system view';
+  bs.onclick=()=>setMode('system');
+  const bu=document.createElement('button'); bu.textContent='Unlink';
+  bu.title='Stop applying changes to that body';
+  bu.onclick=()=>{ syncLink(true); linkIdx=-1; buildUI(); hud('Unlinked. Changes stay in the editor now.'); };
+  bar.append(t,bs,bu);
+}
 function buildUI(){
   scrollEl.querySelectorAll('details').forEach(d=>OPEN[d.dataset.g]=d.open);
+  meterEl=null;
   scrollEl.innerHTML='';
   document.getElementById('mPlanet').setAttribute('aria-pressed',mode==='planet');
   document.getElementById('mSystem').setAttribute('aria-pressed',mode==='system');
   if(mode==='planet') buildPlanetUI(); else buildSystemUI();
+  updateLinkBar();
 }
 
 function buildPlanetUI(){
@@ -1132,6 +1850,9 @@ function buildPlanetUI(){
     ['freq','ridge','sea','warpAmp','warpFreq','amp','snow','plateAmp','plateRidge','plateTrench','shelf','rivers'].forEach(id=>{
       const d=DEF(id); P[id]=d.min+Math.random()*(d.max-d.min)*(id==='amp'?0.6:1); });
     P.plateN=Math.floor(Math.random()*20); P.warpIter=Math.floor(Math.random()*3);
+    P.oblate=Math.random()<0.45?Math.random()*0.35:0;
+    P.elong=Math.random()<0.35?Math.random()*0.6:0;
+    P.lump=Math.random()<0.3?Math.random()*0.35:0;
     S.seed=Math.floor(Math.random()*9999); clearAccum(); buildUI();
   };
   const bClr=el('button',null,'Clear paint'); bClr.onclick=clearAccum;
@@ -1148,7 +1869,7 @@ function buildPlanetUI(){
     const nm=el('span','nm'); nm.textContent=entry.name;
     const bl=el('button',null,'Load'); bl.onclick=()=>{ restore(entry); clearAccum(); buildUI(); hud('Loaded “'+entry.name+'”.'); };
     const bo=el('button',null,'Orbit'); bo.title='Add to the system';
-    bo.onclick=()=>{ const keep=snapshot(); restore(entry); addBodyFromCurrent(entry.name,false); restore(keep); };
+    bo.onclick=()=>{ const keep=snapshot(); restore(entry); addBodyFromCurrent(entry.name,false,-1); restore(keep); buildUI(); };
     const bx=el('button',null,'✕'); bx.title='Delete';
     bx.onclick=()=>{ library.splice(i,1); saveLibrary(); buildUI(); };
     it.append(dot,nm,bl,bo,bx); lb.appendChild(it);
@@ -1169,7 +1890,7 @@ function buildPlanetUI(){
   const b2=el('div','btns');
   const bAdd=el('button',null,'Send to system'); bAdd.onclick=()=>addBodyFromCurrent((nameIn.value||'').trim(),true);
   const bExp=el('button',null,'Export file');
-  bExp.onclick=()=>downloadJSON({library,system:{star,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,tilt:b.tilt,spin:b.spin}))}},'worldseed-library.json');
+  bExp.onclick=()=>downloadJSON({library,system:{star,star2,binary,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))}},'worldseed-library.json');
   const bImp=el('button',null,'Import file');
   const fi=document.createElement('input'); fi.type='file'; fi.accept='.json,application/json'; fi.style.display='none';
   fi.onchange=()=>{ if(fi.files[0]) importJSON(fi.files[0]); };
@@ -1183,8 +1904,42 @@ function buildPlanetUI(){
     if(g==='Tectonics') body.appendChild(el('p','note','Plates are spherical cells with their own elevation. Where two continental plates meet you get mountains; where oceanic ones meet, a trench.'));
     if(g==='Flow') body.appendChild(el('p','note','Particles seed on high-contrast terrain and run along its contour lines. Blend toward curl for weather.'));
     if(g==='Erosion') body.appendChild(el('p','note','Channels cut along the ridge lines of a second noise field; terracing quantises height into plateaus.'));
+    if(g==='Body shape'){
+      body.appendChild(el('p','note','Not everything is a ball. Flatten the poles for a fast-spinning gas giant, stretch the equator for something like Haumea, add lumps for an asteroid, or push out a second lobe for a contact binary like Arrokoth.'));
+    }
+    if(g==='Voice'){
+      body.appendChild(el('p','note','Sing, hum or play something into the microphone and the mouth follows it. In System mode each planet can listen to a different part of the sound, so they take turns.'));
+      const mrow=el('div','btns');
+      const mb=el('button',null,audio?'Microphone on':'Turn on microphone');
+      mb.onclick=async()=>{ const ok=await initAudio();
+        hud(ok?'Microphone is listening.':'Microphone permission was declined.'); buildUI(); };
+      mrow.appendChild(mb); body.appendChild(mrow);
+      const mt=el('div','meter'); const bar=document.createElement('i'); mt.appendChild(bar);
+      body.appendChild(mt); meterEl=bar;
+      const rr=el('div','btns'); recordButton(rr); body.appendChild(rr);
+    }
+    if(g==='Face'){
+      body.appendChild(el('p','note','The face is painted onto the surface, so it lights, wraps and rotates with the planet. Turn spin down to keep it looking at you.'));
+      const mr=el('div','sel','<label for="mood">Expression</label>');
+      const ms=document.createElement('select'); ms.id='mood';
+      ms.innerHTML='<option value="">Choose…</option>'+Object.keys(MOODS).map(k=>`<option>${k}</option>`).join('');
+      ms.onchange=()=>{ const m=MOODS[ms.value]; if(!m) return;
+        for(const k in m) if(k in P) P[k]=m[k];
+        P.faceOn=1; buildUI(); };
+      mr.appendChild(ms); body.appendChild(mr);
+    }
+    if(g==='Rings') body.appendChild(el('p','note','Rings sit in the planet\u2019s equatorial plane, so axial tilt swings them. They cast a banded shadow onto the surface.'));
     for(const s of SCHEMA.filter(x=>x.g===g)){
-      sliderRow(body,{...s,modded:mods.some(m=>m.target===s.id)},P,s.id);
+      if(s.chk) checkbox(body,s.l,()=>P[s.id]>0.5,v=>P[s.id]=v?1:0);
+      else if(s.sel){
+        const r=el('div','sel'); const id='sel_'+s.id;
+        r.innerHTML=`<label for="${id}">${s.l}</label>`;
+        const sl=document.createElement('select'); sl.id=id;
+        sl.innerHTML=s.sel.map((o,j)=>`<option value="${j}"${Math.round(P[s.id])===j?' selected':''}>${o}</option>`).join('');
+        sl.onchange=()=>{ P[s.id]=parseInt(sl.value,10); };
+        r.appendChild(sl); body.appendChild(r);
+      }
+      else sliderRow(body,{...s,modded:mods.some(m=>m.target===s.id)},P,s.id);
     }
     if(g==='Look') checkbox(body,'Faceted surface',()=>S.facet,v=>S.facet=v);
   }
@@ -1244,54 +1999,151 @@ function buildPlanetUI(){
 }
 
 function buildSystemUI(){
+  function starBlock(parent,st,tag){
+    const nrow=el('div','sel',`<label for="nm_${tag}">Name</label>`);
+    const sni=document.createElement('input'); sni.type='text'; sni.id='nm_'+tag; sni.value=st.name||'';
+    sni.onchange=()=>{ st.name=sni.value; saveSystem(); };
+    nrow.appendChild(sni); parent.appendChild(nrow);
+    const sw=el('div','sw');
+    [['color','Core'],['color2','Shell']].forEach(([k,lbl])=>{
+      const cell=el('div');
+      const ci=document.createElement('input'); ci.type='color'; ci.value=st[k]; ci.id=tag+'_'+k;
+      ci.oninput=()=>{ st[k]=ci.value; saveSystem(); };
+      const cl=el('label'); cl.textContent=lbl; cl.htmlFor=tag+'_'+k;
+      cell.append(ci,cl); sw.appendChild(cell);
+    });
+    parent.appendChild(sw);
+    sliderRow(parent,{l:'Radius',min:0.2,max:4,step:0.01},st,'radius',saveSystem);
+    sliderRow(parent,{l:'Brightness',min:0.2,max:4,step:0.01},st,'intensity',saveSystem);
+    sliderRow(parent,{l:'Corona',min:0,max:2,step:0.005},st,'glow',saveSystem);
+    sliderRow(parent,{l:'Corona spread',min:0.02,max:0.6,step:0.002},st,'glowRad',saveSystem);
+    sliderRow(parent,{l:'Granulation',min:0,max:1.5,step:0.005},st,'gran',saveSystem);
+  }
   const sb=section('Star',true);
-  const sw=el('div','sw');
-  [['color','Core'],['color2','Shell']].forEach(([k,lbl])=>{
-    const cell=el('div');
-    const ci=document.createElement('input'); ci.type='color'; ci.value=star[k]; ci.id='st_'+k;
-    ci.oninput=()=>{ star[k]=ci.value; saveSystem(); };
-    const cl=el('label'); cl.textContent=lbl; cl.htmlFor='st_'+k;
-    cell.append(ci,cl); sw.appendChild(cell);
-  });
-  sb.appendChild(sw);
-  sliderRow(sb,{l:'Radius',min:0.2,max:4,step:0.01},star,'radius',saveSystem);
-  sliderRow(sb,{l:'Brightness',min:0.2,max:4,step:0.01},star,'intensity',saveSystem);
-  sliderRow(sb,{l:'Corona',min:0,max:2,step:0.005},star,'glow',saveSystem);
-  sliderRow(sb,{l:'Corona spread',min:0.02,max:0.6,step:0.002},star,'glowRad',saveSystem);
-  sliderRow(sb,{l:'Granulation',min:0,max:1.5,step:0.005},star,'gran',saveSystem);
+  starBlock(sb,star,'st');
+  checkbox(sb,'Binary star',()=>binary.on,v=>{ binary.on=v; saveSystem(); buildUI(); });
+  if(binary.on){
+    const box=el('div','modslot');
+    box.appendChild(el('p','note','Both stars orbit the barycentre at the centre, and everything else orbits the pair. Planets get light from each of them.'));
+    starBlock(box,star2,'st2');
+    sliderRow(box,{l:'Separation',min:0.4,max:14,step:0.01},binary,'sep',saveSystem);
+    sliderRow(box,{l:'Mass balance',min:0.05,max:0.95,step:0.005},binary,'ratio',saveSystem);
+    sliderRow(box,{l:'Orbit speed',min:-1.5,max:1.5,step:0.005},binary,'speed',saveSystem);
+    sliderRow(box,{l:'Inclination',min:-0.9,max:0.9,step:0.005},binary,'incl',saveSystem);
+    const bq=el('div','btns');
+    const bsw=el('button',null,'Swap colours');
+    bsw.onclick=()=>{ const a=star.color,b=star.color2;
+      star.color=star2.color; star.color2=star2.color2; star2.color=a; star2.color2=b;
+      saveSystem(); buildUI(); };
+    const bcl=el('button',null,'Classic red/blue');
+    bcl.onclick=()=>{ star.color='#ffd0a8'; star.color2='#ff6a2c'; star.intensity=1.4;
+      star2.color='#cfe2ff'; star2.color2='#6f9bd8'; star2.intensity=1.2; star2.radius=0.6;
+      saveSystem(); buildUI(); };
+    bq.append(bsw,bcl); box.appendChild(bq);
+    sb.appendChild(box);
+  }
 
   const pb=section('Planets in orbit',true);
-  if(!bodies.length) pb.appendChild(el('p','note','No planets yet. Build one in Planet mode and press “Send to system”.'));
-  bodies.forEach((b,i)=>{
-    const it=el('div','item'+(i===selIdx?' on':''));
+  if(!bodies.length) pb.appendChild(el('p','note','No planets yet. Build one in Planet mode and press “Send to system”, or use “Send current planet” below. Once a planet is here, its “+ Moon” button drops a random moon into orbit around it.'));
+  bodyOrder().forEach(({i,lvl})=>{
+    const b=bodies[i];
+    const it=el('div','item'+(i===selIdx?' on':'')+(lvl?' kid':''));
+    if(lvl) it.style.marginLeft=(lvl*13)+'px';
     const dot=el('div','dot'); dot.style.background=b.world.colors.mid;
-    const nm=el('span','nm'); nm.textContent=b.name;
+    if(lvl){ dot.style.width='7px'; dot.style.height='7px'; }
+    const nm=el('span','nm'); nm.textContent=(i===linkIdx?'\u270e ':'')+b.name;
+    if(i===linkIdx) nm.style.color='var(--hot)';
     const bsel=el('button',null,i===selIdx?'Hide':'Edit orbit');
     bsel.onclick=()=>{ selIdx=(i===selIdx?-1:i); buildUI(); };
+    const bmoon=el('button',null,'+ Moon');
+    bmoon.title='Add a random moon to '+b.name;
+    bmoon.onclick=()=>{ randomMoon(i); hud('Added a moon to '+b.name+'.'); };
     const bf=el('button',null,'Focus');
     bf.onclick=()=>{ focusIdx=(focusIdx===i?-1:i); cam.tDist=focusIdx===i?Math.max(0.9,b.scale*4.5):18; buildUI(); };
     const bx=el('button',null,'✕');
-    bx.onclick=()=>{ bodies.splice(i,1); if(focusIdx>=bodies.length) focusIdx=-1; selIdx=-1; saveSystem(); buildUI(); };
-    it.append(dot,nm,bsel,bf,bx); pb.appendChild(it);
+    bx.onclick=()=>{
+      bodies.splice(i,1);
+      bodies.forEach(o=>{ const pi=(o.parent===undefined?-1:o.parent);
+        o.parent = pi===i ? -1 : (pi>i?pi-1:pi); });
+      linkIdx = linkIdx===i ? -1 : (linkIdx>i?linkIdx-1:linkIdx);
+      if(focusIdx>=bodies.length) focusIdx=-1; selIdx=-1; saveSystem(); buildUI(); };
+    it.append(dot,nm,bmoon,bsel,bf,bx);
+    pb.appendChild(it);
     if(i===selIdx){
       const box=el('div','modslot');
       const nrow=el('div','sel','<label>Name</label>');
       const ni=document.createElement('input'); ni.type='text'; ni.value=b.name;
       ni.onchange=()=>{ b.name=ni.value; saveSystem(); buildUI(); };
       nrow.appendChild(ni); box.appendChild(nrow);
-      sliderRow(box,{l:'Orbit radius',min:1.2,max:40,step:0.05},b.orbit,'r',saveSystem);
+      const prow=el('div','sel','<label>Orbits</label>');
+      const ps=document.createElement('select');
+      ps.innerHTML=`<option value="-1">${(star.name||'Star')}</option>`+
+        bodies.map((o,j)=>j===i?'':`<option value="${j}"${(b.parent===j)?' selected':''}>${o.name}</option>`).join('');
+      ps.value=String(b.parent===undefined?-1:b.parent);
+      ps.onchange=()=>{
+        const v=parseInt(ps.value,10);
+        b.parent=v;
+        if(v>=0&&bodies[v]){ b.orbit.r=Math.min(b.orbit.r,bodies[v].scale*4); b.orbit.speed=Math.max(Math.abs(b.orbit.speed),0.9)*Math.sign(b.orbit.speed||1); }
+        saveSystem(); buildUI();
+      };
+      prow.appendChild(ps); box.appendChild(prow);
+      sliderRow(box,{l:'Orbit radius',min:0.05,max:40,step:0.01},b.orbit,'r',saveSystem);
       sliderRow(box,{l:'Orbit speed',min:-1,max:1,step:0.002},b.orbit,'speed',saveSystem);
       sliderRow(box,{l:'Inclination',min:-0.8,max:0.8,step:0.002},b.orbit,'incl',saveSystem);
       sliderRow(box,{l:'Size',min:0.03,max:1.2,step:0.005},b,'scale',saveSystem);
-      sliderRow(box,{l:'Axial tilt',min:-1.2,max:1.2,step:0.005},b,'tilt',saveSystem);
+      sliderRow(box,{l:'Axial tilt',min:-1.2,max:1.2,step:0.005},b.world.p,'tilt',saveSystem);
       sliderRow(box,{l:'Day length',min:-2,max:2,step:0.005},b,'spin',saveSystem);
       const bb=el('div','btns');
+      const bm=el('button',null,'Add current as moon');
+      bm.onclick=()=>addBodyFromCurrent('',true,i);
+      const brm=el('button',null,'Random moon');
+      brm.onclick=()=>randomMoon(i);
+      bb.append(bm,brm); box.appendChild(bb);
+
+      const wp=(id)=>sliderRow(box,DEF(id),b.world.p,id,saveSystem);
+      const wchk=(id,lbl)=>checkbox(box,lbl||DEF(id).l,()=>num(b.world.p[id],0)>0.5,
+        v=>{ b.world.p[id]=v?1:0; saveSystem(); buildUI(); });
+
+      box.appendChild(el('p','subhead','Shape'));
+      wp('amp'); wp('lump'); wp('lumpScale'); wp('oblate'); wp('elong');
+      wp('craterN'); wp('craterDepth');
+      const sd=el('div','btns');
+      const bsd=el('button',null,'Reroll surface');
+      bsd.onclick=()=>{ b.world.seed=Math.floor(Math.random()*9999); saveSystem(); hud(b.name+' reshaped.'); };
+      sd.appendChild(bsd); box.appendChild(sd);
+
+      box.appendChild(el('p','subhead','Face'));
+      wchk('faceOn','Give it a face');
+      if(num(b.world.p.faceOn,0)>0.5){
+        const mr=el('div','sel','<label>Expression</label>');
+        const msel=document.createElement('select');
+        msel.innerHTML='<option value="">Choose…</option>'+Object.keys(MOODS).map(k=>`<option>${k}</option>`).join('');
+        msel.onchange=()=>{ const m=MOODS[msel.value]; if(!m) return;
+          for(const k in m) b.world.p[k]=m[k]; saveSystem(); buildUI(); };
+        mr.appendChild(msel); box.appendChild(mr);
+        wp('faceSize'); wp('faceLat'); wp('faceLon'); wp('mouthCurve'); wp('mouthOpen'); wp('eyeSize');
+        wchk('browOn','Eyebrows');
+        box.appendChild(el('p','subhead','Voice'));
+        wchk('sing','Sing along with the mic');
+        if(num(b.world.p.sing,0)>0.5){
+          const vr=el('div','sel','<label>Listens to</label>');
+          const vs=document.createElement('select');
+          vs.innerHTML=DEF('singSrc').sel.map((o,j)=>`<option value="${j}"${Math.round(num(b.world.p.singSrc,0))===j?' selected':''}>${o}</option>`).join('');
+          vs.onchange=()=>{ b.world.p.singSrc=parseInt(vs.value,10); saveSystem(); };
+          vr.appendChild(vs); box.appendChild(vr);
+          wp('singAmount'); wp('singBounce');
+        }
+      }
+      box.appendChild(el('p','subhead','Editor'));
+      const bb2=el('div','btns');
       const be=el('button',null,'Open in editor');
       be.onclick=()=>{ restore(b.world); copyTex(bodyAccum(b),accum.tex,accum.size,accum.size/2);
-        setMode('planet'); hud('Editing “'+b.name+'”. Send it back when you are done.'); };
-      const bu=el('button',null,'Update from editor');
-      bu.onclick=()=>{ b.world=snapshot(); copyTex(accum.tex,bodyAccum(b),1024,512); saveSystem(); buildUI(); hud('“'+b.name+'” updated.'); };
-      bb.append(be,bu); box.appendChild(bb);
+        linkIdx=i; setMode('planet');
+        hud('Editing “'+b.name+'” live — every change shows up in the system.'); };
+      const bu=el('button',null,'Copy editor onto this');
+      bu.onclick=()=>{ b.world=snapshot(); copyTex(accum.tex,bodyAccum(b),BODY_ACC,BODY_ACC/2); saveSystem(); buildUI(); hud('“'+b.name+'” now matches the editor.'); };
+      bb2.append(be,bu); box.appendChild(bb2);
+      if(lvl) box.style.marginLeft=(lvl*13)+'px';
       pb.appendChild(box);
     }
   });
@@ -1302,6 +2154,49 @@ function buildSystemUI(){
   bWide.onclick=()=>{ focusIdx=-1; cam.tDist=Math.max(14,(bodies.reduce((m,b)=>Math.max(m,b.orbit.r),6))*2.1); buildUI(); };
   b4.append(bAdd,bWide); pb.appendChild(b4);
 
+  const ab=section('Asteroid belts',belts.length>0);
+  ab.appendChild(el('p','note','Belts are drawn as one instanced batch of tumbling rocks, so the count costs almost nothing.'));
+  belts.forEach((bl,i)=>{
+    const it=el('div','item');
+    const dot=el('div','dot'); dot.style.background=bl.cA||'#8d8478';
+    const nm=el('span','nm'); nm.textContent='Belt '+(i+1)+' · r '+num(bl.r,9).toFixed(1);
+    const bx=el('button',null,'✕');
+    bx.onclick=()=>{ belts.splice(i,1); saveSystem(); buildUI(); };
+    it.append(dot,nm,bx); ab.appendChild(it);
+    const box=el('div','modslot');
+    sliderRow(box,{l:'Distance',min:1,max:40,step:0.05},bl,'r',saveSystem);
+    sliderRow(box,{l:'Width',min:0.1,max:14,step:0.05},bl,'width',saveSystem);
+    sliderRow(box,{l:'Rocks',min:10,max:900,step:10,int:true},bl,'count',saveSystem);
+    sliderRow(box,{l:'Rock size',min:0.005,max:0.3,step:0.002},bl,'size',saveSystem);
+    sliderRow(box,{l:'Size variation',min:0,max:3,step:0.01},bl,'sizeVar',saveSystem);
+    sliderRow(box,{l:'Thickness',min:0,max:1.2,step:0.005},bl,'incl',saveSystem);
+    sliderRow(box,{l:'Orbit speed',min:-1,max:1,step:0.002},bl,'speed',saveSystem);
+    sliderRow(box,{l:'Tumble',min:0,max:3,step:0.01},bl,'spin',saveSystem);
+    sliderRow(box,{l:'Rock lumpiness',min:0,max:1,step:0.005},bl,'lump',saveSystem);
+    const sw2=el('div','sw');
+    [['cA','Rock light'],['cB','Rock dark']].forEach(([k,lbl])=>{
+      const cell=el('div');
+      const ci=document.createElement('input'); ci.type='color'; ci.value=bl[k]||'#8d8478'; ci.id='bl'+i+k;
+      ci.oninput=()=>{ bl[k]=ci.value; saveSystem(); };
+      const cl=el('label'); cl.textContent=lbl; cl.htmlFor='bl'+i+k;
+      cell.append(ci,cl); sw2.appendChild(cell);
+    });
+    box.appendChild(sw2);
+    const rs=el('div','btns');
+    const br=el('button',null,'Reshuffle rocks');
+    br.onclick=()=>{ bl.seed=Math.floor(Math.random()*9999); saveSystem(); };
+    rs.appendChild(br); box.appendChild(rs);
+    ab.appendChild(box);
+  });
+  if(belts.length<MAX_BELTS){
+    const bb2=el('div','btns');
+    const ba=el('button',null,'Add a belt');
+    ba.onclick=()=>{ const nb=newBelt();
+      if(bodies.length) nb.r=Math.max(2,bodies.reduce((m,b)=>Math.max(m,b.orbit.r),4)*0.7);
+      belts.push(nb); saveSystem(); buildUI(); };
+    bb2.appendChild(ba); ab.appendChild(bb2);
+  }
+
   const lb=section('Saved planets',library.length>0);
   if(!library.length) lb.appendChild(el('p','note','Save planets in Planet mode to drop them into orbit here.'));
   library.forEach(entry=>{
@@ -1309,24 +2204,28 @@ function buildSystemUI(){
     const dot=el('div','dot'); dot.style.background=entry.colors.mid;
     const nm=el('span','nm'); nm.textContent=entry.name;
     const bo=el('button',null,'Add to orbit');
-    bo.onclick=()=>{ const keep=snapshot(); restore(entry); addBodyFromCurrent(entry.name,false); restore(keep); };
+    bo.onclick=()=>{ const keep=snapshot(); restore(entry); addBodyFromCurrent(entry.name,false,-1); restore(keep); buildUI(); };
     it.append(dot,nm,bo); lb.appendChild(it);
   });
 
   const vb=section('View',false);
   for(const id of ['kuwahara','outline','sat','contrast','stars']) sliderRow(vb,DEF(id),P,id);
   if(S.rings===undefined) S.rings=true;
+  if(S.labels===undefined) S.labels=true;
   checkbox(vb,'Orbit paths',()=>S.rings,v=>{S.rings=v;});
+  checkbox(vb,'Name labels',()=>S.labels,v=>{S.labels=v;});
   const b5=el('div','btns');
   [['Save PNG',1],['Save 2×',2],['Save 4×',4]].forEach(([l,s3])=>{
     const b=el('button',null,l); b.onclick=()=>saveFrame(s3*S.resScale); b5.appendChild(b); });
+  recordButton(b5);
   const bExp=el('button',null,'Export system');
-  bExp.onclick=()=>downloadJSON({library,system:{star,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,tilt:b.tilt,spin:b.spin}))}},'worldseed-system.json');
+  bExp.onclick=()=>downloadJSON({library,system:{star,star2,binary,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))}},'worldseed-system.json');
   b5.appendChild(bExp);
   vb.appendChild(b5);
 }
 
 function setMode(m){
+  if(mode==='planet'&&m==='system') syncLink(true);
   mode=m;
   if(m==='system'){ cam.tDist=Math.max(14,(bodies.reduce((x,b)=>Math.max(x,b.orbit.r),6))*2.1); cam.pitch=0.45; }
   else { cam.tDist=3.1; cam.tTarget=[0,0,0]; focusIdx=-1; }
@@ -1349,6 +2248,7 @@ document.getElementById('toggle').onclick=e=>{
 /* ── boot ─────────────────────────────────────────────────── */
 buildSphere(S.subdiv);
 meshSys=makeSphere(5);
+meshRock=makeSphere(2);
 buildParticles(S.pCount);
 buildAccum(S.accumSize);
 loadPersisted();

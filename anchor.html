@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anchor — point-sampled shape generator</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto;
+    display:flex;align-items:center;gap:10px}
+  .barwrap{width:120px;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+  .barwrap i{display:block;height:100%;width:0;background:var(--accent);transition:width .08s linear}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:26px}
+  #view{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#0d0f10}
+  #dropHint{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(20,22,24,.86);z-index:50;font-size:16px;color:var(--accent);border:2px dashed var(--accent)}
+  body.dragging #dropHint{display:flex}
+
+  #panel{width:352px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  .group{border-bottom:1px solid var(--line)}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:28px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:52px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--accent);margin-top:-4.5px;border:none}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:none}
+  input[type=range]:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+  select,input[type=text],input[type=number],textarea{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-family:var(--sans);font-size:12px}
+  textarea{resize:vertical;min-height:58px;font-family:var(--mono);line-height:1.4}
+  select:focus,input:focus,textarea:focus{outline:1px solid var(--accent)}
+  input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-family:var(--sans);font-size:12px;cursor:pointer;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.primary:hover{background:#95dccd}
+  button.warm{border-color:#4a3a34;color:#f0a68e}
+  .btnrow{display:flex;gap:6px;padding:6px 0}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
+    border-top:1px solid var(--line);margin-top:8px}
+  .tabs{display:flex;gap:4px;padding:4px 0 8px}
+  .tabs button{flex:1;font-size:11.5px;padding:5px 4px}
+  .tabs button.on{border-color:var(--accent);color:var(--accent)}
+  #footer{border-top:1px solid var(--line);padding:12px 16px;background:var(--panel)}
+  .hidden{display:none !important}
+  #overlay{position:fixed;inset:0;background:rgba(15,17,18,.9);display:none;align-items:center;
+    justify-content:center;flex-direction:column;gap:14px;z-index:60}
+  #overlay.on{display:flex}
+  #overlay .lbl{font-family:var(--mono);font-size:12px;color:var(--dim)}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Anchor <span>— point-sampled shape generator</span></h1>
+    <div id="status">
+      <span id="statusText">starting</span>
+      <div class="barwrap"><i id="barFill"></i></div>
+    </div>
+  </div>
+  <div id="canvasWrap"><canvas id="view"></canvas></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+
+    <details class="group" open>
+      <summary>Presets<span class="chev"></span></summary>
+      <div class="body">
+        <div class="row"><label>Preset</label><div class="ctl"><select id="presetSel"></select></div></div>
+        <div class="btnrow">
+          <button id="btnRestart">Restart preset</button>
+          <button id="btnSaveSession">Save session</button>
+        </div>
+        <div class="btnrow">
+          <button id="btnExportPreset">Export preset</button>
+          <button id="btnImportPreset">Import preset</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Point source<span class="chev"></span></summary>
+      <div class="body">
+        <div class="tabs" id="srcTabs">
+          <button data-src="text">Type</button>
+          <button data-src="cloud">Cloud</button>
+          <button data-src="image">Image</button>
+        </div>
+        <div id="srcText"></div>
+        <div id="srcCloud"></div>
+        <div id="srcImage"></div>
+        <div id="srcCommon"></div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Stamps<span class="chev"></span></summary>
+      <div class="body" id="g-stamp"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Displacement<span class="chev"></span></summary>
+      <div class="body" id="g-disp"></div>
+    </details>
+
+    <details class="group">
+      <summary>Size, stroke, opacity<span class="chev"></span></summary>
+      <div class="body" id="g-sso"></div>
+    </details>
+
+    <details class="group">
+      <summary>Colour<span class="chev"></span></summary>
+      <div class="body" id="g-col"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Ambient motion<span class="chev"></span></summary>
+      <div class="body" id="g-anim"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+
+    <details class="group">
+      <summary>Canvas<span class="chev"></span></summary>
+      <div class="body" id="g-canvas"></div>
+    </details>
+
+  </div>
+
+  <div id="footer">
+    <div class="note" id="statLine" style="padding-top:0">—</div>
+    <div class="row"><label>PNG scale</label><div class="ctl">
+      <input type="range" id="expScale" min="1" max="8" step="1" value="2">
+      <span class="val" id="expScaleVal">2×</span>
+    </div></div>
+    <div class="btnrow">
+      <button class="primary" id="btnPNG">Export PNG</button>
+      <button class="primary" id="btnSVG">Export SVG</button>
+    </div>
+    <div class="btnrow">
+      <button id="btnRec">Record loop</button>
+      <button id="btnDice" class="warm">New seed</button>
+      <button id="btnRerun">Redraw</button>
+    </div>
+  </div>
+</div>
+
+<div id="dropHint">Drop an image, or a .ttf / .otf / .woff2 font file</div>
+<div id="overlay"><div class="lbl" id="ovText">Working</div></div>
+
+<input type="file" id="fileImg" accept="image/*" class="hidden">
+<input type="file" id="fileFont" accept=".ttf,.otf,.woff,.woff2" class="hidden">
+<input type="file" id="filePreset" accept="application/json,.json" class="hidden">
+
+<script src="unlimiter-drive.js"></script>
+<script>
+"use strict";
+
+/* ============================ shared kit ============================ */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const GRAD3 = new Float32Array([1,1,0,-1,1,0,1,-1,0,-1,-1,0,1,0,1,-1,0,1,1,0,-1,-1,0,-1,0,1,1,0,-1,1,0,1,-1,0,-1,-1]);
+class Simplex{
+  constructor(rnd){
+    const p=new Uint8Array(256); for(let i=0;i<256;i++)p[i]=i;
+    for(let i=255;i>0;i--){const n=Math.floor(rnd()*(i+1));const q=p[i];p[i]=p[n];p[n]=q;}
+    this.perm=new Uint8Array(512); this.pm=new Uint8Array(512);
+    for(let i=0;i<512;i++){this.perm[i]=p[i&255];this.pm[i]=this.perm[i]%12;}
+  }
+  noise3D(xin,yin,zin){
+    const F3=1/3,G3=1/6,perm=this.perm,pm=this.pm;
+    let n0,n1,n2,n3;
+    const s=(xin+yin+zin)*F3;
+    const i=Math.floor(xin+s),j=Math.floor(yin+s),k=Math.floor(zin+s);
+    const t=(i+j+k)*G3;
+    const x0=xin-(i-t),y0=yin-(j-t),z0=zin-(k-t);
+    let i1,j1,k1,i2,j2,k2;
+    if(x0>=y0){ if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0;}
+      else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1;} else {i1=0;j1=0;k1=1;i2=1;j2=0;k2=1;} }
+    else { if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1;}
+      else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1;} else {i1=0;j1=1;k1=0;i2=1;j2=1;k2=0;} }
+    const x1=x0-i1+G3,y1=y0-j1+G3,z1=z0-k1+G3;
+    const x2=x0-i2+2*G3,y2=y0-j2+2*G3,z2=z0-k2+2*G3;
+    const x3=x0-1+3*G3,y3=y0-1+3*G3,z3=z0-1+3*G3;
+    const ii=i&255,jj=j&255,kk=k&255;
+    let t0=0.6-x0*x0-y0*y0-z0*z0;
+    if(t0<0)n0=0; else {const g=pm[ii+perm[jj+perm[kk]]]*3;t0*=t0;n0=t0*t0*(GRAD3[g]*x0+GRAD3[g+1]*y0+GRAD3[g+2]*z0);}
+    let t1=0.6-x1*x1-y1*y1-z1*z1;
+    if(t1<0)n1=0; else {const g=pm[ii+i1+perm[jj+j1+perm[kk+k1]]]*3;t1*=t1;n1=t1*t1*(GRAD3[g]*x1+GRAD3[g+1]*y1+GRAD3[g+2]*z1);}
+    let t2=0.6-x2*x2-y2*y2-z2*z2;
+    if(t2<0)n2=0; else {const g=pm[ii+i2+perm[jj+j2+perm[kk+k2]]]*3;t2*=t2;n2=t2*t2*(GRAD3[g]*x2+GRAD3[g+1]*y2+GRAD3[g+2]*z2);}
+    let t3=0.6-x3*x3-y3*y3-z3*z3;
+    if(t3<0)n3=0; else {const g=pm[ii+1+perm[jj+1+perm[kk+1]]]*3;t3*=t3;n3=t3*t3*(GRAD3[g]*x3+GRAD3[g+1]*y3+GRAD3[g+2]*z3);}
+    return 32*(n0+n1+n2+n3);
+  }
+  n2(x,y){ return this.noise3D(x,y,0.37); }
+}
+const c1=1.70158,c3=c1+1,c4=(2*Math.PI)/3;
+const EASE={
+  linear:t=>t,
+  inSine:t=>1-Math.cos(t*Math.PI/2), outSine:t=>Math.sin(t*Math.PI/2),
+  inOutSine:t=>-(Math.cos(Math.PI*t)-1)/2,
+  inQuad:t=>t*t, outQuad:t=>1-(1-t)*(1-t),
+  inOutQuad:t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2,
+  inCubic:t=>t*t*t, outCubic:t=>1-Math.pow(1-t,3),
+  inOutCubic:t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,
+  inQuart:t=>t*t*t*t, outQuart:t=>1-Math.pow(1-t,4),
+  inExpo:t=>t===0?0:Math.pow(2,10*t-10), outExpo:t=>t===1?1:1-Math.pow(2,-10*t),
+  inOutExpo:t=>t===0?0:t===1?1:t<.5?Math.pow(2,20*t-10)/2:(2-Math.pow(2,-20*t+10))/2,
+  inCirc:t=>1-Math.sqrt(1-t*t), outCirc:t=>Math.sqrt(1-Math.pow(t-1,2)),
+  inOutCirc:t=>t<.5?(1-Math.sqrt(1-Math.pow(2*t,2)))/2:(Math.sqrt(1-Math.pow(-2*t+2,2))+1)/2,
+  inBack:t=>c3*t*t*t-c1*t*t, outBack:t=>1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2),
+  outElastic:t=>t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*c4)+1,
+  outBounce:t=>{const n1=7.5625,d1=2.75;
+    if(t<1/d1)return n1*t*t; if(t<2/d1)return n1*(t-=1.5/d1)*t+.75;
+    if(t<2.5/d1)return n1*(t-=2.25/d1)*t+.9375; return n1*(t-=2.625/d1)*t+.984375;}
+};
+const EASE_KEYS=Object.keys(EASE);
+const lerp=(a,b,t)=>a+(b-a)*t;
+function hex2rgb(h){const n=parseInt(h.slice(1),16);return [n>>16&255,n>>8&255,n&255];}
+function rgb2hex(r,g,b){const f=v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0");
+  return "#"+f(r)+f(g)+f(b);}
+function mixHex(a,b,t){const A=hex2rgb(a),B=hex2rgb(b);
+  return rgb2hex(lerp(A[0],B[0],t),lerp(A[1],B[1],t),lerp(A[2],B[2],t));}
+
+/* ============================ parameters ============================ */
+const DEFAULTS = {
+  seed: 1471, aspect:"3:2",
+  src:"text",
+  // type
+  text:"VISION", font:"Georgia, serif", weight:700, fontSize:200, leading:1.0,
+  tracking:0, wordSpace:0, align:"center", autoFit:true,
+  // sampling
+  contourOn:true, spacing:7, smooth:2, fillOn:false, fillCount:900, minDist:9,
+  invertMask:false, threshold:128,
+  // cloud
+  cloudType:"streamlines", cloudCount:1800, cloudPaths:40, cloudLen:90,
+  cloudFreq:0.0018, cloudThresh:0.1, cloudStep:9,
+  // stamps
+  passes:34, shape:"line", sides:5, contentType:"stroke",
+  sizeS:58, sizeE:26, sizeEase:"outCubic", sizeJitMin:1, sizeJitMax:1, sizeMod:"uniform",
+  rotMode:"normal", rotValue:0, rotJit:0,
+  // displacement
+  normalS:0, normalE:96, posEase:"linear",
+  waveAmp:0, waveFreq:3,
+  noiseAmp:0, noiseFreq:0.0022,
+  driftAngle:90, driftDist:0,
+  spiralTurns:0, spiralR:0,
+  scatter:0,
+  // stroke / opacity
+  swS:1.2, swE:1.2, opaS:1, opaE:1, opaEase:"linear", blend:"source-over",
+  // colour
+  colorMode:"passGradient", colA:"#f24b2f", colB:"#11162b",
+  bgMode:"color", bg:"#8c8c8c", drawOrder:"passOuter",
+  // ambient motion
+  anim:false, animSpeed:0.14, animPhase:"alongPath", animSpread:1,
+  mBreathe:0, mSway:0, mSwayAxis:"normal", mWander:0, mWanderFreq:0.0022,
+  mWobble:0, mSpin:0, mShimmer:0, mTravel:0
+};
+let P = Object.assign({}, DEFAULTS);
+let Q = P;                 // P with modulation applied, rebuilt per frame
+let userSlot = null;
+
+/* ---- shared modulation layer ---- */
+const Drive = (window.UnlimiterDrive)
+  ? UnlimiterDrive.create({ onChange:()=>{ if(!P.anim) startRender(); },
+                            getOutputCanvas:()=>work })
+  : null;
+// parameters that rebuild the point geometry are too expensive to modulate per frame
+const NO_MOD = new Set(["text","font","weight","fontSize","leading","tracking","wordSpace",
+  "align","autoFit","contourOn","spacing","smooth","fillOn","fillCount","minDist",
+  "invertMask","threshold","seed","cloudType","cloudCount","cloudPaths","cloudLen",
+  "cloudStep","cloudFreq","cloudThresh","aspect","animSpeed"]);
+let GRP="";
+function registerMod(key,label,min,max){
+  if(!Drive || NO_MOD.has(key)) return;
+  Drive.registerTarget(key, GRP ? GRP+" — "+label : label, min, max);
+}
+
+const PRESETS = {
+  "Ribbon type": {},
+  "Skrew stack": {
+    src:"text", text:"ABC\nDEF\nGHJ", font:"Georgia, serif", weight:400, fontSize:150, leading:1.15,
+    contourOn:true, spacing:16, passes:1, shape:"circle", contentType:"stroke",
+    sizeS:74, sizeE:74, sizeMod:"alongPath", sizeJitMin:0.45, sizeJitMax:1.15,
+    rotMode:"tangent", normalS:0, normalE:0, swS:1.5, swE:1.5,
+    colorMode:"solid", colA:"#000000", bgMode:"color", bg:"#1c3cf0", opaS:1, opaE:1
+  },
+  "Abstract hills": {
+    src:"text", text:"ABS\nTRA\nCT", font:"Impact, Haettenschweiler, sans-serif", weight:400,
+    fontSize:170, leading:1.0, tracking:14,
+    contourOn:true, spacing:5, passes:60, shape:"line", contentType:"stroke",
+    sizeS:120, sizeE:2, sizeEase:"inQuad", rotMode:"value", rotValue:0,
+    normalS:0, normalE:0, waveAmp:34, waveFreq:2.2, driftAngle:270, driftDist:120,
+    posEase:"outCubic", swS:2.4, swE:1,
+    colorMode:"passGradient", colA:"#5ac8ff", colB:"#7b2fa8", bgMode:"color", bg:"#1a0a1e",
+    opaS:1, opaE:0.9, blend:"screen"
+  },
+  "Stipple portrait": {
+    src:"image", contourOn:false, fillOn:true, fillCount:5000, minDist:7,
+    passes:1, shape:"circle", contentType:"fill", sizeS:7, sizeE:7,
+    sizeMod:"noise", sizeJitMin:0.3, sizeJitMax:1.5, rotMode:"none",
+    colorMode:"image", bgMode:"color", bg:"#0e1012", noiseAmp:6, noiseFreq:0.004
+  },
+  "Streamline field": {
+    src:"cloud", cloudType:"streamlines", cloudPaths:70, cloudLen:140, cloudFreq:0.0016, cloudStep:8,
+    passes:6, shape:"line", contentType:"stroke", sizeS:16, sizeE:3, rotMode:"tangent",
+    normalS:0, normalE:22, swS:1, swE:0.6,
+    colorMode:"pathGradient", colA:"#7fd1c0", colB:"#e0714f", bgMode:"color", bg:"#101314"
+  },
+  "Phyllotaxis": {
+    src:"cloud", cloudType:"spiral", cloudCount:2600, passes:1, shape:"polygon", sides:3,
+    contentType:"fill", sizeS:14, sizeE:14, sizeMod:"alongPath", sizeJitMin:0.2, sizeJitMax:1.4,
+    rotMode:"tangent", colorMode:"pathGradient", colA:"#ffd166", colB:"#9b2226",
+    bgMode:"color", bg:"#14100d"
+  },
+  "Noise blobs": {
+    src:"cloud", cloudType:"noiseMask", cloudCount:2400, cloudFreq:0.0035, cloudThresh:0.15,
+    passes:10, shape:"blob", contentType:"fill", sizeS:42, sizeE:8, sizeEase:"outQuad",
+    rotMode:"random", noiseAmp:30, noiseFreq:0.002, opaS:0.25, opaE:0.7,
+    colorMode:"passGradient", colA:"#2b3f8c", colB:"#d9e2ff", bgMode:"color", bg:"#0b0d14",
+    blend:"screen"
+  },
+  "Travelling ribs": {
+    anim:true, animSpeed:0.1, animPhase:"uniform", mTravel:1,
+    passes:24, shape:"line", contentType:"stroke", rotMode:"normal",
+    sizeS:46, sizeE:22, normalS:0, normalE:70, spacing:9, swS:1.4, swE:1,
+    colorMode:"passGradient", colA:"#f24b2f", colB:"#11162b", bg:"#8c8c8c"
+  },
+  "Breathing type": {
+    anim:true, animSpeed:0.13, animPhase:"alongPath", animSpread:2,
+    mBreathe:0.55, mWobble:24, mShimmer:0.35,
+    text:"BREATHE", font:"Helvetica, Arial, sans-serif", weight:700,
+    spacing:13, passes:8, shape:"circle", contentType:"stroke",
+    sizeS:26, sizeE:9, normalS:0, normalE:26, swS:1, swE:0.6,
+    colorMode:"pathGradient", colA:"#7fd1c0", colB:"#e0714f",
+    bgMode:"color", bg:"#101314", opaS:0.9, opaE:0.5
+  },
+  "Contour rings": {
+    src:"text", text:"O", fontSize:520, contourOn:true, spacing:26, passes:26,
+    shape:"circle", contentType:"stroke", sizeS:4, sizeE:120, sizeEase:"inExpo",
+    normalS:0, normalE:0, rotMode:"none", swS:0.8, swE:0.5, opaS:1, opaE:0.15,
+    colorMode:"passGradient", colA:"#ffffff", colB:"#7fd1c0", bgMode:"color", bg:"#0d0f11",
+    blend:"screen"
+  }
+};
+
+/* ============================ control builders ============================ */
+const bound={}, rows={};
+function row(parent,label,nodes,key){
+  const r=document.createElement("div"); r.className="row";
+  const l=document.createElement("label"); l.textContent=label;
+  const c=document.createElement("div"); c.className="ctl";
+  nodes.forEach(n=>c.appendChild(n));
+  r.appendChild(l); r.appendChild(c); parent.appendChild(r);
+  if(key) rows[key]=r;
+  return r;
+}
+function note(parent,t){const d=document.createElement("div");d.className="note";d.textContent=t;parent.appendChild(d);return d;}
+function subhead(parent,t){const d=document.createElement("div");d.className="subhead";d.textContent=t;parent.appendChild(d);return d;}
+function fmt(v,step){ if(step>=1) return String(Math.round(v));
+  const dec=Math.max(0,Math.round(-Math.log10(step))); return v.toFixed(dec); }
+function slider(parent,key,label,min,max,step,suffix){
+  const inp=document.createElement("input");
+  inp.type="range"; inp.min=min; inp.max=max; inp.step=step; inp.value=P[key];
+  const val=document.createElement("span"); val.className="val";
+  const show=()=>val.textContent=fmt(Number(P[key]),step)+(suffix||"");
+  show();
+  inp.addEventListener("input",()=>{P[key]=Number(inp.value);show();changed();});
+  bound[key]=()=>{inp.value=P[key];show();};
+  registerMod(key,label,min,max);
+  return row(parent,label,[inp,val],key);
+}
+function dual(parent,ka,kb,label,min,max,step){
+  const a=document.createElement("input"),b=document.createElement("input");
+  [a,b].forEach(i=>{i.type="range";i.min=min;i.max=max;i.step=step;});
+  a.value=P[ka]; b.value=P[kb];
+  const val=document.createElement("span"); val.className="val"; val.style.width="76px";
+  const show=()=>val.textContent=fmt(Number(P[ka]),step)+"–"+fmt(Number(P[kb]),step);
+  show();
+  a.addEventListener("input",()=>{P[ka]=Number(a.value);show();changed();});
+  b.addEventListener("input",()=>{P[kb]=Number(b.value);show();changed();});
+  bound[ka]=()=>{a.value=P[ka];show();}; bound[kb]=()=>{b.value=P[kb];show();};
+  registerMod(ka,label+" min",min,max); registerMod(kb,label+" max",min,max);
+  return row(parent,label,[a,b,val],ka);
+}
+function select(parent,key,label,opts){
+  const s=document.createElement("select");
+  opts.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;s.appendChild(o);});
+  s.value=P[key];
+  s.addEventListener("change",()=>{P[key]=s.value;changed();vis();});
+  bound[key]=()=>{s.value=P[key];};
+  return row(parent,label,[s],key);
+}
+function easeSel(parent,key,label){ return select(parent,key,label,EASE_KEYS.map(k=>[k,k])); }
+function check(parent,key,label){
+  const c=document.createElement("input"); c.type="checkbox"; c.checked=!!P[key];
+  c.addEventListener("change",()=>{P[key]=c.checked;changed();vis();});
+  bound[key]=()=>{c.checked=!!P[key];};
+  return row(parent,label,[c],key);
+}
+function colorPick(parent,key,label){
+  const c=document.createElement("input"); c.type="color"; c.value=P[key];
+  c.addEventListener("input",()=>{P[key]=c.value;changed();});
+  bound[key]=()=>{c.value=P[key];};
+  return row(parent,label,[c],key);
+}
+function textArea(parent,key,label){
+  const t=document.createElement("textarea"); t.value=P[key]; t.rows=3;
+  t.addEventListener("input",()=>{P[key]=t.value;changed();});
+  bound[key]=()=>{t.value=P[key];};
+  return row(parent,label,[t],key);
+}
+function textInput(parent,key,label){
+  const t=document.createElement("input"); t.type="text"; t.value=P[key];
+  t.addEventListener("input",()=>{P[key]=t.value;changed();});
+  bound[key]=()=>{t.value=P[key];};
+  return row(parent,label,[t],key);
+}
+
+/* ============================ panel ============================ */
+const elText=document.getElementById("srcText");
+const elCloud=document.getElementById("srcCloud");
+const elImage=document.getElementById("srcImage");
+const elCommon=document.getElementById("srcCommon");
+
+GRP="Type";
+// --- type
+textArea(elText,"text","Text");
+const fontSel=select(elText,"font","Font",[
+  ["Georgia, serif","Georgia"],
+  ["'Times New Roman', serif","Times"],
+  ["Helvetica, Arial, sans-serif","Helvetica"],
+  ["'Arial Black', sans-serif","Arial Black"],
+  ["Impact, Haettenschweiler, sans-serif","Impact"],
+  ["'Courier New', monospace","Courier"],
+  ["Verdana, sans-serif","Verdana"],
+  ["'Trebuchet MS', sans-serif","Trebuchet"],
+  ["Palatino, 'Book Antiqua', serif","Palatino"],
+  ["'CustomFont'","Loaded font file"]
+]);
+const fontBtnRow=document.createElement("div"); fontBtnRow.className="btnrow";
+const fontBtn=document.createElement("button"); fontBtn.textContent="Load font file";
+fontBtnRow.appendChild(fontBtn); elText.appendChild(fontBtnRow);
+slider(elText,"weight","Weight",100,900,100,"");
+slider(elText,"fontSize","Size",20,700,1,"");
+slider(elText,"leading","Leading",0.5,2.5,0.01,"");
+slider(elText,"tracking","Tracking",-40,120,1,"");
+slider(elText,"wordSpace","Word space",-40,200,1,"");
+select(elText,"align","Align",[["left","Left"],["center","Centre"],["right","Right"]]);
+check(elText,"autoFit","Fit to canvas");
+
+GRP="Cloud";
+// --- cloud
+select(elCloud,"cloudType","Generator",[
+  ["uniform","Uniform scatter"],["grid","Jittered grid"],["poisson","Even spacing"],
+  ["noiseMask","Noise clusters"],["rings","Concentric rings"],["spiral","Phyllotaxis spiral"],
+  ["streamlines","Flow streamlines"],["harmonic","Harmonic curves"]
+]);
+slider(elCloud,"cloudCount","Points",50,12000,10,"");
+slider(elCloud,"cloudPaths","Paths",1,300,1,"");
+slider(elCloud,"cloudLen","Path length",4,400,1,"");
+slider(elCloud,"cloudStep","Step",1,40,0.5,"");
+slider(elCloud,"cloudFreq","Frequency",0.0002,0.008,0.0001,"");
+slider(elCloud,"cloudThresh","Threshold",-0.6,0.6,0.01,"");
+
+GRP="Image";
+// --- image
+const imgRow=document.createElement("div"); imgRow.className="btnrow";
+const imgBtn=document.createElement("button"); imgBtn.textContent="Load image";
+const imgClr=document.createElement("button"); imgClr.textContent="Clear";
+imgRow.appendChild(imgBtn); imgRow.appendChild(imgClr); elImage.appendChild(imgRow);
+slider(elImage,"threshold","Threshold",0,255,1,"");
+check(elImage,"invertMask","Invert mask");
+note(elImage,"The image is thresholded to a mask, then sampled exactly like a glyph. It also feeds the image colour mode.");
+
+// --- sampling common to type + image
+GRP="Sampling";
+subhead(elCommon,"Sampling");
+check(elCommon,"contourOn","Trace contours");
+slider(elCommon,"spacing","Point spacing",2,60,1,"px");
+slider(elCommon,"smooth","Smoothing",0,8,1,"");
+check(elCommon,"fillOn","Fill interior");
+slider(elCommon,"fillCount","Fill points",50,12000,50,"");
+slider(elCommon,"minDist","Fill spacing",2,60,1,"px");
+slider(elCommon,"seed","Seed",0,9999,1,"");
+
+// --- stamps
+GRP="Stamps";
+const gStamp=document.getElementById("g-stamp");
+slider(gStamp,"passes","Passes",1,160,1,"");
+select(gStamp,"shape","Shape",[
+  ["circle","Circle"],["square","Square"],["rect","Rectangle"],["polygon","Polygon"],
+  ["line","Line"],["cross","Cross"],["arc","Arc"],["blob","Blob"],["mixed","Mixed"]
+]);
+slider(gStamp,"sides","Polygon sides",3,12,1,"");
+select(gStamp,"contentType","Draw",[["fillStroke","Fill and stroke"],["fill","Fill only"],["stroke","Stroke only"]]);
+select(gStamp,"rotMode","Rotation",[
+  ["none","None"],["value","Fixed angle"],["tangent","Follow path"],["normal","Across path"],
+  ["random","Random"],["progress","By progress"],["noise","By noise"]
+]);
+slider(gStamp,"rotValue","Angle",0,360,1,"°");
+slider(gStamp,"rotJit","Angle jitter",0,180,1,"°");
+select(gStamp,"drawOrder","Draw order",[
+  ["passOuter","Pass by pass"],["pathOuter","Path by path"]
+]);
+note(gStamp,"Each sampled point is an anchor. A pass walks every anchor once, so passes are the layers that build the form.");
+
+// --- displacement
+GRP="Displacement";
+const gDisp=document.getElementById("g-disp");
+subhead(gDisp,"Offset across the path");
+slider(gDisp,"normalS","Start",-300,300,1,"");
+slider(gDisp,"normalE","End",-300,300,1,"");
+easeSel(gDisp,"posEase","Ease");
+subhead(gDisp,"Wave along the path");
+slider(gDisp,"waveAmp","Amplitude",0,200,1,"");
+slider(gDisp,"waveFreq","Cycles",0.25,24,0.25,"");
+subhead(gDisp,"Noise");
+slider(gDisp,"noiseAmp","Amplitude",0,300,1,"");
+slider(gDisp,"noiseFreq","Frequency",0.0002,0.01,0.0001,"");
+subhead(gDisp,"Drift");
+slider(gDisp,"driftAngle","Direction",0,360,1,"°");
+slider(gDisp,"driftDist","Distance",0,600,1,"");
+subhead(gDisp,"Spiral");
+slider(gDisp,"spiralR","Radius",0,300,1,"");
+slider(gDisp,"spiralTurns","Turns",0,8,0.1,"");
+subhead(gDisp,"Scatter");
+slider(gDisp,"scatter","Amount",0,120,1,"");
+note(gDisp,"Every displacement is driven by the pass progress, so pass 1 sits on the anchor and the last pass sits at the end value.");
+
+// --- size / stroke / opacity
+GRP="Size";
+const gSso=document.getElementById("g-sso");
+subhead(gSso,"Stamp size");
+slider(gSso,"sizeS","Start",0.5,300,0.5,"");
+slider(gSso,"sizeE","End",0.5,300,0.5,"");
+easeSel(gSso,"sizeEase","Ease");
+select(gSso,"sizeMod","Vary by",[
+  ["uniform","Nothing"],["alongPath","Position on path"],["noise","Noise"],["random","Random"]
+]);
+dual(gSso,"sizeJitMin","sizeJitMax","Spread",0.05,2.5,0.05);
+subhead(gSso,"Stroke width");
+slider(gSso,"swS","Start",0.1,14,0.1,"");
+slider(gSso,"swE","End",0.1,14,0.1,"");
+subhead(gSso,"Opacity");
+slider(gSso,"opaS","Start",0,1,0.01,"");
+slider(gSso,"opaE","End",0,1,0.01,"");
+easeSel(gSso,"opaEase","Ease");
+select(gSso,"blend","Blending",[
+  ["source-over","Normal"],["multiply","Multiply"],["screen","Screen"],["lighter","Add"],
+  ["overlay","Overlay"],["difference","Difference"]
+]);
+
+// --- colour
+GRP="Colour";
+const gCol=document.getElementById("g-col");
+select(gCol,"colorMode","Colour from",[
+  ["solid","One colour"],["passGradient","Gradient across passes"],
+  ["pathGradient","Gradient along path"],["image","Sampled image"],["random","Random between two"]
+]);
+colorPick(gCol,"colA","Colour A");
+colorPick(gCol,"colB","Colour B");
+select(gCol,"bgMode","Background",[["color","Colour"],["none","Transparent"]]);
+colorPick(gCol,"bg","Background");
+
+// --- ambient motion
+GRP="Motion";
+const gAnim=document.getElementById("g-anim");
+check(gAnim,"anim","Play");
+slider(gAnim,"animSpeed","Loop speed",0.01,1.5,0.01,"/s");
+select(gAnim,"animPhase","Stagger by",[
+  ["uniform","Nothing — all together"],["alongPath","Position on path"],["byPass","Pass number"],
+  ["random","Random per stamp"],["noise","Noise"],["radial","Distance from centre"]
+]);
+slider(gAnim,"animSpread","Stagger amount",0,4,0.05,"");
+subhead(gAnim,"Modulators");
+slider(gAnim,"mBreathe","Breathe",0,1,0.01,"");
+slider(gAnim,"mSway","Sway",0,200,1,"");
+select(gAnim,"mSwayAxis","Sway along",[["normal","Across path"],["tangent","Along path"],["orbit","Orbit"]]);
+slider(gAnim,"mWander","Wander",0,240,1,"");
+slider(gAnim,"mWanderFreq","Wander scale",0.0002,0.01,0.0001,"");
+slider(gAnim,"mWobble","Wobble",0,180,1,"°");
+slider(gAnim,"mSpin","Spin",0,4,0.25,"t");
+slider(gAnim,"mShimmer","Shimmer",0,1,0.01,"");
+slider(gAnim,"mTravel","Travel",0,3,0.01,"");
+note(gAnim,"Everything here is a full cycle per loop, so the motion returns exactly to where it started. Travel slides stamps along their own path — whole numbers of turns for spin keep the loop clean.");
+
+// --- canvas
+const gCanvas=document.getElementById("g-canvas");
+select(gCanvas,"aspect","Format",[
+  ["1:1","Square"],["4:5","Portrait 4:5"],["2:3","Portrait 2:3"],["A4","A4 portrait"],
+  ["3:2","Landscape 3:2"],["16:9","Landscape 16:9"]
+]);
+
+function vis(){
+  const show=(k,on)=>{ if(rows[k]) rows[k].classList.toggle("hidden",!on); };
+  elText.classList.toggle("hidden",P.src!=="text");
+  elCloud.classList.toggle("hidden",P.src!=="cloud");
+  elImage.classList.toggle("hidden",P.src!=="image");
+  const maskish = P.src==="text"||P.src==="image";
+  ["contourOn","spacing","smooth","fillOn","fillCount","minDist"].forEach(k=>show(k,maskish));
+  show("spacing",maskish&&P.contourOn); show("smooth",maskish&&P.contourOn);
+  show("fillCount",maskish&&P.fillOn); show("minDist",maskish&&P.fillOn);
+  const ct=P.cloudType;
+  show("cloudCount",["uniform","grid","poisson","noiseMask","spiral","rings"].includes(ct));
+  show("cloudPaths",["rings","streamlines","harmonic"].includes(ct));
+  show("cloudLen",["streamlines","harmonic"].includes(ct));
+  show("cloudStep",["streamlines"].includes(ct));
+  show("cloudFreq",["noiseMask","streamlines"].includes(ct));
+  show("cloudThresh",["noiseMask"].includes(ct));
+  show("rotValue",P.rotMode==="value");
+  show("sides",P.shape==="polygon");
+  show("colB",["passGradient","pathGradient","random"].includes(P.colorMode));
+  show("colA",P.colorMode!=="image");
+  show("bg",P.bgMode==="color");
+  show("sizeJitMin",P.sizeMod!=="uniform");
+  ["animSpeed","animPhase","animSpread","mBreathe","mSway","mSwayAxis","mWander",
+   "mWanderFreq","mWobble","mSpin","mShimmer","mTravel"].forEach(k=>show(k,P.anim));
+  show("mWanderFreq",P.anim&&P.mWander>0);
+  show("mSwayAxis",P.anim&&P.mSway>0);
+  document.querySelectorAll("#srcTabs button").forEach(b=>b.classList.toggle("on",b.dataset.src===P.src));
+}
+document.querySelectorAll("#srcTabs button").forEach(b=>{
+  b.addEventListener("click",()=>{P.src=b.dataset.src;vis();changed();});
+});
+
+/* ============================ canvas ============================ */
+const view=document.getElementById("view");
+const vctx=view.getContext("2d");
+const BASE=1200;
+let CW=BASE, CH=BASE;
+function dims(){
+  let a,b;
+  if(P.aspect==="A4"){ a=210; b=297; }
+  else { const p=P.aspect.split(":"); a=+p[0]; b=+p[1]; }
+  if(a>=b){ CW=BASE; CH=Math.round(BASE*b/a); } else { CH=BASE; CW=Math.round(BASE*a/b); }
+  return {w:CW,h:CH};
+}
+
+/* ============================ mask + contours ============================ */
+const mask=document.createElement("canvas");
+const mctx=mask.getContext("2d",{willReadFrequently:true});
+let sourceImg=null;                       // uploaded Image/canvas
+const colorSampler=document.createElement("canvas");
+const csctx=colorSampler.getContext("2d",{willReadFrequently:true});
+let csData=null, csW=0, csH=0;
+
+const MASK_LONG=820;
+function maskDims(){
+  const {w,h}=dims();
+  const s=MASK_LONG/Math.max(w,h);
+  return {mw:Math.max(8,Math.round(w*s)), mh:Math.max(8,Math.round(h*s)), s};
+}
+
+function drawTextMask(){
+  const {w,h}=dims(); const {mw,mh,s}=maskDims();
+  mask.width=mw; mask.height=mh;
+  mctx.setTransform(1,0,0,1,0,0);
+  mctx.clearRect(0,0,mw,mh);
+  mctx.fillStyle="#fff"; mctx.textBaseline="alphabetic";
+  const lines=(P.text||"").split("\n");
+  let fs=P.fontSize*s;
+  const tr=P.tracking*s, ws=P.wordSpace*s;
+  const unit = (P.fontSize*s)||1;
+  const trAt=size=>tr*size/unit, wsAt=size=>ws*size/unit;
+  const measure=(line,size)=>{
+    mctx.font=`${P.weight} ${size}px ${P.font}`;
+    let wd=0;
+    for(const ch of line){ wd+=mctx.measureText(ch).width+trAt(size); if(ch===" ") wd+=wsAt(size); }
+    return wd;
+  };
+  if(P.autoFit){
+    const pad=0.86;
+    let widest=0;
+    lines.forEach(l=>{ widest=Math.max(widest,measure(l,fs)); });
+    const totalH=fs*P.leading*lines.length;
+    const kx = widest>0 ? (mw*pad)/widest : 1;
+    const ky = totalH>0 ? (mh*pad)/totalH : 1;
+    fs = fs*Math.min(kx,ky);
+  }
+  mctx.font=`${P.weight} ${fs}px ${P.font}`;
+  const lineH=fs*P.leading;
+  const blockH=lineH*lines.length;
+  let y=(mh-blockH)/2 + fs*0.80;
+  for(const line of lines){
+    const wd=measure(line,fs);
+    let x = P.align==="left" ? mw*0.07 : P.align==="right" ? mw*0.93-wd : (mw-wd)/2;
+    for(const ch of line){
+      mctx.fillText(ch,x,y);
+      x += mctx.measureText(ch).width + trAt(fs) + (ch===" "?wsAt(fs):0);
+    }
+    y += lineH;
+  }
+  return {mw,mh,s};
+}
+
+function drawImageMask(){
+  const {w,h}=dims(); const {mw,mh,s}=maskDims();
+  mask.width=mw; mask.height=mh;
+  mctx.setTransform(1,0,0,1,0,0);
+  mctx.clearRect(0,0,mw,mh);
+  if(!sourceImg) return {mw,mh,s};
+  const iw=sourceImg.naturalWidth||sourceImg.width, ih=sourceImg.naturalHeight||sourceImg.height;
+  const ar=iw/ih, tar=mw/mh;
+  let dw,dh,dx,dy;
+  if(ar>tar){ dh=mh; dw=mh*ar; dx=(mw-dw)/2; dy=0; } else { dw=mw; dh=mw/ar; dx=0; dy=(mh-dh)/2; }
+  mctx.drawImage(sourceImg,dx,dy,dw,dh);
+  const img=mctx.getImageData(0,0,mw,mh), d=img.data;
+  for(let i=0;i<d.length;i+=4){
+    const lum=0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2];
+    const on = P.invertMask ? lum < P.threshold : lum >= P.threshold;
+    d[i]=d[i+1]=d[i+2]=255; d[i+3]= on?255:0;
+  }
+  mctx.putImageData(img,0,0);
+  return {mw,mh,s};
+}
+
+function maskBits(mw,mh){
+  const d=mctx.getImageData(0,0,mw,mh).data;
+  const bin=new Uint8Array(mw*mh);
+  for(let i=0,j=3;i<bin.length;i++,j+=4) bin[i]= d[j]>100 ? 1:0;
+  return bin;
+}
+
+const N8=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+function traceMask(bin,w,h){
+  const get=(x,y)=>(x<0||y<0||x>=w||y>=h)?0:bin[y*w+x];
+  const done=new Uint8Array(w*h);
+  const out=[];
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      if(!get(x,y) || done[y*w+x] || get(x-1,y)) continue;
+      const pts=[];
+      let cx=x, cy=y, bx=x-1, by=y;
+      const sx=x, sy=y;
+      let guard=0, ok=true;
+      for(;;){
+        done[cy*w+cx]=1;
+        pts.push([cx,cy]);
+        let bi=0;
+        for(let i=0;i<8;i++){ if(cx+N8[i][0]===bx && cy+N8[i][1]===by){ bi=i; break; } }
+        let found=false;
+        for(let k=1;k<=8;k++){
+          const i=(bi+k)%8;
+          const nx=cx+N8[i][0], ny=cy+N8[i][1];
+          if(get(nx,ny)){
+            const pb=N8[(i+7)%8];
+            bx=cx+pb[0]; by=cy+pb[1];
+            cx=nx; cy=ny; found=true; break;
+          }
+        }
+        if(!found){ break; }
+        if(cx===sx && cy===sy) break;
+        if(++guard>120000){ ok=false; break; }
+      }
+      if(ok && pts.length>10) out.push(pts);
+    }
+  }
+  return out;
+}
+
+function smoothPts(pts,iter){
+  let p=pts;
+  for(let k=0;k<iter;k++){
+    const q=new Array(p.length);
+    const n=p.length;
+    for(let i=0;i<n;i++){
+      const a=p[(i-1+n)%n], b=p[i], c=p[(i+1)%n];
+      q[i]=[(a[0]+b[0]*2+c[0])/4,(a[1]+b[1]*2+c[1])/4];
+    }
+    p=q;
+  }
+  return p;
+}
+
+function resample(pts,spacing,closed){
+  const n=pts.length;
+  if(n<3) return pts.slice();
+  const seq = closed ? pts.concat([pts[0]]) : pts;
+  let total=0; const segs=[];
+  for(let i=1;i<seq.length;i++){
+    const dx=seq[i][0]-seq[i-1][0], dy=seq[i][1]-seq[i-1][1];
+    const L=Math.hypot(dx,dy); segs.push(L); total+=L;
+  }
+  if(total<spacing*2) return [];
+  const count=Math.max(3,Math.round(total/spacing));
+  const step=total/count;
+  const out=[]; let d=0, si=0, acc=0;
+  for(let i=0;i<count;i++){
+    const target=i*step;
+    while(si<segs.length-1 && acc+segs[si]<target){ acc+=segs[si]; si++; }
+    const t = segs[si]>0 ? (target-acc)/segs[si] : 0;
+    const a=seq[si], b=seq[si+1]||seq[si];
+    out.push([a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]);
+  }
+  return out;
+}
+
+/* ============================ point sources ============================ */
+// A path = {pts:[{x,y,tx,ty,nx,ny,u,r1,r2}], closed:bool}
+let PATHS=[], POINT_COUNT=0;
+
+function finishPath(raw,closed,rnd){
+  const n=raw.length;
+  if(n<2) return null;
+  const pts=new Array(n);
+  for(let i=0;i<n;i++){
+    const a=raw[(i-1+n)%n], b=raw[i], c=raw[(i+1)%n];
+    let tx,ty;
+    if(!closed && i===0){ tx=raw[1][0]-b[0]; ty=raw[1][1]-b[1]; }
+    else if(!closed && i===n-1){ tx=b[0]-raw[n-2][0]; ty=b[1]-raw[n-2][1]; }
+    else { tx=c[0]-a[0]; ty=c[1]-a[1]; }
+    const L=Math.hypot(tx,ty)||1; tx/=L; ty/=L;
+    pts[i]={x:b[0],y:b[1],tx,ty,nx:ty,ny:-tx,u:n>1?i/(n-1):0,r1:rnd(),r2:rnd()};
+  }
+  return {pts,closed};
+}
+
+function buildFromMask(){
+  const {mw,mh,s}=(P.src==="image") ? drawImageMask() : drawTextMask();
+  const inv=1/s;
+  const bin=maskBits(mw,mh);
+  const rnd=mulberry32(P.seed*2654435761+11);
+  const paths=[];
+  if(P.contourOn){
+    const raw=traceMask(bin,mw,mh);
+    for(const c of raw){
+      let p=smoothPts(c,P.smooth);
+      p=resample(p,Math.max(2,P.spacing*s),true);
+      if(p.length<3) continue;
+      const scaled=p.map(q=>[q[0]*inv,q[1]*inv]);
+      const fp=finishPath(scaled,true,rnd);
+      if(fp) paths.push(fp);
+    }
+  }
+  if(P.fillOn){
+    const cell=Math.max(2,P.minDist*s);
+    const gw=Math.ceil(mw/cell), gh=Math.ceil(mh/cell);
+    const grid=new Int32Array(gw*gh).fill(-1);
+    const acc=[];
+    let tries=0, maxTries=P.fillCount*40;
+    while(acc.length<P.fillCount && tries++<maxTries){
+      const x=rnd()*mw, y=rnd()*mh;
+      const ix=x|0, iy=y|0;
+      if(!bin[iy*mw+ix]) continue;
+      const gx=(x/cell)|0, gy=(y/cell)|0;
+      let ok=true;
+      for(let j=-1;j<=1&&ok;j++)for(let i=-1;i<=1&&ok;i++){
+        const a=gx+i,b=gy+j;
+        if(a<0||b<0||a>=gw||b>=gh) continue;
+        const idx=grid[b*gw+a];
+        if(idx>=0){
+          const q=acc[idx];
+          if(Math.hypot(q[0]-x,q[1]-y)<cell) ok=false;
+        }
+      }
+      if(!ok) continue;
+      grid[gy*gw+gx]=acc.length;
+      acc.push([x,y]);
+    }
+    if(acc.length>1){
+      acc.sort((a,b)=> a[1]-b[1] || a[0]-b[0]);
+      const noise=new Simplex(mulberry32(P.seed+3));
+      const scaled=acc.map(q=>[q[0]*inv,q[1]*inv]);
+      const fp=finishPath(scaled,false,rnd);
+      if(fp){
+        for(const p of fp.pts){
+          const a=noise.n2(p.x*0.004,p.y*0.004)*Math.PI*2;
+          p.tx=Math.cos(a); p.ty=Math.sin(a); p.nx=p.ty; p.ny=-p.tx;
+        }
+        paths.push(fp);
+      }
+    }
+  }
+  return paths;
+}
+
+function buildCloud(){
+  const {w,h}=dims();
+  const rnd=mulberry32(P.seed*40503+7);
+  const noise=new Simplex(mulberry32(P.seed*104729+3));
+  const paths=[];
+  const m=0.06;                       // margin fraction
+  const X0=w*m, Y0=h*m, W=w*(1-2*m), H=h*(1-2*m);
+  const t=P.cloudType;
+
+  if(t==="uniform"||t==="poisson"||t==="noiseMask"||t==="grid"){
+    const acc=[];
+    if(t==="grid"){
+      const n=Math.max(1,Math.round(Math.sqrt(P.cloudCount*W/H)));
+      const rowsN=Math.max(1,Math.round(P.cloudCount/n));
+      for(let j=0;j<rowsN;j++)for(let i=0;i<n;i++){
+        const jx=(rnd()-0.5)*(W/n), jy=(rnd()-0.5)*(H/rowsN);
+        acc.push([X0+(i+0.5)*W/n+jx, Y0+(j+0.5)*H/rowsN+jy]);
+      }
+    } else if(t==="poisson"){
+      const cell=Math.sqrt(W*H/Math.max(1,P.cloudCount))*0.9;
+      const gw=Math.ceil(W/cell)+1, gh=Math.ceil(H/cell)+1;
+      const grid=new Int32Array(gw*gh).fill(-1);
+      let tries=0;
+      while(acc.length<P.cloudCount && tries++<P.cloudCount*40){
+        const x=X0+rnd()*W, y=Y0+rnd()*H;
+        const gx=((x-X0)/cell)|0, gy=((y-Y0)/cell)|0;
+        let ok=true;
+        for(let j=-1;j<=1&&ok;j++)for(let i=-1;i<=1&&ok;i++){
+          const a=gx+i,b=gy+j; if(a<0||b<0||a>=gw||b>=gh) continue;
+          const idx=grid[b*gw+a];
+          if(idx>=0 && Math.hypot(acc[idx][0]-x,acc[idx][1]-y)<cell) ok=false;
+        }
+        if(!ok) continue;
+        grid[gy*gw+gx]=acc.length; acc.push([x,y]);
+      }
+    } else if(t==="noiseMask"){
+      let tries=0;
+      while(acc.length<P.cloudCount && tries++<P.cloudCount*60){
+        const x=X0+rnd()*W, y=Y0+rnd()*H;
+        if(noise.n2(x*P.cloudFreq,y*P.cloudFreq) > P.cloudThresh) acc.push([x,y]);
+      }
+    } else {
+      for(let i=0;i<P.cloudCount;i++) acc.push([X0+rnd()*W, Y0+rnd()*H]);
+    }
+    acc.sort((a,b)=> a[1]-b[1] || a[0]-b[0]);
+    const fp=finishPath(acc,false,rnd);
+    if(fp){
+      for(const p of fp.pts){
+        const a=noise.n2(p.x*P.cloudFreq,p.y*P.cloudFreq)*Math.PI*2;
+        p.tx=Math.cos(a); p.ty=Math.sin(a); p.nx=p.ty; p.ny=-p.tx;
+      }
+      paths.push(fp);
+    }
+  }
+  else if(t==="rings"){
+    const cx=w/2, cy=h/2, R=Math.min(W,H)/2;
+    for(let k=0;k<P.cloudPaths;k++){
+      const r=R*(k+1)/P.cloudPaths;
+      const n=Math.max(8,Math.round(P.cloudCount/P.cloudPaths));
+      const acc=[];
+      for(let i=0;i<n;i++){
+        const a=i/n*Math.PI*2;
+        acc.push([cx+Math.cos(a)*r, cy+Math.sin(a)*r]);
+      }
+      const fp=finishPath(acc,true,rnd); if(fp) paths.push(fp);
+    }
+  }
+  else if(t==="spiral"){
+    const cx=w/2, cy=h/2, R=Math.min(W,H)/2;
+    const ga=Math.PI*(3-Math.sqrt(5));
+    const acc=[];
+    for(let i=0;i<P.cloudCount;i++){
+      const r=R*Math.sqrt(i/P.cloudCount);
+      const a=i*ga;
+      acc.push([cx+Math.cos(a)*r, cy+Math.sin(a)*r]);
+    }
+    const fp=finishPath(acc,false,rnd); if(fp) paths.push(fp);
+  }
+  else if(t==="streamlines"){
+    for(let k=0;k<P.cloudPaths;k++){
+      let x=X0+rnd()*W, y=Y0+rnd()*H;
+      const acc=[];
+      for(let i=0;i<P.cloudLen;i++){
+        acc.push([x,y]);
+        const a=noise.n2(x*P.cloudFreq,y*P.cloudFreq)*Math.PI*2;
+        x+=Math.cos(a)*P.cloudStep; y+=Math.sin(a)*P.cloudStep;
+        if(x<-w*0.2||x>w*1.2||y<-h*0.2||y>h*1.2) break;
+      }
+      const fp=finishPath(acc,false,rnd); if(fp&&acc.length>3) paths.push(fp);
+    }
+  }
+  else if(t==="harmonic"){
+    const cx=w/2, cy=h/2;
+    for(let k=0;k<P.cloudPaths;k++){
+      const a1=1+Math.floor(rnd()*4), a2=1+Math.floor(rnd()*4);
+      const ph=rnd()*Math.PI*2, rr=0.3+rnd()*0.7;
+      const acc=[];
+      for(let i=0;i<P.cloudLen;i++){
+        const t2=i/P.cloudLen*Math.PI*2;
+        acc.push([cx+Math.sin(t2*a1+ph)*W/2*rr, cy+Math.sin(t2*a2)*H/2*rr]);
+      }
+      const fp=finishPath(acc,false,rnd); if(fp) paths.push(fp);
+    }
+  }
+  return paths;
+}
+
+function buildSource(){
+  PATHS = (P.src==="cloud") ? buildCloud() : buildFromMask();
+  POINT_COUNT = PATHS.reduce((a,p)=>a+p.pts.length,0);
+}
+
+/* ============================ colour sampling ============================ */
+function updateColorSampler(){
+  if(!sourceImg){ csData=null; return; }
+  const {w,h}=dims();
+  csW=Math.min(600,w); csH=Math.round(csW*h/w);
+  colorSampler.width=csW; colorSampler.height=csH;
+  const iw=sourceImg.naturalWidth||sourceImg.width, ih=sourceImg.naturalHeight||sourceImg.height;
+  const ar=iw/ih, tar=csW/csH;
+  let dw,dh,dx,dy;
+  if(ar>tar){ dh=csH; dw=csH*ar; dx=(csW-dw)/2; dy=0; } else { dw=csW; dh=csW/ar; dx=0; dy=(csH-dh)/2; }
+  csctx.fillStyle="#000"; csctx.fillRect(0,0,csW,csH);
+  csctx.drawImage(sourceImg,dx,dy,dw,dh);
+  csData=csctx.getImageData(0,0,csW,csH).data;
+}
+function sampleHex(x,y){
+  if(!csData) return P.colA;
+  let sx=(x*csW/CW)|0, sy=(y*csH/CH)|0;
+  sx=sx<0?0:sx>=csW?csW-1:sx; sy=sy<0?0:sy>=csH?csH-1:sy;
+  const i=(sy*csW+sx)*4;
+  return rgb2hex(csData[i],csData[i+1],csData[i+2]);
+}
+
+/* ============================ stamp generation ============================ */
+const SHAPES=["circle","square","rect","polygon","line","cross","arc","blob"];
+
+function blobSegments(size,seedv){
+  const n=8, r=size/2, pts=[];
+  for(let i=0;i<n;i++){
+    const a=i/n*Math.PI*2;
+    const jitter=0.62+0.55*(((seedv*(i+3))%1));
+    pts.push([Math.cos(a)*r*jitter, Math.sin(a)*r*jitter*0.92]);
+  }
+  const segs=[];
+  for(let i=0;i<n;i++){
+    const p0=pts[(i-1+n)%n], p1=pts[i], p2=pts[(i+1)%n], p3=pts[(i+2)%n];
+    segs.push([p1[0]+(p2[0]-p0[0])/6, p1[1]+(p2[1]-p0[1])/6,
+               p2[0]-(p3[0]-p1[0])/6, p2[1]-(p3[1]-p1[1])/6, p2[0], p2[1]]);
+  }
+  return {start:[(pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2], segs, pts};
+}
+function polyPoints(sides,size){
+  const r=size/2, out=[];
+  for(let i=0;i<sides;i++){
+    const a=-Math.PI/2 + i/sides*Math.PI*2;
+    out.push([Math.cos(a)*r,Math.sin(a)*r]);
+  }
+  return out;
+}
+
+// walks every anchor for one pass, calling emit(stamp)
+// T is the loop phase, 0..1. T=0 is the resting state for every modulator.
+const TAU=Math.PI*2;
+function emitPass(pass, emit, noise, T){
+  T = T||0;
+  const PN=Math.max(1,Q.passes);
+  const t = PN===1 ? 0 : pass/(PN-1);
+  const te = EASE[Q.posEase](t);
+  const size = lerp(Q.sizeS,Q.sizeE,EASE[Q.sizeEase](t));
+  const opa  = lerp(Q.opaS,Q.opaE,EASE[Q.opaEase](t));
+  const sw   = lerp(Q.swS,Q.swE,t);
+  const normal = lerp(Q.normalS,Q.normalE,te);
+  const drift = Q.driftDist*te;
+  const da = Q.driftAngle*Math.PI/180;
+  const dxg=Math.cos(da)*drift, dyg=Math.sin(da)*drift;
+  const spiralA = Q.spiralTurns*TAU*te;
+  const spiralR = Q.spiralR*te;
+
+  const live = Q.anim;
+  const travelAmt = live ? Q.mTravel*T : 0;
+  const passPhase = PN>1 ? pass/(PN-1) : 0;
+  const cx=CW/2, cy=CH/2, halfDiag=Math.hypot(CW,CH)/2;
+
+  for(let pi=0; pi<PATHS.length; pi++){
+    const path=PATHS[pi];
+    const pts=path.pts;
+    const n=pts.length;
+    for(let i=0;i<n;i++){
+      const p=pts[i];
+      let bx=p.x, by=p.y, ttx=p.tx, tty=p.ty, tnx=p.nx, tny=p.ny, uu=p.u;
+
+      // --- travel: slide the stamp along its own path
+      if(travelAmt){
+        let f=i+travelAmt*n;
+        let i0,i1,fr;
+        if(path.closed){ f=((f%n)+n)%n; i0=Math.floor(f); i1=(i0+1)%n; }
+        else { f=Math.max(0,Math.min(n-1.001,f)); i0=Math.floor(f); i1=Math.min(n-1,i0+1); }
+        fr=f-i0;
+        const a=pts[i0], b=pts[i1];
+        bx=a.x+(b.x-a.x)*fr; by=a.y+(b.y-a.y)*fr;
+        ttx=a.tx; tty=a.ty; tnx=a.nx; tny=a.ny; uu=a.u;
+      }
+
+      // --- loop phase for this stamp
+      let w=0, w2=0, ph=0;
+      if(live){
+        switch(Q.animPhase){
+          case "alongPath": ph=uu; break;
+          case "byPass": ph=passPhase; break;
+          case "random": ph=p.r2; break;
+          case "noise": ph=(noise.n2(p.x*0.0025,p.y*0.0025)+1)/2; break;
+          case "radial": ph=Math.min(1,Math.hypot(p.x-cx,p.y-cy)/halfDiag); break;
+          default: ph=0;
+        }
+        ph*=Q.animSpread;
+        w  = Math.sin((T+ph)*TAU);
+        w2 = Math.cos((T+ph)*TAU);
+      }
+
+      let x=bx, y=by;
+      // across the path
+      x += tnx*normal; y += tny*normal;
+      // wave along the path
+      if(Q.waveAmp){
+        const sgn=Math.sin(uu*TAU*Q.waveFreq + t*TAU);
+        x += tnx*sgn*Q.waveAmp; y += tny*sgn*Q.waveAmp;
+      }
+      // noise
+      if(Q.noiseAmp){
+        const a=noise.noise3D(bx*Q.noiseFreq, by*Q.noiseFreq, t*1.7+0.3)*TAU;
+        const m=noise.noise3D(bx*Q.noiseFreq+55, by*Q.noiseFreq+55, t*1.7+9.1);
+        x += Math.cos(a)*Q.noiseAmp*m*te; y += Math.sin(a)*Q.noiseAmp*m*te;
+      }
+      // drift + spiral + scatter
+      x += dxg; y += dyg;
+      if(spiralR){ x += Math.cos(spiralA+uu*TAU)*spiralR; y += Math.sin(spiralA+uu*TAU)*spiralR; }
+      if(Q.scatter){ x += (p.r1*2-1)*Q.scatter*te; y += (p.r2*2-1)*Q.scatter*te; }
+
+      // --- ambient motion
+      if(live){
+        if(Q.mSway){
+          const amp=Q.mSway*w;
+          if(Q.mSwayAxis==="tangent"){ x+=ttx*amp; y+=tty*amp; }
+          else if(Q.mSwayAxis==="orbit"){ x+=tnx*amp+ttx*Q.mSway*w2; y+=tny*amp+tty*Q.mSway*w2; }
+          else { x+=tnx*amp; y+=tny*amp; }
+        }
+        if(Q.mWander){
+          const a=noise.noise3D(bx*Q.mWanderFreq, by*Q.mWanderFreq, 40.5)*TAU;
+          x += Math.cos(a)*Q.mWander*w; y += Math.sin(a)*Q.mWander*w2;
+        }
+      }
+
+      // size
+      let sz=size;
+      if(Q.sizeMod==="alongPath") sz *= lerp(Q.sizeJitMin,Q.sizeJitMax,Math.abs(Math.sin(uu*Math.PI)));
+      else if(Q.sizeMod==="noise") sz *= lerp(Q.sizeJitMin,Q.sizeJitMax,(noise.n2(p.x*0.003,p.y*0.003)+1)/2);
+      else if(Q.sizeMod==="random") sz *= lerp(Q.sizeJitMin,Q.sizeJitMax,p.r1);
+      if(live && Q.mBreathe) sz *= 1 + Q.mBreathe*w;
+      if(sz<=0.08) continue;
+
+      // rotation
+      let rot=0;
+      switch(Q.rotMode){
+        case "value": rot=Q.rotValue*Math.PI/180; break;
+        case "tangent": rot=Math.atan2(tty,ttx); break;
+        case "normal": rot=Math.atan2(tny,tnx); break;
+        case "random": rot=p.r2*TAU; break;
+        case "progress": rot=(uu+t)*TAU; break;
+        case "noise": rot=noise.n2(p.x*0.002,p.y*0.002)*TAU; break;
+      }
+      if(Q.rotJit) rot += (p.r1*2-1)*Q.rotJit*Math.PI/180;
+      if(live){
+        if(Q.mWobble) rot += Q.mWobble*Math.PI/180*w;
+        if(Q.mSpin) rot += (T+ph)*TAU*Q.mSpin;
+      }
+
+      // opacity
+      let alpha=opa;
+      if(live && Q.mShimmer) alpha *= 1 - Q.mShimmer*(0.5-0.5*w2);
+      if(alpha<=0.004) continue;
+
+      // colour
+      let col;
+      switch(Q.colorMode){
+        case "solid": col=Q.colA; break;
+        case "passGradient": col=mixHex(Q.colA,Q.colB,t); break;
+        case "pathGradient": col=mixHex(Q.colA,Q.colB,uu); break;
+        case "random": col=mixHex(Q.colA,Q.colB,p.r1); break;
+        case "image": col=sampleHex(p.x,p.y); break;
+        default: col=Q.colA;
+      }
+      let shape=Q.shape;
+      if(shape==="mixed") shape=SHAPES[Math.floor(p.r2*SHAPES.length)];
+
+      emit({x,y,rot,size:sz,shape,col,sw,alpha,seedv:p.r1});
+    }
+  }
+}
+
+/* ============================ canvas backend ============================ */
+let _fs=null,_ss=null,_lw=-1,_ga=-1;
+function resetStampCache(){ _fs=null; _ss=null; _lw=-1; _ga=-1; }
+function paintStamp(ctx,st,sc){
+  const doFill=Q.contentType!=="stroke";
+  const doStroke=Q.contentType!=="fill";
+  const isLine = st.shape==="line"||st.shape==="cross"||st.shape==="arc";
+  const co=Math.cos(st.rot), si=Math.sin(st.rot);
+  ctx.setTransform(co,si,-si,co, st.x*sc, st.y*sc);
+  if(st.alpha!==_ga){ ctx.globalAlpha=st.alpha; _ga=st.alpha; }
+  if(doFill && st.col!==_fs){ ctx.fillStyle=st.col; _fs=st.col; }
+  if(doStroke||isLine){
+    if(st.col!==_ss){ ctx.strokeStyle=st.col; _ss=st.col; }
+    const lw=Math.max(0.2,st.sw*sc);
+    if(lw!==_lw){ ctx.lineWidth=lw; _lw=lw; }
+  }
+  const sz=st.size*sc, h=sz/2;
+  ctx.beginPath();
+  switch(st.shape){
+    case "circle": ctx.arc(0,0,h,0,Math.PI*2); break;
+    case "square": ctx.rect(-h,-h,sz,sz); break;
+    case "rect": ctx.rect(-h,-h*0.4,sz,sz*0.4); break;
+    case "polygon": {
+      const pp=polyPoints(Q.sides,sz);
+      ctx.moveTo(pp[0][0],pp[0][1]);
+      for(let k=1;k<pp.length;k++) ctx.lineTo(pp[k][0],pp[k][1]);
+      ctx.closePath(); break;
+    }
+    case "line": ctx.moveTo(-h,0); ctx.lineTo(h,0); break;
+    case "cross": ctx.moveTo(-h,0); ctx.lineTo(h,0); ctx.moveTo(0,-h); ctx.lineTo(0,h); break;
+    case "arc": ctx.arc(0,0,h,0,Math.PI); break;
+    case "blob": {
+      const b=blobSegments(sz,st.seedv);
+      ctx.moveTo(b.start[0],b.start[1]);
+      for(const g of b.segs) ctx.bezierCurveTo(g[0],g[1],g[2],g[3],g[4],g[5]);
+      ctx.closePath(); break;
+    }
+  }
+  if(isLine){ ctx.stroke(); }
+  else { if(doFill) ctx.fill(); if(doStroke) ctx.stroke(); }
+}
+
+/* ============================ svg backend ============================ */
+function svgStamp(st){
+  const doFill=Q.contentType!=="stroke";
+  const doStroke=Q.contentType!=="fill";
+  const isLine = st.shape==="line"||st.shape==="cross"||st.shape==="arc";
+  const fill = (doFill&&!isLine) ? st.col : "none";
+  const stroke = (doStroke||isLine) ? st.col : "none";
+  const sw = st.sw.toFixed(2);
+  const op = st.alpha.toFixed(3);
+  const n=v=>(Math.round(v*100)/100);
+  const tr=`transform="translate(${n(st.x)} ${n(st.y)})${st.rot?` rotate(${n(st.rot*180/Math.PI)})`:""}"`;
+  const style=`fill="${fill}" stroke="${stroke}" stroke-width="${sw}" opacity="${op}" stroke-linecap="round"`;
+  const s=st.size, h=s/2;
+  switch(st.shape){
+    case "circle": return `<circle r="${n(h)}" ${style} ${tr}/>`;
+    case "square": return `<rect x="${n(-h)}" y="${n(-h)}" width="${n(s)}" height="${n(s)}" ${style} ${tr}/>`;
+    case "rect": return `<rect x="${n(-h)}" y="${n(-h*0.4)}" width="${n(s)}" height="${n(s*0.4)}" ${style} ${tr}/>`;
+    case "polygon": {
+      const pp=polyPoints(Q.sides,s).map(q=>`${n(q[0])},${n(q[1])}`).join(" ");
+      return `<polygon points="${pp}" ${style} ${tr}/>`;
+    }
+    case "line": return `<line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${style} ${tr}/>`;
+    case "cross": return `<path d="M${n(-h)} 0H${n(h)}M0 ${n(-h)}V${n(h)}" ${style} ${tr}/>`;
+    case "arc": return `<path d="M${n(h)} 0A${n(h)} ${n(h)} 0 0 1 ${n(-h)} 0" ${style} ${tr}/>`;
+    case "blob": {
+      const b=blobSegments(s,st.seedv);
+      let d=`M${n(b.start[0])} ${n(b.start[1])}`;
+      for(const g of b.segs) d+=`C${n(g[0])} ${n(g[1])} ${n(g[2])} ${n(g[3])} ${n(g[4])} ${n(g[5])}`;
+      return `<path d="${d}Z" ${style} ${tr}/>`;
+    }
+  }
+  return "";
+}
+
+function buildSVG(){
+  const {w,h}=dims();
+  const noise=new Simplex(mulberry32(P.seed*7919+5));
+  const parts=[];
+  parts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`);
+  if(P.bgMode==="color") parts.push(`<rect width="${w}" height="${h}" fill="${P.bg}"/>`);
+  if(P.blend!=="source-over") parts.push(`<g style="mix-blend-mode:${P.blend}">`);
+  const order=[];
+  for(let pass=0;pass<Q.passes;pass++) order.push(pass);
+  for(const pass of order){
+    parts.push(`<g id="pass-${pass+1}">`);
+    emitPass(pass, st=>parts.push(svgStamp(st)), noise, curT);
+    parts.push(`</g>`);
+  }
+  if(P.blend!=="source-over") parts.push(`</g>`);
+  parts.push(`</svg>`);
+  return parts.join("\n");
+}
+
+/* ============================ render loop ============================ */
+const statusText=document.getElementById("statusText");
+const barFill=document.getElementById("barFill");
+const statLine=document.getElementById("statLine");
+let pass=0, running=false, rafId=0, noiseInst=null;
+let animRAF=0, animT0=0, curT=0, fpsN=0, fpsT0=0, fps=0;
+const work=document.createElement("canvas");
+const wctx=work.getContext("2d");
+
+function paintBackground(ctx,W,H){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha=1; ctx.globalCompositeOperation="source-over";
+  ctx.clearRect(0,0,W,H);
+  if(P.bgMode==="color"){ ctx.fillStyle=P.bg; ctx.fillRect(0,0,W,H); }
+  resetStampCache();
+}
+function prepCtx(ctx){
+  ctx.globalCompositeOperation=P.blend;
+  ctx.lineJoin="round"; ctx.lineCap="round";
+}
+function blit(){
+  vctx.setTransform(1,0,0,1,0,0);
+  vctx.clearRect(0,0,view.width,view.height);
+  vctx.drawImage(work,0,0);
+}
+
+// full redraw of every pass at one moment in the loop
+function renderAll(ctx,sc,T,noise){
+  paintBackground(ctx,ctx.canvas.width,ctx.canvas.height);
+  prepCtx(ctx);
+  const n=Math.max(1,Math.round(Q.passes));
+  for(let p2=0;p2<n;p2++) emitPass(p2, st=>paintStamp(ctx,st,sc), noise, T);
+  ctx.setTransform(1,0,0,1,0,0);
+}
+
+function stopLoops(){
+  if(rafId) cancelAnimationFrame(rafId);
+  if(animRAF) cancelAnimationFrame(animRAF);
+  rafId=0; animRAF=0; running=false;
+}
+
+function startRender(){
+  stopLoops();
+  const {w,h}=dims();
+  buildSource();
+  updateStats();
+  work.width=w; work.height=h;
+  view.width=w; view.height=h;
+  noiseInst=new Simplex(mulberry32(P.seed*7919+5));
+  const driven = Drive && Drive.isLive();
+  if(P.anim || driven){
+    animT0=performance.now()-curT*1000/Math.max(0.001,P.animSpeed);
+    fpsN=0; fpsT0=performance.now();
+    animRAF=requestAnimationFrame(animFrame);
+  } else {
+    curT=0;
+    Q = Drive ? Drive.resolve(P) : P;
+    paintBackground(wctx,w,h);
+    prepCtx(wctx);
+    pass=0; running=true;
+    rafId=requestAnimationFrame(tick);
+  }
+}
+
+// static mode: accumulate pass by pass, never clearing
+function tick(){
+  rafId=0;
+  if(!running) return;
+  const t0=performance.now();
+  while(pass<Q.passes && performance.now()-t0<16){
+    emitPass(pass, st=>paintStamp(wctx,st,1), noiseInst, 0);
+    pass++;
+  }
+  wctx.setTransform(1,0,0,1,0,0);
+  blit();
+  statusText.textContent = pass>=Q.passes ? "idle" : `pass ${pass} / ${Math.round(Q.passes)}`;
+  barFill.style.width=(pass/Q.passes*100).toFixed(1)+"%";
+  if(pass>=Q.passes){ running=false; return; }
+  rafId=requestAnimationFrame(tick);
+}
+
+// playback: clear and redraw the whole stack every frame
+function animFrame(now){
+  animRAF=0;
+  if(!P.anim && !(Drive && Drive.isLive())) return;
+  curT = (((now-animT0)/1000*P.animSpeed)%1+1)%1;
+  Q = Drive ? Drive.resolve(P) : P;
+  renderAll(wctx,1,curT,noiseInst);
+  blit();
+  fpsN++;
+  if(now-fpsT0>500){ fps=Math.round(fpsN*1000/(now-fpsT0)); fpsN=0; fpsT0=now; }
+  statusText.textContent=(P.anim?"playing":"driven")+` · ${fps} fps`
+    + (Drive && Drive.state.midi.clockOk ? ` · ${Drive.bpm.toFixed(0)} bpm` : "");
+  barFill.style.width=(curT*100).toFixed(1)+"%";
+  animRAF=requestAnimationFrame(animFrame);
+}
+
+function updateStats(){
+  const stamps=POINT_COUNT*P.passes;
+  let msg=`${PATHS.length} paths · ${POINT_COUNT} anchors · ${stamps.toLocaleString()} stamps`;
+  if(P.anim && stamps>25000) msg+=" — heavy to animate";
+  else if(stamps>60000) msg+=" — heavy for SVG";
+  statLine.textContent=msg;
+}
+
+let deb=0;
+function changed(){ clearTimeout(deb); deb=setTimeout(startRender,160); }
+
+/* ============================ export ============================ */
+const expScale=document.getElementById("expScale");
+const expScaleVal=document.getElementById("expScaleVal");
+expScale.addEventListener("input",()=>expScaleVal.textContent=expScale.value+"×");
+const overlay=document.getElementById("overlay"), ovText=document.getElementById("ovText");
+
+// exports freeze the loop where it currently sits
+async function exportPNG(){
+  const sc=Number(expScale.value);
+  const {w,h}=dims();
+  const big=document.createElement("canvas");
+  big.width=Math.round(w*sc); big.height=Math.round(h*sc);
+  const bx=big.getContext("2d");
+  overlay.classList.add("on");
+  const noise=new Simplex(mulberry32(P.seed*7919+5));
+  paintBackground(bx,big.width,big.height);
+  prepCtx(bx);
+  const np=Math.max(1,Math.round(Q.passes));
+  for(let p2=0;p2<np;p2++){
+    emitPass(p2, st=>paintStamp(bx,st,sc), noise, curT);
+    if(p2%3===0){ ovText.textContent=`Rendering pass ${p2+1} of ${np}`; await new Promise(r=>setTimeout(r,0)); }
+  }
+  bx.setTransform(1,0,0,1,0,0);
+  big.toBlob(b=>{
+    download(URL.createObjectURL(b), `anchor_${P.seed}_${Date.now()}.png`);
+    overlay.classList.remove("on");
+  },"image/png");
+}
+function exportSVG(){
+  overlay.classList.add("on"); ovText.textContent="Writing SVG";
+  setTimeout(()=>{
+    const blob=new Blob([buildSVG()],{type:"image/svg+xml"});
+    download(URL.createObjectURL(blob), `anchor_${P.seed}_${Date.now()}.svg`);
+    overlay.classList.remove("on");
+  },30);
+}
+function download(url,name){
+  const a=document.createElement("a"); a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+document.getElementById("btnPNG").addEventListener("click",exportPNG);
+document.getElementById("btnSVG").addEventListener("click",exportSVG);
+document.getElementById("btnRerun").addEventListener("click",startRender);
+document.getElementById("btnDice").addEventListener("click",()=>{
+  P.seed=Math.floor(Math.random()*10000); bound.seed(); startRender();
+});
+
+/* ---- record exactly one loop to webm ---- */
+const btnRec=document.getElementById("btnRec");
+let recorder=null;
+function pickMime(){
+  const list=["video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm"];
+  for(const m of list){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }
+  return null;
+}
+btnRec.addEventListener("click",()=>{
+  if(recorder){ recorder.stop(); return; }
+  if(!P.anim){ statusText.textContent="turn Play on first"; return; }
+  const mime=pickMime();
+  if(!mime){ statusText.textContent="this browser can't record webm"; return; }
+  const stream=work.captureStream(60);
+  const chunks=[];
+  recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:24000000});
+  recorder.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  recorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:mime});
+    download(URL.createObjectURL(blob), `anchor_loop_${P.seed}_${Date.now()}.webm`);
+    recorder=null; btnRec.textContent="Record loop";
+    btnRec.classList.remove("warm");
+  };
+  // restart the loop at zero so the capture is a clean cycle
+  curT=0; animT0=performance.now();
+  recorder.start();
+  btnRec.textContent="Stop recording"; btnRec.classList.add("warm");
+  const dur=1000/Math.max(0.001,P.animSpeed)+120;
+  setTimeout(()=>{ if(recorder && recorder.state==="recording") recorder.stop(); }, dur);
+});
+
+/* ============================ presets & files ============================ */
+const presetSel=document.getElementById("presetSel");
+Object.keys(PRESETS).forEach(k=>{
+  const o=document.createElement("option");o.value=k;o.textContent=k;presetSel.appendChild(o);
+});
+["*Random values","*User preset"].forEach(k=>{
+  const o=document.createElement("option");o.value=k;o.textContent=k;presetSel.appendChild(o);
+});
+function syncUI(){
+  Object.keys(bound).forEach(k=>bound[k]&&bound[k]());
+  vis();
+}
+function randomise(){
+  const r=Math.random, pick=a=>a[Math.floor(r()*a.length)];
+  const keepText=P.text, keepSrc=P.src;
+  P=Object.assign({},DEFAULTS,{
+    src:keepSrc, text:keepText, seed:Math.floor(r()*10000), aspect:P.aspect,
+    passes:1+Math.floor(r()*70),
+    shape:pick(SHAPES.concat(["mixed"])), sides:3+Math.floor(r()*9),
+    contentType:pick(["fill","stroke","fillStroke"]),
+    spacing:3+Math.floor(r()*24),
+    sizeS:2+r()*120, sizeE:1+r()*60, sizeEase:pick(EASE_KEYS),
+    sizeMod:pick(["uniform","alongPath","noise","random"]),
+    sizeJitMin:0.1+r()*0.5, sizeJitMax:0.8+r()*1.4,
+    rotMode:pick(["none","value","tangent","normal","random","progress","noise"]),
+    rotValue:Math.floor(r()*360),
+    normalS:(r()*2-1)*40, normalE:(r()*2-1)*160, posEase:pick(EASE_KEYS),
+    waveAmp:r()<0.5?0:r()*70, waveFreq:0.5+r()*8,
+    noiseAmp:r()<0.5?0:r()*90, noiseFreq:0.0005+r()*0.004,
+    driftAngle:Math.floor(r()*360), driftDist:r()<0.5?0:r()*200,
+    swS:0.3+r()*3, swE:0.3+r()*3,
+    opaS:0.2+r()*0.8, opaE:0.2+r()*0.8,
+    blend:pick(["source-over","source-over","screen","multiply"]),
+    colorMode:pick(["solid","passGradient","pathGradient","random"]),
+    colA:rgb2hex(r()*255,r()*255,r()*255), colB:rgb2hex(r()*255,r()*255,r()*255),
+    bg:rgb2hex(r()*90,r()*90,r()*90),
+    cloudType:P.cloudType
+  });
+}
+function applyPreset(name){
+  if(name==="*Random values") randomise();
+  else if(name==="*User preset"){ if(userSlot) P=Object.assign({},DEFAULTS,userSlot); }
+  else P=Object.assign({},DEFAULTS,PRESETS[name]||{});
+  syncUI(); startRender();
+}
+presetSel.addEventListener("change",()=>applyPreset(presetSel.value));
+document.getElementById("btnRestart").addEventListener("click",()=>applyPreset(presetSel.value));
+document.getElementById("btnSaveSession").addEventListener("click",()=>{
+  userSlot=JSON.parse(JSON.stringify(P)); presetSel.value="*User preset";
+  statusText.textContent="session saved";
+});
+document.getElementById("btnExportPreset").addEventListener("click",()=>{
+  const out=Object.assign({},P);
+  if(Drive) out._drive=Drive.serialize();
+  const blob=new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
+  download(URL.createObjectURL(blob),`anchor_preset_${P.seed}.json`);
+});
+const filePreset=document.getElementById("filePreset");
+document.getElementById("btnImportPreset").addEventListener("click",()=>filePreset.click());
+filePreset.addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const j=JSON.parse(r.result);
+      if(Drive && j._drive) Drive.load(j._drive);
+      delete j._drive;
+      P=Object.assign({},DEFAULTS,j);
+      userSlot=JSON.parse(JSON.stringify(P)); presetSel.value="*User preset";
+      syncUI(); startRender();
+    }catch(err){ statusText.textContent="that file isn't a preset"; } };
+  r.readAsText(f); e.target.value="";
+});
+
+const fileImg=document.getElementById("fileImg");
+imgBtn.addEventListener("click",()=>fileImg.click());
+imgClr.addEventListener("click",()=>{ sourceImg=null; csData=null; startRender(); });
+fileImg.addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadImage(f); e.target.value=""; });
+function loadImage(f){
+  const url=URL.createObjectURL(f), im=new Image();
+  im.onload=()=>{ sourceImg=im; updateColorSampler(); P.src="image"; vis(); startRender(); URL.revokeObjectURL(url); };
+  im.src=url;
+}
+const fileFont=document.getElementById("fileFont");
+fontBtn.addEventListener("click",()=>fileFont.click());
+fileFont.addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadFont(f); e.target.value=""; });
+async function loadFont(f){
+  try{
+    const buf=await f.arrayBuffer();
+    const face=new FontFace("CustomFont",buf);
+    await face.load(); document.fonts.add(face);
+    P.font="'CustomFont'"; bound.font(); P.src="text"; vis(); startRender();
+    statusText.textContent=`loaded ${f.name}`;
+  }catch(err){ statusText.textContent="couldn't load that font"; }
+}
+
+let dragDepth=0;
+window.addEventListener("dragenter",e=>{e.preventDefault();dragDepth++;document.body.classList.add("dragging");});
+window.addEventListener("dragleave",e=>{e.preventDefault();if(--dragDepth<=0)document.body.classList.remove("dragging");});
+window.addEventListener("dragover",e=>e.preventDefault());
+window.addEventListener("drop",e=>{
+  e.preventDefault(); dragDepth=0; document.body.classList.remove("dragging");
+  const f=e.dataTransfer.files[0]; if(!f) return;
+  if(f.type.startsWith("image/")) loadImage(f);
+  else if(/\.(ttf|otf|woff2?|TTF|OTF|WOFF2?)$/.test(f.name)) loadFont(f);
+});
+
+window.addEventListener("keydown",e=>{
+  if(e.target.matches("input,select,textarea")) return;
+  if(e.code==="Space"){ e.preventDefault(); startRender(); }
+  if(e.key==="r"||e.key==="R"){ P.seed=Math.floor(Math.random()*10000); bound.seed(); startRender(); }
+});
+
+/* ============================ boot ============================ */
+const drivePanel=document.getElementById("g-drive");
+if(Drive){
+  Drive.mountPanel(drivePanel);
+} else {
+  drivePanel.innerHTML='<div class="note">unlimiter-drive.js was not found. Put it in the same '
+    +'folder as this file, and serve the folder over http://localhost or https — the microphone '
+    +'and WebMIDI are both blocked on file:// URLs.</div>';
+}
+vis();
+document.fonts.ready.then(startRender);
+</script>
+</body>
+</html>

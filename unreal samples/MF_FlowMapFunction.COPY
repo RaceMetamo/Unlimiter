@@ -1,0 +1,454 @@
+Begin Object Class=/Script/Engine.MaterialFunction Name="MF_FlowMapFunction" ExportPath="/Script/Engine.MaterialFunction'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction'"
+   Begin Object Class=/Script/Engine.MaterialFunctionEditorOnlyData Name="MF_FlowMapFunctionEditorOnlyData" ExportPath="/Script/Engine.MaterialFunctionEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MF_FlowMapFunctionEditorOnlyData'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAbs Name="MaterialExpressionAbs_0" ExportPath="/Script/Engine.MaterialExpressionAbs'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAbs_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_0" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_1" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_2" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_3" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_4" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_4'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionComponentMask Name="MaterialExpressionComponentMask_0" ExportPath="/Script/Engine.MaterialExpressionComponentMask'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionComponentMask_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstantBiasScale Name="MaterialExpressionConstantBiasScale_0" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionConstantBiasScale_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstantBiasScale Name="MaterialExpressionConstantBiasScale_1" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionConstantBiasScale_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstantBiasScale Name="MaterialExpressionConstantBiasScale_2" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionConstantBiasScale_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFrac Name="MaterialExpressionFrac_1" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFrac_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFrac Name="MaterialExpressionFrac_2" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFrac_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_1" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_2" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_3" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_4" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_4'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_5" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_5'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_6" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_6'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_7" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_7'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionOutput Name="MaterialExpressionFunctionOutput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionOutput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionOutput_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionLinearInterpolate Name="MaterialExpressionLinearInterpolate_1" ExportPath="/Script/Engine.MaterialExpressionLinearInterpolate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionLinearInterpolate_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_10" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_10'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_11" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_11'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_2" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_3" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_5" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_5'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_6" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_6'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_7" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_7'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionReroute Name="MaterialExpressionReroute_0" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionReroute_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionReroute Name="MaterialExpressionReroute_8" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionReroute_8'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionStaticBool Name="MaterialExpressionStaticBool_0" ExportPath="/Script/Engine.MaterialExpressionStaticBool'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionStaticBool_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionStaticSwitch Name="MaterialExpressionStaticSwitch_0" ExportPath="/Script/Engine.MaterialExpressionStaticSwitch'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionStaticSwitch_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionSubtract Name="MaterialExpressionSubtract_3" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionSubtract_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureCoordinate Name="MaterialExpressionTextureCoordinate_0" ExportPath="/Script/Engine.MaterialExpressionTextureCoordinate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTextureCoordinate_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureSample Name="MaterialExpressionTextureSample_13" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTextureSample_13'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureSample Name="MaterialExpressionTextureSample_14" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTextureSample_14'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTime Name="MaterialExpressionTime_0" ExportPath="/Script/Engine.MaterialExpressionTime'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTime_0'"
+   End Object
+   Begin Object Class=/Script/UnrealEd.SceneThumbnailInfoWithPrimitive Name="SceneThumbnailInfoWithPrimitive_0" ExportPath="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:SceneThumbnailInfoWithPrimitive_0'"
+   End Object
+   Begin Object Class=/Script/Engine.Material Name="Material_0" ExportPath="/Script/Engine.Material'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:Material_0'"
+      Begin Object Class=/Script/Engine.MaterialEditorOnlyData Name="Material_0EditorOnlyData" ExportPath="/Script/Engine.MaterialEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:Material_0.Material_0EditorOnlyData'"
+      End Object
+   End Object
+   Begin Object Name="MF_FlowMapFunctionEditorOnlyData" ExportPath="/Script/Engine.MaterialFunctionEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MF_FlowMapFunctionEditorOnlyData'"
+      ExpressionCollection=(Expressions=("/Script/Engine.MaterialExpressionFunctionOutput'MF_FlowMapFunction:MaterialExpressionFunctionOutput_0'","/Script/Engine.MaterialExpressionLinearInterpolate'MF_FlowMapFunction:MaterialExpressionLinearInterpolate_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_0'","/Script/Engine.MaterialExpressionTime'MF_FlowMapFunction:MaterialExpressionTime_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_7'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_3'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_4'","/Script/Engine.MaterialExpressionTextureCoordinate'MF_FlowMapFunction:MaterialExpressionTextureCoordinate_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_10'","/Script/Engine.MaterialExpressionFrac'MF_FlowMapFunction:MaterialExpressionFrac_1'","/Script/Engine.MaterialExpressionFrac'MF_FlowMapFunction:MaterialExpressionFrac_2'","/Script/Engine.MaterialExpressionAbs'MF_FlowMapFunction:MaterialExpressionAbs_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowMapFunction:MaterialExpressionReroute_8'","/Script/Engine.MaterialExpressionTextureSample'MF_FlowMapFunction:MaterialExpressionTextureSample_13'","/Script/Engine.MaterialExpressionTextureSample'MF_FlowMapFunction:MaterialExpressionTextureSample_14'","/Script/Engine.MaterialExpressionComponentMask'MF_FlowMapFunction:MaterialExpressionComponentMask_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowMapFunction:MaterialExpressionReroute_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_3'","/Script/Engine.MaterialExpressionSubtract'MF_FlowMapFunction:MaterialExpressionSubtract_3'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_1'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_5'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_11'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_6'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_1'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_3'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_5'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_6'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_4'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_7'","/Script/Engine.MaterialExpressionStaticSwitch'MF_FlowMapFunction:MaterialExpressionStaticSwitch_0'","/Script/Engine.MaterialExpressionStaticBool'MF_FlowMapFunction:MaterialExpressionStaticBool_0'"))
+   End Object
+   Begin Object Name="MaterialExpressionAbs_0" ExportPath="/Script/Engine.MaterialExpressionAbs'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAbs_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_2'")
+      MaterialExpressionEditorX=-1120
+      MaterialExpressionEditorY=768
+      MaterialExpressionGuid=F57600EB49973E493B2781B3237493A7
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_0" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_7'")
+      B=(Expression="/Script/Engine.MaterialExpressionReroute'MF_FlowMapFunction:MaterialExpressionReroute_0'")
+      MaterialExpressionEditorX=-256
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=0FD5283543EC582F18D29896A77A6FDB
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_1" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_1'"
+      A=(Expression="/Script/Engine.MaterialExpressionFrac'MF_FlowMapFunction:MaterialExpressionFrac_2'")
+      ConstB=-0.500000
+      MaterialExpressionEditorX=-1520
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=2FC318A247227823E8EB7CB0471209FE
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_2" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionFrac'MF_FlowMapFunction:MaterialExpressionFrac_1'")
+      ConstB=-0.500000
+      MaterialExpressionEditorX=-1520
+      MaterialExpressionEditorY=480
+      MaterialExpressionGuid=4AC64F9447FC4F8C36F9E0A3397B1E4C
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_3" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_2'")
+      ConstB=0.500000
+      MaterialExpressionEditorX=-1792
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=DDB428EF46A765E390965D86375DD100
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      Desc="Time Offset"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionAdd_4" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionAdd_4'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_10'")
+      B=(Expression="/Script/Engine.MaterialExpressionReroute'MF_FlowMapFunction:MaterialExpressionReroute_0'")
+      MaterialExpressionEditorX=-256
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=0FD5283543EC582F18D29896A77A6FDB
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionComponentMask_0" ExportPath="/Script/Engine.MaterialExpressionComponentMask'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionComponentMask_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_1'")
+      R=True
+      G=True
+      MaterialExpressionEditorX=-2288
+      MaterialExpressionEditorY=336
+      MaterialExpressionGuid=1AE1E6604AA14729A24278A775695674
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionConstantBiasScale_0" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionConstantBiasScale_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_0'")
+      MaterialExpressionEditorX=-128
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=599E79EB466DA242C2AFE08CFA5F31CF
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionConstantBiasScale_1" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionConstantBiasScale_1'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_4'")
+      MaterialExpressionEditorX=-128
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=599E79EB466DA242C2AFE08CFA5F31CF
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionConstantBiasScale_2" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionConstantBiasScale_2'"
+      Input=(Expression="/Script/Engine.MaterialExpressionFrac'MF_FlowMapFunction:MaterialExpressionFrac_1'")
+      Bias=-0.500000
+      Scale=2.000000
+      MaterialExpressionEditorX=-1328
+      MaterialExpressionEditorY=768
+      MaterialExpressionGuid=599E79EB466DA242C2AFE08CFA5F31CF
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionFrac_1" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFrac_1'"
+      Input=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_2'")
+      MaterialExpressionEditorX=-1632
+      MaterialExpressionEditorY=480
+      MaterialExpressionGuid=06C4F2C343C25A58053D2382E9A72485
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      Desc="phase1"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionFrac_2" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFrac_2'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_3'")
+      MaterialExpressionEditorX=-1632
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=06C4F2C343C25A58053D2382E9A72485
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      Desc="phase2"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_0'"
+      InputName="FlowTargetTexture"
+      Id=D28409684CBA5FE9E4C5D8A514F0C856
+      InputType=FunctionInput_Texture2D
+      SortPriority=99
+      MaterialExpressionEditorX=-240
+      MaterialExpressionEditorY=704
+      MaterialExpressionGuid=1D7125BF498F605D83965FB1FA65B0B2
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_1" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_1'"
+      Preview=(Mask=1,MaskR=1,MaskG=1,MaskB=1)
+      InputName="FlowInputVector"
+      Id=82CB748042E222EEDC1562A27CC47B22
+      InputType=FunctionInput_Vector2
+      SortPriority=1
+      MaterialExpressionEditorX=-2560
+      MaterialExpressionEditorY=336
+      MaterialExpressionGuid=9B95D401456A575374849CB43FF7B80F
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_2" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_2'"
+      InputName="FlowSpeed"
+      Id=432D707C4874E0AC37934681964CB962
+      InputType=FunctionInput_Scalar
+      PreviewValue=(X=1.600000,Y=0.000000,Z=0.000000,W=1.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=6
+      MaterialExpressionEditorX=-2560
+      MaterialExpressionEditorY=688
+      MaterialExpressionGuid=AEE6DE8943FD9843E8F3B3AA16F26005
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_3" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_3'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionTime'MF_FlowMapFunction:MaterialExpressionTime_0'")
+      InputName="CustomTime"
+      Id=5D2AEED9435EE920F2233DA1602FECF4
+      InputType=FunctionInput_Scalar
+      bUsePreviewValueAsDefault=True
+      SortPriority=8
+      MaterialExpressionEditorX=-2560
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=43932AE242DA974EFE90A3B9343A8A47
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_4" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_4'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionTextureCoordinate'MF_FlowMapFunction:MaterialExpressionTextureCoordinate_0'")
+      InputName="UV"
+      Id=BB03C8C14BD3B236A96BAD8AFF39EA31
+      InputType=FunctionInput_Vector2
+      bUsePreviewValueAsDefault=True
+      SortPriority=90
+      MaterialExpressionEditorX=-1520
+      MaterialExpressionEditorY=112
+      MaterialExpressionGuid=B1AB476443FE29EF696A61B0767B65E9
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_5" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_5'"
+      InputName="InputFlowStrength"
+      Id=4D2A00D841EE150ECC7053832C6A670B
+      InputType=FunctionInput_Scalar
+      PreviewValue=(X=0.150000,Y=0.000000,Z=0.000000,W=1.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=4
+      MaterialExpressionEditorX=-2064
+      MaterialExpressionEditorY=112
+      MaterialExpressionGuid=DF90197F41D7FCC4FD5A1D849CBAFCD4
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_6" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_6'"
+      InputName="FlowMultiplyByDensity"
+      Id=74653D92406F6E0C89C6A3B5AD962BCA
+      InputType=FunctionInput_Scalar
+      bUsePreviewValueAsDefault=True
+      MaterialExpressionEditorX=-2064
+      MaterialExpressionEditorY=208
+      MaterialExpressionGuid=D6E720BC46D025656B242FABAFA2E68B
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_7" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionInput_7'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionStaticBool'MF_FlowMapFunction:MaterialExpressionStaticBool_0'")
+      InputName="InputRangeIs-0-to-1"
+      Id=337C79E04F26385661F7BFAC8B39A170
+      InputType=FunctionInput_StaticBool
+      PreviewValue=(X=1.000000,Y=1.000000,Z=1.000000,W=1.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=300
+      MaterialExpressionEditorX=-752
+      MaterialExpressionEditorY=528
+      MaterialExpressionGuid=DA25E075494DD82C164CC783D6F6CAE3
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionOutput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionOutput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionFunctionOutput_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionLinearInterpolate'MF_FlowMapFunction:MaterialExpressionLinearInterpolate_1'")
+      bLastPreviewed=True
+      Id=0961393E464E2FBB728C4D908508CD59
+      MaterialExpressionEditorX=1232
+      MaterialExpressionEditorY=288
+      MaterialExpressionGuid=0C7FA16F4C93EC6048084FB7F22347D6
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionLinearInterpolate_1" ExportPath="/Script/Engine.MaterialExpressionLinearInterpolate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionLinearInterpolate_1'"
+      A=(Expression="/Script/Engine.MaterialExpressionTextureSample'MF_FlowMapFunction:MaterialExpressionTextureSample_13'",Mask=1,MaskR=1,MaskG=1,MaskB=1)
+      B=(Expression="/Script/Engine.MaterialExpressionTextureSample'MF_FlowMapFunction:MaterialExpressionTextureSample_14'",Mask=1,MaskR=1,MaskG=1,MaskB=1)
+      Alpha=(Expression="/Script/Engine.MaterialExpressionReroute'MF_FlowMapFunction:MaterialExpressionReroute_8'")
+      MaterialExpressionEditorX=656
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=AFB948874ABFAC3DC48A67B9F5067E3A
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_10" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_10'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_1'")
+      MaterialExpressionEditorX=-1248
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=76F28DC942E53A50DB827F9B636345D4
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_11" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_11'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_6'")
+      B=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_6'")
+      ConstB=-1.000000
+      MaterialExpressionEditorX=-1760
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=7F6A5922465371297F74BB8548CFFB97
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_2" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_3'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_2'")
+      ConstB=0.500000
+      MaterialExpressionEditorX=-2144
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=40154D004264B0D095DF0E882366F922
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      Desc="Time speed (frequency)"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_3" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_4'")
+      ConstB=2.000000
+      MaterialExpressionEditorX=-1248
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=09AAD7B847991A0FF43E2898AFB97CDA
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_5" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_5'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_11'")
+      MaterialExpressionEditorX=-1632
+      MaterialExpressionEditorY=304
+      MaterialExpressionGuid=0F2C45B447A4E85FA38ECE9395F79328
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_6" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_6'"
+      A=(Expression="/Script/Engine.MaterialExpressionComponentMask'MF_FlowMapFunction:MaterialExpressionComponentMask_0'")
+      ConstB=-1.000000
+      MaterialExpressionEditorX=-1904
+      MaterialExpressionEditorY=336
+      MaterialExpressionGuid=42DE5DAE46E8EC59CBE141AB85367FE5
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+      Desc="INVERT"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_7" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionMultiply_7'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_2'")
+      MaterialExpressionEditorX=-1248
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=76F28DC942E53A50DB827F9B636345D4
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionReroute_0" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionReroute_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionStaticSwitch'MF_FlowMapFunction:MaterialExpressionStaticSwitch_0'")
+      MaterialExpressionEditorX=-336
+      MaterialExpressionEditorY=480
+      MaterialExpressionGuid=81F985DE4271727DA952E6A4C95AF5EA
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionReroute_8" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionReroute_8'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAbs'MF_FlowMapFunction:MaterialExpressionAbs_0'")
+      MaterialExpressionEditorX=336
+      MaterialExpressionEditorY=800
+      MaterialExpressionGuid=4EC4AD9346F9316CA73BD7A6FE10F2ED
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionStaticBool_0" ExportPath="/Script/Engine.MaterialExpressionStaticBool'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionStaticBool_0'"
+      Value=True
+      MaterialExpressionEditorX=-912
+      MaterialExpressionEditorY=512
+      MaterialExpressionGuid=9256654543BCFD24EDCEDFB64512DAC0
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionStaticSwitch_0" ExportPath="/Script/Engine.MaterialExpressionStaticSwitch'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionStaticSwitch_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionSubtract'MF_FlowMapFunction:MaterialExpressionSubtract_3'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_4'")
+      Value=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_7'")
+      MaterialExpressionEditorX=-448
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=79EE390B4E63E4864861CC9844FA437E
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionSubtract_3" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionSubtract_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_3'")
+      MaterialExpressionEditorX=-1120
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=1C07B4C14F30F9054F748BA0854DA436
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureCoordinate_0" ExportPath="/Script/Engine.MaterialExpressionTextureCoordinate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTextureCoordinate_0'"
+      MaterialExpressionEditorX=-1744
+      MaterialExpressionEditorY=112
+      MaterialExpressionGuid=50A5F723418807DD9ACA82ACBC68B096
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureSample_13" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTextureSample_13'"
+      Coordinates=(Expression="/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_0'")
+      TextureObject=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_0'")
+      MaterialExpressionEditorX=112
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=B5D7F63A4AE5528F439EA8AAD14CEF4E
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureSample_14" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTextureSample_14'"
+      Coordinates=(Expression="/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_1'")
+      TextureObject=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_0'")
+      MaterialExpressionEditorX=112
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=B5D7F63A4AE5528F439EA8AAD14CEF4E
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTime_0" ExportPath="/Script/Engine.MaterialExpressionTime'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:MaterialExpressionTime_0'"
+      Period=1.000000
+      MaterialExpressionEditorX=-2688
+      MaterialExpressionEditorY=592
+      MaterialExpressionGuid=A8C143B74180B2A00ECAFB8D5A45C8D3
+      Function="/Script/Engine.MaterialFunction'MF_FlowMapFunction'"
+   End Object
+   Begin Object Name="SceneThumbnailInfoWithPrimitive_0" ExportPath="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:SceneThumbnailInfoWithPrimitive_0'"
+   End Object
+   Begin Object Name="Material_0" ExportPath="/Script/Engine.Material'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:Material_0'"
+      Begin Object Name="Material_0EditorOnlyData" ExportPath="/Script/Engine.MaterialEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowMapFunction.MF_FlowMapFunction:Material_0.Material_0EditorOnlyData'"
+         EmissiveColor=(Expression="/Script/Engine.MaterialExpressionFunctionOutput'MF_FlowMapFunction:MaterialExpressionFunctionOutput_0'")
+         ExpressionCollection=(Expressions=("/Script/Engine.MaterialExpressionFunctionOutput'MF_FlowMapFunction:MaterialExpressionFunctionOutput_0'","/Script/Engine.MaterialExpressionLinearInterpolate'MF_FlowMapFunction:MaterialExpressionLinearInterpolate_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_0'","/Script/Engine.MaterialExpressionTime'MF_FlowMapFunction:MaterialExpressionTime_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_7'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_3'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_4'","/Script/Engine.MaterialExpressionTextureCoordinate'MF_FlowMapFunction:MaterialExpressionTextureCoordinate_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_10'","/Script/Engine.MaterialExpressionFrac'MF_FlowMapFunction:MaterialExpressionFrac_1'","/Script/Engine.MaterialExpressionFrac'MF_FlowMapFunction:MaterialExpressionFrac_2'","/Script/Engine.MaterialExpressionAbs'MF_FlowMapFunction:MaterialExpressionAbs_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowMapFunction:MaterialExpressionReroute_8'","/Script/Engine.MaterialExpressionTextureSample'MF_FlowMapFunction:MaterialExpressionTextureSample_13'","/Script/Engine.MaterialExpressionTextureSample'MF_FlowMapFunction:MaterialExpressionTextureSample_14'","/Script/Engine.MaterialExpressionComponentMask'MF_FlowMapFunction:MaterialExpressionComponentMask_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowMapFunction:MaterialExpressionReroute_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_3'","/Script/Engine.MaterialExpressionSubtract'MF_FlowMapFunction:MaterialExpressionSubtract_3'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowMapFunction:MaterialExpressionConstantBiasScale_1'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_5'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_11'","/Script/Engine.MaterialExpressionMultiply'MF_FlowMapFunction:MaterialExpressionMultiply_6'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_1'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_3'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_5'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_6'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowMapFunction:MaterialExpressionAdd_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_4'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowMapFunction:MaterialExpressionFunctionInput_7'","/Script/Engine.MaterialExpressionStaticSwitch'MF_FlowMapFunction:MaterialExpressionStaticSwitch_0'","/Script/Engine.MaterialExpressionStaticBool'MF_FlowMapFunction:MaterialExpressionStaticBool_0'"))
+      End Object
+      ShadingModel=MSM_Unlit
+      ShadingModels=(ShadingModelField=1)
+      StateId=4BDFDC8B4FD58B625A3AF5BD1913837B
+      EditorOnlyData="/Script/Engine.MaterialEditorOnlyData'Material_0EditorOnlyData'"
+      ReferencedDefaultTextures(0)=None
+      ThumbnailInfo="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'MF_FlowMapFunction:SceneThumbnailInfoWithPrimitive_0'"
+      LightingGuid=0A1B1A984DAE5814938DFF9EACB917FB
+   End Object
+   EditorOnlyData="/Script/Engine.MaterialFunctionEditorOnlyData'MF_FlowMapFunctionEditorOnlyData'"
+   StateId=FDF558904C443E3DC7FBC4897EBC550D
+   CombinedInputTypes=543
+   CombinedOutputTypes=15
+   ThumbnailInfo="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'SceneThumbnailInfoWithPrimitive_0'"
+End Object

@@ -1,0 +1,509 @@
+Begin Object Class=/Script/Engine.MaterialFunction Name="MF_FlowVolumeFunction" ExportPath="/Script/Engine.MaterialFunction'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction'"
+   Begin Object Class=/Script/Engine.MaterialFunctionEditorOnlyData Name="MF_FlowVolumeFunctionEditorOnlyData" ExportPath="/Script/Engine.MaterialFunctionEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MF_FlowVolumeFunctionEditorOnlyData'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAbs Name="MaterialExpressionAbs_0" ExportPath="/Script/Engine.MaterialExpressionAbs'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAbs_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_0" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_1" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_2" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_3" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_4" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_4'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_5" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_5'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_6" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_6'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAppendVector Name="MaterialExpressionAppendVector_0" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAppendVector_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAppendVector Name="MaterialExpressionAppendVector_1" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAppendVector_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionComponentMask Name="MaterialExpressionComponentMask_0" ExportPath="/Script/Engine.MaterialExpressionComponentMask'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionComponentMask_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstant Name="MaterialExpressionConstant_0" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstant_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstantBiasScale Name="MaterialExpressionConstantBiasScale_0" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstantBiasScale Name="MaterialExpressionConstantBiasScale_1" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstantBiasScale Name="MaterialExpressionConstantBiasScale_2" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFrac Name="MaterialExpressionFrac_1" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFrac_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFrac Name="MaterialExpressionFrac_2" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFrac_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_1" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_2" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_3" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_4" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_4'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_5" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_5'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_6" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_6'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_7" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_7'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_9" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_9'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionOutput Name="MaterialExpressionFunctionOutput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionOutput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionOutput_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionLinearInterpolate Name="MaterialExpressionLinearInterpolate_1" ExportPath="/Script/Engine.MaterialExpressionLinearInterpolate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionLinearInterpolate_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_10" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_10'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_11" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_11'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_2" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_3" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_5" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_5'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_6" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_6'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_7" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_7'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionReroute Name="MaterialExpressionReroute_0" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionReroute_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionReroute Name="MaterialExpressionReroute_8" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionReroute_8'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionStaticBool Name="MaterialExpressionStaticBool_0" ExportPath="/Script/Engine.MaterialExpressionStaticBool'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionStaticBool_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionStaticSwitch Name="MaterialExpressionStaticSwitch_0" ExportPath="/Script/Engine.MaterialExpressionStaticSwitch'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionStaticSwitch_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionSubtract Name="MaterialExpressionSubtract_3" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionSubtract_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureCoordinate Name="MaterialExpressionTextureCoordinate_0" ExportPath="/Script/Engine.MaterialExpressionTextureCoordinate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTextureCoordinate_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureSampleParameterVolume Name="MaterialExpressionTextureSampleParameterVolume_0" ExportPath="/Script/Engine.MaterialExpressionTextureSampleParameterVolume'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureSampleParameterVolume Name="MaterialExpressionTextureSampleParameterVolume_1" ExportPath="/Script/Engine.MaterialExpressionTextureSampleParameterVolume'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTime Name="MaterialExpressionTime_0" ExportPath="/Script/Engine.MaterialExpressionTime'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTime_0'"
+   End Object
+   Begin Object Class=/Script/UnrealEd.SceneThumbnailInfoWithPrimitive Name="SceneThumbnailInfoWithPrimitive_0" ExportPath="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:SceneThumbnailInfoWithPrimitive_0'"
+   End Object
+   Begin Object Class=/Script/Engine.Material Name="Material_0" ExportPath="/Script/Engine.Material'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:Material_0'"
+      Begin Object Class=/Script/Engine.MaterialEditorOnlyData Name="Material_0EditorOnlyData" ExportPath="/Script/Engine.MaterialEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:Material_0.Material_0EditorOnlyData'"
+      End Object
+   End Object
+   Begin Object Name="MF_FlowVolumeFunctionEditorOnlyData" ExportPath="/Script/Engine.MaterialFunctionEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MF_FlowVolumeFunctionEditorOnlyData'"
+      ExpressionCollection=(Expressions=("/Script/Engine.MaterialExpressionFunctionOutput'MF_FlowVolumeFunction:MaterialExpressionFunctionOutput_0'","/Script/Engine.MaterialExpressionLinearInterpolate'MF_FlowVolumeFunction:MaterialExpressionLinearInterpolate_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_0'","/Script/Engine.MaterialExpressionTime'MF_FlowVolumeFunction:MaterialExpressionTime_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_7'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_3'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_4'","/Script/Engine.MaterialExpressionTextureCoordinate'MF_FlowVolumeFunction:MaterialExpressionTextureCoordinate_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_10'","/Script/Engine.MaterialExpressionFrac'MF_FlowVolumeFunction:MaterialExpressionFrac_1'","/Script/Engine.MaterialExpressionFrac'MF_FlowVolumeFunction:MaterialExpressionFrac_2'","/Script/Engine.MaterialExpressionAbs'MF_FlowVolumeFunction:MaterialExpressionAbs_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowVolumeFunction:MaterialExpressionReroute_8'","/Script/Engine.MaterialExpressionComponentMask'MF_FlowVolumeFunction:MaterialExpressionComponentMask_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowVolumeFunction:MaterialExpressionReroute_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_3'","/Script/Engine.MaterialExpressionSubtract'MF_FlowVolumeFunction:MaterialExpressionSubtract_3'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_1'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_5'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_11'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_6'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_1'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_3'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_5'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_6'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_4'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_7'","/Script/Engine.MaterialExpressionStaticSwitch'MF_FlowVolumeFunction:MaterialExpressionStaticSwitch_0'","/Script/Engine.MaterialExpressionStaticBool'MF_FlowVolumeFunction:MaterialExpressionStaticBool_0'","/Script/Engine.MaterialExpressionTextureSampleParameterVolume'MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_1'","/Script/Engine.MaterialExpressionTextureSampleParameterVolume'MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_0'","/Script/Engine.MaterialExpressionAppendVector'MF_FlowVolumeFunction:MaterialExpressionAppendVector_0'","/Script/Engine.MaterialExpressionAppendVector'MF_FlowVolumeFunction:MaterialExpressionAppendVector_1'","/Script/Engine.MaterialExpressionConstant'MF_FlowVolumeFunction:MaterialExpressionConstant_0'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_5'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_6'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_9'"))
+   End Object
+   Begin Object Name="MaterialExpressionAbs_0" ExportPath="/Script/Engine.MaterialExpressionAbs'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAbs_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_2'")
+      MaterialExpressionEditorX=-1120
+      MaterialExpressionEditorY=768
+      MaterialExpressionGuid=F57600EB49973E493B2781B3237493A7
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_0" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_7'")
+      B=(Expression="/Script/Engine.MaterialExpressionReroute'MF_FlowVolumeFunction:MaterialExpressionReroute_0'")
+      MaterialExpressionEditorX=-224
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=0FD5283543EC582F18D29896A77A6FDB
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_1" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_1'"
+      A=(Expression="/Script/Engine.MaterialExpressionFrac'MF_FlowVolumeFunction:MaterialExpressionFrac_2'")
+      ConstB=-0.500000
+      MaterialExpressionEditorX=-1520
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=2FC318A247227823E8EB7CB0471209FE
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_2" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionFrac'MF_FlowVolumeFunction:MaterialExpressionFrac_1'")
+      ConstB=-0.500000
+      MaterialExpressionEditorX=-1520
+      MaterialExpressionEditorY=480
+      MaterialExpressionGuid=4AC64F9447FC4F8C36F9E0A3397B1E4C
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_3" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_2'")
+      ConstB=0.500000
+      MaterialExpressionEditorX=-1792
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=DDB428EF46A765E390965D86375DD100
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      Desc="Time Offset"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionAdd_4" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_4'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_10'")
+      B=(Expression="/Script/Engine.MaterialExpressionReroute'MF_FlowVolumeFunction:MaterialExpressionReroute_0'")
+      MaterialExpressionEditorX=-224
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=0FD5283543EC582F18D29896A77A6FDB
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_5" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_5'"
+      A=(Expression="/Script/Engine.MaterialExpressionAppendVector'MF_FlowVolumeFunction:MaterialExpressionAppendVector_0'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_9'")
+      MaterialExpressionEditorX=192
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=7281A31C485C19ACDB6A12AA8ED84DEB
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_6" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAdd_6'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_9'")
+      B=(Expression="/Script/Engine.MaterialExpressionAppendVector'MF_FlowVolumeFunction:MaterialExpressionAppendVector_1'")
+      MaterialExpressionEditorX=192
+      MaterialExpressionEditorY=544
+      MaterialExpressionGuid=CC7F696B45D3C86C2A054F9CBE085165
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAppendVector_0" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAppendVector_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_0'")
+      B=(Expression="/Script/Engine.MaterialExpressionConstant'MF_FlowVolumeFunction:MaterialExpressionConstant_0'")
+      MaterialExpressionEditorX=64
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=2ADBFD5A4246035028B8C2899CFBDB53
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionAppendVector_1" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionAppendVector_1'"
+      A=(Expression="/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_1'")
+      B=(Expression="/Script/Engine.MaterialExpressionConstant'MF_FlowVolumeFunction:MaterialExpressionConstant_0'")
+      MaterialExpressionEditorX=64
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=48901AAD44DEEA4F0A59798ADD3C7521
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionComponentMask_0" ExportPath="/Script/Engine.MaterialExpressionComponentMask'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionComponentMask_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_1'")
+      R=True
+      G=True
+      MaterialExpressionEditorX=-2288
+      MaterialExpressionEditorY=336
+      MaterialExpressionGuid=1AE1E6604AA14729A24278A775695674
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionConstant_0" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstant_0'"
+      MaterialExpressionEditorX=-224
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=94BFFC8748B8F2DC180E6DB02984CB6B
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionConstantBiasScale_0" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_0'")
+      MaterialExpressionEditorX=-128
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=599E79EB466DA242C2AFE08CFA5F31CF
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionConstantBiasScale_1" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_1'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_4'")
+      MaterialExpressionEditorX=-128
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=599E79EB466DA242C2AFE08CFA5F31CF
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionConstantBiasScale_2" ExportPath="/Script/Engine.MaterialExpressionConstantBiasScale'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_2'"
+      Input=(Expression="/Script/Engine.MaterialExpressionFrac'MF_FlowVolumeFunction:MaterialExpressionFrac_1'")
+      Bias=-0.500000
+      Scale=2.000000
+      MaterialExpressionEditorX=-1328
+      MaterialExpressionEditorY=768
+      MaterialExpressionGuid=599E79EB466DA242C2AFE08CFA5F31CF
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionFrac_1" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFrac_1'"
+      Input=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_2'")
+      MaterialExpressionEditorX=-1632
+      MaterialExpressionEditorY=480
+      MaterialExpressionGuid=06C4F2C343C25A58053D2382E9A72485
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      Desc="phase1"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionFrac_2" ExportPath="/Script/Engine.MaterialExpressionFrac'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFrac_2'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_3'")
+      MaterialExpressionEditorX=-1632
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=06C4F2C343C25A58053D2382E9A72485
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      Desc="phase2"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_1" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_1'"
+      Preview=(Mask=1,MaskR=1,MaskG=1,MaskB=1)
+      InputName="FlowInputVector"
+      Id=82CB748042E222EEDC1562A27CC47B22
+      InputType=FunctionInput_Vector2
+      SortPriority=1
+      MaterialExpressionEditorX=-2560
+      MaterialExpressionEditorY=336
+      MaterialExpressionGuid=9B95D401456A575374849CB43FF7B80F
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_2" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_2'"
+      InputName="FlowSpeed"
+      Id=432D707C4874E0AC37934681964CB962
+      InputType=FunctionInput_Scalar
+      PreviewValue=(X=1.600000,Y=0.000000,Z=0.000000,W=1.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=6
+      MaterialExpressionEditorX=-2560
+      MaterialExpressionEditorY=688
+      MaterialExpressionGuid=AEE6DE8943FD9843E8F3B3AA16F26005
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_3" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_3'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionTime'MF_FlowVolumeFunction:MaterialExpressionTime_0'")
+      InputName="CustomTime"
+      Id=5D2AEED9435EE920F2233DA1602FECF4
+      InputType=FunctionInput_Scalar
+      bUsePreviewValueAsDefault=True
+      SortPriority=8
+      MaterialExpressionEditorX=-2560
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=43932AE242DA974EFE90A3B9343A8A47
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_4" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_4'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionTextureCoordinate'MF_FlowVolumeFunction:MaterialExpressionTextureCoordinate_0'")
+      InputName="UV"
+      Id=BB03C8C14BD3B236A96BAD8AFF39EA31
+      InputType=FunctionInput_Vector2
+      bUsePreviewValueAsDefault=True
+      SortPriority=90
+      MaterialExpressionEditorX=-1520
+      MaterialExpressionEditorY=112
+      MaterialExpressionGuid=B1AB476443FE29EF696A61B0767B65E9
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_5" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_5'"
+      InputName="InputFlowStrength"
+      Id=4D2A00D841EE150ECC7053832C6A670B
+      InputType=FunctionInput_Scalar
+      PreviewValue=(X=0.150000,Y=0.000000,Z=0.000000,W=1.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=4
+      MaterialExpressionEditorX=-2064
+      MaterialExpressionEditorY=112
+      MaterialExpressionGuid=DF90197F41D7FCC4FD5A1D849CBAFCD4
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_6" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_6'"
+      InputName="FlowMultiplyByDensity"
+      Id=74653D92406F6E0C89C6A3B5AD962BCA
+      InputType=FunctionInput_Scalar
+      bUsePreviewValueAsDefault=True
+      MaterialExpressionEditorX=-2064
+      MaterialExpressionEditorY=208
+      MaterialExpressionGuid=D6E720BC46D025656B242FABAFA2E68B
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_7" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_7'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionStaticBool'MF_FlowVolumeFunction:MaterialExpressionStaticBool_0'")
+      InputName="InputRangeIs-0-to-1"
+      Id=337C79E04F26385661F7BFAC8B39A170
+      InputType=FunctionInput_StaticBool
+      PreviewValue=(X=1.000000,Y=1.000000,Z=1.000000,W=1.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=300
+      MaterialExpressionEditorX=-752
+      MaterialExpressionEditorY=528
+      MaterialExpressionGuid=DA25E075494DD82C164CC783D6F6CAE3
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_9" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionInput_9'"
+      InputName="UVWoffset"
+      Id=0EEC7196420D46DD415DF8BA3F5C3E67
+      bUsePreviewValueAsDefault=True
+      SortPriority=94
+      MaterialExpressionEditorX=-48
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=6BEF75F44B61E0695D37CEBC0DB25939
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionOutput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionOutput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionFunctionOutput_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionLinearInterpolate'MF_FlowVolumeFunction:MaterialExpressionLinearInterpolate_1'")
+      bLastPreviewed=True
+      Id=0961393E464E2FBB728C4D908508CD59
+      MaterialExpressionEditorX=1104
+      MaterialExpressionEditorY=288
+      MaterialExpressionGuid=0C7FA16F4C93EC6048084FB7F22347D6
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionLinearInterpolate_1" ExportPath="/Script/Engine.MaterialExpressionLinearInterpolate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionLinearInterpolate_1'"
+      A=(Expression="/Script/Engine.MaterialExpressionTextureSampleParameterVolume'MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_1'",Mask=1,MaskR=1,MaskG=1,MaskB=1)
+      B=(Expression="/Script/Engine.MaterialExpressionTextureSampleParameterVolume'MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_0'",Mask=1,MaskR=1,MaskG=1,MaskB=1)
+      Alpha=(Expression="/Script/Engine.MaterialExpressionReroute'MF_FlowVolumeFunction:MaterialExpressionReroute_8'")
+      MaterialExpressionEditorX=944
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=AFB948874ABFAC3DC48A67B9F5067E3A
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_10" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_10'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_1'")
+      MaterialExpressionEditorX=-1248
+      MaterialExpressionEditorY=576
+      MaterialExpressionGuid=76F28DC942E53A50DB827F9B636345D4
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_11" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_11'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_6'")
+      B=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_6'")
+      ConstB=-1.000000
+      MaterialExpressionEditorX=-1760
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=7F6A5922465371297F74BB8548CFFB97
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_2" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_3'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_2'")
+      ConstB=0.500000
+      MaterialExpressionEditorX=-2144
+      MaterialExpressionEditorY=608
+      MaterialExpressionGuid=40154D004264B0D095DF0E882366F922
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      Desc="Time speed (frequency)"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_3" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_4'")
+      ConstB=2.000000
+      MaterialExpressionEditorX=-1248
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=09AAD7B847991A0FF43E2898AFB97CDA
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_5" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_5'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_11'")
+      MaterialExpressionEditorX=-1632
+      MaterialExpressionEditorY=304
+      MaterialExpressionGuid=0F2C45B447A4E85FA38ECE9395F79328
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_6" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_6'"
+      A=(Expression="/Script/Engine.MaterialExpressionComponentMask'MF_FlowVolumeFunction:MaterialExpressionComponentMask_0'")
+      ConstB=-1.000000
+      MaterialExpressionEditorX=-1904
+      MaterialExpressionEditorY=336
+      MaterialExpressionGuid=42DE5DAE46E8EC59CBE141AB85367FE5
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+      Desc="INVERT"
+      bCommentBubbleVisible=True
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_7" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionMultiply_7'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_2'")
+      MaterialExpressionEditorX=-1248
+      MaterialExpressionEditorY=320
+      MaterialExpressionGuid=76F28DC942E53A50DB827F9B636345D4
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionReroute_0" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionReroute_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionStaticSwitch'MF_FlowVolumeFunction:MaterialExpressionStaticSwitch_0'")
+      MaterialExpressionEditorX=-336
+      MaterialExpressionEditorY=480
+      MaterialExpressionGuid=81F985DE4271727DA952E6A4C95AF5EA
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionReroute_8" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionReroute_8'"
+      Input=(Expression="/Script/Engine.MaterialExpressionAbs'MF_FlowVolumeFunction:MaterialExpressionAbs_0'")
+      MaterialExpressionEditorX=624
+      MaterialExpressionEditorY=800
+      MaterialExpressionGuid=4EC4AD9346F9316CA73BD7A6FE10F2ED
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionStaticBool_0" ExportPath="/Script/Engine.MaterialExpressionStaticBool'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionStaticBool_0'"
+      MaterialExpressionEditorX=-912
+      MaterialExpressionEditorY=512
+      MaterialExpressionGuid=9256654543BCFD24EDCEDFB64512DAC0
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionStaticSwitch_0" ExportPath="/Script/Engine.MaterialExpressionStaticSwitch'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionStaticSwitch_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionSubtract'MF_FlowVolumeFunction:MaterialExpressionSubtract_3'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_4'")
+      Value=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_7'")
+      MaterialExpressionEditorX=-448
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=79EE390B4E63E4864861CC9844FA437E
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionSubtract_3" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionSubtract_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_3'")
+      MaterialExpressionEditorX=-1120
+      MaterialExpressionEditorY=448
+      MaterialExpressionGuid=1C07B4C14F30F9054F748BA0854DA436
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureCoordinate_0" ExportPath="/Script/Engine.MaterialExpressionTextureCoordinate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTextureCoordinate_0'"
+      MaterialExpressionEditorX=-1744
+      MaterialExpressionEditorY=112
+      MaterialExpressionGuid=50A5F723418807DD9ACA82ACBC68B096
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureSampleParameterVolume_0" ExportPath="/Script/Engine.MaterialExpressionTextureSampleParameterVolume'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_0'"
+      ParameterName="CausticsTileComponentVolumeTexture"
+      ExpressionGUID=FC4C3F31430D5A392DF68B9D973D24EE
+      Group="SingleLayerWaterOps"
+      SortPriority=2010
+      Coordinates=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_6'")
+      Texture="/Script/Engine.VolumeTexture'/Game/FluidNinjaLive/Textures/Volumetric/T_Caustics_Animated_01_VolumeTexture.T_Caustics_Animated_01_VolumeTexture'"
+      MaterialExpressionEditorX=400
+      MaterialExpressionEditorY=496
+      MaterialExpressionGuid=0A1D0D07478D3C6101DBB6B18E0E3ADE
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureSampleParameterVolume_1" ExportPath="/Script/Engine.MaterialExpressionTextureSampleParameterVolume'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_1'"
+      ParameterName="CausticsTileComponentVolumeTexture"
+      ExpressionGUID=458D61284B8E2EC004C0758B0EF3A2FD
+      Group="SingleLayerWaterOps"
+      SortPriority=2010
+      Coordinates=(Expression="/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_5'")
+      Texture="/Script/Engine.VolumeTexture'/Game/FluidNinjaLive/Textures/Volumetric/T_Caustics_Animated_01_VolumeTexture.T_Caustics_Animated_01_VolumeTexture'"
+      MaterialExpressionEditorX=400
+      MaterialExpressionEditorY=224
+      MaterialExpressionGuid=3A9B7A0A4D0248A32380678C53DE1F68
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="MaterialExpressionTime_0" ExportPath="/Script/Engine.MaterialExpressionTime'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:MaterialExpressionTime_0'"
+      Period=1.000000
+      MaterialExpressionEditorX=-2688
+      MaterialExpressionEditorY=592
+      MaterialExpressionGuid=A8C143B74180B2A00ECAFB8D5A45C8D3
+      Function="/Script/Engine.MaterialFunction'MF_FlowVolumeFunction'"
+   End Object
+   Begin Object Name="SceneThumbnailInfoWithPrimitive_0" ExportPath="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:SceneThumbnailInfoWithPrimitive_0'"
+   End Object
+   Begin Object Name="Material_0" ExportPath="/Script/Engine.Material'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:Material_0'"
+      Begin Object Name="Material_0EditorOnlyData" ExportPath="/Script/Engine.MaterialEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_FlowVolumeFunction.MF_FlowVolumeFunction:Material_0.Material_0EditorOnlyData'"
+         EmissiveColor=(Expression="/Script/Engine.MaterialExpressionFunctionOutput'MF_FlowVolumeFunction:MaterialExpressionFunctionOutput_0'")
+         ExpressionCollection=(Expressions=("/Script/Engine.MaterialExpressionFunctionOutput'MF_FlowVolumeFunction:MaterialExpressionFunctionOutput_0'","/Script/Engine.MaterialExpressionLinearInterpolate'MF_FlowVolumeFunction:MaterialExpressionLinearInterpolate_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_0'","/Script/Engine.MaterialExpressionTime'MF_FlowVolumeFunction:MaterialExpressionTime_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_7'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_3'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_4'","/Script/Engine.MaterialExpressionTextureCoordinate'MF_FlowVolumeFunction:MaterialExpressionTextureCoordinate_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_10'","/Script/Engine.MaterialExpressionFrac'MF_FlowVolumeFunction:MaterialExpressionFrac_1'","/Script/Engine.MaterialExpressionFrac'MF_FlowVolumeFunction:MaterialExpressionFrac_2'","/Script/Engine.MaterialExpressionAbs'MF_FlowVolumeFunction:MaterialExpressionAbs_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowVolumeFunction:MaterialExpressionReroute_8'","/Script/Engine.MaterialExpressionComponentMask'MF_FlowVolumeFunction:MaterialExpressionComponentMask_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_2'","/Script/Engine.MaterialExpressionReroute'MF_FlowVolumeFunction:MaterialExpressionReroute_0'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_3'","/Script/Engine.MaterialExpressionSubtract'MF_FlowVolumeFunction:MaterialExpressionSubtract_3'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_0'","/Script/Engine.MaterialExpressionConstantBiasScale'MF_FlowVolumeFunction:MaterialExpressionConstantBiasScale_1'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_5'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_11'","/Script/Engine.MaterialExpressionMultiply'MF_FlowVolumeFunction:MaterialExpressionMultiply_6'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_1'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_3'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_5'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_6'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_1'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_4'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_7'","/Script/Engine.MaterialExpressionStaticSwitch'MF_FlowVolumeFunction:MaterialExpressionStaticSwitch_0'","/Script/Engine.MaterialExpressionStaticBool'MF_FlowVolumeFunction:MaterialExpressionStaticBool_0'","/Script/Engine.MaterialExpressionTextureSampleParameterVolume'MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_1'","/Script/Engine.MaterialExpressionTextureSampleParameterVolume'MF_FlowVolumeFunction:MaterialExpressionTextureSampleParameterVolume_0'","/Script/Engine.MaterialExpressionAppendVector'MF_FlowVolumeFunction:MaterialExpressionAppendVector_0'","/Script/Engine.MaterialExpressionAppendVector'MF_FlowVolumeFunction:MaterialExpressionAppendVector_1'","/Script/Engine.MaterialExpressionConstant'MF_FlowVolumeFunction:MaterialExpressionConstant_0'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_5'","/Script/Engine.MaterialExpressionAdd'MF_FlowVolumeFunction:MaterialExpressionAdd_6'","/Script/Engine.MaterialExpressionFunctionInput'MF_FlowVolumeFunction:MaterialExpressionFunctionInput_9'"))
+      End Object
+      ShadingModel=MSM_Unlit
+      ShadingModels=(ShadingModelField=1)
+      StateId=5B25FA7746CE9F3B4799E3B470AE7443
+      ReferencedTextureGuids(0)=F40CB8BF48DA4A486DF81B919E162304
+      EditorOnlyData="/Script/Engine.MaterialEditorOnlyData'Material_0EditorOnlyData'"
+      ReferencedDefaultTextures(0)="/Script/Engine.VolumeTexture'/Game/FluidNinjaLive/Textures/Volumetric/T_Caustics_Animated_01_VolumeTexture.T_Caustics_Animated_01_VolumeTexture'"
+      ThumbnailInfo="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'MF_FlowVolumeFunction:SceneThumbnailInfoWithPrimitive_0'"
+      LightingGuid=F322D5A24AE6CFB2D62712A94EFA7262
+   End Object
+   EditorOnlyData="/Script/Engine.MaterialFunctionEditorOnlyData'MF_FlowVolumeFunctionEditorOnlyData'"
+   StateId=15B622494EFE99636403C1919125BC12
+   CombinedInputTypes=527
+   CombinedOutputTypes=15
+   ThumbnailInfo="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'SceneThumbnailInfoWithPrimitive_0'"
+End Object

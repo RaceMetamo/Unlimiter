@@ -1,0 +1,389 @@
+Begin Object Class=/Script/Engine.MaterialFunction Name="MF_NormalFromHeightmap" ExportPath="/Script/Engine.MaterialFunction'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap'"
+   Begin Object Class=/Script/Engine.MaterialFunctionEditorOnlyData Name="MF_NormalFromHeightmapEditorOnlyData" ExportPath="/Script/Engine.MaterialFunctionEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MF_NormalFromHeightmapEditorOnlyData'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_2" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAdd_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAdd Name="MaterialExpressionAdd_3" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAdd_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAppendVector Name="MaterialExpressionAppendVector_0" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAppendVector Name="MaterialExpressionAppendVector_2" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAppendVector Name="MaterialExpressionAppendVector_3" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_3'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionAppendVector Name="MaterialExpressionAppendVector_5" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_5'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstant Name="MaterialExpressionConstant_0" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstant Name="MaterialExpressionConstant_1" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstant Name="MaterialExpressionConstant_2" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstant2Vector Name="MaterialExpressionConstant2Vector_0" ExportPath="/Script/Engine.MaterialExpressionConstant2Vector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionConstant2Vector Name="MaterialExpressionConstant2Vector_1" ExportPath="/Script/Engine.MaterialExpressionConstant2Vector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionCrossProduct Name="MaterialExpressionCrossProduct_0" ExportPath="/Script/Engine.MaterialExpressionCrossProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionCrossProduct_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionDotProduct Name="MaterialExpressionDotProduct_0" ExportPath="/Script/Engine.MaterialExpressionDotProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionDotProduct_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionDotProduct Name="MaterialExpressionDotProduct_2" ExportPath="/Script/Engine.MaterialExpressionDotProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionDotProduct_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionDotProduct Name="MaterialExpressionDotProduct_4" ExportPath="/Script/Engine.MaterialExpressionDotProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionDotProduct_4'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_10" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_10'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_5" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_5'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_6" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_6'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_7" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_7'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionInput Name="MaterialExpressionFunctionInput_8" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_8'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionFunctionOutput Name="MaterialExpressionFunctionOutput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionOutput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionOutput_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_1" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionMultiply_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionMultiply Name="MaterialExpressionMultiply_2" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionMultiply_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionReroute Name="MaterialExpressionReroute_0" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionReroute_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionReroute Name="MaterialExpressionReroute_1" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionReroute_1'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionReroute Name="MaterialExpressionReroute_2" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionReroute_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionSubtract Name="MaterialExpressionSubtract_0" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionSubtract_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionSubtract Name="MaterialExpressionSubtract_2" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionSubtract_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureCoordinate Name="MaterialExpressionTextureCoordinate_0" ExportPath="/Script/Engine.MaterialExpressionTextureCoordinate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureCoordinate_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureObject Name="MaterialExpressionTextureObject_0" ExportPath="/Script/Engine.MaterialExpressionTextureObject'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureObject_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureSample Name="MaterialExpressionTextureSample_0" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureSample_0'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureSample Name="MaterialExpressionTextureSample_2" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureSample_2'"
+   End Object
+   Begin Object Class=/Script/Engine.MaterialExpressionTextureSample Name="MaterialExpressionTextureSample_4" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureSample_4'"
+   End Object
+   Begin Object Class=/Script/UnrealEd.SceneThumbnailInfoWithPrimitive Name="SceneThumbnailInfoWithPrimitive_6" ExportPath="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:SceneThumbnailInfoWithPrimitive_6'"
+   End Object
+   Begin Object Class=/Script/Engine.Material Name="Material_0" ExportPath="/Script/Engine.Material'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:Material_0'"
+      Begin Object Class=/Script/Engine.MaterialEditorOnlyData Name="Material_0EditorOnlyData" ExportPath="/Script/Engine.MaterialEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:Material_0.Material_0EditorOnlyData'"
+      End Object
+   End Object
+   Begin Object Name="MF_NormalFromHeightmapEditorOnlyData" ExportPath="/Script/Engine.MaterialFunctionEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MF_NormalFromHeightmapEditorOnlyData'"
+      ExpressionCollection=(Expressions=("/Script/Engine.MaterialExpressionFunctionOutput'MF_NormalFromHeightmap:MaterialExpressionFunctionOutput_0'","/Script/Engine.MaterialExpressionCrossProduct'MF_NormalFromHeightmap:MaterialExpressionCrossProduct_0'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_3'","/Script/Engine.MaterialExpressionMultiply'MF_NormalFromHeightmap:MaterialExpressionMultiply_1'","/Script/Engine.MaterialExpressionSubtract'MF_NormalFromHeightmap:MaterialExpressionSubtract_0'","/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_7'","/Script/Engine.MaterialExpressionTextureObject'MF_NormalFromHeightmap:MaterialExpressionTextureObject_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_6'","/Script/Engine.MaterialExpressionTextureCoordinate'MF_NormalFromHeightmap:MaterialExpressionTextureCoordinate_0'","/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_0'","/Script/Engine.MaterialExpressionAdd'MF_NormalFromHeightmap:MaterialExpressionAdd_3'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_5'","/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_2'","/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_8'","/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_1'","/Script/Engine.MaterialExpressionConstant2Vector'MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_0'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_5'","/Script/Engine.MaterialExpressionMultiply'MF_NormalFromHeightmap:MaterialExpressionMultiply_2'","/Script/Engine.MaterialExpressionSubtract'MF_NormalFromHeightmap:MaterialExpressionSubtract_2'","/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_4'","/Script/Engine.MaterialExpressionAdd'MF_NormalFromHeightmap:MaterialExpressionAdd_2'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_2'","/Script/Engine.MaterialExpressionConstant2Vector'MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_1'","/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_10'","/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_2'","/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_4'","/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_0'","/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_1'","/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_2'"))
+   End Object
+   Begin Object Name="MaterialExpressionAdd_2" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAdd_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_2'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_6'")
+      MaterialExpressionEditorX=-3188
+      MaterialExpressionEditorY=-65
+      MaterialExpressionGuid=DA1FF3D84BD7C28162E8AFA72B324457
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionAdd_3" ExportPath="/Script/Engine.MaterialExpressionAdd'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAdd_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_6'")
+      B=(Expression="/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_0'")
+      MaterialExpressionEditorX=-3180
+      MaterialExpressionEditorY=454
+      MaterialExpressionGuid=E66BAAC646EE14350C28CDBDB831A4CC
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionAppendVector_0" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_0'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_5'")
+      MaterialExpressionEditorX=-3704
+      MaterialExpressionEditorY=485
+      MaterialExpressionGuid=DDE0B06043273C2989913A8DF7CE2460
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionAppendVector_2" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_0'")
+      MaterialExpressionEditorX=-3712
+      MaterialExpressionEditorY=-61
+      MaterialExpressionGuid=3304C1ED4591DC6A414F1FAE2AC2CA47
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionAppendVector_3" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_3'"
+      A=(Expression="/Script/Engine.MaterialExpressionConstant2Vector'MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_0'")
+      B=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_NormalFromHeightmap:MaterialExpressionMultiply_1'")
+      MaterialExpressionEditorX=-863
+      MaterialExpressionEditorY=407
+      MaterialExpressionGuid=C14F91CE4A1D01251E1E7395E2954735
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionAppendVector_5" ExportPath="/Script/Engine.MaterialExpressionAppendVector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionAppendVector_5'"
+      A=(Expression="/Script/Engine.MaterialExpressionConstant2Vector'MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_1'")
+      B=(Expression="/Script/Engine.MaterialExpressionMultiply'MF_NormalFromHeightmap:MaterialExpressionMultiply_2'")
+      MaterialExpressionEditorX=-880
+      MaterialExpressionEditorY=-32
+      MaterialExpressionGuid=A5C40BD14208345342F811AEF0991858
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionConstant_0" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant_0'"
+      MaterialExpressionEditorX=-3909
+      MaterialExpressionEditorY=191
+      MaterialExpressionGuid=D05D11424F868F70E65C21A084FEACAB
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionConstant_1" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant_1'"
+      R=8.000000
+      MaterialExpressionEditorX=-1728
+      MaterialExpressionEditorY=208
+      MaterialExpressionGuid=C8C4F98847A93DB089723091895C1C9B
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionConstant_2" ExportPath="/Script/Engine.MaterialExpressionConstant'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant_2'"
+      R=0.005000
+      MaterialExpressionEditorX=-4464
+      MaterialExpressionEditorY=192
+      MaterialExpressionGuid=77CB2FB547CE1728FCFC5CA049F1DB2E
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionConstant2Vector_0" ExportPath="/Script/Engine.MaterialExpressionConstant2Vector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_0'"
+      G=1.000000
+      MaterialExpressionEditorX=-1104
+      MaterialExpressionEditorY=288
+      MaterialExpressionGuid=8BD0A791441D7F1204364CA2B9A12A8C
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionConstant2Vector_1" ExportPath="/Script/Engine.MaterialExpressionConstant2Vector'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_1'"
+      R=1.000000
+      MaterialExpressionEditorX=-1120
+      MaterialExpressionEditorY=-144
+      MaterialExpressionGuid=6433C9AE445371D1BC42F684A6F140EA
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionCrossProduct_0" ExportPath="/Script/Engine.MaterialExpressionCrossProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionCrossProduct_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_5'")
+      B=(Expression="/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_3'")
+      MaterialExpressionEditorX=-624
+      MaterialExpressionEditorY=160
+      MaterialExpressionGuid=C99C04E546C696E0B56C9CA612218B49
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bRealtimePreview=True
+   End Object
+   Begin Object Name="MaterialExpressionDotProduct_0" ExportPath="/Script/Engine.MaterialExpressionDotProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionDotProduct_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_0'",OutputIndex=5,Mask=1,MaskR=1,MaskG=1,MaskB=1,MaskA=1)
+      B=(Expression="/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_2'")
+      MaterialExpressionEditorX=-1976
+      MaterialExpressionEditorY=453
+      MaterialExpressionGuid=A5F6D071445B055CA3C0FBADEB757990
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionDotProduct_2" ExportPath="/Script/Engine.MaterialExpressionDotProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionDotProduct_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_2'",OutputIndex=5,Mask=1,MaskR=1,MaskG=1,MaskB=1,MaskA=1)
+      B=(Expression="/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_1'")
+      MaterialExpressionEditorX=-1984
+      MaterialExpressionEditorY=192
+      MaterialExpressionGuid=DF1A1B444FDD79C351207BAF595027B8
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionDotProduct_4" ExportPath="/Script/Engine.MaterialExpressionDotProduct'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionDotProduct_4'"
+      A=(Expression="/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_4'",OutputIndex=5,Mask=1,MaskR=1,MaskG=1,MaskB=1,MaskA=1)
+      B=(Expression="/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_0'")
+      MaterialExpressionEditorX=-1984
+      MaterialExpressionEditorY=-64
+      MaterialExpressionGuid=689CB09C4F21FAAEB43E39A39621578D
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_10" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_10'"
+      InputName="Height Map Channel Selector"
+      Description="If you would like the red channel to be used to generate the normal map enter (1,0,0,0). If the green channel is preferred enter (0,1,0,0) etc."
+      Id=91D2AE2C4FDB93F22CC486A515E427D4
+      InputType=FunctionInput_Vector4
+      PreviewValue=(X=1.000000,Y=0.000000,Z=0.000000,W=0.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=11
+      MaterialExpressionEditorX=-2464
+      MaterialExpressionEditorY=-160
+      MaterialExpressionGuid=68AD66134A172C7DAD3FCB8DFEA76D16
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_5" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_5'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_2'")
+      InputName="Height Map UV Offset"
+      Description="Spread used to derive the height from a scalar input. Default is .005"
+      Id=869F13D34EC0F9820DE2FF939EAFE52E
+      InputType=FunctionInput_Scalar
+      PreviewValue=(X=0.005000,Y=0.000000,Z=0.000000,W=1.000000)
+      bUsePreviewValueAsDefault=True
+      SortPriority=2
+      MaterialExpressionEditorX=-4288
+      MaterialExpressionEditorY=192
+      MaterialExpressionGuid=22586D60479B2F51C27C538279FDD278
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_6" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_6'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionTextureCoordinate'MF_NormalFromHeightmap:MaterialExpressionTextureCoordinate_0'")
+      InputName="Coordinates"
+      Id=030390874A5513D2A2E5298EE2924C44
+      InputType=FunctionInput_Vector2
+      bUsePreviewValueAsDefault=True
+      SortPriority=3
+      MaterialExpressionEditorX=-3488
+      MaterialExpressionEditorY=192
+      MaterialExpressionGuid=A0216B3B4D7BD93E38D14D96C54A857E
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_7" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_7'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionTextureObject'MF_NormalFromHeightmap:MaterialExpressionTextureObject_0'")
+      InputName="Height Map"
+      Description="Uses the R channel as the heightmap by default."
+      Id=D18B76DA498ACF9019832CA057F28DF9
+      InputType=FunctionInput_Texture2D
+      bUsePreviewValueAsDefault=True
+      MaterialExpressionEditorX=-2832
+      MaterialExpressionEditorY=256
+      MaterialExpressionGuid=CD04241E492648B9B5763FBA75EB249A
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionInput_8" ExportPath="/Script/Engine.MaterialExpressionFunctionInput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionInput_8'"
+      Preview=(Expression="/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_1'")
+      InputName="Normal Map Intensity"
+      Description="How strong the normal map will be.  Default is 8."
+      Id=B29BEDF846981D4D3E77569F196580E9
+      InputType=FunctionInput_Scalar
+      bUsePreviewValueAsDefault=True
+      SortPriority=1
+      MaterialExpressionEditorX=-1568
+      MaterialExpressionEditorY=208
+      MaterialExpressionGuid=A14AEFB74A71794953396BB7BE61F504
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bCollapsed=True
+   End Object
+   Begin Object Name="MaterialExpressionFunctionOutput_0" ExportPath="/Script/Engine.MaterialExpressionFunctionOutput'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionFunctionOutput_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionCrossProduct'MF_NormalFromHeightmap:MaterialExpressionCrossProduct_0'")
+      bLastPreviewed=True
+      Id=E286AA1C4D326C3C97D7D98AA7273BEF
+      MaterialExpressionEditorX=-416
+      MaterialExpressionEditorY=128
+      MaterialExpressionGuid=C24E215D431C7ACF9F2A4B8B80822449
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_1" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionMultiply_1'"
+      A=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_8'")
+      B=(Expression="/Script/Engine.MaterialExpressionSubtract'MF_NormalFromHeightmap:MaterialExpressionSubtract_0'")
+      MaterialExpressionEditorX=-1104
+      MaterialExpressionEditorY=432
+      MaterialExpressionGuid=178B105F427B8D50B673DEB64E07DB30
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bRealtimePreview=True
+   End Object
+   Begin Object Name="MaterialExpressionMultiply_2" ExportPath="/Script/Engine.MaterialExpressionMultiply'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionMultiply_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionSubtract'MF_NormalFromHeightmap:MaterialExpressionSubtract_2'")
+      B=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_8'")
+      MaterialExpressionEditorX=-1120
+      MaterialExpressionGuid=3FEAD45C44A3E4CCA91848B23249252A
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bRealtimePreview=True
+   End Object
+   Begin Object Name="MaterialExpressionReroute_0" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionReroute_0'"
+      Input=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_10'")
+      MaterialExpressionEditorX=-2016
+      MaterialExpressionEditorY=16
+      MaterialExpressionGuid=7654ABFA46D4E3F546F570AD637B6C29
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionReroute_1" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionReroute_1'"
+      Input=(Expression="/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_0'")
+      MaterialExpressionEditorX=-2016
+      MaterialExpressionEditorY=256
+      MaterialExpressionGuid=F975F348490E607EF29E6E91C9350FFC
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionReroute_2" ExportPath="/Script/Engine.MaterialExpressionReroute'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionReroute_2'"
+      Input=(Expression="/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_1'")
+      MaterialExpressionEditorX=-2024
+      MaterialExpressionEditorY=517
+      MaterialExpressionGuid=E69FA348454A75B3460641919BCB43BE
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionSubtract_0" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionSubtract_0'"
+      A=(Expression="/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_0'")
+      B=(Expression="/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_2'")
+      MaterialExpressionEditorX=-1752
+      MaterialExpressionEditorY=453
+      MaterialExpressionGuid=D8297A214F8CE40C6DE769BDA789F5FC
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionSubtract_2" ExportPath="/Script/Engine.MaterialExpressionSubtract'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionSubtract_2'"
+      A=(Expression="/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_4'")
+      B=(Expression="/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_2'")
+      MaterialExpressionEditorX=-1766
+      MaterialExpressionEditorY=2
+      MaterialExpressionGuid=8B44F5984B7CEFADA8D5DC8555D81376
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bRealtimePreview=True
+   End Object
+   Begin Object Name="MaterialExpressionTextureCoordinate_0" ExportPath="/Script/Engine.MaterialExpressionTextureCoordinate'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureCoordinate_0'"
+      MaterialExpressionEditorX=-3696
+      MaterialExpressionEditorY=192
+      MaterialExpressionGuid=5FBFAD724840517DE0EB988858146B94
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureObject_0" ExportPath="/Script/Engine.MaterialExpressionTextureObject'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureObject_0'"
+      MaterialExpressionEditorX=-3008
+      MaterialExpressionEditorY=256
+      MaterialExpressionGuid=4751D18C4FBD37B196384B9299871590
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+   End Object
+   Begin Object Name="MaterialExpressionTextureSample_0" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureSample_0'"
+      Coordinates=(Expression="/Script/Engine.MaterialExpressionAdd'MF_NormalFromHeightmap:MaterialExpressionAdd_3'")
+      TextureObject=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_7'")
+      MaterialExpressionEditorX=-2456
+      MaterialExpressionEditorY=453
+      MaterialExpressionGuid=D276A6ED43E2514192E881838D50CFE7
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bRealtimePreview=True
+   End Object
+   Begin Object Name="MaterialExpressionTextureSample_2" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureSample_2'"
+      Coordinates=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_6'")
+      TextureObject=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_7'")
+      MaterialExpressionEditorX=-2463
+      MaterialExpressionEditorY=196
+      MaterialExpressionGuid=1A8523D2497106FA98B4EBA82B0524A5
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bRealtimePreview=True
+   End Object
+   Begin Object Name="MaterialExpressionTextureSample_4" ExportPath="/Script/Engine.MaterialExpressionTextureSample'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:MaterialExpressionTextureSample_4'"
+      Coordinates=(Expression="/Script/Engine.MaterialExpressionAdd'MF_NormalFromHeightmap:MaterialExpressionAdd_2'")
+      TextureObject=(Expression="/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_7'")
+      MaterialExpressionEditorX=-2467
+      MaterialExpressionEditorY=-65
+      MaterialExpressionGuid=0CDC950849E9F364FF33748B8C9CB1A4
+      Function="/Script/Engine.MaterialFunction'MF_NormalFromHeightmap'"
+      bRealtimePreview=True
+   End Object
+   Begin Object Name="SceneThumbnailInfoWithPrimitive_6" ExportPath="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:SceneThumbnailInfoWithPrimitive_6'"
+   End Object
+   Begin Object Name="Material_0" ExportPath="/Script/Engine.Material'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:Material_0'"
+      Begin Object Name="Material_0EditorOnlyData" ExportPath="/Script/Engine.MaterialEditorOnlyData'/Game/FluidNinjaLive/OutputMaterials/Base/Functions/MF_NormalFromHeightmap.MF_NormalFromHeightmap:Material_0.Material_0EditorOnlyData'"
+         EmissiveColor=(Expression="/Script/Engine.MaterialExpressionFunctionOutput'MF_NormalFromHeightmap:MaterialExpressionFunctionOutput_0'")
+         ExpressionCollection=(Expressions=("/Script/Engine.MaterialExpressionFunctionOutput'MF_NormalFromHeightmap:MaterialExpressionFunctionOutput_0'","/Script/Engine.MaterialExpressionCrossProduct'MF_NormalFromHeightmap:MaterialExpressionCrossProduct_0'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_3'","/Script/Engine.MaterialExpressionMultiply'MF_NormalFromHeightmap:MaterialExpressionMultiply_1'","/Script/Engine.MaterialExpressionSubtract'MF_NormalFromHeightmap:MaterialExpressionSubtract_0'","/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_2'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_7'","/Script/Engine.MaterialExpressionTextureObject'MF_NormalFromHeightmap:MaterialExpressionTextureObject_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_6'","/Script/Engine.MaterialExpressionTextureCoordinate'MF_NormalFromHeightmap:MaterialExpressionTextureCoordinate_0'","/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_0'","/Script/Engine.MaterialExpressionAdd'MF_NormalFromHeightmap:MaterialExpressionAdd_3'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_5'","/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_2'","/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_8'","/Script/Engine.MaterialExpressionConstant'MF_NormalFromHeightmap:MaterialExpressionConstant_1'","/Script/Engine.MaterialExpressionConstant2Vector'MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_0'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_5'","/Script/Engine.MaterialExpressionMultiply'MF_NormalFromHeightmap:MaterialExpressionMultiply_2'","/Script/Engine.MaterialExpressionSubtract'MF_NormalFromHeightmap:MaterialExpressionSubtract_2'","/Script/Engine.MaterialExpressionTextureSample'MF_NormalFromHeightmap:MaterialExpressionTextureSample_4'","/Script/Engine.MaterialExpressionAdd'MF_NormalFromHeightmap:MaterialExpressionAdd_2'","/Script/Engine.MaterialExpressionAppendVector'MF_NormalFromHeightmap:MaterialExpressionAppendVector_2'","/Script/Engine.MaterialExpressionConstant2Vector'MF_NormalFromHeightmap:MaterialExpressionConstant2Vector_1'","/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_0'","/Script/Engine.MaterialExpressionFunctionInput'MF_NormalFromHeightmap:MaterialExpressionFunctionInput_10'","/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_2'","/Script/Engine.MaterialExpressionDotProduct'MF_NormalFromHeightmap:MaterialExpressionDotProduct_4'","/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_0'","/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_1'","/Script/Engine.MaterialExpressionReroute'MF_NormalFromHeightmap:MaterialExpressionReroute_2'"))
+      End Object
+      ShadingModel=MSM_Unlit
+      ShadingModels=(ShadingModelField=1)
+      StateId=14EF5FC54489E04734D537A0B1FD417B
+      ReferencedTextureGuids(0)=00000000000000000000000000000000
+      EditorOnlyData="/Script/Engine.MaterialEditorOnlyData'Material_0EditorOnlyData'"
+      ReferencedDefaultTextures(0)=None
+      ReferencedDefaultTextures(1)="/Script/Engine.Texture2D'/Engine/EngineResources/DefaultTexture.DefaultTexture'"
+      ThumbnailInfo="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'MF_NormalFromHeightmap:SceneThumbnailInfoWithPrimitive_6'"
+      LightingGuid=32C3A1714CC8FC3223DC859A2061DDD0
+   End Object
+   Description="Takes a heightmap input and generates a normal map from it."
+   bExposeToLibrary=True
+   LibraryCategoriesText(1)=NSLOCTEXT("", "B6CF9D814B6E30B9818A26ADEA888C1E", "Procedurals")
+   EditorOnlyData="/Script/Engine.MaterialFunctionEditorOnlyData'MF_NormalFromHeightmapEditorOnlyData'"
+   StateId=BFC631EF4B953227025A8C9EE7733907
+   CombinedInputTypes=31
+   CombinedOutputTypes=15
+   ThumbnailInfo="/Script/UnrealEd.SceneThumbnailInfoWithPrimitive'SceneThumbnailInfoWithPrimitive_6'"
+End Object
