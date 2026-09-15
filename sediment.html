@@ -246,6 +246,11 @@
       <div class="body" id="g-post"></div>
     </details>
 
+    <details class="group" open>
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+
     <details class="group">
       <summary>Layout<span class="chev"></span></summary>
       <div class="body" id="g-layout"></div>
@@ -272,6 +277,7 @@
 <input type="file" id="fileImg" accept="image/png,image/jpeg,image/webp" class="hidden">
 <input type="file" id="filePreset" accept="application/json,.json" class="hidden">
 
+<script src="unlimiter-drive.js"></script>
 <script>
 "use strict";
 
@@ -416,7 +422,21 @@ const DEFAULTS = {
 };
 
 let P = Object.assign({}, DEFAULTS);
+let Q = P;                 // P with modulation applied
 let userSlot = null;
+
+/* ---- shared modulation layer ---- */
+const Drive = (window.UnlimiterDrive)
+  ? UnlimiterDrive.create({ onChange:()=>restart(), getOutputCanvas:()=>view })
+  : null;
+// anything consumed when the cycle is built, rather than while it draws
+const NO_MOD = new Set(["frames","particles","seed","sizeMulMin","sizeMulMax",
+  "strokeMin","strokeMax","rotValue","aspect"]);
+let GRP="";
+function registerMod(key,label,min,max){
+  if(!Drive || NO_MOD.has(key)) return;
+  Drive.registerTarget(key, GRP ? GRP+" — "+label : label, min, max);
+}
 
 const PRESETS = {
   "Sediment": {},
@@ -513,6 +533,7 @@ function slider(parent, key, label, min, max, step, suffix, structural=true){
   show();
   inp.addEventListener("input", ()=>{ P[key]=Number(inp.value); show(); changed(structural); });
   bound[key] = ()=>{ inp.value=P[key]; show(); };
+  registerMod(key,label,min,max);
   row(parent, label, [inp, val]);
   return inp;
 }
@@ -527,6 +548,7 @@ function dual(parent, keyA, keyB, label, min, max, step, structural=true){
   b.addEventListener("input",()=>{P[keyB]=Number(b.value);show();changed(structural);});
   bound[keyA]=()=>{a.value=P[keyA];show();};
   bound[keyB]=()=>{b.value=P[keyB];show();};
+  registerMod(keyA,label+" min",min,max); registerMod(keyB,label+" max",min,max);
   row(parent,label,[a,b,val]);
 }
 function select(parent, key, label, options, structural=true){
@@ -565,6 +587,7 @@ function textField(parent,key,label){
 /* =========================================================================
    Build the panel
    ========================================================================= */
+GRP="Cycle";
 const gCycle=document.getElementById("g-cycle");
 slider(gCycle,"frames","Frames",1,600,1,"");
 slider(gCycle,"particles","Particles",20,8000,10,"");
@@ -573,6 +596,7 @@ check(gCycle,"wrap","Wrap at edges");
 check(gCycle,"autoLoop","Loop forever");
 note(gCycle,"Every parameter with a start and an end value is spread across the frame budget. Fewer frames means bigger jumps between them.");
 
+GRP="Mode";
 const gMode=document.getElementById("g-mode");
 select(gMode,"colorMode","Colour from",[
   ["trace","Trace — resample every frame"],
@@ -591,6 +615,7 @@ select(gMode,"blend","Layer blending",[
 colorPick(gMode,"wireFill","Wire fill");
 colorPick(gMode,"wireStroke","Wire stroke");
 
+GRP="Shape";
 const gShape=document.getElementById("g-shape");
 select(gShape,"contentType","Draw",[
   ["fillStroke","Fill and stroke"],["fill","Fill only"],["stroke","Stroke only"]
@@ -616,6 +641,7 @@ select(gShape,"rotMode","Rotation",[
 ]);
 slider(gShape,"rotValue","Angle",0,360,5,"°");
 
+GRP="Motion";
 function motionGroup(el, pre){
   slider(el,pre+"Flow","Flow",0,0.006,0.0001,"");
   slider(el,pre+"Attract","Attract",0,0.006,0.0001,"");
@@ -628,10 +654,11 @@ function motionGroup(el, pre){
   slider(el,pre+"ScatterE","End",0,0.08,0.001,"");
   easeSelect(el,pre+"ScatterEase","Ease");
 }
-motionGroup(document.getElementById("g-x"),"x");
-motionGroup(document.getElementById("g-y"),"y");
+GRP="Motion X"; motionGroup(document.getElementById("g-x"),"x");
+GRP="Motion Y"; motionGroup(document.getElementById("g-y"),"y");
 note(document.getElementById("g-y"),"Flow sets the noise frequency along the axis; attract sets it across the axis, which reads as invisible lines the particles gather on.");
 
+GRP="Size/colour";
 const gSco=document.getElementById("g-sco");
 subhead(gSco,"Shape size (px)");
 slider(gSco,"sizeS","Start",0.5,160,0.5,"");
@@ -649,6 +676,7 @@ subhead(gSco,"Field");
 slider(gSco,"drift","Drift per frame",0,0.02,0.0005,"");
 note(gSco,"Drift slowly rewrites the noise field as the cycle runs, so late frames no longer follow the same currents as early ones.");
 
+GRP="Post";
 const gPost=document.getElementById("g-post");
 check(gPost,"postApply","Apply filters",false);
 slider(gPost,"blur","Blur",0,12,0.1,"",false);
@@ -883,33 +911,33 @@ function renderStep(ctx, sc){
   const {w,h}=dims();
   const F=Math.max(1,P.frames);
   const t = F===1 ? 1 : frame/(F-1);
-  const spdX = P.xSpeedS + (P.xSpeedE-P.xSpeedS)*EASE[P.xSpeedEase](t);
-  const spdY = P.ySpeedS + (P.ySpeedE-P.ySpeedS)*EASE[P.ySpeedEase](t);
-  const scX  = P.xScatterS + (P.xScatterE-P.xScatterS)*EASE[P.xScatterEase](t);
-  const scY  = P.yScatterS + (P.yScatterE-P.yScatterS)*EASE[P.yScatterEase](t);
-  const size = P.sizeS + (P.sizeE-P.sizeS)*EASE[P.sizeEase](t);
-  const off  = P.offS + (P.offE-P.offS)*EASE[P.offEase](t);
-  const opa  = P.opaS + (P.opaE-P.opaS)*EASE[P.opaEase](t);
-  const zt   = P.drift * frame;
+  const spdX = Q.xSpeedS + (Q.xSpeedE-Q.xSpeedS)*EASE[Q.xSpeedEase](t);
+  const spdY = Q.ySpeedS + (Q.ySpeedE-Q.ySpeedS)*EASE[Q.ySpeedEase](t);
+  const scX  = Q.xScatterS + (Q.xScatterE-Q.xScatterS)*EASE[Q.xScatterEase](t);
+  const scY  = Q.yScatterS + (Q.yScatterE-Q.yScatterS)*EASE[Q.yScatterEase](t);
+  const size = Q.sizeS + (Q.sizeE-Q.sizeS)*EASE[Q.sizeEase](t);
+  const off  = Q.offS + (Q.offE-Q.offS)*EASE[Q.offEase](t);
+  const opa  = Q.opaS + (Q.opaE-Q.opaS)*EASE[Q.opaEase](t);
+  const zt   = Q.drift * frame;
 
-  ctx.globalCompositeOperation = P.blend;
+  ctx.globalCompositeOperation = Q.blend;
   ctx.globalAlpha = Math.max(0,Math.min(1,opa));
   ctx.lineJoin="round"; ctx.lineCap="round";
 
-  const wire = P.colorMode==="wireframe";
-  const doFill = P.contentType!=="stroke";
-  const doStroke = P.contentType!=="fill";
+  const wire = Q.colorMode==="wireframe";
+  const doFill = Q.contentType!=="stroke";
+  const doStroke = Q.contentType!=="fill";
   const tmp=[0,0,0];
 
   for(let i=0;i<particles.length;i++){
     const p=particles[i];
     // ---- move
-    const nx = noise.noise3D(p.x*P.xFlow, p.y*P.xAttract, 11.7+zt);
-    const ny = noise.noise3D(p.x*P.yAttract, p.y*P.yFlow, 91.3+zt);
+    const nx = noise.noise3D(p.x*Q.xFlow, p.y*Q.xAttract, 11.7+zt);
+    const ny = noise.noise3D(p.x*Q.yAttract, p.y*Q.yFlow, 91.3+zt);
     p.px=p.x; p.py=p.y;
     p.x += nx*spdX*0.14 + (p.rnd()*2-1)*scX*400;
     p.y += ny*spdY*0.14 + (p.rnd()*2-1)*scY*400;
-    if(P.wrap){
+    if(Q.wrap){
       if(p.x<0) p.x+=w; else if(p.x>=w) p.x-=w;
       if(p.y<0) p.y+=h; else if(p.y>=h) p.y-=h;
     }
@@ -917,7 +945,7 @@ function renderStep(ctx, sc){
     let cs;
     if(wire){
       cs=null;
-    } else if(P.colorMode==="trace" && sData){
+    } else if(Q.colorMode==="trace" && sData){
       const ox = off? (p.rnd()*2-1)*off : 0;
       const oy = off? (p.rnd()*2-1)*off : 0;
       sampleRGB(p.x+ox, p.y+oy, tmp);
@@ -927,8 +955,8 @@ function renderStep(ctx, sc){
     }
     // ---- rotation
     let rot=p.rot;
-    if(P.rotMode==="randomEach") rot=p.rnd()*Math.PI*2;
-    else if(P.rotMode==="flow") rot=Math.atan2(p.y-p.py, p.x-p.px);
+    if(Q.rotMode==="randomEach") rot=p.rnd()*Math.PI*2;
+    else if(Q.rotMode==="flow") rot=Math.atan2(p.y-p.py, p.x-p.px);
 
     const s = size*p.sm;
     if(s<=0.05) continue;
@@ -937,9 +965,9 @@ function renderStep(ctx, sc){
     ctx.translate(p.x*sc, p.y*sc);
     if(rot) ctx.rotate(rot);
     const isLine = p.shape==="line" || p.shape==="lineCircles" || p.shape==="lineRects";
-    if(doFill) ctx.fillStyle = wire ? P.wireFill : cs;
+    if(doFill) ctx.fillStyle = wire ? Q.wireFill : cs;
     if(doStroke || isLine){
-      ctx.strokeStyle = wire ? (doStroke ? P.wireStroke : P.wireFill) : cs;
+      ctx.strokeStyle = wire ? (doStroke ? Q.wireStroke : Q.wireFill) : cs;
       ctx.lineWidth = Math.max(0.35, p.sw*sc);
     }
 
@@ -979,41 +1007,41 @@ function applyPost(src, sc){
   const out=document.createElement("canvas"); out.width=w; out.height=h;
   const o=out.getContext("2d",{willReadFrequently:true});
   const f=[];
-  if(P.blur>0) f.push(`blur(${(P.blur*sc).toFixed(2)}px)`);
-  if(P.brightness!==1) f.push(`brightness(${P.brightness})`);
-  if(P.contrast!==1) f.push(`contrast(${P.contrast})`);
-  if(P.saturation!==1) f.push(`saturate(${P.saturation})`);
+  if(Q.blur>0) f.push(`blur(${(Q.blur*sc).toFixed(2)}px)`);
+  if(Q.brightness!==1) f.push(`brightness(${Q.brightness})`);
+  if(Q.contrast!==1) f.push(`contrast(${Q.contrast})`);
+  if(Q.saturation!==1) f.push(`saturate(${Q.saturation})`);
   o.filter = f.length? f.join(" ") : "none";
   o.drawImage(src,0,0);
   o.filter="none";
 
-  const needPixel = P.sharpGain>0 || P.posterize>0 || P.gRed!==1 || P.gGreen!==1 || P.gBlue!==1 || P.grain>0;
+  const needPixel = Q.sharpGain>0 || Q.posterize>0 || Q.gRed!==1 || Q.gGreen!==1 || Q.gBlue!==1 || Q.grain>0;
   if(!needPixel) return out;
 
   const img=o.getImageData(0,0,w,h); const d=img.data;
   let bd=null;
-  if(P.sharpGain>0){
+  if(Q.sharpGain>0){
     const b=document.createElement("canvas"); b.width=w; b.height=h;
     const bc=b.getContext("2d",{willReadFrequently:true});
-    bc.filter=`blur(${(P.sharpRadius*sc).toFixed(2)}px)`;
+    bc.filter=`blur(${(Q.sharpRadius*sc).toFixed(2)}px)`;
     bc.drawImage(out,0,0); bc.filter="none";
     bd=bc.getImageData(0,0,w,h).data;
   }
-  const levels=P.posterize>=2?P.posterize:0;
+  const levels=Q.posterize>=2?Q.posterize:0;
   const step=levels?255/(levels-1):0;
-  const gr=P.grain;
-  const rnd=mulberry32(P.seed+99);
+  const gr=Q.grain;
+  const rnd=mulberry32(Q.seed+99);
   for(let i=0;i<d.length;i+=4){
     let r=d[i],g=d[i+1],b=d[i+2];
     if(bd){
-      r=r+(r-bd[i])*P.sharpGain;
-      g=g+(g-bd[i+1])*P.sharpGain;
-      b=b+(b-bd[i+2])*P.sharpGain;
+      r=r+(r-bd[i])*Q.sharpGain;
+      g=g+(g-bd[i+1])*Q.sharpGain;
+      b=b+(b-bd[i+2])*Q.sharpGain;
     }
     if(levels){
       r=Math.round(r/step)*step; g=Math.round(g/step)*step; b=Math.round(b/step)*step;
     }
-    r*=P.gRed; g*=P.gGreen; b*=P.gBlue;
+    r*=Q.gRed; g*=Q.gGreen; b*=Q.gBlue;
     if(gr){
       const n=(rnd()*2-1)*gr;
       r+=n; g+=n; b+=n;
@@ -1072,6 +1100,7 @@ function tick(){
   rafId=0;
   if(!running) return;
   const t0=performance.now();
+  if(Drive) Q=Drive.resolve(P);
   while(frame<P.frames && performance.now()-t0 < 15){
     renderStep(wctx,1);
   }
@@ -1096,6 +1125,7 @@ function tick(){
 
 function restart(){
   if(rafId) cancelAnimationFrame(rafId);
+  Q = Drive ? Drive.resolve(P) : P;
   if(camLiveOn && camStream) grabCam(true);
   initCycle();
   running=true;
@@ -1145,6 +1175,7 @@ async function exportPNG(){
   // rebuild the same cycle at scale
   const savedParticles=particles, savedFrame=frame, savedNoise=noise;
   overlay.classList.add("on");
+  Q = Drive ? Drive.resolve(P) : P;
   initCycle();
   // repaint background at export size
   bx.setTransform(1,0,0,1,0,0);
@@ -1248,7 +1279,9 @@ document.getElementById("btnSaveSession").addEventListener("click",()=>{
   setTimeout(()=>setStatus(running?statusText.textContent:"idle",running?frame/P.frames:1),900);
 });
 document.getElementById("btnExportPreset").addEventListener("click",()=>{
-  const blob=new Blob([JSON.stringify(P,null,2)],{type:"application/json"});
+  const out=Object.assign({},P);
+  if(Drive) out._drive=Drive.serialize();
+  const blob=new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download=`sediment_preset_${P.seed}.json`; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),3000);
@@ -1261,6 +1294,8 @@ filePreset.addEventListener("change",e=>{
   r.onload=()=>{
     try{
       const j=JSON.parse(r.result);
+      if(Drive && j._drive) Drive.load(j._drive);
+      delete j._drive;
       P=Object.assign({},DEFAULTS,j);
       userSlot=JSON.parse(JSON.stringify(P));
       presetSel.value="*User preset";
@@ -1352,6 +1387,14 @@ window.addEventListener("keydown",e=>{
    Boot
    ========================================================================= */
 refreshVisibility();
+const drivePanel=document.getElementById("g-drive");
+if(Drive){
+  Drive.mountPanel(drivePanel);
+} else {
+  drivePanel.innerHTML='<div class="note">unlimiter-drive.js was not found. It needs to sit in the '
+    +'same folder, served over http://localhost or https — the microphone and WebMIDI are blocked '
+    +'on file:// URLs.</div>';
+}
 setSource(makePattern(4821));
 </script>
 </body>
