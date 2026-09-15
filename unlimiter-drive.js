@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.2";
+const VERSION = "1.3";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -758,6 +758,14 @@ function create(opts){
     get bpm(){ return S.clock.bpm; },
     get audio(){ return S.audio; },
     get state(){ return S; },
+    audioContext(){ return S.audio.ac || null; },
+    analyserNode(){ return S.audio.analyser || null; },
+    modulatedKeys(){
+      const set=new Set();
+      S.matrix.forEach(r=>{ if(r.on!==false && r.target) set.add(r.target); });
+      return [...set];
+    },
+    isModulated(k){ return this.modulatedKeys().indexOf(k)>=0; },
     mountPanel, openOutput, pushFrame, outputOpen, tap,
     rebuildMatrix:buildMatrix,
     serialize(){

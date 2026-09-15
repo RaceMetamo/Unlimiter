@@ -12,10 +12,10 @@ tenth tool works like the first.
 | sediment | yes | modulation is painted into the accumulation, not just displayed |
 | drive-check | n/a | it *is* the drive |
 | flow-field-plotter | — | |
-| flow-weave | — | GPU: resolve once per sim step, and use `Drive.pushFrame()` for output |
-| melted-world | — | |
-| time-cube | — | currently on `modulation.js` — port and retire |
-| worldseed | — | currently on `modulation.js` — port and retire |
+| flow-weave | yes | old `modulation.js` retired; `mod` kept as an adapter |
+| melted-world | yes | old `modulation.js` retired; uses `Drive.pushFrame()` |
+| time-cube | — | still on `modulation.js` — port with the adapter shim |
+| worldseed | — | still on `modulation.js` — port with the adapter shim |
 | tbg-facade | — | |
 
 ---
@@ -124,6 +124,44 @@ Everything consumed *while drawing* is fair game.
 
 Rule of thumb: if the parameter is read inside `init()`, exclude it. If it's read
 inside `draw()`, register it.
+
+---
+
+## Porting a tool that already has `modulation.js`
+
+Do not restructure it. Those tools already keep a `P` and a modulated copy, which
+is the same contract. Strip the inlined module, load the drive, and leave a `mod`
+adapter in place so every existing call site keeps working:
+
+```js
+const mod = {
+  tick(){},                                   // the drive runs its own clock
+  apply(p){ return Drive ? Drive.resolve(p) : p; },
+  get active(){ return Drive ? (Drive.isLive() || Drive.audio.on) : false; },
+  serialize(){ return Drive ? Drive.serialize() : null; },
+  load(o){ if(Drive) Drive.load(o); },
+  modulatedKeys(){ return Drive ? Drive.modulatedKeys() : []; },
+  isModulated(k){ return Drive ? Drive.isModulated(k) : false; },
+  source(id){ return Drive ? Drive.sourceValue(id) : 0; },
+  audioContext(){ return Drive ? Drive.audioContext() : null; },
+  analyserNode(){ return Drive ? Drive.analyserNode() : null; },
+  sync(){}
+};
+```
+
+Targets register straight from the tool's own `RID` map, reading bounds off the
+live slider elements:
+
+```js
+for(const k in TARGETS){
+  const r = el(RID[k]);
+  if(r) Drive.registerTarget(k, TARGETS[k].label || k,
+                             parseFloat(r.min), parseFloat(r.max));
+}
+```
+
+Presets saved by the old system keep their look but lose their routing — the two
+serialisation formats differ. Re-save them once.
 
 ---
 
