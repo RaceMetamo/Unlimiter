@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Unlimiter — Control Surface</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#14161d; --panel:#1c1f29; --panel-2:#171a22; --line:#2a2e3c; --line-soft:#232735;
+  --text:#e8e9ee; --dim:#8b90a0; --faint:#575c6c;
+  --band:#ffb02e; --env:#38c7d8; --onset:#f0459c; --tempo:#6fce62; --scalar:#9d7bff; --util:#aeb4c6;
+  --danger:#ff5d5d;
+  --radius:6px;
+  font-size:15px;
+}
+:root:not([data-theme="light"]){ color-scheme:dark; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ color-scheme:dark; } }
+:root[data-theme="dark"]{ color-scheme:dark; }
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  background:var(--bg); color:var(--text);
+  font-family:"Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-weight:400; overflow:hidden;
+}
+button, input, select{ font-family:inherit; font-size:0.85rem; color:var(--text); }
+button{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:5px 11px; cursor:pointer;
+}
+button:hover{ border-color:var(--dim); }
+button:focus-visible, input:focus-visible, select:focus-visible{ outline:2px solid var(--env); outline-offset:1px; }
+button.on{ border-color:var(--env); color:var(--env); }
+input[type=number], input[type=text]{
+  background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:4px 7px; width:74px;
+}
+input[type=range]{ accent-color:var(--scalar); }
+
+#app{ display:grid; height:100%; grid-template-rows:52px 1fr 60px; }
+header{
+  display:flex; align-items:center; gap:14px; padding:0 16px;
+  border-bottom:1px solid var(--line); background:var(--panel-2);
+}
+header h1{ font-size:1.02rem; font-weight:700; letter-spacing:.01em; }
+header h1 span{ color:var(--dim); font-weight:400; }
+.spacer{ flex:1; }
+#bpm{ color:var(--tempo); font-weight:500; min-width:86px; text-align:right; font-variant-numeric:tabular-nums; }
+#beatDot{ display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--faint); margin-right:6px; }
+#beatDot.hit{ background:var(--tempo); }
+#patchName{ width:160px; }
+
+main{ display:grid; grid-template-columns:230px 1fr 320px; min-height:0; }
+.rail{ background:var(--panel-2); border-right:1px solid var(--line); overflow-y:auto; padding:12px; }
+.rail.right{ border-right:none; border-left:1px solid var(--line); }
+.rail h2{ font-size:.8rem; font-weight:500; color:var(--dim); margin:14px 0 8px; }
+.rail h2:first-child{ margin-top:0; }
+
+.meter{ display:grid; grid-template-columns:1fr 44px; align-items:center; gap:8px; margin-bottom:7px; }
+.meter .name{ font-size:.78rem; color:var(--text); }
+.meter .bar{ grid-column:1 / -1; height:5px; background:var(--panel); border-radius:3px; overflow:hidden; }
+.meter .bar i{ display:block; height:100%; width:0%; border-radius:3px; }
+.meter .val{ font-size:.72rem; color:var(--dim); text-align:right; font-variant-numeric:tabular-nums; }
+.palette button{ display:block; width:100%; text-align:left; margin-bottom:6px; }
+.palette button b{ font-weight:500; }
+.palette button small{ display:block; color:var(--dim); font-weight:400; }
+
+#canvasWrap{ position:relative; overflow:hidden; background:
+  radial-gradient(circle at 50% 40%, #181b25 0%, var(--bg) 75%); }
+#graph{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+#graph .node{ cursor:grab; }
+#graph .node.dragging{ cursor:grabbing; }
+#graph .node rect.body{ fill:var(--panel); stroke:var(--line); stroke-width:1; rx:6; }
+#graph .node.selected rect.body{ stroke:var(--env); }
+#graph .node text{ fill:var(--text); font-size:11.5px; font-family:inherit; pointer-events:none; }
+#graph .node text.sub{ fill:var(--dim); font-size:10px; }
+#graph .port{ cursor:crosshair; stroke:var(--bg); stroke-width:1.5; }
+#graph path.cable{ fill:none; stroke-linecap:round; cursor:pointer; }
+#graph path.cable.selected{ filter:drop-shadow(0 0 4px currentColor); }
+#graph path.pending{ fill:none; stroke:var(--dim); stroke-dasharray:5 4; pointer-events:none; }
+#emptyHint{
+  position:absolute; left:50%; top:14px; transform:translateX(-50%);
+  font-size:.78rem; color:var(--faint); pointer-events:none; white-space:nowrap;
+}
+
+.tool{ border:1px solid var(--line); border-radius:var(--radius); margin-bottom:14px; overflow:hidden; background:var(--panel); }
+.tool h3{ font-size:.82rem; font-weight:500; padding:8px 10px; border-bottom:1px solid var(--line-soft); }
+.tool canvas{ display:block; width:100%; height:150px; background:#0e1016; }
+.tool .params{ padding:7px 10px; font-size:.72rem; color:var(--dim); display:grid; gap:3px; }
+.tool .params span{ font-variant-numeric:tabular-nums; }
+
+footer{
+  display:flex; align-items:center; gap:16px; padding:0 16px;
+  border-top:1px solid var(--line); background:var(--panel-2); font-size:.82rem;
+}
+footer .field{ display:flex; align-items:center; gap:7px; }
+footer label{ color:var(--dim); }
+#status{ color:var(--dim); margin-left:auto; }
+.hidden{ display:none !important; }
+
+@media (max-width: 900px){
+  main{ grid-template-columns:170px 1fr; }
+  .rail.right{ display:none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>The Unlimiter <span>· Control Surface</span></h1>
+    <button id="btnDemo" class="on">Demo signal</button>
+    <button id="btnMic">Mic input</button>
+    <div class="spacer"></div>
+    <div id="bpm"><span id="beatDot"></span><span id="bpmVal">—</span></div>
+    <input type="text" id="patchName" value="untitled patch" aria-label="Patch name">
+    <button id="btnSave">Save patch</button>
+    <button id="btnLoad">Load patch</button>
+    <input type="file" id="fileLoad" accept="application/json" class="hidden">
+  </header>
+
+  <main>
+    <div class="rail" id="leftRail">
+      <h2>Signals</h2>
+      <div id="meters"></div>
+      <h2>Manual</h2>
+      <div class="meter">
+        <span class="name">scalar.manual</span>
+        <span class="val" id="manualVal">0.50</span>
+        <input type="range" id="manualSlider" min="0" max="1" step="0.01" value="0.5" style="grid-column:1/-1" aria-label="scalar.manual value">
+      </div>
+      <h2>Add node</h2>
+      <div class="palette" id="palette"></div>
+    </div>
+
+    <div id="canvasWrap">
+      <svg id="graph" xmlns="http://www.w3.org/2000/svg">
+        <g id="cableLayer"></g>
+        <g id="nodeLayer"></g>
+        <path id="pendingCable" class="pending" d=""></path>
+      </svg>
+      <div id="emptyHint">drag from an output port to an input port to patch</div>
+    </div>
+
+    <div class="rail right">
+      <h2>Targets</h2>
+      <div id="toolPanels"></div>
+    </div>
+  </main>
+
+  <footer>
+    <div id="inspector"><span style="color:var(--faint)">select a cable or node to edit it</span></div>
+    <div id="status"></div>
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   UnlimiterBus — the signal bus. schemaVersion 1.
+   This block is identical to unlimiter-bus.js in the repo;
+   keep the two in sync until the suite loads it as a module.
+   ============================================================ */
+const UnlimiterBus = (() => {
+  const SCHEMA_VERSION = 1;
+  const channels = new Map();   // id -> {id, type, range, updateHz}
+  const values   = new Map();   // id -> number
+  const subs     = new Map();   // id -> Set<fn>  (event channels: onset)
+
+  function register(spec){
+    if(!spec || !spec.id || !spec.type) throw new Error("UnlimiterBus.register: {id, type} required");
+    channels.set(spec.id, { range:[0,1], updateHz:60, ...spec });
+    if(!values.has(spec.id)) values.set(spec.id, 0);
+  }
+  function publish(id, value){
+    values.set(id, value);
+    const s = subs.get(id);
+    if(s) s.forEach(fn => { try{ fn(value); }catch(e){ console.error(e); } });
+  }
+  function get(id){ return values.get(id) ?? 0; }
+  function subscribe(id, fn){
+    if(!subs.has(id)) subs.set(id, new Set());
+    subs.get(id).add(fn);
+    return () => subs.get(id).delete(fn);
+  }
+  function list(){ return [...channels.values()]; }
+  function has(id){ return channels.has(id); }
+  return { SCHEMA_VERSION, register, publish, get, subscribe, list, has };
+})();
+
+/* ============================================================
+   AudioEngine — publishes to the bus.
+   Two sources: an internal demo generator (default, works with
+   no permissions) and live mic input via Web Audio.
+   Channels: band.low/mid/high, env.low/mid/mix,
+             onset.beat (decaying pulse), tempo.phase, tempo.bpm,
+             scalar.lfo, scalar.manual
+   ============================================================ */
+const AudioEngine = (() => {
+  const CH = [
+    { id:"band.low",     type:"band",     range:[0,1] },
+    { id:"band.mid",     type:"band",     range:[0,1] },
+    { id:"band.high",    type:"band",     range:[0,1] },
+    { id:"env.low",      type:"envelope", range:[0,1] },
+    { id:"env.mid",      type:"envelope", range:[0,1] },
+    { id:"env.mix",      type:"envelope", range:[0,1] },
+    { id:"onset.beat",   type:"onset",    range:[0,1] },
+    { id:"tempo.phase",  type:"tempo",    range:[0,1] },
+    { id:"tempo.bpm",    type:"tempo",    range:[0,300] },
+    { id:"scalar.lfo",   type:"scalar",   range:[0,1] },
+    { id:"scalar.manual",type:"scalar",   range:[0,1] },
+  ];
+  CH.forEach(c => UnlimiterBus.register(c));
+
+  let mode = "demo";           // "demo" | "mic"
+  let audioCtx = null, analyser = null, freqData = null;
+  let envState = { low:0, mid:0, mix:0 };
+  let pulse = 0;               // onset decaying pulse
+  let beatTimes = [];          // for BPM estimate
+  let lastBeatAt = 0;
+  let bpm = 0;
+  let fluxPrev = null, fluxAvg = 0;
+  const onBeatFns = [];
+
+  function follow(cur, target, dtMs, attackMs, releaseMs){
+    const tau = target > cur ? attackMs : releaseMs;
+    return cur + (target - cur) * Math.min(1, dtMs / Math.max(1, tau));
+  }
+  function registerBeat(now){
+    pulse = 1;
+    beatTimes.push(now);
+    if(beatTimes.length > 12) beatTimes.shift();
+    if(beatTimes.length >= 4){
+      const iois = [];
+      for(let i = 1; i < beatTimes.length; i++) iois.push(beatTimes[i] - beatTimes[i-1]);
+      iois.sort((a,b) => a - b);
+      const med = iois[Math.floor(iois.length/2)];
+      if(med > 200 && med < 2000) bpm = Math.round(60000 / med);
+    }
+    lastBeatAt = now;
+    onBeatFns.forEach(fn => fn());
+  }
+
+  /* ---- demo generator: layered LFOs + a steady synthetic beat ---- */
+  const demo = { t:0, nextBeat:0, interval:483 }; // ~124 bpm
+  function stepDemo(now, dtMs){
+    demo.t += dtMs / 1000;
+    const t = demo.t;
+    if(now >= demo.nextBeat){
+      registerBeat(now);
+      demo.nextBeat = now + demo.interval + (Math.random()*30 - 15);
+    }
+    const kick = Math.max(0, 1 - (now - lastBeatAt) / 180);
+    const low  = Math.min(1, 0.18 + kick*0.82 + Math.random()*0.04);
+    const mid  = 0.30 + 0.25*Math.sin(t*2.1) + 0.18*Math.sin(t*5.7 + 1.3) + Math.random()*0.06;
+    const high = 0.22 + 0.20*Math.sin(t*9.3 + 0.5) + Math.random()*0.12 + kick*0.15;
+    return { low, mid:Math.max(0,Math.min(1,mid)), high:Math.max(0,Math.min(1,high)) };
+  }
+
+  /* ---- mic path ---- */
+  async function startMic(){
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.5;
+    src.connect(analyser);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    fluxPrev = null; fluxAvg = 0;
+    mode = "mic";
+  }
+  function bandAvg(from, to){
+    let s = 0;
+    for(let i = from; i < to; i++) s += freqData[i];
+    return s / ((to - from) * 255);
+  }
+  function stepMic(now){
+    analyser.getByteFrequencyData(freqData);
+    const n = freqData.length;
+    const low  = bandAvg(1, Math.floor(n*0.06));
+    const mid  = bandAvg(Math.floor(n*0.06), Math.floor(n*0.35));
+    const high = bandAvg(Math.floor(n*0.35), Math.floor(n*0.9));
+    // spectral flux onset detection on the low/mid region
+    let flux = 0;
+    const upTo = Math.floor(n*0.35);
+    if(fluxPrev){
+      for(let i = 1; i < upTo; i++){
+        const d = freqData[i] - fluxPrev[i];
+        if(d > 0) flux += d;
+      }
+      flux /= upTo * 255;
+    } else fluxPrev = new Uint8Array(n);
+    fluxPrev.set(freqData);
+    fluxAvg = fluxAvg * 0.95 + flux * 0.05;
+    if(flux > Math.max(0.02, fluxAvg * 1.9) && now - lastBeatAt > 180) registerBeat(now);
+    return { low, mid, high };
+  }
+
+  function tick(now, dtMs){
+    const b = (mode === "mic" && analyser) ? stepMic(now) : stepDemo(now, dtMs);
+    pulse = Math.max(0, pulse - dtMs / 260);
+    envState.low = follow(envState.low, b.low, dtMs, 25, 220);
+    envState.mid = follow(envState.mid, b.mid, dtMs, 25, 220);
+    const mix = (b.low + b.mid + b.high) / 3;
+    envState.mix = follow(envState.mix, mix, dtMs, 30, 300);
+    const beatLen = bpm > 0 ? 60000 / bpm : 500;
+    const phase = ((now - lastBeatAt) % beatLen) / beatLen;
+    UnlimiterBus.publish("band.low", b.low);
+    UnlimiterBus.publish("band.mid", b.mid);
+    UnlimiterBus.publish("band.high", b.high);
+    UnlimiterBus.publish("env.low", envState.low);
+    UnlimiterBus.publish("env.mid", envState.mid);
+    UnlimiterBus.publish("env.mix", envState.mix);
+    UnlimiterBus.publish("onset.beat", pulse);
+    UnlimiterBus.publish("tempo.phase", phase);
+    UnlimiterBus.publish("tempo.bpm", bpm);
+    UnlimiterBus.publish("scalar.lfo", 0.5 + 0.5*Math.sin(now/1600));
+  }
+
+  return {
+    tick, startMic,
+    setDemo(){ mode = "demo"; },
+    get mode(){ return mode; },
+    get bpm(){ return bpm; },
+    onBeat(fn){ onBeatFns.push(fn); },
+  };
+})();
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Graph — model + evaluation.
+   Node kinds: source (bus channel), target (toolId+param),
+   utility.scale / .smooth / .invert / .combine / .threshold
+   ============================================================ */
+const SIGNAL_COLORS = { band:"var(--band)", envelope:"var(--env)", onset:"var(--onset)", tempo:"var(--tempo)", scalar:"var(--scalar)", util:"var(--util)" };
+const UTILITIES = {
+  "utility.scale":    { label:"Scale / remap", sub:"min · max · curve", inputs:["in"], params:{ min:0, max:1, curve:1 } },
+  "utility.smooth":   { label:"Smooth",        sub:"extra lag",         inputs:["in"], params:{ lagMs:120 } },
+  "utility.invert":   { label:"Invert",        sub:"1 − x",             inputs:["in"], params:{} },
+  "utility.combine":  { label:"Combine",       sub:"mix a · b",         inputs:["a","b"], params:{ mix:0.5 } },
+  "utility.threshold":{ label:"Threshold",     sub:"gate at t",         inputs:["in"], params:{ t:0.5 } },
+};
+
+const Graph = (() => {
+  let nodes = [];        // {id, kind, x, y, channel? | toolId?,param? | utilKind?, params?, state?}
+  let conns = [];        // {id, from:{node,port}, to:{node,port}, scale, offset}
+  let nextId = 1;
+  const values = new Map();     // nodeId -> output value (this frame)
+  const connValues = new Map(); // connId -> value carried (for cable glow)
+  let order = [];               // topo-sorted utility ids
+  let onChange = () => {};
+
+  const uid = p => p + (nextId++);
+
+  function addSource(channel, x, y){
+    const n = { id:uid("n"), kind:"source", channel, x, y };
+    nodes.push(n); rebuild(); return n;
+  }
+  function addTarget(toolId, param, x, y){
+    const n = { id:uid("n"), kind:"target", toolId, param, x, y };
+    nodes.push(n); rebuild(); return n;
+  }
+  function addUtility(utilKind, x, y){
+    const n = { id:uid("n"), kind:utilKind, params:{ ...UTILITIES[utilKind].params }, state:{ y:0 }, x, y };
+    nodes.push(n); rebuild(); return n;
+  }
+  function removeNode(id){
+    nodes = nodes.filter(n => n.id !== id);
+    conns = conns.filter(c => c.from.node !== id && c.to.node !== id);
+    rebuild();
+  }
+  function connect(from, to){
+    if(from.node === to.node) return null;
+    if(conns.some(c => c.from.node===from.node && c.from.port===from.port && c.to.node===to.node && c.to.port===to.port)) return null;
+    if(createsCycle(from.node, to.node)) return null;
+    const c = { id:uid("c"), from, to, scale:1, offset:0 };
+    conns.push(c); rebuild(); return c;
+  }
+  function removeConn(id){ conns = conns.filter(c => c.id !== id); rebuild(); }
+  function createsCycle(fromNode, toNode){
+    // would adding fromNode -> toNode create a cycle? walk downstream of toNode
+    const seen = new Set([toNode]);
+    const stack = [toNode];
+    while(stack.length){
+      const cur = stack.pop();
+      if(cur === fromNode) return true;
+      conns.forEach(c => { if(c.from.node === cur && !seen.has(c.to.node)){ seen.add(c.to.node); stack.push(c.to.node); } });
+    }
+    return false;
+  }
+  function rebuild(){
+    // topo order over utility nodes only (sources have no inputs, targets no outputs)
+    const utils = nodes.filter(n => n.kind.startsWith("utility."));
+    const remaining = new Set(utils.map(n => n.id));
+    order = [];
+    let guard = utils.length + 1;
+    while(remaining.size && guard--){
+      for(const id of [...remaining]){
+        const deps = conns.filter(c => c.to.node === id).map(c => c.from.node);
+        if(deps.every(d => !remaining.has(d))){ order.push(id); remaining.delete(id); }
+      }
+    }
+    order.push(...remaining); // safety — cycles are refused at connect()
+    onChange();
+  }
+  function inputSum(nodeId, port, dflt){
+    const inputs = conns.filter(c => c.to.node === nodeId && c.to.port === port);
+    if(!inputs.length) return dflt;
+    let s = 0;
+    inputs.forEach(c => {
+      const raw = values.get(c.from.node) ?? 0;
+      const v = raw * c.scale + c.offset;
+      connValues.set(c.id, v);
+      s += v;
+    });
+    return s;
+  }
+  function evaluate(dtMs){
+    // sources
+    nodes.forEach(n => { if(n.kind === "source") values.set(n.id, UnlimiterBus.get(n.channel)); });
+    // utilities in topo order
+    order.forEach(id => {
+      const n = nodes.find(x => x.id === id);
+      if(!n) return;
+      let out = 0;
+      if(n.kind === "utility.combine"){
+        const a = inputSum(id, "a", 0), b = inputSum(id, "b", 0);
+        out = a * (1 - n.params.mix) + b * n.params.mix;
+      } else {
+        const x = inputSum(id, "in", 0);
+        if(n.kind === "utility.scale"){
+          const span = (n.params.max - n.params.min) || 1e-6;
+          out = Math.pow(Math.max(0, Math.min(1, (x - n.params.min) / span)), n.params.curve);
+        }
+        else if(n.kind === "utility.smooth"){
+          n.state.y += (x - n.state.y) * Math.min(1, dtMs / Math.max(1, n.params.lagMs));
+          out = n.state.y;
+        }
+        else if(n.kind === "utility.invert") out = 1 - x;
+        else if(n.kind === "utility.threshold") out = x >= n.params.t ? 1 : 0;
+      }
+      values.set(id, out);
+    });
+    // targets — map summed 0..1 into the param's declared range
+    nodes.forEach(n => {
+      if(n.kind !== "target") return;
+      const v = inputSum(n.id, "in", null);
+      if(v === null) return;
+      const spec = Tools.paramSpec(n.toolId, n.param);
+      if(!spec) return;
+      const clamped = Math.max(0, Math.min(1, v));
+      const mapped = spec.range[0] + clamped * (spec.range[1] - spec.range[0]);
+      values.set(n.id, clamped);
+      Tools.setParam(n.toolId, n.param, mapped);
+    });
+  }
+  function signalTypeOf(nodeId){
+    const n = nodes.find(x => x.id === nodeId);
+    if(!n) return "util";
+    if(n.kind === "source") return (UnlimiterBus.list().find(c => c.id === n.channel) || {}).type || "scalar";
+    if(n.kind.startsWith("utility.")){
+      const up = conns.find(c => c.to.node === nodeId);
+      return up ? signalTypeOf(up.from.node) : "util";
+    }
+    return "util";
+  }
+  function toJSON(){
+    return {
+      schemaVersion: UnlimiterBus.SCHEMA_VERSION,
+      name: document.getElementById("patchName").value || "untitled patch",
+      nodes: nodes.map(n => {
+        if(n.kind === "source") return { id:n.id, kind:"source", channel:n.channel };
+        if(n.kind === "target") return { id:n.id, kind:"target", toolId:n.toolId, param:n.param };
+        return { id:n.id, kind:n.kind, ...n.params };
+      }),
+      connections: conns.map(c => ({ from:c.from.node+":"+c.from.port, to:c.to.node+":"+c.to.port, scale:c.scale, offset:c.offset })),
+      layout: Object.fromEntries(nodes.map(n => [n.id, { x:Math.round(n.x), y:Math.round(n.y) }])),
+    };
+  }
+  function fromJSON(p){
+    nodes = []; conns = []; values.clear(); connValues.clear();
+    let maxNum = 0;
+    (p.nodes || []).forEach(sn => {
+      const num = parseInt(String(sn.id).replace(/\D/g, ""), 10);
+      if(!isNaN(num)) maxNum = Math.max(maxNum, num);
+      const pos = (p.layout && p.layout[sn.id]) || { x:120 + Math.random()*300, y:80 + Math.random()*260 };
+      if(sn.kind === "source"){
+        if(!UnlimiterBus.has(sn.channel)){ UI.status("patch wants unknown channel " + sn.channel + " — skipped"); return; }
+        nodes.push({ id:sn.id, kind:"source", channel:sn.channel, x:pos.x, y:pos.y });
+      } else if(sn.kind === "target"){
+        if(!Tools.paramSpec(sn.toolId, sn.param)){ UI.status("patch wants unknown target " + sn.toolId + "." + sn.param + " — skipped"); return; }
+        nodes.push({ id:sn.id, kind:"target", toolId:sn.toolId, param:sn.param, x:pos.x, y:pos.y });
+      } else if(UTILITIES[sn.kind]){
+        const { id, kind, ...rest } = sn;
+        nodes.push({ id, kind, params:{ ...UTILITIES[kind].params, ...rest }, state:{ y:0 }, x:pos.x, y:pos.y });
+      }
+    });
+    (p.connections || []).forEach(sc => {
+      const [fn, fp] = String(sc.from).split(":");
+      const [tn, tp] = String(sc.to).split(":");
+      if(nodes.some(n => n.id===fn) && nodes.some(n => n.id===tn)){
+        const num = ++maxNum;
+        conns.push({ id:"c"+num, from:{node:fn, port:fp||"out"}, to:{node:tn, port:tp||"in"}, scale:sc.scale ?? 1, offset:sc.offset ?? 0 });
+      }
+    });
+    nextId = maxNum + 1;
+    if(p.name) document.getElementById("patchName").value = p.name;
+    rebuild();
+  }
+  return {
+    get nodes(){ return nodes; }, get conns(){ return conns; },
+    values, connValues,
+    addSource, addTarget, addUtility, removeNode, connect, removeConn,
+    evaluate, signalTypeOf, toJSON, fromJSON,
+    setOnChange(fn){ onChange = fn; },
+  };
+})();
+
+/* ============================================================
+   GraphView — SVG rendering + pointer interaction
+   ============================================================ */
+const GraphView = (() => {
+  const svg = document.getElementById("graph");
+  const cableLayer = document.getElementById("cableLayer");
+  const nodeLayer = document.getElementById("nodeLayer");
+  const pending = document.getElementById("pendingCable");
+  const NODE_W = 132, NODE_H = 46;
+  let selected = null;          // {type:"node"|"conn", id}
+  let drag = null;              // {id, dx, dy}
+  let wire = null;              // {from:{node,port}, x, y}
+  const nodeEls = new Map(), cableEls = new Map();
+
+  function portPos(nodeId, port, isOut){
+    const n = Graph.nodes.find(x => x.id === nodeId);
+    if(!n) return { x:0, y:0 };
+    if(isOut) return { x:n.x + NODE_W, y:n.y + NODE_H/2 };
+    const ins = n.kind === "utility.combine" ? ["a","b"] : ["in"];
+    const idx = Math.max(0, ins.indexOf(port));
+    const step = NODE_H / (ins.length + 1);
+    return { x:n.x, y:n.y + step * (idx + 1) };
+  }
+  function cablePath(a, b){
+    const dx = Math.max(40, Math.abs(b.x - a.x) * 0.5);
+    return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`;
+  }
+  function nodeTitle(n){
+    if(n.kind === "source") return [n.channel, (UnlimiterBus.list().find(c => c.id===n.channel)||{}).type || ""];
+    if(n.kind === "target") return [Tools.label(n.toolId) + "", n.param];
+    const u = UTILITIES[n.kind];
+    return [u.label, u.sub];
+  }
+  function build(){
+    nodeLayer.innerHTML = ""; cableLayer.innerHTML = "";
+    nodeEls.clear(); cableEls.clear();
+    Graph.conns.forEach(c => {
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.classList.add("cable");
+      p.dataset.id = c.id;
+      p.addEventListener("pointerdown", e => { e.stopPropagation(); select({ type:"conn", id:c.id }); });
+      cableLayer.appendChild(p);
+      cableEls.set(c.id, p);
+    });
+    Graph.nodes.forEach(n => {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.classList.add("node");
+      g.dataset.id = n.id;
+      const stripeColor = n.kind === "source" ? SIGNAL_COLORS[Graph.signalTypeOf(n.id)] :
+                          n.kind === "target" ? "var(--text)" : SIGNAL_COLORS.util;
+      const [title, sub] = nodeTitle(n);
+      g.innerHTML =
+        `<rect class="body" width="${NODE_W}" height="${NODE_H}" rx="6"></rect>` +
+        `<rect x="0" y="0" width="4" height="${NODE_H}" rx="2" fill="${stripeColor}"></rect>` +
+        `<text x="12" y="19">${title}</text>` +
+        `<text x="12" y="34" class="sub">${sub}</text>`;
+      const outPorts = n.kind === "target" ? [] : ["out"];
+      const inPorts  = n.kind === "source" ? [] : (n.kind === "utility.combine" ? ["a","b"] : ["in"]);
+      inPorts.forEach(port => {
+        const pos = portPos(n.id, port, false);
+        const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        c.setAttribute("r", 5.5);
+        c.setAttribute("cx", pos.x - n.x); c.setAttribute("cy", pos.y - n.y);
+        c.setAttribute("fill", "var(--dim)"); c.classList.add("port");
+        c.dataset.node = n.id; c.dataset.port = port; c.dataset.dir = "in";
+        g.appendChild(c);
+      });
+      outPorts.forEach(port => {
+        const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        c.setAttribute("r", 5.5);
+        c.setAttribute("cx", NODE_W); c.setAttribute("cy", NODE_H/2);
+        c.setAttribute("fill", stripeColor); c.classList.add("port");
+        c.dataset.node = n.id; c.dataset.port = port; c.dataset.dir = "out";
+        c.addEventListener("pointerdown", e => {
+          e.stopPropagation();
+          wire = { from:{ node:n.id, port }, x:e.clientX, y:e.clientY };
+          svg.setPointerCapture(e.pointerId);
+        });
+        g.appendChild(c);
+      });
+      g.addEventListener("pointerdown", e => {
+        if(e.target.classList.contains("port")) return;
+        select({ type:"node", id:n.id });
+        drag = { id:n.id, dx:e.clientX - n.x, dy:e.clientY - n.y };
+        g.classList.add("dragging");
+        svg.setPointerCapture(e.pointerId);
+      });
+      nodeLayer.appendChild(g);
+      nodeEls.set(n.id, g);
+    });
+    applySelection();
+    document.getElementById("emptyHint").style.display = Graph.conns.length ? "none" : "block";
+  }
+  function layout(){
+    Graph.nodes.forEach(n => {
+      const g = nodeEls.get(n.id);
+      if(g) g.setAttribute("transform", `translate(${n.x},${n.y})`);
+    });
+    Graph.conns.forEach(c => {
+      const el = cableEls.get(c.id);
+      if(el) el.setAttribute("d", cablePath(portPos(c.from.node, c.from.port, true), portPos(c.to.node, c.to.port, false)));
+    });
+  }
+  function pulseCables(){
+    Graph.conns.forEach(c => {
+      const el = cableEls.get(c.id);
+      if(!el) return;
+      const v = Math.max(0, Math.min(1, Math.abs(Graph.connValues.get(c.id) ?? 0)));
+      el.style.stroke = SIGNAL_COLORS[Graph.signalTypeOf(c.from.node)] || SIGNAL_COLORS.util;
+      el.style.strokeOpacity = (0.30 + 0.70 * v).toFixed(3);
+      el.style.strokeWidth = (1.5 + 2.6 * v).toFixed(2);
+    });
+  }
+  function svgPoint(e){
+    const r = svg.getBoundingClientRect();
+    return { x:e.clientX - r.left, y:e.clientY - r.top };
+  }
+  svg.addEventListener("pointermove", e => {
+    if(drag){
+      const n = Graph.nodes.find(x => x.id === drag.id);
+      if(n){ n.x = e.clientX - drag.dx; n.y = e.clientY - drag.dy; layout(); }
+    } else if(wire){
+      const p = svgPoint(e);
+      pending.setAttribute("d", cablePath(portPos(wire.from.node, wire.from.port, true), p));
+    }
+  });
+  svg.addEventListener("pointerup", e => {
+    if(drag){
+      const g = nodeEls.get(drag.id);
+      if(g) g.classList.remove("dragging");
+      drag = null;
+    }
+    if(wire){
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if(el && el.classList && el.classList.contains("port") && el.dataset.dir === "in"){
+        const made = Graph.connect(wire.from, { node:el.dataset.node, port:el.dataset.port });
+        if(!made) UI.status("connection refused — duplicate or would loop");
+      }
+      wire = null;
+      pending.setAttribute("d", "");
+    }
+  });
+  svg.addEventListener("pointerdown", e => { if(e.target === svg) select(null); });
+  window.addEventListener("keydown", e => {
+    if((e.key === "Delete" || e.key === "Backspace") && selected && document.activeElement.tagName !== "INPUT"){
+      if(selected.type === "conn") Graph.removeConn(selected.id);
+      else Graph.removeNode(selected.id);
+      select(null);
+    }
+  });
+  function select(sel){
+    selected = sel;
+    applySelection();
+    UI.inspect(sel);
+  }
+  function applySelection(){
+    nodeEls.forEach((g,id) => g.classList.toggle("selected", !!selected && selected.type==="node" && selected.id===id));
+    cableEls.forEach((p,id) => p.classList.toggle("selected", !!selected && selected.type==="conn" && selected.id===id));
+  }
+  return { build, layout, pulseCables, select };
+})();
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Tools — the UnlimiterParams manifest pattern.
+   These two demo tools are stand-ins proving the routing;
+   the real Time Cube / Flow Weave register the same shape.
+   ============================================================ */
+const Tools = (() => {
+  const tools = new Map();   // toolId -> {manifest, values}
+  function registerTool(manifest){
+    const values = {};
+    manifest.params.forEach(p => values[p.id] = p.default ?? (p.range[0] + p.range[1]) / 2);
+    tools.set(manifest.toolId, { manifest, values });
+    buildPanel(manifest);
+  }
+  function setParam(toolId, param, value){
+    const t = tools.get(toolId);
+    if(!t) return;
+    t.values[param] = value;
+    t.manifest.setParam(param, value);
+    const el = document.getElementById("pv-" + toolId + "-" + param);
+    if(el) el.textContent = value.toFixed(2);
+  }
+  function paramSpec(toolId, param){
+    const t = tools.get(toolId);
+    return t ? t.manifest.params.find(p => p.id === param) : null;
+  }
+  function label(toolId){
+    const t = tools.get(toolId);
+    return t ? t.manifest.label : toolId;
+  }
+  function buildPanel(m){
+    const wrap = document.createElement("div");
+    wrap.className = "tool";
+    wrap.innerHTML = `<h3>${m.label}</h3><canvas id="cv-${m.toolId}" width="300" height="150"></canvas>` +
+      `<div class="params">` +
+      m.params.map(p => `<div>${p.label} <span id="pv-${m.toolId}-${p.id}">—</span>` +
+        ` <button data-tool="${m.toolId}" data-param="${p.id}" class="addTarget" title="Add ${m.toolId}.${p.id} to the patch">patch</button></div>`).join("") +
+      `</div>`;
+    document.getElementById("toolPanels").appendChild(wrap);
+  }
+  function get(toolId){ return tools.get(toolId); }
+  function list(){ return [...tools.values()].map(t => t.manifest); }
+  return { registerTool, setParam, paramSpec, label, get, list };
+})();
+
+/* ---- demo tool 1: Time Cube (stacked rotating slices) ---- */
+(function(){
+  const state = { stackRate:0.5, rotationSpeed:0.2, maskThreshold:0.4, slices:[], angle:0, acc:0 };
+  Tools.registerTool({
+    toolId:"time-cube", label:"Time Cube · demo",
+    params:[
+      { id:"stackRate",      label:"stack rate",      type:"float", range:[0,1],  default:0.5 },
+      { id:"rotationSpeed",  label:"rotation speed",  type:"float", range:[-1,1], default:0.2 },
+      { id:"maskThreshold",  label:"mask threshold",  type:"float", range:[0,1],  default:0.4 },
+    ],
+    setParam:(id,v) => state[id] = v,
+  });
+  const cv = document.getElementById("cv-time-cube");
+  const ctx = cv.getContext("2d");
+  window.__timeCubeStep = function(dtMs){
+    state.angle += state.rotationSpeed * dtMs * 0.0018;
+    state.acc += state.stackRate * dtMs;
+    if(state.acc > 70){
+      state.acc = 0;
+      state.slices.push({ hue: 185 + Math.random()*140, r: 12 + Math.random()*30 });
+      if(state.slices.length > 26) state.slices.shift();
+    }
+    ctx.fillStyle = "rgba(14,16,22,0.5)";
+    ctx.fillRect(0,0,cv.width,cv.height);
+    const cx = cv.width/2, cy = cv.height/2 + 18;
+    state.slices.forEach((s,i) => {
+      const t = i / Math.max(1, state.slices.length - 1);
+      if(t < state.maskThreshold * 0.9) return;
+      const y = cy - i * 4.4;
+      const a = state.angle + i * 0.09;
+      const w = s.r * 2.4, h = s.r * 0.9;
+      ctx.save();
+      ctx.translate(cx, y);
+      ctx.rotate(Math.sin(a) * 0.35);
+      ctx.strokeStyle = `hsla(${s.hue}, 80%, 62%, ${0.25 + t*0.6})`;
+      ctx.lineWidth = 1.4;
+      ctx.strokeRect(-w/2 * (0.6 + 0.4*Math.cos(a)), -h/2, w * (0.6 + 0.4*Math.cos(a)), h);
+      ctx.restore();
+    });
+  };
+})();
+
+/* ---- demo tool 2: Flow Weave (advected particles) ---- */
+(function(){
+  const state = { advectStrength:0.5, decay:0.35, turbulence:0.4 };
+  Tools.registerTool({
+    toolId:"flow-weave", label:"Flow Weave · demo",
+    params:[
+      { id:"advectStrength", label:"advect strength", type:"float", range:[0,1], default:0.5 },
+      { id:"decay",          label:"decay",           type:"float", range:[0,1], default:0.35 },
+      { id:"turbulence",     label:"turbulence",      type:"float", range:[0,1], default:0.4 },
+    ],
+    setParam:(id,v) => state[id] = v,
+  });
+  const cv = document.getElementById("cv-flow-weave");
+  const ctx = cv.getContext("2d");
+  const P = [];
+  for(let i = 0; i < 130; i++) P.push({ x:Math.random()*cv.width, y:Math.random()*cv.height, hue:170+Math.random()*160 });
+  let t = 0;
+  window.__flowWeaveStep = function(dtMs){
+    t += dtMs * 0.001;
+    ctx.fillStyle = `rgba(14,16,22,${0.04 + state.decay * 0.30})`;
+    ctx.fillRect(0,0,cv.width,cv.height);
+    const k = 0.012 + state.turbulence * 0.045;
+    P.forEach(p => {
+      const a = Math.sin(p.x * k + t) * Math.cos(p.y * k - t*0.7) * Math.PI * 2;
+      const sp = 0.2 + state.advectStrength * 2.6;
+      const nx = p.x + Math.cos(a) * sp, ny = p.y + Math.sin(a) * sp;
+      ctx.strokeStyle = `hsla(${p.hue}, 75%, 60%, 0.55)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
+      p.x = (nx + cv.width) % cv.width; p.y = (ny + cv.height) % cv.height;
+    });
+  };
+})();
+
+/* ============================================================
+   UI — meters, palette, inspector, patch IO, boot loop
+   ============================================================ */
+const UI = (() => {
+  const meterEls = new Map();
+  const METERED = ["band.low","band.mid","band.high","env.low","env.mid","env.mix","onset.beat","tempo.phase","scalar.lfo"];
+
+  function buildMeters(){
+    const wrap = document.getElementById("meters");
+    METERED.forEach(id => {
+      const type = (UnlimiterBus.list().find(c => c.id === id) || {}).type || "scalar";
+      const el = document.createElement("div");
+      el.className = "meter";
+      el.innerHTML = `<span class="name">${id}</span><span class="val">0.00</span>` +
+        `<span class="bar"><i style="background:${SIGNAL_COLORS[type]}"></i></span>`;
+      el.title = "Click to add " + id + " to the patch";
+      el.style.cursor = "pointer";
+      el.addEventListener("click", () => { Graph.addSource(id, 60 + Math.random()*60, 60 + Math.random()*260); });
+      wrap.appendChild(el);
+      meterEls.set(id, { bar: el.querySelector("i"), val: el.querySelector(".val") });
+    });
+  }
+  function updateMeters(){
+    meterEls.forEach((els, id) => {
+      const v = Math.max(0, Math.min(1, UnlimiterBus.get(id)));
+      els.bar.style.width = (v*100).toFixed(1) + "%";
+      els.val.textContent = v.toFixed(2);
+    });
+    document.getElementById("manualVal").textContent = UnlimiterBus.get("scalar.manual").toFixed(2);
+  }
+  function buildPalette(){
+    const wrap = document.getElementById("palette");
+    Object.entries(UTILITIES).forEach(([kind, u]) => {
+      const b = document.createElement("button");
+      b.innerHTML = `<b>${u.label}</b><small>${u.sub}</small>`;
+      b.addEventListener("click", () => Graph.addUtility(kind, 300 + Math.random()*120, 100 + Math.random()*220));
+      wrap.appendChild(b);
+    });
+  }
+  function inspect(sel){
+    const box = document.getElementById("inspector");
+    if(!sel){ box.innerHTML = '<span style="color:var(--faint)">select a cable or node to edit it</span>'; return; }
+    if(sel.type === "conn"){
+      const c = Graph.conns.find(x => x.id === sel.id);
+      if(!c) return;
+      box.innerHTML = `<div class="field"><label>cable scale</label><input type="number" step="0.05" value="${c.scale}" id="iScale"></div>` +
+        `<div class="field"><label>offset</label><input type="number" step="0.05" value="${c.offset}" id="iOffset"></div>` +
+        `<button id="iDel" style="color:var(--danger)">Delete cable</button>`;
+      box.querySelector("#iScale").addEventListener("input", e => c.scale = parseFloat(e.target.value) || 0);
+      box.querySelector("#iOffset").addEventListener("input", e => c.offset = parseFloat(e.target.value) || 0);
+      box.querySelector("#iDel").addEventListener("click", () => { Graph.removeConn(c.id); GraphView.select(null); });
+      return;
+    }
+    const n = Graph.nodes.find(x => x.id === sel.id);
+    if(!n) return;
+    let html = "";
+    if(n.params){
+      Object.entries(n.params).forEach(([k, v]) => {
+        html += `<div class="field"><label>${k}</label><input type="number" step="${k==="lagMs"?"10":"0.05"}" value="${v}" data-k="${k}" class="iParam"></div>`;
+      });
+    } else {
+      html += `<span style="color:var(--dim)">${n.kind === "source" ? n.channel : n.toolId + "." + n.param}</span>`;
+    }
+    html += `<button id="iDelN" style="color:var(--danger)">Delete node</button>`;
+    box.innerHTML = html;
+    box.querySelectorAll(".iParam").forEach(inp => inp.addEventListener("input", e => {
+      n.params[e.target.dataset.k] = parseFloat(e.target.value) || 0;
+    }));
+    box.querySelector("#iDelN").addEventListener("click", () => { Graph.removeNode(n.id); GraphView.select(null); });
+  }
+  let statusTimer = null;
+  function status(msg){
+    const el = document.getElementById("status");
+    el.textContent = msg;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => el.textContent = "", 4200);
+  }
+  return { buildMeters, updateMeters, buildPalette, inspect, status };
+})();
+
+/* ---- patch IO ---- */
+const PatchIO = (() => {
+  const LS_KEY = "unlimiter.controlSurface.lastPatch";
+  async function save(){
+    const patch = Graph.toJSON();
+    const json = JSON.stringify(patch, null, 2);
+    const fname = ((patch.name || "patch").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "patch") + ".json";
+    persist();
+    if(window.claude && window.claude.use){
+      // published on claude.ai — saves go through the viewer-confirmed downloads capability
+      try{
+        const dl = await claude.use("downloads");
+        if(!dl){ UI.status("saving files is unavailable in this view — the patch is kept in this browser"); return; }
+        await dl.save({ filename:fname, data:json });
+        UI.status("patch saved");
+      }catch(err){
+        UI.status(err && err.code === "declined" ? "save cancelled" : "save didn't go through — the patch is kept in this browser");
+      }
+      return;
+    }
+    // running from the repo / local file — plain download
+    const blob = new Blob([json], { type:"application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    UI.status("patch saved");
+  }
+  function persist(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(Graph.toJSON())); }catch(e){ /* storage unavailable — fine */ }
+  }
+  function restore(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(raw){ Graph.fromJSON(JSON.parse(raw)); return true; }
+    }catch(e){ /* ignore */ }
+    return false;
+  }
+  function loadFile(file){
+    file.text().then(txt => {
+      try{
+        const p = JSON.parse(txt);
+        if(p.schemaVersion > UnlimiterBus.SCHEMA_VERSION) UI.status("patch schema v" + p.schemaVersion + " is newer than this bus (v" + UnlimiterBus.SCHEMA_VERSION + ") — loading anyway");
+        Graph.fromJSON(p);
+        UI.status("patch loaded");
+      }catch(e){ UI.status("could not read that file as a patch"); }
+    });
+  }
+  return { save, persist, restore, loadFile };
+})();
+
+/* ---- default patch so the surface moves immediately ---- */
+function defaultPatch(){
+  const s1 = Graph.addSource("band.low", 70, 70);
+  const s2 = Graph.addSource("env.mix", 70, 210);
+  const s3 = Graph.addSource("onset.beat", 70, 350);
+  const u1 = Graph.addUtility("utility.smooth", 300, 90);
+  const t1 = Graph.addTarget("time-cube", "stackRate", 560, 70);
+  const t2 = Graph.addTarget("flow-weave", "advectStrength", 560, 210);
+  const t3 = Graph.addTarget("time-cube", "rotationSpeed", 560, 350);
+  Graph.connect({ node:s1.id, port:"out" }, { node:u1.id, port:"in" });
+  Graph.connect({ node:u1.id, port:"out" }, { node:t1.id, port:"in" });
+  Graph.connect({ node:s2.id, port:"out" }, { node:t2.id, port:"in" });
+  Graph.connect({ node:s3.id, port:"out" }, { node:t3.id, port:"in" });
+}
+
+/* ---- boot ---- */
+(function boot(){
+  UI.buildMeters();
+  UI.buildPalette();
+  Graph.setOnChange(() => { GraphView.build(); GraphView.layout(); PatchIO.persist(); });
+
+  document.getElementById("manualSlider").addEventListener("input", e => {
+    UnlimiterBus.publish("scalar.manual", parseFloat(e.target.value));
+  });
+  UnlimiterBus.publish("scalar.manual", 0.5);
+
+  document.getElementById("btnSave").addEventListener("click", PatchIO.save);
+  document.getElementById("btnLoad").addEventListener("click", () => document.getElementById("fileLoad").click());
+  document.getElementById("fileLoad").addEventListener("change", e => { if(e.target.files[0]) PatchIO.loadFile(e.target.files[0]); e.target.value = ""; });
+
+  const btnDemo = document.getElementById("btnDemo"), btnMic = document.getElementById("btnMic");
+  btnDemo.addEventListener("click", () => { AudioEngine.setDemo(); btnDemo.classList.add("on"); btnMic.classList.remove("on"); UI.status("demo signal"); });
+  btnMic.addEventListener("click", async () => {
+    try{
+      await AudioEngine.startMic();
+      btnMic.classList.add("on"); btnDemo.classList.remove("on");
+      UI.status("listening to mic");
+    }catch(e){
+      UI.status("mic unavailable here — open this page in its own tab and allow the microphone");
+    }
+  });
+
+  document.getElementById("toolPanels").addEventListener("click", e => {
+    const b = e.target.closest(".addTarget");
+    if(b) Graph.addTarget(b.dataset.tool, b.dataset.param, 520 + Math.random()*60, 80 + Math.random()*260);
+  });
+
+  const beatDot = document.getElementById("beatDot");
+  AudioEngine.onBeat(() => {
+    beatDot.classList.add("hit");
+    setTimeout(() => beatDot.classList.remove("hit"), 90);
+  });
+
+  if(!PatchIO.restore()) defaultPatch();
+
+  let last = performance.now(), persistAt = 0;
+  function frame(now){
+    const dt = Math.min(50, now - last);
+    last = now;
+    AudioEngine.tick(now, dt);
+    Graph.evaluate(dt);
+    GraphView.pulseCables();
+    UI.updateMeters();
+    window.__timeCubeStep(dt);
+    window.__flowWeaveStep(dt);
+    const bpm = AudioEngine.bpm;
+    document.getElementById("bpmVal").textContent = bpm > 0 ? bpm + " bpm" : "—";
+    if(now > persistAt){ PatchIO.persist(); persistAt = now + 5000; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

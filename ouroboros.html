@@ -112,6 +112,16 @@
       <div class="body" id="g-color"></div>
     </details>
 
+    <details class="group" open>
+      <summary>Energy<span class="chev"></span></summary>
+      <div class="body" id="g-energy"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Auto brush<span class="chev"></span></summary>
+      <div class="body" id="g-autobrush"></div>
+    </details>
+
     <details class="group">
       <summary>Mirror<span class="chev"></span></summary>
       <div class="body" id="g-mirror"></div>
@@ -167,17 +177,28 @@ const DEFAULTS = {
   inEdge: 0, edgeMode: 0,
   // display
   exposure: 1, gamma: 1, vignette: 0.15, satOut: 1,
+  // energy control
+  agc: 0.6, agcTarget: 0.18, soft: 0.35,
   // brush
-  brushR: 0.06, brushStr: 1.2, brushCol: "#ffeccc"
+  brushR: 0.06, brushStr: 1.2, brushCol: "#ffeccc",
+  // auto brushes
+  abCount: 0, abMode: 0, abSpeed: 0.35, abSpread: 0.3, abSize: 0.07,
+  abStr: 0.9, abHue: 0.15, abSat: 0.7, abJitter: 0, abBeat: 0
 };
 let P = Object.assign({}, DEFAULTS);
 let Q = P;
 let userSlot = null;
 
 const PRESETS = {
-  "Slow bloom": {},
+  "Slow bloom": { agc:0.6, agcTarget:0.18, soft:0.35, abCount:2, abMode:0, abSpeed:0.25 },
   "Tunnel": { zoom:1.028, rot:0.05, decay:0.972, blur:0.7, inMix:0.5, inMode:1,
     hue:0.3, twist:0, vignette:0.3, edgeMode:0 },
+  "Auto orbit": { abCount:4, abMode:0, abSpeed:0.4, abSpread:0.33, abSize:0.05,
+    abStr:1.1, abHue:0.3, zoom:1.012, rot:0.6, decay:0.985, blur:0.6, inMix:0,
+    agc:0.7, agcTarget:0.2, soft:0.4, mirrorMode:4, kaleidoN:6 },
+  "Lissajous rain": { abCount:6, abMode:1, abSpeed:0.55, abSpread:0.38, abSize:0.035,
+    abStr:0.9, abHue:0.5, abJitter:0.1, zoom:1.004, rot:0.1, driftY:-1.2,
+    decay:0.988, blur:0.5, inMix:0, agc:0.65, soft:0.45 },
   "Wormhole": { zoom:1.05, rot:1.6, twist:0.9, decay:0.965, blur:1.1, sat:1.05,
     hue:2.2, inMix:0.4, mirrorMode:0, vignette:0.35 },
   "Kaleido drift": { zoom:1.004, rot:0.08, mirrorMode:4, kaleidoN:6, decay:0.985,
@@ -293,6 +314,13 @@ slider(gC,"posterize","Posterise",0,16,1,"");
 check(gC,"invert","Invert each pass");
 note(gC,"Decay below 1 makes the loop die out, above 1 makes it bloom until it clips. The interesting territory is the last thousandth before 1.");
 
+GRP="Energy";
+const gE=document.getElementById("g-energy");
+slider(gE,"agc","Auto gain",0,1,0.01,"");
+slider(gE,"agcTarget","Target level",0.02,0.6,0.005,"");
+slider(gE,"soft","Soft ceiling",0,1,0.01,"");
+note(gE,"Auto gain is a servo on the loop's own average brightness — it nudges decay a fraction each frame to hold the level, so the loop settles instead of whiting out or dying. Soft ceiling compresses highlights rather than letting them stack up and clip.");
+
 GRP="Mirror";
 const gM=document.getElementById("g-mirror");
 select(gM,"mirrorMode","Mode",[[0,"None"],[1,"Horizontal"],[2,"Vertical"],[3,"Quad"],[4,"Kaleidoscope"]]);
@@ -320,6 +348,19 @@ subhead(gI,"Brush");
 slider(gI,"brushR","Size",0.005,0.4,0.002,"");
 slider(gI,"brushStr","Strength",0,4,0.02,"");
 colorPick(gI,"brushCol","Colour");
+
+GRP="Auto brush";
+const gA=document.getElementById("g-autobrush");
+slider(gA,"abCount","Count",0,8,1,"");
+select(gA,"abMode","Motion",[[0,"Orbit"],[1,"Lissajous"],[2,"Wander"],[3,"Bounce"],[4,"Spiral"],[5,"Beat jump"]]);
+slider(gA,"abSpeed","Speed",0,2,0.005,"");
+slider(gA,"abSpread","Spread",0,0.5,0.005,"");
+slider(gA,"abSize","Size",0.005,0.25,0.002,"");
+slider(gA,"abStr","Strength",0,3,0.01,"");
+slider(gA,"abHue","Hue cycle",0,2,0.005,"");
+slider(gA,"abSat","Saturation",0,1,0.01,"");
+slider(gA,"abJitter","Jitter",0,0.4,0.005,"");
+note(gA,"Brushes that move themselves. Beat jump repositions them on the downbeat when the drive has a clock, so the loop gets struck in time rather than stirred continuously.");
 
 GRP="Display";
 const gD=document.getElementById("g-display");
@@ -365,9 +406,10 @@ uniform int uInvert, uEdge, uMirror, uKaleidoN;
 uniform float uMirrorMix;
 uniform float uInMix, uInZoom, uInRot, uInKey, uInKeySoft;
 uniform int uInMode, uInEdge;
-uniform vec2 uBrush;            // xy position, -1 = inactive
-uniform float uBrushR, uBrushStr;
-uniform vec3 uBrushCol;
+uniform vec4 uB[8];             // xy position, z radius, w strength
+uniform vec3 uBC[8];            // colour per brush
+uniform int uBN;                // how many are active
+uniform float uAgc, uAgcTarget, uSoft, uMipLod;
 
 const float TAU = 6.28318530718;
 
@@ -404,17 +446,17 @@ vec3 hueRot(vec3 c, float deg){
 float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
 
 vec3 samplePrev(vec2 uv){
-  if(uBlur <= 0.001) return texture(uPrev, edgeUV(uv)).rgb;
+  if(uBlur <= 0.001) return textureLod(uPrev, edgeUV(uv), 0.0).rgb;
   vec2 px = uBlur / uRes;
-  vec3 s = texture(uPrev, edgeUV(uv)).rgb * 4.0;
-  s += texture(uPrev, edgeUV(uv+vec2( px.x,0))).rgb * 2.0;
-  s += texture(uPrev, edgeUV(uv+vec2(-px.x,0))).rgb * 2.0;
-  s += texture(uPrev, edgeUV(uv+vec2(0, px.y))).rgb * 2.0;
-  s += texture(uPrev, edgeUV(uv+vec2(0,-px.y))).rgb * 2.0;
-  s += texture(uPrev, edgeUV(uv+px)).rgb;
-  s += texture(uPrev, edgeUV(uv-px)).rgb;
-  s += texture(uPrev, edgeUV(uv+vec2(px.x,-px.y))).rgb;
-  s += texture(uPrev, edgeUV(uv-vec2(px.x,-px.y))).rgb;
+  vec3 s = textureLod(uPrev, edgeUV(uv), 0.0).rgb * 4.0;
+  s += textureLod(uPrev, edgeUV(uv+vec2( px.x,0)), 0.0).rgb * 2.0;
+  s += textureLod(uPrev, edgeUV(uv+vec2(-px.x,0)), 0.0).rgb * 2.0;
+  s += textureLod(uPrev, edgeUV(uv+vec2(0, px.y)), 0.0).rgb * 2.0;
+  s += textureLod(uPrev, edgeUV(uv+vec2(0,-px.y)), 0.0).rgb * 2.0;
+  s += textureLod(uPrev, edgeUV(uv+px), 0.0).rgb;
+  s += textureLod(uPrev, edgeUV(uv-px), 0.0).rgb;
+  s += textureLod(uPrev, edgeUV(uv+vec2(px.x,-px.y)), 0.0).rgb;
+  s += textureLod(uPrev, edgeUV(uv-vec2(px.x,-px.y)), 0.0).rgb;
   return s / 16.0;
 }
 
@@ -466,10 +508,10 @@ void main(){
   // self warp: push the sample along the previous frame's brightness gradient
   if(uSelfWarp > 0.00001){
     vec2 px = 1.5 / uRes;
-    float l1 = luma(texture(uPrev, edgeUV(uv+vec2(px.x,0))).rgb);
-    float l2 = luma(texture(uPrev, edgeUV(uv-vec2(px.x,0))).rgb);
-    float l3 = luma(texture(uPrev, edgeUV(uv+vec2(0,px.y))).rgb);
-    float l4 = luma(texture(uPrev, edgeUV(uv-vec2(0,px.y))).rgb);
+    float l1 = luma(textureLod(uPrev, edgeUV(uv+vec2(px.x,0)), 0.0).rgb);
+    float l2 = luma(textureLod(uPrev, edgeUV(uv-vec2(px.x,0)), 0.0).rgb);
+    float l3 = luma(textureLod(uPrev, edgeUV(uv+vec2(0,px.y)), 0.0).rgb);
+    float l4 = luma(textureLod(uPrev, edgeUV(uv-vec2(0,px.y)), 0.0).rgb);
     c += vec2(l1-l2, l3-l4) * uSelfWarp * 10.0;
   }
 
@@ -490,15 +532,24 @@ void main(){
 
   if(uSharp > 0.001){
     vec2 px = 1.6 / uRes;
-    vec3 soft = (texture(uPrev, edgeUV(uv+vec2(px.x,0))).rgb
-               + texture(uPrev, edgeUV(uv-vec2(px.x,0))).rgb
-               + texture(uPrev, edgeUV(uv+vec2(0,px.y))).rgb
-               + texture(uPrev, edgeUV(uv-vec2(0,px.y))).rgb) * 0.25;
+    vec3 soft = (textureLod(uPrev, edgeUV(uv+vec2(px.x,0)), 0.0).rgb
+               + textureLod(uPrev, edgeUV(uv-vec2(px.x,0)), 0.0).rgb
+               + textureLod(uPrev, edgeUV(uv+vec2(0,px.y)), 0.0).rgb
+               + textureLod(uPrev, edgeUV(uv-vec2(0,px.y)), 0.0).rgb) * 0.25;
     prev += (prev - soft) * uSharp;
   }
 
+  // automatic gain: a servo on the loop's own average brightness, so it
+  // settles at a level instead of running away or dying
+  float decayEff = uDecay;
+  if(uAgc > 0.001){
+    float m = luma(textureLod(uPrev, vec2(0.5), uMipLod).rgb);
+    float g = uAgcTarget / max(0.004, m);
+    decayEff *= mix(1.0, clamp(pow(g, 0.12), 0.985, 1.015), uAgc);
+  }
+
   // colour through one pass of the loop
-  prev *= uDecay;
+  prev *= decayEff;
   prev += uLift;
   if(abs(uHue) > 0.0001) prev = hueRot(prev, uHue);
   if(abs(uSat-1.0) > 0.0001){ float l = luma(prev); prev = mix(vec3(l), prev, uSat); }
@@ -535,13 +586,19 @@ void main(){
     else prev = mix(prev, prev*src, amt);
   }
 
-  // brush
-  if(uBrush.x >= 0.0 && uBrushStr > 0.001){
-    vec2 bc = toC(uBrush);
-    float d = length(toC(uv) - bc);
-    float f = exp(-pow(d/max(0.002,uBrushR), 2.0) * 3.0);
-    prev += uBrushCol * f * uBrushStr * 0.35;
+  // brushes — mouse and automatic, same path
+  vec2 here = toC(uv);
+  for(int i=0;i<8;i++){
+    if(i >= uBN) break;
+    vec4 b = uB[i];
+    if(b.w <= 0.001) continue;
+    float d = length(here - toC(b.xy));
+    float f = exp(-pow(d/max(0.002,b.z), 2.0) * 3.0);
+    prev += uBC[i] * f * b.w * 0.35;
   }
+
+  // soft ceiling: compress the highlights instead of letting them stack and clip
+  if(uSoft > 0.001) prev = prev / (1.0 + prev * uSoft);
 
   fragColor = vec4(clamp(prev, 0.0, 12.0), 1.0);
 }`;
@@ -592,10 +649,11 @@ function makeTex(w,h,float){
   gl.bindTexture(gl.TEXTURE_2D,t);
   if(float) gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
   else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.generateMipmap(gl.TEXTURE_2D);
   return t;
 }
 function makeFBO(tex){
@@ -609,6 +667,7 @@ function allocate(w,h){
   [texA,texB].forEach(t=>{ if(t) gl.deleteTexture(t); });
   [fboA,fboB].forEach(f=>{ if(f) gl.deleteFramebuffer(f); });
   texA=makeTex(SW,SH,useFloat); texB=makeTex(SW,SH,useFloat);
+  mipLod=Math.floor(Math.log2(Math.max(SW,SH)));
   fboA=makeFBO(texA); fboB=makeFBO(texB);
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   flip=0;
@@ -746,9 +805,92 @@ cv.addEventListener("pointermove",e=>{ if(!brush.down) return; const u=canvasUV(
 cv.addEventListener("pointerup",()=>{ brush.down=false; brush.x=-1; });
 cv.addEventListener("pointercancel",()=>{ brush.down=false; brush.x=-1; });
 
+/* ============================ auto brushes ============================ */
+const AB = [];
+for(let i=0;i<8;i++) AB.push({x:Math.random(),y:Math.random(),
+  vx:(Math.random()*2-1),vy:(Math.random()*2-1),
+  jx:Math.random()*1000, jy:Math.random()*1000, tx:Math.random(), ty:Math.random()});
+let lastBeat=-1;
+function abHash(n){ const x=Math.sin(n*127.1)*43758.5453; return x-Math.floor(x); }
+function abNoise(t,seed){
+  const i=Math.floor(t), f=t-i, u=f*f*(3-2*f);
+  return abHash(i+seed)*(1-u) + abHash(i+1+seed)*u;
+}
+function hsl2rgb(h,sat,l){
+  h=((h%1)+1)%1;
+  const c=(1-Math.abs(2*l-1))*sat, x=c*(1-Math.abs((h*6)%2-1)), m=l-c/2;
+  let r,g,b;
+  const k=Math.floor(h*6);
+  if(k===0){r=c;g=x;b=0;} else if(k===1){r=x;g=c;b=0;} else if(k===2){r=0;g=c;b=x;}
+  else if(k===3){r=0;g=x;b=c;} else if(k===4){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  return [r+m,g+m,b+m];
+}
+// returns [positions Float32Array(32), colours Float32Array(24), count]
+const abPos=new Float32Array(32), abCol=new Float32Array(24);
+function buildBrushes(time,dt){
+  let n=0;
+  // mouse first, so it always wins a slot
+  if(brush.down && Q.brushStr>0.001){
+    const c=hex2rgb(P.brushCol);
+    abPos[0]=brush.x; abPos[1]=brush.y; abPos[2]=Q.brushR; abPos[3]=Q.brushStr;
+    abCol[0]=c[0]; abCol[1]=c[1]; abCol[2]=c[2];
+    n=1;
+  }
+  const count=Math.min(8-n, Math.round(Q.abCount));
+  if(count>0 && Q.abStr>0.001){
+    const mode=+Q.abMode, sp=Q.abSpeed, spread=Q.abSpread;
+    const beat = Drive ? Drive.beatPhase : (time*0.5)%1;
+    const bi = Drive ? Math.floor(Drive.state.clock.beats) : Math.floor(time*0.5);
+    const newBeat = (bi!==lastBeat);
+    if(newBeat) lastBeat=bi;
+    for(let i=0;i<count;i++){
+      const a=AB[i];
+      const ph=i/count;
+      let x,y;
+      if(mode===0){                       // orbit
+        const ang=time*sp + ph*Math.PI*2;
+        x=0.5+Math.cos(ang)*spread; y=0.5+Math.sin(ang)*spread;
+      } else if(mode===1){                // lissajous
+        const f1=1+i%3, f2=2+((i+1)%3);
+        x=0.5+Math.sin(time*sp*f1 + ph*Math.PI*2)*spread;
+        y=0.5+Math.sin(time*sp*f2)*spread;
+      } else if(mode===2){                // wander
+        x=0.5+(abNoise(time*sp+a.jx,i*7)-0.5)*spread*2.6;
+        y=0.5+(abNoise(time*sp+a.jy,i*13+99)-0.5)*spread*2.6;
+      } else if(mode===3){                // bounce
+        a.x+=a.vx*sp*dt*0.6; a.y+=a.vy*sp*dt*0.6;
+        const lo=0.5-spread, hi=0.5+spread;
+        if(a.x<lo){a.x=lo;a.vx=Math.abs(a.vx);} if(a.x>hi){a.x=hi;a.vx=-Math.abs(a.vx);}
+        if(a.y<lo){a.y=lo;a.vy=Math.abs(a.vy);} if(a.y>hi){a.y=hi;a.vy=-Math.abs(a.vy);}
+        x=a.x; y=a.y;
+      } else if(mode===4){                // spiral
+        const ang=time*sp*1.6 + ph*Math.PI*2;
+        const r=spread*(0.25+0.75*(0.5+0.5*Math.sin(time*sp*0.37+ph*3.1)));
+        x=0.5+Math.cos(ang)*r; y=0.5+Math.sin(ang)*r;
+      } else {                            // beat jump
+        if(newBeat){ a.tx=abHash(bi*13+i*7); a.ty=abHash(bi*29+i*17); }
+        x=0.5+(a.tx-0.5)*spread*2.4; y=0.5+(a.ty-0.5)*spread*2.4;
+      }
+      if(Q.abJitter>0.0005){
+        x+=(abNoise(time*3+a.jx,i)-0.5)*Q.abJitter;
+        y+=(abNoise(time*3+a.jy,i+55)-0.5)*Q.abJitter;
+      }
+      // beat jump fades in on the hit; the others burn steadily
+      let str=Q.abStr;
+      if(mode===5) str *= Math.pow(1-beat, 2.2);
+      const c=hsl2rgb(time*Q.abHue + ph, Q.abSat, 0.6);
+      const k=n*4, kc=n*3;
+      abPos[k]=x; abPos[k+1]=y; abPos[k+2]=Q.abSize; abPos[k+3]=str;
+      abCol[kc]=c[0]; abCol[kc+1]=c[1]; abCol[kc+2]=c[2];
+      n++;
+    }
+  }
+  return n;
+}
+
 /* ============================ frame ============================ */
 const t0=performance.now();
-let frames=0, fpsT=performance.now(), fps=0;
+let frames=0, fpsT=performance.now(), fps=0, lastFrameT=performance.now(), mipLod=10;
 function U(p,n){ return gl.getUniformLocation(p,n); }
 const hex2rgb=h=>{const n=parseInt(h.slice(1),16);return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255];};
 
@@ -814,14 +956,26 @@ function frame(now){
   gl.uniform1f(U(progFeed,"uInKeySoft"),Q.inKeySoft);
   gl.uniform1i(U(progFeed,"uInEdge"),Q.inEdge?1:0);
 
-  gl.uniform2f(U(progFeed,"uBrush"), brush.down?brush.x:-1, brush.y);
-  gl.uniform1f(U(progFeed,"uBrushR"),Q.brushR);
-  gl.uniform1f(U(progFeed,"uBrushStr"),Q.brushStr);
-  const bc=hex2rgb(P.brushCol);
-  gl.uniform3f(U(progFeed,"uBrushCol"),bc[0],bc[1],bc[2]);
+  const nB=buildBrushes(time, Math.min(0.05,(now-lastFrameT)/1000||0.016));
+  lastFrameT=now;
+  gl.uniform1i(U(progFeed,"uBN"),nB);
+  if(nB>0){
+    gl.uniform4fv(U(progFeed,"uB"),abPos);
+    gl.uniform3fv(U(progFeed,"uBC"),abCol);
+  }
+  gl.uniform1f(U(progFeed,"uAgc"),Q.agc);
+  gl.uniform1f(U(progFeed,"uAgcTarget"),Q.agcTarget);
+  gl.uniform1f(U(progFeed,"uSoft"),Q.soft);
+  gl.uniform1f(U(progFeed,"uMipLod"),mipLod);
 
   gl.bindVertexArray(vao);
   gl.drawArrays(gl.TRIANGLES,0,3);
+
+  // the servo reads the top of the mip chain, so it needs rebuilding each frame
+  if(Q.agc > 0.001){
+    gl.bindTexture(gl.TEXTURE_2D, flip?texA:texB);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  }
 
   // display
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
