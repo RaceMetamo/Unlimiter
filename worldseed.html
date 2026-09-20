@@ -196,7 +196,11 @@ const SCHEMA=[
  {g:'Face', id:'faceSize',l:'Face size',min:0.15,max:1.3,step:0.005,v:0.6},
  {g:'Face', id:'faceLat',l:'Face latitude',min:-1.4,max:1.4,step:0.005,v:0.12},
  {g:'Face', id:'faceLon',l:'Face longitude',min:-3.14,max:3.14,step:0.005,v:0},
- {g:'Face', id:'eyes',l:'Number of eyes',min:1,max:6,step:1,v:2,int:true},
+ {g:'Face', id:'eyes',l:'Number of eyes',min:1,max:100,step:1,v:2,int:true},
+ {g:'Face', id:'eyeLayout',l:'Eye arrangement',min:0,max:3,step:1,v:0,int:true,sel:['Row','Grid','Spiral','Ring']},
+ {g:'Face', id:'eyeFit',l:'Shrink eyes to fit',min:0,max:1,step:1,v:1,int:true,chk:true},
+ {g:'Face', id:'eyeJitter',l:'Scatter',min:0,max:1,step:0.005,v:0},
+ {g:'Face', id:'blinkStagger',l:'Blink out of sync',min:0,max:1,step:0.005,v:0.6},
  {g:'Face', id:'eyeSpace',l:'Eye spacing',min:0.1,max:1,step:0.005,v:0.42},
  {g:'Face', id:'eyeSize',l:'Eye size',min:0.04,max:0.5,step:0.002,v:0.19},
  {g:'Face', id:'eyeTall',l:'Eye squash',min:0.35,max:2.2,step:0.005,v:1.15},
@@ -401,31 +405,47 @@ vec4 faceLayer(vec3 d,float t){
     float ph=fract(t/uBlink);
     blink=smoothstep(0.0,0.05,ph)*smoothstep(0.11,0.06,ph);
   }
-  const float aa=0.014;
   vec3 col=vec3(0.0); float a=0.0;
-  float ne=max(uEyes,1.0);
-  for(int i=0;i<6;i++){
-    if(float(i)>=ne) break;
+  float es=uEyeSize*uEyeScale;
+  float aa=clamp(es*0.085,0.0022,0.014);
+  float olw=clamp(es*0.15,0.0014,0.008);
+  // eye centres are laid out on the CPU once per frame; the loop below stays branch-light
+  float bboxY=es*max(uEyeTall,1.0)+olw+aa*2.0;
+  float bboxX=es+olw+aa*2.0;
+  // one test rejects every eye at once for forehead, cheek and chin fragments
+  bool nearEyes = p.x>uEyeBounds.x-bboxX && p.x<uEyeBounds.z+bboxX
+               && p.y>uEyeBounds.y-bboxY && p.y<uEyeBounds.w+bboxY;
+  for(int i=0;i<100;i++){
+    if(i>=uEyes||!nearEyes) break;
+    vec4 pk=uEyePos[i>>1];
+    vec2 ec=((i&1)==0)?pk.xy:pk.zw;
+    vec2 dp=p-ec;
+    if(abs(dp.x)>bboxX||abs(dp.y)>bboxY) continue;
     float fi=float(i);
-    float cx=(ne<1.5)?0.0:(fi/(ne-1.0)-0.5)*2.0*uEyeSpace;
-    float sx=(cx<0.0)?-1.0:1.0;
-    vec2 ec=vec2(cx,0.26);
-    vec2 er=vec2(uEyeSize, uEyeSize*uEyeTall*(1.0-blink*0.93));
-    float e=sdEll(p-ec,er);
+    float bl=blink;
+    if(uBlinkStagger>0.0&&uBlink>0.05){
+      float off=fract(sin(fi*45.977+uFaceSeed*0.31)*9871.23)*uBlinkStagger;
+      float ph=fract(t/uBlink+off);
+      bl=smoothstep(0.0,0.05,ph)*smoothstep(0.11,0.06,ph);
+    }
+    vec2 er=vec2(es, es*uEyeTall*(1.0-bl*0.93));
+    float e=sdEll(dp,er);
     float m=smoothstep(aa,-aa,e);
     col=mix(col,cEyeW,m); a=max(a,m);
-    vec2 pc=ec+uFaceLook*uPupil*uEyeSize*vec2(1.0,uEyeTall);
-    float pu=sdEll(p-pc,vec2(uEyeSize*0.44,uEyeSize*0.44*max(uEyeTall,0.6))*(1.0-blink));
+    vec2 pc=ec+uFaceLook*uPupil*es*vec2(1.0,uEyeTall);
+    float pu=sdEll(p-pc,vec2(es*0.44,es*0.44*max(uEyeTall,0.6))*(1.0-bl));
     float pm=smoothstep(aa,-aa,pu)*m;
     col=mix(col,cInk,pm);
-    float ol=smoothstep(aa,0.0,abs(e)-0.008);
+    float ol=smoothstep(aa,0.0,abs(e)-olw);
     col=mix(col,cInk,ol); a=max(a,ol);
-    if(uBrowOn>0.5){
-      vec2 bp=rot2(p-vec2(cx, 0.26+uEyeSize*uEyeTall+uBrowT), -sx*uBrow);
-      float br=smoothstep(aa,-aa, max(abs(bp.x)-uEyeSize*1.15, abs(bp.y)-0.035));
+    if(uBrowOn>0.5&&uEyes<=8){
+      float sx=(ec.x<0.0)?-1.0:1.0;
+      vec2 bp=rot2(p-vec2(ec.x, ec.y+es*uEyeTall+uBrowT), -sx*uBrow);
+      float br=smoothstep(aa,-aa, max(abs(bp.x)-es*1.15, abs(bp.y)-0.035));
       col=mix(col,cInk,br); a=max(a,br);
     }
   }
+  aa=0.014;
   vec2 mp=(p-vec2(0.0,-0.34+uMouthY))/vec2(max(uMouthW,0.02),max(uMouthH,0.02));
   float lip=-uMouthCurve*(1.0-mp.x*mp.x)*0.55;
   float bot=lip-max(uMouthOpen,0.06)*(1.0-mp.x*mp.x*0.75);
@@ -502,7 +522,11 @@ uniform float uTwo;
 uniform float uSea,uRim,uPaint,uCel,uFacet,uSpec,uSnow;
 uniform float uRingOn,uRingIn,uRingOut,uRingOpacity,uRingBands,uRingGap,uRingSeed;
 uniform vec3 uRingAxis,uCenter;
-uniform float uFaceOn,uFaceSize,uFaceLat,uFaceLon,uEyes,uEyeSpace,uEyeSize,uEyeTall,uPupil,
+uniform int uEyes;
+uniform vec4 uEyePos[50];
+uniform vec4 uEyeBounds;
+uniform float uEyeScale,uBlinkStagger,uFaceSeed;
+uniform float uFaceOn,uFaceSize,uFaceLat,uFaceLon,uEyeSpace,uEyeSize,uEyeTall,uPupil,
               uBlink,uBrowOn,uBrow,uBrowT,uMouthY,uMouthW,uMouthH,uMouthOpen,uMouthCurve,uFaceGlow,uTime;
 uniform vec2 uFaceLook;
 uniform vec3 cEyeW,cInk;
@@ -1176,7 +1200,8 @@ function randomMoon(parentIdx){
   P.amp=0.05+r()*0.12; P.plateN=Math.floor(r()*5); P.ringOn=0;
   const hp=host.world.p;
   if(num(hp.faceOn,0)>0.5){
-    ['faceSize','faceLat','faceLon','eyes','eyeSpace','eyeSize','eyeTall','pupil','lookFollow','blink',
+    ['faceSize','faceLat','faceLon','eyes','eyeLayout','eyeFit','eyeJitter','blinkStagger',
+     'eyeSpace','eyeSize','eyeTall','pupil','lookFollow','blink',
      'browOn','brow','brt','mouthY','mouthW','mouthH','mouthOpen','mouthCurve','faceGlow']
       .forEach(k=>{ if(hp[k]!==undefined) P[k]=hp[k]; });
     const moods=Object.keys(MOODS), pick=MOODS[moods[Math.floor(r()*moods.length)]];
@@ -1391,6 +1416,67 @@ function vcross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1
 function vnorm(a){ const l=Math.hypot(...a)||1; return [a[0]/l,a[1]/l,a[2]/l]; }
 function m3apply(m,v){ const s=modelScale(m);
   return [(m[0]*v[0]+m[4]*v[1]+m[8]*v[2])/s,(m[1]*v[0]+m[5]*v[1]+m[9]*v[2])/s,(m[2]*v[0]+m[6]*v[1]+m[10]*v[2])/s]; }
+// eye layout is worked out once per body per frame, never per fragment
+const eyeBuf=new Float32Array(200);
+let eyeCache={key:'',n:1,scale:1};
+function hashf(x){ const v=Math.sin(x)*43758.5453; return v-Math.floor(v); }
+function eyeGeom(w,seed){
+  const n=Math.max(1,Math.min(100,Math.round(num(w.eyes,2))));
+  const layout=Math.max(0,Math.min(3,Math.round(num(w.eyeLayout,0))));
+  const space=num(w.eyeSpace,0.42), size=Math.max(num(w.eyeSize,0.19),1e-4);
+  const jitter=num(w.eyeJitter,0), fit=num(w.eyeFit,1)>0.5;
+  const fs=num(seed,0)*0.017;
+  const key=[n,layout,space,size,jitter,fit?1:0,fs].join(',');
+  if(eyeCache.key===key) return eyeCache;
+
+  const rx=space*1.45, ry=space*1.05;
+  const cy=layout===0?0.26:0.17;
+  let cols=1, gap;
+  if(layout===0){
+    gap=n>1?(2*space)/(n-1):4*space;
+  } else if(layout===1){                // grid — keep cells roughly square
+    cols=Math.min(n,Math.max(1,Math.round(Math.sqrt(n*(rx/Math.max(ry,1e-4))))));
+    const rows=Math.ceil(n/cols);
+    gap=Math.min(cols>1?(2*rx)/(cols-1):4*rx, rows>1?(2*ry)/(rows-1):4*ry);
+  } else if(layout===2){                // phyllotaxis — mean nearest-neighbour spacing
+    gap=1.9*Math.min(rx,ry)/Math.sqrt(n);
+  } else {                              // ring
+    gap=n>1?2*Math.PI*((rx+ry)*0.5)/n:4*rx;
+  }
+  // only ever shrink, so a two-eyed face keeps exactly the size you set
+  const scale=fit?Math.min(1,(gap*0.46)/size):1;
+  const es=size*scale;
+
+  const rows=Math.ceil(n/cols);
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  for(let i=0;i<n;i++){
+    let x,y;
+    if(layout===0){
+      x=n>1?(i/(n-1)-0.5)*2*space:0; y=0.26;
+    } else if(layout===1){
+      const gx=i%cols, gy=Math.floor(i/cols);
+      const inRow=Math.min(cols,n-gy*cols);
+      x=inRow>1?((gx-(inRow-1)/2)/Math.max(cols-1,1))*2*rx:0;
+      y=rows>1?cy+((rows-1)/2-gy)/(rows-1)*2*ry:cy;
+    } else if(layout===2){
+      const rr=Math.sqrt((i+0.5)/n), th=i*2.39996323;
+      x=Math.cos(th)*rr*rx; y=cy+Math.sin(th)*rr*ry;
+    } else {
+      const th=(i/n)*Math.PI*2-Math.PI/2;
+      x=Math.cos(th)*rx; y=cy+Math.sin(th)*ry;
+    }
+    if(jitter>0){
+      x+=(hashf(i*12.9898+fs)-0.5)*jitter*es*2.4;
+      y+=(hashf(i*78.233+fs*1.7)-0.5)*jitter*es*2.4;
+    }
+    eyeBuf[i*2]=x; eyeBuf[i*2+1]=y;
+    if(x<minX) minX=x; if(x>maxX) maxX=x;
+    if(y<minY) minY=y; if(y>maxY) maxY=y;
+  }
+  for(let i=n*2;i<200;i++) eyeBuf[i]=999;
+  eyeCache={key,n,scale,bounds:[minX,minY,maxX,maxY]};
+  return eyeCache;
+}
 function faceLookVec(w,model,eye){
   const la=num(w.faceLat,0), lo=num(w.faceLon,0);
   if(num(w.lookFollow,1)<0.5) return [num(w.lookX,0),num(w.lookY,0)];
@@ -1441,7 +1527,15 @@ function drawPlanet(w,seed,colors,facet,model,light,accTex,eye,time,geo,sun){
   gl.uniform1f(U(pPlanet,'uFaceOn'),num(w.faceOn,0)>0.5?1:0);
   gl.uniform1f(U(pPlanet,'uFaceSize'),num(w.faceSize,0.6));
   gl.uniform1f(U(pPlanet,'uFaceLat'),num(w.faceLat,0)); gl.uniform1f(U(pPlanet,'uFaceLon'),num(w.faceLon,0));
-  gl.uniform1f(U(pPlanet,'uEyes'),Math.max(1,Math.round(num(w.eyes,2))));
+  if(num(w.faceOn,0)>0.5){
+    const eg=eyeGeom(w,seed);
+    gl.uniform1i(U(pPlanet,'uEyes'),eg.n);
+    gl.uniform1f(U(pPlanet,'uEyeScale'),eg.scale);
+    gl.uniform4fv(U(pPlanet,'uEyePos[0]'),eyeBuf);
+    gl.uniform4f(U(pPlanet,'uEyeBounds'),eg.bounds[0],eg.bounds[1],eg.bounds[2],eg.bounds[3]);
+    gl.uniform1f(U(pPlanet,'uBlinkStagger'),num(w.blinkStagger,0.6));
+    gl.uniform1f(U(pPlanet,'uFaceSeed'),seed*0.017);
+  } else gl.uniform1i(U(pPlanet,'uEyes'),0);
   gl.uniform1f(U(pPlanet,'uEyeSpace'),num(w.eyeSpace,0.42)); gl.uniform1f(U(pPlanet,'uEyeSize'),num(w.eyeSize,0.19));
   gl.uniform1f(U(pPlanet,'uEyeTall'),num(w.eyeTall,1.15)); gl.uniform1f(U(pPlanet,'uPupil'),num(w.pupil,0.45));
   gl.uniform1f(U(pPlanet,'uBlink'),num(w.blink,4.5));
@@ -1976,6 +2070,10 @@ const MOODS={
  'Unimpressed':{mouthCurve:-0.35,mouthOpen:0.06,mouthW:0.5,mouthH:0.3,brow:-0.35,brt:0.1,eyeTall:0.6,eyeSize:0.2,pupil:0.6},
  'Sleepy':{mouthCurve:0.15,mouthOpen:0.5,mouthW:0.2,mouthH:0.3,brow:0.15,brt:0.09,eyeTall:0.42,eyeSize:0.2,pupil:0.2},
  'Furious':{mouthCurve:-0.8,mouthOpen:0.5,mouthW:0.5,mouthH:0.38,brow:-0.75,brt:0.06,eyeTall:0.9,eyeSize:0.21,pupil:0.7},
+ 'Swarm':{eyes:42,eyeLayout:2,eyeFit:1,eyeJitter:0.35,blinkStagger:0.85,eyeSize:0.2,eyeSpace:0.6,
+   eyeTall:1.0,pupil:0.6,mouthCurve:-0.2,mouthOpen:0.12,mouthW:0.3,mouthH:0.28,browOn:0,blink:3.0},
+ 'All-seeing':{eyes:24,eyeLayout:3,eyeFit:1,eyeJitter:0,blinkStagger:0.5,eyeSize:0.22,eyeSpace:0.62,
+   eyeTall:1.1,pupil:0.75,mouthCurve:0.1,mouthOpen:0.2,mouthW:0.26,mouthH:0.3,browOn:0,blink:5.0},
  'Goofy':{mouthCurve:0.9,mouthOpen:0.8,mouthW:0.55,mouthH:0.4,brow:0.45,brt:0.2,eyeTall:1.5,eyeSize:0.23,pupil:0.9,eyeSpace:0.5}
 };
 function applyPreset(src,keepSeed){
@@ -2128,7 +2226,7 @@ function buildPlanetUI(){
       const rr=el('div','btns'); recordButton(rr); body.appendChild(rr);
     }
     if(g==='Face'){
-      body.appendChild(el('p','note','The face is painted onto the surface, so it lights, wraps and rotates with the planet. Turn spin down to keep it looking at you.'));
+      body.appendChild(el('p','note','The face is painted onto the surface, so it lights, wraps and rotates with the planet. Turn spin down to keep it looking at you. Past a handful of eyes, switch the arrangement off Row — they shrink to fit automatically.'));
       const mr=el('div','sel','<label for="mood">Expression</label>');
       const ms=document.createElement('select'); ms.id='mood';
       ms.innerHTML='<option value="">Choose…</option>'+Object.keys(MOODS).map(k=>`<option>${k}</option>`).join('');
@@ -2357,8 +2455,14 @@ function buildSystemUI(){
         msel.onchange=()=>{ const m=MOODS[msel.value]; if(!m) return;
           for(const k in m) b.world.p[k]=m[k]; saveSystem(); buildUI(); };
         mr.appendChild(msel); box.appendChild(mr);
-        wp('eyes'); wp('faceSize'); wp('faceLat'); wp('faceLon');
-        wp('mouthCurve'); wp('mouthOpen'); wp('eyeSize'); wp('eyeSpace');
+        wp('eyes');
+        const er=el('div','sel','<label>Eye arrangement</label>');
+        const es2=document.createElement('select');
+        es2.innerHTML=DEF('eyeLayout').sel.map((o,j)=>`<option value="${j}"${Math.round(num(b.world.p.eyeLayout,0))===j?' selected':''}>${o}</option>`).join('');
+        es2.onchange=()=>{ b.world.p.eyeLayout=parseInt(es2.value,10); saveSystem(); };
+        er.appendChild(es2); box.appendChild(er);
+        wp('faceSize'); wp('faceLat'); wp('faceLon');
+        wp('mouthCurve'); wp('mouthOpen'); wp('eyeSize'); wp('eyeSpace'); wp('eyeJitter');
         wchk('browOn','Eyebrows');
         box.appendChild(el('p','subhead','Voice'));
         wchk('sing','Sing along with the mic');
