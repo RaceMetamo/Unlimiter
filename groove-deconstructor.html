@@ -199,7 +199,7 @@
       </div>
     </div>
     <div class="legend" style="margin-top:10px;">
-      <b>Genre</b> shapes what ⚄ Generate produces (and sets BPM/swing) — track 1 is treated as kick, 2 as snare/clap, 3 as closed hat, 4 as open hat, 5–9 as percussion, using whatever channel/note you've set per track. Rename tracks to match your own Sound Bank patching. Tap a step to cycle <b>off → hit → accent</b> (bass also gets a fourth state, <b>slide</b>, in teal, for legato glide runs). If a track stays silent or triggers the wrong sound, tap its <b>▸</b> button to fire a single test note, and on the unit make sure that track's MIDI channel isn't set to OFF under <code>func + midi</code>.
+      <b>Genre</b> shapes what ⚄ Generate produces (and sets BPM/swing) — track 1 is treated as kick, 2 as snare/clap, 3 as closed hat, 4 as open hat, 5–9 as percussion. <b>BANK</b>/<b>SND</b> on each track pick which sample/drum voice actually plays there (CC24/CC12) — that's what makes track 1 a kick and track 3 a hat, not the note number. <b>NOTE</b> only tunes/transposes whatever sound is loaded, so leave it near the middle unless you want a deliberate pitch shift. Rename tracks once BANK/SND are set so labels match what's really patched. Tap a step to cycle <b>off → hit → accent</b> (bass also gets a fourth state, <b>slide</b>, in teal). If a track stays silent, tap its <b>▸</b> button to test, and check that track's MIDI channel isn't OFF under <code>func + midi</code> on the unit.
     </div>
   </div>
 
@@ -243,7 +243,7 @@
         tracks: tracks.map(function(t){
           return { name:t.name, channel:t.channel, note:t.note, muted:t.muted,
                    density:t.density, steps:t.steps, degrees:t.degrees,
-                   root:t.root, scale:t.scale };
+                   root:t.root, scale:t.scale, sound:t.sound, soundBank:t.soundBank };
         })
       }));
     }catch(e){ /* private mode / storage blocked — ignore */ }
@@ -269,7 +269,9 @@
       name: isBass ? "Bass" : (isLoop ? "Loop" : "Trk " + (i+1)),
       type: isBass ? "bass" : (isLoop ? "loop" : "drum"),
       channel: i+1,
-      note: isBass ? 36 : (36 + i),
+      note: isBass ? 36 : 60,
+      sound: null,
+      soundBank: null,
       muted:false,
       density: isBass ? 6 : (i===0?6:4),
       root: 0,
@@ -301,6 +303,8 @@
         if(Array.isArray(st.degrees) && st.degrees.length === STEP_COUNT) t.degrees = st.degrees;
         t.root = (typeof st.root === "number") ? st.root : t.root;
         t.scale = st.scale || t.scale;
+        t.sound = (typeof st.sound === "number") ? st.sound : t.sound;
+        t.soundBank = (typeof st.soundBank === "number") ? st.soundBank : t.soundBank;
       });
     }
   }
@@ -495,6 +499,43 @@
       noteField.appendChild(noteInput);
       noteField.appendChild(noteNameSpan);
       head.appendChild(noteField);
+
+      if(t.type !== "bass"){
+        // Which SAMPLE/DRUM VOICE plays is picked here (CC24 bank, CC12 sound
+        // within that bank) — Note only tunes/transposes whatever's already
+        // loaded, it doesn't switch sounds.
+        var bankField = document.createElement("span");
+        bankField.className = "mini-field";
+        bankField.innerHTML = "BANK";
+        var bankInput = document.createElement("input");
+        bankInput.type = "number"; bankInput.min = 0; bankInput.max = 127;
+        bankInput.placeholder = "—";
+        if(t.soundBank !== null) bankInput.value = t.soundBank;
+        bankInput.addEventListener("change", function(){
+          if(bankInput.value === ""){ t.soundBank = null; return; }
+          t.soundBank = Math.max(0, Math.min(127, parseInt(bankInput.value,10) || 0));
+          sendCC(t.channel, 24, t.soundBank);
+          saveState();
+        });
+        bankField.appendChild(bankInput);
+        head.appendChild(bankField);
+
+        var sndField = document.createElement("span");
+        sndField.className = "mini-field";
+        sndField.innerHTML = "SND";
+        var sndInput = document.createElement("input");
+        sndInput.type = "number"; sndInput.min = 0; sndInput.max = 127;
+        sndInput.placeholder = "—";
+        if(t.sound !== null) sndInput.value = t.sound;
+        sndInput.addEventListener("change", function(){
+          if(sndInput.value === ""){ t.sound = null; return; }
+          t.sound = Math.max(0, Math.min(127, parseInt(sndInput.value,10) || 0));
+          sendCC(t.channel, 12, t.sound);
+          saveState();
+        });
+        sndField.appendChild(sndInput);
+        head.appendChild(sndField);
+      }
 
       if(t.type === "bass"){
         var rootSel = document.createElement("select");
