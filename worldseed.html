@@ -517,8 +517,9 @@ void main(){
 const PLANET_FS=`#version 300 es
 precision highp float;
 in vec3 vWorld,vN,vObj; in float vH;
-uniform vec3 uCam,uLight,cDeep,cShallow,cLow,cMid,cHigh,cAtmo,uSun,uLight2,uSun2;
-uniform float uTwo;
+uniform vec3 uCam,cDeep,cShallow,cLow,cMid,cHigh,cAtmo;
+uniform vec3 uLightDir[4],uSunCol[4];
+uniform int uNumLights;
 uniform float uSea,uRim,uPaint,uCel,uFacet,uSpec,uSnow;
 uniform float uRingOn,uRingIn,uRingOut,uRingOpacity,uRingBands,uRingGap,uRingSeed;
 uniform vec3 uRingAxis,uCenter;
@@ -569,17 +570,21 @@ void main(){
   vec4 fc=faceLayer(vObj,uTime);
   col=mix(col,fc.rgb,fc.a);
   vec3 V=normalize(uCam-vWorld);
-  vec3 L1=normalize(uLight), L2=normalize(uLight2);
-  float nl1=dot(n,L1), nl2=dot(n,L2);
-  float lam1=shadeLam(n,L1,nl1);
-  float lam2=(uTwo>0.5)?shadeLam(n,L2,nl2):0.0;
-  float sp=pow(max(dot(n,normalize(V+L1)),0.0),72.0)*step(0.0,nl1);
-  if(uTwo>0.5) sp+=pow(max(dot(n,normalize(V+L2)),0.0),72.0)*step(0.0,nl2);
-  sp*=water*uSpec*(1.0-fc.a);
-  vec3 lit=uSun*lam1+((uTwo>0.5)?uSun2*lam2:vec3(0.0));
-  float lamA=clamp(lam1+lam2,0.0,1.0);
-  float nlA=max(nl1,(uTwo>0.5)?nl2:-1.0);
-  vec3 outc=col*(vec3(0.09)+0.98*lit)+sp*uSun;
+  vec3 lit=vec3(0.0), spc=vec3(0.0);
+  float lamA=0.0, nlA=-1.0;
+  for(int i=0;i<4;i++){
+    if(i>=uNumLights) break;
+    vec3 L=normalize(uLightDir[i]);
+    float nl=dot(n,L);
+    float lam=shadeLam(n,L,nl);
+    lit+=uSunCol[i]*lam;
+    lamA+=lam;
+    nlA=max(nlA,nl);
+    spc+=uSunCol[i]*pow(max(dot(n,normalize(V+L)),0.0),72.0)*step(0.0,nl);
+  }
+  lamA=clamp(lamA,0.0,1.0);
+  spc*=water*uSpec*(1.0-fc.a);
+  vec3 outc=col*(vec3(0.09)+0.98*lit)+spc;
   if(uPaint>0.0){ vec3 pc=texture(uAccum,sphUV(vObj)).rgb; outc+=pc*uPaint*(0.25+0.75*lamA)*(1.0-fc.a); }
   outc+=fc.rgb*fc.a*uFaceGlow*0.9;
   float fres=pow(1.0-clamp(dot(n,V),0.0,1.0),3.0);
@@ -667,15 +672,18 @@ void main(){
 const BELT_FS=`#version 300 es
 precision highp float;
 in vec3 vWorld,vN; in float vSh;
-uniform vec3 cA,cB,uSun,uSun2,uS1,uS2;
-uniform float uTwo;
+uniform vec3 cA,cB;
+uniform vec3 uStarPos[4],uSunCol[4];
+uniform int uNumLights;
 layout(location=0) out vec4 oColor;
 layout(location=1) out vec4 oNorm;
 void main(){
   vec3 n=normalize(vN);
-  float lam1=pow(clamp(dot(n,normalize(uS1-vWorld))*0.5+0.5,0.0,1.0),1.6);
-  vec3 lit=uSun*lam1;
-  if(uTwo>0.5) lit+=uSun2*pow(clamp(dot(n,normalize(uS2-vWorld))*0.5+0.5,0.0,1.0),1.6);
+  vec3 lit=vec3(0.0);
+  for(int i=0;i<4;i++){
+    if(i>=uNumLights) break;
+    lit+=uSunCol[i]*pow(clamp(dot(n,normalize(uStarPos[i]-vWorld))*0.5+0.5,0.0,1.0),1.6);
+  }
   vec3 col=mix(cA,cB,vSh)*(vec3(0.07)+lit);
   oColor=vec4(col,1.0);
   oNorm=vec4(n*0.5+0.5,1.0);
@@ -696,8 +704,10 @@ void main(){
 const RING_FS=`#version 300 es
 precision highp float;
 in vec3 vWorld; in float vT;
-uniform vec3 uCam,uLight,uCenter,cRingA,cRingB,uSun,uLight2,uSun2;
-uniform float uOpacity,uBands,uGap,uRingSeed,uPlanetR,uTwo;
+uniform vec3 uCam,uCenter,cRingA,cRingB;
+uniform vec3 uLightDir[4],uSunCol[4];
+uniform int uNumLights;
+uniform float uOpacity,uBands,uGap,uRingSeed,uPlanetR;
 layout(location=0) out vec4 oColor;
 layout(location=1) out vec4 oNorm;
 ${RINGFN}
@@ -708,15 +718,14 @@ void main(){
   vec3 rel=vWorld-uCenter;
   float c=dot(rel,rel)-uPlanetR*uPlanetR;
   vec3 Vv=normalize(uCam-vWorld);
-  vec3 L1=normalize(uLight);
-  float b1=dot(rel,L1);
-  float sh1=(b1<0.0&&(b1*b1-c)>0.0)?0.18:1.0;
-  vec3 lit=uSun*(0.3+0.85*sh1)*(0.75+0.6*abs(dot(Vv,L1)));
-  if(uTwo>0.5){
-    vec3 L2=normalize(uLight2);
-    float b2=dot(rel,L2);
-    float sh2=(b2<0.0&&(b2*b2-c)>0.0)?0.18:1.0;
-    lit+=uSun2*(0.3+0.85*sh2)*(0.75+0.6*abs(dot(Vv,L2)));
+  vec3 lit=vec3(0.0);
+  for(int i=0;i<4;i++){
+    if(i>=uNumLights) break;
+    vec3 L=normalize(uLightDir[i]);
+    float bb=dot(rel,L);
+    // the planet casts its own shadow band across the ring, once per star
+    float sh=(bb<0.0&&(bb*bb-c)>0.0)?0.18:1.0;
+    lit+=uSunCol[i]*(0.3+0.85*sh)*(0.75+0.6*abs(dot(Vv,L)));
   }
   col*=lit;
   float a=clamp(d*uOpacity,0.0,1.0);
@@ -802,10 +811,10 @@ const POST_FS=`#version 300 es
 precision highp float;
 in vec2 vUV;
 uniform sampler2D uColor,uNorm;
-uniform vec2 uPx,uGlowPos[2];
+uniform vec2 uPx,uGlowPos[4];
 uniform int uK;
-uniform float uOutline,uStars,uSat,uContrast,uAspect,uTanF,uGlowAmt[2],uGlowRad[2];
-uniform vec3 uRight,uUp,uFwd,uSpace,uInk,uGlowCol[2],cNeb1,cNeb2,cNeb3;
+uniform float uOutline,uStars,uSat,uContrast,uAspect,uTanF,uGlowAmt[4],uGlowRad[4];
+uniform vec3 uRight,uUp,uFwd,uSpace,uInk,uGlowCol[4],cNeb1,cNeb2,cNeb3;
 uniform float uNeb,uNebDen,uNebScale,uNebCon,uNebDrift,uStarDen,uStarWarm,uPTime,uMilky;
 ${NOISE}
 vec3 kuwahara(vec2 uv){
@@ -895,7 +904,7 @@ void main(){
   }
   col=mix(bg,col,cov);
   col=mix(col,uInk,clamp(edge(vUV)*uOutline*gate,0.0,1.0));
-  for(int i=0;i<2;i++){
+  for(int i=0;i<4;i++){
     if(uGlowAmt[i]>0.0){
       float dd=length((vUV-uGlowPos[i])*vec2(uAspect,1.0));
       col+=uGlowCol[i]*uGlowAmt[i]*(exp(-dd/max(uGlowRad[i],0.002))*0.85+0.2/(1.0+dd*dd*220.0));
@@ -1085,9 +1094,61 @@ function deriveGeo(seed,plateN,craterN,craterSize){
 
 /* ── library, system, persistence ─────────────────────────── */
 let library=[];
-const star={name:'Sol',color:'#ffd9a0',color2:'#ff8a3c',radius:1.1,intensity:1.5,glow:0.55,glowRad:0.16,gran:0.5};
-const star2={name:'Companion',color:'#bfd8ff',color2:'#6f9bd8',radius:0.7,intensity:1.1,glow:0.4,glowRad:0.12,gran:0.55};
-const binary={on:false,sep:3.4,ratio:0.38,speed:0.28,incl:0.1,phase:0};
+const MAX_STARS=4;
+const STAR_DEFAULTS=[
+ {name:'Sol',      color:'#ffd9a0',color2:'#ff8a3c',radius:1.1,intensity:1.5,glow:0.55,glowRad:0.16,gran:0.5},
+ {name:'Companion',color:'#bfd8ff',color2:'#6f9bd8',radius:0.7,intensity:1.1,glow:0.40,glowRad:0.12,gran:0.55},
+ {name:'Tertius',  color:'#ffd0d0',color2:'#c4483c',radius:0.5,intensity:0.9,glow:0.32,glowRad:0.10,gran:0.6},
+ {name:'Quartus',  color:'#e8e2ff',color2:'#8f7ad0',radius:0.45,intensity:0.8,glow:0.28,glowRad:0.09,gran:0.5}
+];
+function makeStar(i){ return {...STAR_DEFAULTS[i%4]}; }
+const stars=[makeStar(0)];
+// kept so older saves and any lingering reference still resolve to the primary
+const star=stars[0];
+const multi={mode:'hier', sep:3.4, ratio:0.38, speed:0.28, incl:0.1, phase:0,
+             innerSep:2.6, innerSpeed:0.9, innerIncl:0.35, innerPhase:0, innerPhase2:2.1};
+
+/* Real multiple-star systems are hierarchical — tight pairs orbiting each other at a
+   distance — so that is the default. Trapezium packs them on one ring instead. */
+function starPositions(){
+  const out=[[0,0,0],[0,0,0],[0,0,0],[0,0,0]];
+  const n=stars.length;
+  if(n<2) return out;
+  const A=multi.phase, I=multi.incl, S=multi.sep;
+  const dirAt=(ang,inc)=>[Math.cos(ang),Math.sin(ang)*Math.sin(inc),Math.sin(ang)*Math.cos(inc)];
+  const add=(a,b,k)=>[a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k];
+
+  if(multi.mode==='ring'){
+    for(let i=0;i<n;i++){
+      const th=A+(i/n)*Math.PI*2;
+      const r=(n===2)?(i===0?S*multi.ratio:S*(1-multi.ratio)):S*0.5;
+      const d=dirAt(th,I);
+      out[i]=[d[0]*r,d[1]*r,d[2]*r];
+    }
+    if(n===2){ const d=dirAt(A,I); out[0]=[d[0]*S*multi.ratio,d[1]*S*multi.ratio,d[2]*S*multi.ratio];
+      out[1]=[-d[0]*S*(1-multi.ratio),-d[1]*S*(1-multi.ratio),-d[2]*S*(1-multi.ratio)]; }
+    return out;
+  }
+
+  // hierarchical
+  const D=dirAt(A,I);
+  const rA=S*multi.ratio, rB=S*(1-multi.ratio);
+  const cA=[D[0]*rA,D[1]*rA,D[2]*rA];
+  const cB=[-D[0]*rB,-D[1]*rB,-D[2]*rB];
+  const iD1=dirAt(multi.innerPhase,multi.innerIncl);
+  const iD2=dirAt(multi.innerPhase2,multi.innerIncl);
+  const h=multi.innerSep*0.5;
+  if(n===2){ out[0]=cA; out[1]=cB; }
+  else if(n===3){
+    // a tight pair on one side, the lone star on the other
+    out[0]=add(cA,iD1,h); out[1]=add(cA,iD1,-h); out[2]=cB;
+  } else {
+    out[0]=add(cA,iD1,h); out[1]=add(cA,iD1,-h);
+    out[2]=add(cB,iD2,h); out[3]=add(cB,iD2,-h);
+  }
+  return out;
+}
+function starCol(st){ return hex(st.color).map(v=>0.35+v*st.intensity*0.75); }
 const sky={neb:0.0,den:0.55,scale:1.35,con:0.45,drift:0.01,milky:0.0,
            starDen:46,starWarm:0.5,
            space:'#04060a',c1:'#3b1f6e',c2:'#0f4d7a',c3:'#c2417a'};
@@ -1104,14 +1165,8 @@ const SKY_PRESETS={
  'Milky band':{neb:0.35,den:0.6,scale:1.1,con:0.35,milky:0.75,starDen:64,starWarm:0.5,
    space:'#04050b',c1:'#3a3560',c2:'#5d5a86',c3:'#ffe3c0'}
 };
-const secondLight={on:0,dir:[0,0,1],sun:[0,0,0]};
-function starPositions(){
-  if(!binary.on) return [[0,0,0],[0,0,0]];
-  const a=binary.phase,i=binary.incl;
-  const d=[Math.cos(a),Math.sin(a)*Math.sin(i),Math.sin(a)*Math.cos(i)];
-  const r1=binary.sep*binary.ratio, r2=binary.sep*(1-binary.ratio);
-  return [[d[0]*r1,d[1]*r1,d[2]*r1],[-d[0]*r2,-d[1]*r2,-d[2]*r2]];
-}
+// per-frame lighting, filled in by the system view and cleared by the planet view
+const lights={n:1,dir:new Float32Array(12),col:new Float32Array(12),pos:new Float32Array(12)};
 function projectPt(VP,p){
   return [VP[0]*p[0]+VP[4]*p[1]+VP[8]*p[2]+VP[12],
           VP[1]*p[0]+VP[5]*p[1]+VP[9]*p[2]+VP[13],
@@ -1139,7 +1194,7 @@ function store(k,v){ try{ localStorage.setItem('worldseed.'+k,JSON.stringify(v))
 function load(k){ try{ const s=localStorage.getItem('worldseed.'+k); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveLibrary(){ store('library',library); }
 function saveSystem(){
-  store('system',{star,star2,binary,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))});
+  store('system',{stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))});
 }
 function migrate(w){
   if(!w||!w.p) return w;
@@ -1148,12 +1203,49 @@ function migrate(w){
   for(const k in S.colors) if(!w.colors[k]) w.colors[k]=S.colors[k];
   return w;
 }
+// accepts both the current {stars,multi} shape and the older {star,star2,binary} one
+function loadStars(src){
+  if(Array.isArray(src.stars)&&src.stars.length){
+    stars.length=0;
+    src.stars.slice(0,MAX_STARS).forEach((st,i)=>stars.push({...makeStar(i),...st}));
+    if(src.multi) Object.assign(multi,src.multi);
+    return;
+  }
+  if(src.star){
+    stars.length=0;
+    stars.push({...makeStar(0),...src.star});
+    if(src.binary&&src.binary.on){
+      stars.push({...makeStar(1),...(src.star2||{})});
+      Object.assign(multi,{mode:'hier',sep:src.binary.sep,ratio:src.binary.ratio,
+        speed:src.binary.speed,incl:src.binary.incl,phase:src.binary.phase||0});
+    }
+  }
+}
+function setStarCount(n){
+  n=Math.max(1,Math.min(MAX_STARS,n));
+  while(stars.length<n) stars.push(makeStar(stars.length));
+  while(stars.length>n) stars.pop();
+  spaceStars();
+  saveSystem(); buildUI();
+}
+// keep stars from starting out inside one another; the sliders can still overlap them on purpose
+function spaceStars(){
+  const n=stars.length;
+  if(n<2) return;
+  const big=Math.max(...stars.map(s=>s.radius));
+  if(multi.mode==='hier'&&n>2){
+    const pairA=(stars[0].radius+stars[1].radius)*1.5;
+    const pairB=n>3?(stars[2].radius+stars[3].radius)*1.5:0;
+    multi.innerSep=Math.max(multi.innerSep,pairA,pairB);
+    multi.sep=Math.max(multi.sep,multi.innerSep*2.2+big);
+  } else {
+    multi.sep=Math.max(multi.sep,big*(n>2?3.2:2.6));
+  }
+}
 function loadPersisted(){
   const L=load('library'); if(Array.isArray(L)) library=L.map(migrate);
   const Sy=load('system');
-  if(Sy&&Sy.star){ Object.assign(star,Sy.star);
-    if(Sy.star2) Object.assign(star2,Sy.star2);
-    if(Sy.binary) Object.assign(binary,Sy.binary);
+  if(Sy){ loadStars(Sy);
     if(Sy.sky) Object.assign(sky,Sy.sky);
     if(Array.isArray(Sy.belts)) belts=Sy.belts;
     bodies=(Sy.bodies||[]).map(b=>{
@@ -1263,8 +1355,7 @@ function pickAt(cx,cy){
     if(tt>0.001&&(!best||tt<best.t)) best={t:tt,tag};
   };
   const SP=starPositions();
-  hit(SP[0],star.radius*1.05,{kind:'star',n:0});
-  if(binary.on) hit(SP[1],star2.radius*1.05,{kind:'star',n:1});
+  stars.forEach((st,i)=>hit(SP[i],st.radius*1.05,{kind:'star',n:i}));
   bodies.forEach((b,i)=>{
     const p=b.world&&b.world.p?b.world.p:{};
     const ext=1+Math.max(num(p.elong,0),num(p.lump,0),num(p.lobe,0)+num(p.lobeSize,0)*0.5,num(p.amp,0));
@@ -1304,9 +1395,10 @@ canvas.addEventListener('pointerup',e=>{
       cam.tDist=Math.max(14,(bodies.reduce((m,b)=>Math.max(m,b.orbit.r),6))*2.1);
       buildUI(); hud('Showing the whole system.'); } return; }
   if(t.kind==='star'){
+    const st=stars[t.n]||stars[0];
     focusIdx=-1; selIdx=-1; cam.tTarget=[0,0,0];
-    cam.tDist=Math.max(3,(t.n?star2.radius:star.radius)*5);
-    buildUI(); hud('Focused '+((t.n?star2.name:star.name)||'the star')+'.');
+    cam.tDist=Math.max(3,st.radius*5);
+    buildUI(); hud('Focused '+(st.name||'the star')+'.');
   } else focusBody(t.n);
 });
 canvas.addEventListener('dblclick',()=>{ if(mode==='system'&&selIdx>=0) openInEditor(selIdx); });
@@ -1491,7 +1583,7 @@ function faceLookVec(w,model,eye){
   return [x,y];
 }
 function modelAxis(m){ const a=[m[4],m[5],m[6]]; const l=Math.hypot(...a)||1; return [a[0]/l,a[1]/l,a[2]/l]; }
-function drawPlanet(w,seed,colors,facet,model,light,accTex,eye,time,geo,sun){
+function drawPlanet(w,seed,colors,facet,model,accTex,eye,time,geo){
   gl.useProgram(pPlanet);
   gl.uniformMatrix4fv(U(pPlanet,'uModel'),false,model);
   gl.uniform1f(U(pPlanet,'uTime'),time);
@@ -1502,11 +1594,9 @@ function drawPlanet(w,seed,colors,facet,model,light,accTex,eye,time,geo,sun){
   gl.uniform1f(U(pPlanet,'uSnow'),w.snow); gl.uniform1f(U(pPlanet,'uCel'),Math.round(w.cel));
   gl.uniform1f(U(pPlanet,'uFacet'),facet?1:0);
   gl.uniform3fv(U(pPlanet,'uCam'),new Float32Array(eye));
-  gl.uniform3fv(U(pPlanet,'uLight'),new Float32Array(light));
-  gl.uniform1f(U(pPlanet,'uTwo'),secondLight.on);
-  gl.uniform3fv(U(pPlanet,'uLight2'),new Float32Array(secondLight.dir));
-  gl.uniform3fv(U(pPlanet,'uSun2'),new Float32Array(secondLight.sun));
-  gl.uniform3fv(U(pPlanet,'uSun'),new Float32Array(sun||[1,1,1]));
+  gl.uniform1i(U(pPlanet,'uNumLights'),lights.n);
+  gl.uniform3fv(U(pPlanet,'uLightDir[0]'),lights.dir);
+  gl.uniform3fv(U(pPlanet,'uSunCol[0]'),lights.col);
   gl.uniform3fv(U(pPlanet,'cDeep'),hex(colors.deep)); gl.uniform3fv(U(pPlanet,'cShallow'),hex(colors.shallow));
   gl.uniform3fv(U(pPlanet,'cLow'),hex(colors.low)); gl.uniform3fv(U(pPlanet,'cMid'),hex(colors.mid));
   gl.uniform3fv(U(pPlanet,'cHigh'),hex(colors.high)); gl.uniform3fv(U(pPlanet,'cAtmo'),hex(colors.atmo));
@@ -1558,7 +1648,7 @@ function drawPlanet(w,seed,colors,facet,model,light,accTex,eye,time,geo,sun){
 
 const RING_SEGS=192;
 let curVP=null;
-function drawRing(w,colors,ringModel,light,eye,sun,planetR,seed){
+function drawRing(w,colors,ringModel,eye,planetR,seed){
   if(num(w.ringOn,0)<0.5||num(w.ringOpacity,0.75)<=0) return;
   const sc=modelScale(ringModel);
   gl.useProgram(pRing);
@@ -1573,11 +1663,9 @@ function drawRing(w,colors,ringModel,light,eye,sun,planetR,seed){
   gl.uniform1f(U(pRing,'uRingSeed'),seed);
   gl.uniform1f(U(pRing,'uPlanetR'),planetR*sc);
   gl.uniform3fv(U(pRing,'uCam'),new Float32Array(eye));
-  gl.uniform3fv(U(pRing,'uLight'),new Float32Array(light));
-  gl.uniform1f(U(pRing,'uTwo'),secondLight.on);
-  gl.uniform3fv(U(pRing,'uLight2'),new Float32Array(secondLight.dir));
-  gl.uniform3fv(U(pRing,'uSun2'),new Float32Array(secondLight.sun));
-  gl.uniform3fv(U(pRing,'uSun'),new Float32Array(sun||[1,1,1]));
+  gl.uniform1i(U(pRing,'uNumLights'),lights.n);
+  gl.uniform3fv(U(pRing,'uLightDir[0]'),lights.dir);
+  gl.uniform3fv(U(pRing,'uSunCol[0]'),lights.col);
   gl.uniform3fv(U(pRing,'uCenter'),new Float32Array([ringModel[12],ringModel[13],ringModel[14]]));
   gl.uniform3fv(U(pRing,'cRingA'),hex(colOf(colors,'ringA','#d8c9ad')));
   gl.uniform3fv(U(pRing,'cRingB'),hex(colOf(colors,'ringB','#8f7f6b')));
@@ -1626,10 +1714,10 @@ function endScene(la,glow){
   gl.uniform3fv(U(pPost,'cNeb2'),new Float32Array(hex(sky.c2||'#0f4d7a')));
   gl.uniform3fv(U(pPost,'cNeb3'),new Float32Array(hex(sky.c3||'#c2417a')));
   gl.uniform3fv(U(pPost,'uInk'),new Float32Array([0.02,0.03,0.045]));
-  const gl_amt=new Float32Array(2), gl_rad=new Float32Array([0.1,0.1]),
-        gl_pos=new Float32Array(4), gl_col=new Float32Array(6);
+  const gl_amt=new Float32Array(4), gl_rad=new Float32Array([0.1,0.1,0.1,0.1]),
+        gl_pos=new Float32Array(8), gl_col=new Float32Array(12);
   const gs=Array.isArray(glow)?glow:(glow?[glow]:[]);
-  for(let i=0;i<2;i++){
+  for(let i=0;i<4;i++){
     const g=gs[i];
     if(!g) continue;
     gl_amt[i]=g.amt; gl_rad[i]=g.rad;
@@ -1713,12 +1801,13 @@ function render(now){
         if(linkTimer>0.6){ linkTimer=0; syncLink(true); }
       }
     }
-    secondLight.on=0; secondLight.sun=[0,0,0];
+    lights.n=1;
+    lights.dir.set(L,0); lights.col.set([1,1,1],0);
     const bnc=1+singState(w).bounce;
     const tiltM=mul(rotZ(MP.tilt),trs([0,0,0],bnc));
     drawPlanet(w,S.seed,S.colors,S.facet,mul(mul(rotZ(MP.tilt),rotY(spinAngle)),trs([0,0,0],bnc)),
-               L,accum.tex,eye,time,mesh,[1,1,1]);
-    drawRing(w,S.colors,tiltM,L,eye,[1,1,1],1+MP.amp,S.seed);
+               accum.tex,eye,time,mesh);
+    drawRing(w,S.colors,tiltM,eye,1+MP.amp,S.seed);
     updateLabels(null,null);
     endScene(la,null);
   } else {
@@ -1738,21 +1827,29 @@ function render(now){
     beginScene();
 
     // stars
-    if(binary.on) binary.phase+=binary.speed*dt;
+    if(stars.length>1){
+      multi.phase+=multi.speed*dt;
+      multi.innerPhase+=multi.innerSpeed*dt;
+      multi.innerPhase2+=multi.innerSpeed*dt;
+    }
     const SP=starPositions();
     gl.useProgram(pStar);
     gl.uniformMatrix4fv(U(pStar,'uVP'),false,VP);
     gl.uniform3fv(U(pStar,'uCam'),new Float32Array(eye));
     gl.uniform1f(U(pStar,'uTime'),time);
     gl.bindVertexArray(meshSys.vao);
-    const drawStar=(st,pos)=>{
-      gl.uniformMatrix4fv(U(pStar,'uModel'),false,trs(pos,st.radius));
+    stars.forEach((st,i)=>{
+      gl.uniformMatrix4fv(U(pStar,'uModel'),false,trs(SP[i],st.radius));
       gl.uniform3fv(U(pStar,'cStar'),hex(st.color)); gl.uniform3fv(U(pStar,'cStar2'),hex(st.color2));
       gl.uniform1f(U(pStar,'uGran'),st.gran); gl.uniform1f(U(pStar,'uInt'),st.intensity);
       gl.drawElements(gl.TRIANGLES,meshSys.count,gl.UNSIGNED_INT,0);
-    };
-    drawStar(star,SP[0]);
-    if(binary.on) drawStar(star2,SP[1]);
+    });
+    lights.n=stars.length;
+    stars.forEach((st,i)=>{
+      const c=starCol(st);
+      lights.col[i*3]=c[0]; lights.col[i*3+1]=c[1]; lights.col[i*3+2]=c[2];
+      lights.pos[i*3]=SP[i][0]; lights.pos[i*3+1]=SP[i][1]; lights.pos[i*3+2]=SP[i][2];
+    });
 
     // orbit rings
     if(S.rings!==false){
@@ -1760,12 +1857,16 @@ function render(now){
       gl.uniformMatrix4fv(U(pOrbit,'uVP'),false,VP);
       gl.uniform1f(U(pOrbit,'uN'),192);
       gl.bindVertexArray(emptyVAO);
-      if(binary.on){
+      if(stars.length>1){
         gl.uniform3fv(U(pOrbit,'uCol'),new Float32Array([0.16,0.14,0.11]));
         gl.uniform3fv(U(pOrbit,'uCenter'),new Float32Array([0,0,0]));
-        gl.uniform1f(U(pOrbit,'uIncl'),binary.incl);
-        gl.uniform1f(U(pOrbit,'uR'),binary.sep*binary.ratio); gl.drawArrays(gl.LINE_LOOP,0,192);
-        gl.uniform1f(U(pOrbit,'uR'),binary.sep*(1-binary.ratio)); gl.drawArrays(gl.LINE_LOOP,0,192);
+        gl.uniform1f(U(pOrbit,'uIncl'),multi.incl);
+        if(multi.mode==='ring'&&stars.length>2){
+          gl.uniform1f(U(pOrbit,'uR'),multi.sep*0.5); gl.drawArrays(gl.LINE_LOOP,0,192);
+        } else {
+          gl.uniform1f(U(pOrbit,'uR'),multi.sep*multi.ratio); gl.drawArrays(gl.LINE_LOOP,0,192);
+          gl.uniform1f(U(pOrbit,'uR'),multi.sep*(1-multi.ratio)); gl.drawArrays(gl.LINE_LOOP,0,192);
+        }
       }
       for(const b of bodies){
         const par=parentOf(b);
@@ -1777,16 +1878,14 @@ function render(now){
       }
     }
 
-    const sunCol=hex(star.color).map(v=>0.35+v*star.intensity*0.75);
-    const sunCol2=hex(star2.color).map(v=>0.35+v*star2.intensity*0.75);
-    secondLight.on=binary.on?1:0; secondLight.sun=binary.on?sunCol2:[0,0,0];
-
     // asteroid belts
     if(belts.length){
       gl.useProgram(pBelt);
       gl.uniformMatrix4fv(U(pBelt,'uVP'),false,VP);
       gl.uniform1f(U(pBelt,'uTime'),time);
-      gl.uniform3fv(U(pBelt,'uSun'),new Float32Array(sunCol));
+      gl.uniform1i(U(pBelt,'uNumLights'),lights.n);
+      gl.uniform3fv(U(pBelt,'uSunCol[0]'),lights.col);
+      gl.uniform3fv(U(pBelt,'uStarPos[0]'),lights.pos);
       gl.bindVertexArray(meshRock.vao);
       for(const bl of belts){
         gl.uniform1f(U(pBelt,'uR'),num(bl.r,9)); gl.uniform1f(U(pBelt,'uWidth'),num(bl.width,2.4));
@@ -1795,10 +1894,6 @@ function render(now){
         gl.uniform1f(U(pBelt,'uSpin'),num(bl.spin,0.6)); gl.uniform1f(U(pBelt,'uLump'),num(bl.lump,0.45));
         gl.uniform1f(U(pBelt,'uSeed'),num(bl.seed,1));
         gl.uniform3fv(U(pBelt,'cA'),hex(bl.cA||'#8d8478')); gl.uniform3fv(U(pBelt,'cB'),hex(bl.cB||'#413b36'));
-        gl.uniform3fv(U(pBelt,'uSun2'),new Float32Array(sunCol2));
-        gl.uniform1f(U(pBelt,'uTwo'),binary.on?1:0);
-        gl.uniform3fv(U(pBelt,'uS1'),new Float32Array(SP[0]));
-        gl.uniform3fv(U(pBelt,'uS2'),new Float32Array(SP[1]));
         gl.drawElementsInstanced(gl.TRIANGLES,meshRock.count,gl.UNSIGNED_INT,0,Math.max(1,Math.round(num(bl.count,240))));
       }
     }
@@ -1808,37 +1903,33 @@ function render(now){
     const rings=[];
     for(const b of bodies){
       const pos=bodyPos(b);
-      const L=[SP[0][0]-pos[0],SP[0][1]-pos[1],SP[0][2]-pos[2]];
-      const ln=Math.hypot(...L)||1; const Ln=[L[0]/ln,L[1]/ln,L[2]/ln];
-      if(binary.on){
-        const D=[SP[1][0]-pos[0],SP[1][1]-pos[1],SP[1][2]-pos[2]];
-        const dl=Math.hypot(...D)||1;
-        secondLight.dir=[D[0]/dl,D[1]/dl,D[2]/dl];
+      // each star lights this body from wherever it happens to be right now
+      for(let k=0;k<stars.length;k++){
+        const D=[SP[k][0]-pos[0],SP[k][1]-pos[1],SP[k][2]-pos[2]];
+        const dl=Math.hypot(D[0],D[1],D[2])||1;
+        lights.dir[k*3]=D[0]/dl; lights.dir[k*3+1]=D[1]/dl; lights.dir[k*3+2]=D[2]/dl;
       }
       const bsc=b.scale*(1+singState(b.world.p).bounce);
       const base=mul(mul(trs(pos,1),rotZ(bTilt(b))),trs([0,0,0],bsc));
       const model=mul(mul(trs(pos,1),rotZ(bTilt(b))),mul(rotY(b._spin||0),trs([0,0,0],bsc)));
       drawPlanet(b.world.p,b.world.seed,b.world.colors,b.world.facet,model,
-                 Ln,bodyAccum(b),eye,time,meshSys,sunCol);
+                 bodyAccum(b),eye,time,meshSys);
       if(num(b.world.p.ringOn,0)>0.5)
-        rings.push({b,base,Ln,L2:secondLight.dir.slice(),d:dist2(pos,eye)});
+        rings.push({b,base,dir:lights.dir.slice(0,stars.length*3),d:dist2(pos,eye)});
     }
     rings.sort((x,y)=>y.d-x.d);
     for(const r of rings){
-      if(binary.on) secondLight.dir=r.L2;
-      drawRing(r.b.world.p,r.b.world.colors,r.base,r.Ln,eye,sunCol,1+num(r.b.world.p.amp,0.1),r.b.world.seed);
+      lights.dir.set(r.dir,0);
+      drawRing(r.b.world.p,r.b.world.colors,r.base,eye,1+num(r.b.world.p.amp,0.1),r.b.world.seed);
     }
 
     // star glow in screen space
-    const glows=[];
-    const addGlow=(st,pos)=>{
-      const cp=projectPt(VP,pos);
-      if(cp[2]>0.0001) glows.push({amt:st.glow*st.intensity,rad:st.glowRad,
-        pos:[cp[0]/cp[2]*0.5+0.5,cp[1]/cp[2]*0.5+0.5],col:hex(st.color)});
-      else glows.push(null);
-    };
-    addGlow(star,SP[0]);
-    if(binary.on) addGlow(star2,SP[1]);
+    const glows=stars.map((st,i)=>{
+      const cp=projectPt(VP,SP[i]);
+      if(cp[2]<=0.0001) return null;
+      return {amt:st.glow*st.intensity,rad:st.glowRad,
+        pos:[cp[0]/cp[2]*0.5+0.5,cp[1]/cp[2]*0.5+0.5],col:hex(st.color)};
+    });
     updateLabels(VP,SP);
     endScene(la,glows);
   }
@@ -1898,8 +1989,7 @@ function updateLabels(VP,SP){
   if(!VP||S.labels===false||mode!=='system'){ labelsEl.style.display='none'; return; }
   labelsEl.style.display='block';
   const sp0=SP||[[0,0,0],[0,0,0]];
-  const items=[{n:star.name||'Star',p:sp0[0],r:star.radius,s:true}];
-  if(binary.on) items.push({n:star2.name||'Companion',p:sp0[1],r:star2.radius,s:true});
+  const items=stars.map((st,i)=>({n:st.name||('Star '+(i+1)),p:sp0[i],r:st.radius,s:true}));
   bodies.forEach((b,i)=>items.push({n:b.name,p:bodyPos(b),r:b.scale,sel:i===selIdx}));
 
   const W2=canvas.clientWidth, H2=canvas.clientHeight;
@@ -2013,9 +2103,7 @@ function importJSON(file){
     if(Array.isArray(d)) { library=library.concat(d.map(migrate)); saveLibrary(); hud('Imported '+d.length+' presets.'); }
     else if(d.library||d.system){
       if(d.library) library=library.concat(d.library.map(migrate));
-      if(d.system){ Object.assign(star,d.system.star||{});
-        if(d.system.star2) Object.assign(star2,d.system.star2);
-        if(d.system.binary) Object.assign(binary,d.system.binary);
+      if(d.system){ loadStars(d.system);
         if(d.system.sky) Object.assign(sky,d.system.sky);
         if(Array.isArray(d.system.belts)) belts=d.system.belts;
         bodies=(d.system.bodies||[]).map(b=>{ const nb={...b,accum:null,parent:(b.parent===undefined?-1:b.parent)}; migrate(nb.world); return nb; }); }
@@ -2197,7 +2285,7 @@ function buildPlanetUI(){
   const b2=el('div','btns');
   const bAdd=el('button',null,'Send to system'); bAdd.onclick=()=>addBodyFromCurrent((nameIn.value||'').trim(),true);
   const bExp=el('button',null,'Export file');
-  bExp.onclick=()=>downloadJSON({library,system:{star,star2,binary,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))}},'worldseed-library.json');
+  bExp.onclick=()=>downloadJSON({library,system:{stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))}},'worldseed-library.json');
   const bImp=el('button',null,'Import file');
   const fi=document.createElement('input'); fi.type='file'; fi.accept='.json,application/json'; fi.style.display='none';
   fi.onchange=()=>{ if(fi.files[0]) importJSON(fi.files[0]); };
@@ -2339,29 +2427,62 @@ function buildSystemUI(){
     sliderRow(parent,{l:'Corona spread',min:0.02,max:0.6,step:0.002},st,'glowRad',saveSystem);
     sliderRow(parent,{l:'Granulation',min:0,max:1.5,step:0.005},st,'gran',saveSystem);
   }
-  const sb=section('Star',true);
-  starBlock(sb,star,'st');
-  checkbox(sb,'Binary star',()=>binary.on,v=>{ binary.on=v; saveSystem(); buildUI(); });
-  if(binary.on){
-    const box=el('div','modslot');
-    box.appendChild(el('p','note','Both stars orbit the barycentre at the centre, and everything else orbits the pair. Planets get light from each of them.'));
-    starBlock(box,star2,'st2');
-    sliderRow(box,{l:'Separation',min:0.4,max:14,step:0.01},binary,'sep',saveSystem);
-    sliderRow(box,{l:'Mass balance',min:0.05,max:0.95,step:0.005},binary,'ratio',saveSystem);
-    sliderRow(box,{l:'Orbit speed',min:-1.5,max:1.5,step:0.005},binary,'speed',saveSystem);
-    sliderRow(box,{l:'Inclination',min:-0.9,max:0.9,step:0.005},binary,'incl',saveSystem);
+  const sb=section('Stars',true);
+  const cr=el('div','sel','<label for="nstars">How many stars</label>');
+  const cs=document.createElement('select'); cs.id='nstars';
+  cs.innerHTML=[[1,'One'],[2,'Binary'],[3,'Triple'],[4,'Quadruple']]
+    .map(([v,l])=>`<option value="${v}"${stars.length===v?' selected':''}>${l}</option>`).join('');
+  cs.onchange=()=>setStarCount(parseInt(cs.value,10));
+  cr.appendChild(cs); sb.appendChild(cr);
+
+  if(stars.length>1){
+    const ar=el('div','sel','<label for="starmode">Arrangement</label>');
+    const as=document.createElement('select'); as.id='starmode';
+    as.innerHTML=`<option value="hier"${multi.mode==='hier'?' selected':''}>Hierarchical</option>`+
+                 `<option value="ring"${multi.mode==='ring'?' selected':''}>Trapezium</option>`;
+    as.onchange=()=>{ multi.mode=as.value; spaceStars(); saveSystem(); buildUI(); };
+    ar.appendChild(as); sb.appendChild(ar);
+    sb.appendChild(el('p','note', multi.mode==='hier'
+      ? (stars.length>3 ? 'Two tight pairs circling each other \u2014 the arrangement real quadruple systems settle into.'
+        : stars.length>2 ? 'A tight pair on one side, a lone star on the other, like Alpha Centauri with Proxima.'
+        : 'Both stars circle the barycentre at the centre.')
+      : 'Every star shares one ring around the centre. Pretty, though nothing like it stays stable for long.'));
+    sliderRow(sb,{l:'Separation',min:0.4,max:20,step:0.01},multi,'sep',saveSystem);
+    if(!(multi.mode==='ring'&&stars.length>2))
+      sliderRow(sb,{l:'Mass balance',min:0.05,max:0.95,step:0.005},multi,'ratio',saveSystem);
+    sliderRow(sb,{l:'Orbit speed',min:-1.5,max:1.5,step:0.005},multi,'speed',saveSystem);
+    sliderRow(sb,{l:'Inclination',min:-0.9,max:0.9,step:0.005},multi,'incl',saveSystem);
+    if(multi.mode==='hier'&&stars.length>2){
+      sliderRow(sb,{l:'Pair separation',min:0.1,max:6,step:0.01},multi,'innerSep',saveSystem);
+      sliderRow(sb,{l:'Pair speed',min:-3,max:3,step:0.005},multi,'innerSpeed',saveSystem);
+      sliderRow(sb,{l:'Pair tilt',min:-1.5,max:1.5,step:0.005},multi,'innerIncl',saveSystem);
+    }
     const bq=el('div','btns');
-    const bsw=el('button',null,'Swap colours');
-    bsw.onclick=()=>{ const a=star.color,b=star.color2;
-      star.color=star2.color; star.color2=star2.color2; star2.color=a; star2.color2=b;
+    const bcl=el('button',null,'Warm / cool mix');
+    bcl.onclick=()=>{
+      const pal=[['#ffd0a8','#ff6a2c',1.4],['#cfe2ff','#6f9bd8',1.2],
+                 ['#ffd8d8','#c4483c',1.0],['#efe6ff','#8f7ad0',0.95]];
+      stars.forEach((st,i)=>{ st.color=pal[i][0]; st.color2=pal[i][1]; st.intensity=pal[i][2]; });
       saveSystem(); buildUI(); };
-    const bcl=el('button',null,'Classic red/blue');
-    bcl.onclick=()=>{ star.color='#ffd0a8'; star.color2='#ff6a2c'; star.intensity=1.4;
-      star2.color='#cfe2ff'; star2.color2='#6f9bd8'; star2.intensity=1.2; star2.radius=0.6;
-      saveSystem(); buildUI(); };
-    bq.append(bsw,bcl); box.appendChild(bq);
-    sb.appendChild(box);
+    const bsw=el('button',null,'Shuffle sizes');
+    bsw.onclick=()=>{ stars.forEach((st,i)=>{ st.radius=+(0.35+Math.random()*(i?0.7:1.1)).toFixed(2); });
+      spaceStars(); saveSystem(); buildUI(); };
+    const bsp=el('button',null,'Space them out');
+    bsp.title='Push the orbits apart until no two stars overlap';
+    bsp.onclick=()=>{ spaceStars(); saveSystem(); buildUI(); hud('Orbits spaced so nothing overlaps.'); };
+    bq.append(bcl,bsw,bsp); sb.appendChild(bq);
   }
+
+  stars.forEach((st,i)=>{
+    if(i===0){ starBlock(sb,st,'st0'); return; }
+    const box=el('div','modslot');
+    const hd=el('div','item');
+    const dot=el('div','dot'); dot.style.background=st.color;
+    const nm=el('span','nm'); nm.textContent=st.name||('Star '+(i+1));
+    hd.append(dot,nm); box.appendChild(hd);
+    starBlock(box,st,'st'+i);
+    sb.appendChild(box);
+  });
 
   const pb=section('Planets in orbit',true);
   if(!bodies.length) pb.appendChild(el('p','note','No planets yet. Build one in Planet mode and press “Send to system”, or use “Send current planet” below. Once a planet is here, its “+ Moon” button drops a random moon into orbit around it.'));
@@ -2411,7 +2532,7 @@ function buildSystemUI(){
       const box=el('div','modslot');
       const prow=el('div','sel','<label>Orbits</label>');
       const ps=document.createElement('select');
-      ps.innerHTML=`<option value="-1">${(star.name||'Star')}</option>`+
+      ps.innerHTML=`<option value="-1">${(stars[0].name||'Star')}</option>`+
         bodies.map((o,j)=>j===i?'':`<option value="${j}"${(b.parent===j)?' selected':''}>${o.name}</option>`).join('');
       ps.value=String(b.parent===undefined?-1:b.parent);
       ps.onchange=()=>{
@@ -2588,7 +2709,7 @@ function buildSystemUI(){
     const b=el('button',null,l); b.onclick=()=>saveFrame(s3*S.resScale); b5.appendChild(b); });
   recordButton(b5);
   const bExp=el('button',null,'Export system');
-  bExp.onclick=()=>downloadJSON({library,system:{star,star2,binary,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))}},'worldseed-system.json');
+  bExp.onclick=()=>downloadJSON({library,system:{stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))}},'worldseed-system.json');
   b5.appendChild(bExp);
   vb.appendChild(b5);
 }
