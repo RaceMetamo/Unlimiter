@@ -1,0 +1,859 @@
+<title>Groove Deconstructor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#14161a;
+    --panel:#1c1f24;
+    --panel-2:#23272e;
+    --border:#2d323a;
+    --border-soft:#252932;
+    --text:#eae6dd;
+    --text-dim:#8b909a;
+    --text-faint:#565b64;
+    --accent:#ff9d2e;
+    --accent-dim:#8a5a25;
+    --accent-2:#ff5a3c;
+    --cool:#35c9b0;
+    --danger:#ff5a5a;
+    --mono:'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --sans:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    margin:0;
+    padding-inline:16px;
+    padding-block:20px 40px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  h1,h2,h3{font-family:var(--mono); margin:0; text-wrap:balance;}
+  button{font-family:var(--sans); -webkit-user-select:none; user-select:none;}
+  select,input{font-family:var(--sans);}
+  .wrap{max-width:900px; margin:0 auto; display:flex; flex-direction:column; gap:18px;}
+
+  /* header */
+  .hero{display:flex; flex-direction:column; gap:4px; padding-block:4px 8px; border-bottom:1px solid var(--border); }
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); display:flex; align-items:center; gap:8px;}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%; background:var(--text-faint); display:inline-block;}
+  .eyebrow .dot.live{background:var(--accent); box-shadow:0 0 6px var(--accent);}
+  h1{font-size:22px; font-weight:700; letter-spacing:-.01em;}
+  .sub{color:var(--text-dim); font-size:13px; line-height:1.5; max-width:60ch;}
+
+  /* panel */
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px;}
+  .panel-title{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .panel-title .hint{font-family:var(--sans); text-transform:none; letter-spacing:0; font-size:11px; color:var(--text-faint);}
+
+  /* midi connect */
+  .midi-row{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
+  .midi-row select{flex:1 1 200px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:9px 10px; font-size:13px;}
+  .status-pill{font-family:var(--mono); font-size:11px; padding:5px 10px; border-radius:20px; border:1px solid var(--border); color:var(--text-dim); white-space:nowrap; display:flex; align-items:center; gap:6px;}
+  .status-pill .dot{width:7px;height:7px;border-radius:50%; background:var(--text-faint);}
+  .status-pill.ok{color:var(--accent); border-color:var(--accent-dim);}
+  .status-pill.ok .dot{background:var(--accent); box-shadow:0 0 6px var(--accent);}
+  .status-pill.err{color:var(--danger); border-color:#5a2a2a;}
+  .status-pill.err .dot{background:var(--danger);}
+  .note-line{font-size:12px; color:var(--text-faint); line-height:1.5; margin-top:8px;}
+  .note-line a{color:var(--text-dim);}
+
+  /* transport */
+  .transport{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center;}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint);}
+  .field .val{font-family:var(--mono); font-size:13px; color:var(--text); font-variant-numeric:tabular-nums;}
+  input[type=range]{-webkit-appearance:none; appearance:none; width:120px; height:4px; background:var(--border); border-radius:2px; outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:15px; height:15px; border-radius:50%; background:var(--accent); cursor:pointer; border:2px solid var(--bg);}
+  input[type=range]::-moz-range-thumb{width:15px; height:15px; border-radius:50%; background:var(--accent); cursor:pointer; border:2px solid var(--bg);}
+  .btn{font-family:var(--mono); font-size:12px; letter-spacing:.04em; text-transform:uppercase; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:9px 14px; cursor:pointer; white-space:nowrap;}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:var(--accent); color:#1a1200; border-color:var(--accent); font-weight:600;}
+  .btn.primary.playing{background:var(--accent-2); border-color:var(--accent-2);}
+  .btn.ghost{background:transparent;}
+  .btn.danger{color:var(--danger); border-color:#4a2424;}
+  .btn.small{padding:5px 9px; font-size:10px;}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+  select.plain{background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:8px 9px; font-family:var(--mono); font-size:12px;}
+
+  /* track list */
+  .tracks{display:flex; flex-direction:column; gap:10px;}
+  .track{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
+  .track.muted{opacity:.45;}
+  .track.bass{border-color:#2a4440;}
+  .track.loop{border-color:#2a3a4a;}
+  .track-head{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px;}
+  .track-name{font-family:var(--mono); font-weight:600; font-size:13px; background:transparent; border:none; color:var(--text); width:64px; padding:2px 0; border-bottom:1px solid transparent;}
+  .track-name:focus{outline:none; border-bottom:1px solid var(--accent);}
+  .type-badge{font-family:var(--mono); font-size:9px; letter-spacing:.08em; text-transform:uppercase; padding:3px 7px; border-radius:4px; background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border);}
+  .type-badge.bass{color:var(--cool); border-color:#1f4a43;}
+  .type-badge.loop{color:#6fa8ff; border-color:#1f3a5a;}
+  .mini-field{display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:11px; color:var(--text-faint);}
+  .mini-field input, .mini-field select{width:48px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:5px; padding:4px 5px; font-family:var(--mono); font-size:11px;}
+  .mini-field .noteName{color:var(--text-dim); width:30px;}
+  .spacer{flex:1;}
+  .icon-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text-dim); border-radius:6px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px;}
+  .icon-btn.active{color:var(--accent); border-color:var(--accent-dim);}
+  .icon-btn.danger-active{color:var(--danger); border-color:#5a2a2a;}
+
+  .steps{display:flex; flex-wrap:wrap; gap:4px;}
+  .step{flex:1 1 30px; min-width:26px; aspect-ratio:1; border-radius:5px; background:var(--panel-2); border:1px solid var(--border-soft); cursor:pointer; position:relative; padding:0;}
+  .step .fill{position:absolute; inset:0; border-radius:4px;}
+  .step[data-state="1"] .fill{background:var(--accent-dim);}
+  .step[data-state="2"] .fill{background:var(--accent-2); box-shadow:0 0 8px rgba(255,90,60,.5);}
+  .step[data-state="3"] .fill{background:var(--cool); box-shadow:0 0 8px rgba(53,201,176,.5);}
+  .step.beat{border-color:#3a4048;}
+  .step.playhead{outline:2px solid var(--text); outline-offset:1px;}
+  .step .deg{position:absolute; bottom:2px; right:3px; font-family:var(--mono); font-size:7px; color:rgba(0,0,0,.55);}
+
+  .track-controls{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px;}
+  .density-field{display:flex; align-items:center; gap:6px;}
+  .density-field label{font-family:var(--mono); font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em;}
+
+  .legend{font-size:11px; color:var(--text-faint); line-height:1.6;}
+  .legend b{color:var(--text-dim); font-weight:600;}
+
+  /* CC panel */
+  .cc-toggle{display:flex; align-items:center; justify-content:space-between; cursor:pointer;}
+  .cc-body{display:none; flex-direction:column; gap:14px; margin-top:12px;}
+  .cc-body.open{display:flex;}
+  .cc-group-title{font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .cc-group-title::after{content:""; flex:1; height:1px; background:var(--border);}
+  .cc-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px 14px;}
+  .cc-item{display:flex; flex-direction:column; gap:4px;}
+  .cc-item .row{display:flex; justify-content:space-between; font-size:11px;}
+  .cc-item .row .name{color:var(--text-dim); font-family:var(--mono);}
+  .cc-item .row .num{color:var(--text-faint); font-family:var(--mono);}
+  .cc-item .row .v{color:var(--accent); font-family:var(--mono); font-variant-numeric:tabular-nums;}
+  .cc-item input[type=range]{width:100%;}
+
+  .foot{font-size:11px; color:var(--text-faint); line-height:1.6; text-align:center; padding-top:8px;}
+  .foot a{color:var(--text-dim);}
+  code{font-family:var(--mono); background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:.92em;}
+
+  @media (max-width:520px){
+    .midi-row select{flex-basis:100%;}
+    h1{font-size:19px;}
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="eyebrow"><span class="dot" id="liveDot"></span>USB MIDI · deconstruct MINIMAL</div>
+    <h1>Groove Deconstructor</h1>
+    <p class="sub">A generative 16-step pattern engine that plays your Sonicware deconstruct MINIMAL directly over USB &mdash; no DAW, no computer. Works in Chrome or Edge on Android with a USB‑C OTG cable.</p>
+  </div>
+
+  <!-- MIDI connection -->
+  <div class="panel" id="midiPanel">
+    <div class="panel-title">MIDI Output</div>
+    <div class="midi-row">
+      <button class="btn primary" id="connectBtn" type="button">Connect MIDI</button>
+      <select id="outputSelect" disabled hidden><option>—</option></select>
+      <span class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Not connected</span></span>
+      <button class="btn small" id="rescanBtn" type="button" hidden>Rescan</button>
+    </div>
+    <div class="note-line">
+      Tap <b>Connect MIDI</b> (Chrome only shows the permission prompt when you tap something — it won't ask on its own).
+    </div>
+    <div class="note-line" id="unsupportedNote" hidden>
+      This browser has no Web MIDI support. On your phone, open this page in <b>Chrome</b> or <b>Edge for Android</b> &mdash; Safari / iOS browsers can't do USB MIDI. Plug in with a USB‑C OTG cable, power the deconstruct MINIMAL on with USB MIDI enabled (<code>func + midi</code> &rarr; port set to <code>USB</code> or <code>MID.USB</code>), then rescan.
+    </div>
+  </div>
+
+  <!-- transport -->
+  <div class="panel">
+    <div class="panel-title">Transport</div>
+    <div class="transport">
+      <button class="btn primary" id="playBtn" type="button">▶ Play</button>
+      <button class="btn danger" id="panicBtn" type="button">Panic</button>
+      <div class="field">
+        <label>BPM</label>
+        <input type="range" id="bpmRange" min="60" max="200" value="120">
+        <span class="val" id="bpmVal">120</span>
+      </div>
+      <div class="field">
+        <label>Swing</label>
+        <input type="range" id="swingRange" min="50" max="75" value="50">
+        <span class="val" id="swingVal">50%</span>
+      </div>
+      <div class="field">
+        <label>Gate</label>
+        <input type="range" id="gateRange" min="10" max="90" value="45">
+        <span class="val" id="gateVal">45%</span>
+      </div>
+      <div class="field">
+        <label>Send Clock</label>
+        <span class="val"><input type="checkbox" id="clockToggle"> 24ppqn</span>
+      </div>
+    </div>
+    <div class="legend" style="margin-top:10px;">
+      Tap a step to cycle <b>off → hit → accent</b> (bass also gets a fourth state, <b>slide</b>, in teal, for legato glide runs).
+    </div>
+  </div>
+
+  <!-- tracks -->
+  <div class="tracks" id="trackList"></div>
+
+  <div class="panel">
+    <button class="btn" id="generateAllBtn" type="button" style="width:100%;">⚄ Generate all unmuted tracks</button>
+  </div>
+
+  <!-- CC control -->
+  <div class="panel">
+    <div class="cc-toggle" id="ccToggle">
+      <div class="panel-title" style="margin-bottom:0;">Live Parameters <span class="hint">CCs from midi.guide</span></div>
+      <span class="icon-btn" id="ccChevron">＋</span>
+    </div>
+    <div class="cc-body" id="ccBody"></div>
+  </div>
+
+  <div class="foot">
+    Channels and notes here are just starting points &mdash; set them to match whatever you've assigned on the unit itself under <code>func + midi</code> (per-track channel, and <code>edit note map</code> for trigger notes). Pattern data and CC assignments are saved to this browser automatically.
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- persistence ---------- */
+  var STORE_KEY = "groove-deconstructor-v1";
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  function saveState(){
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        bpm: bpm, swing: swing, gate: gate, sendClock: sendClock,
+        tracks: tracks.map(function(t){
+          return { name:t.name, channel:t.channel, note:t.note, muted:t.muted,
+                   density:t.density, steps:t.steps, degrees:t.degrees,
+                   root:t.root, scale:t.scale };
+        })
+      }));
+    }catch(e){ /* private mode / storage blocked — ignore */ }
+  }
+  var saved = loadState();
+
+  /* ---------- track model ---------- */
+  var STEP_COUNT = 16;
+  var SCALES = {
+    "Minor Pent": [0,3,5,7,10],
+    "Natural Min": [0,2,3,5,7,8,10],
+    "Phrygian": [0,1,3,5,7,8,10],
+    "Chromatic": [0,1,2,3,4,5,6,7,8,9,10,11]
+  };
+  var NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteName(n){ return NOTE_NAMES[((n%12)+12)%12] + (Math.floor(n/12)-1); }
+
+  function defaultTrack(i){
+    var isBass = (i === 10);
+    var isLoop = (i === 9);
+    return {
+      idx:i,
+      name: isBass ? "Bass" : (isLoop ? "Loop" : "Trk " + (i+1)),
+      type: isBass ? "bass" : (isLoop ? "loop" : "drum"),
+      channel: i+1,
+      note: isBass ? 36 : (36 + i),
+      muted:false,
+      density: isBass ? 6 : (i===0?6:4),
+      root: 0,
+      scale: "Minor Pent",
+      steps: new Array(STEP_COUNT).fill(0),
+      degrees: new Array(STEP_COUNT).fill(0)
+    };
+  }
+
+  var tracks = [];
+  for(var i=0;i<11;i++){ tracks.push(defaultTrack(i)); }
+
+  var bpm = 120, swing = 50, gate = 45, sendClock = false;
+  if(saved){
+    bpm = saved.bpm || 120;
+    swing = saved.swing || 50;
+    gate = saved.gate || 45;
+    sendClock = !!saved.sendClock;
+    if(saved.tracks && saved.tracks.length === 11){
+      saved.tracks.forEach(function(st, i){
+        var t = tracks[i];
+        t.name = st.name || t.name;
+        t.channel = st.channel || t.channel;
+        t.note = (typeof st.note === "number") ? st.note : t.note;
+        t.muted = !!st.muted;
+        t.density = (typeof st.density === "number") ? st.density : t.density;
+        if(Array.isArray(st.steps) && st.steps.length === STEP_COUNT) t.steps = st.steps;
+        if(Array.isArray(st.degrees) && st.degrees.length === STEP_COUNT) t.degrees = st.degrees;
+        t.root = (typeof st.root === "number") ? st.root : t.root;
+        t.scale = st.scale || t.scale;
+      });
+    }
+  }
+
+  /* ---------- euclidean-ish generator (Bresenham distribution) ---------- */
+  function euclid(pulses, steps){
+    pulses = Math.max(0, Math.min(steps, pulses));
+    var pattern = [], bucket = 0;
+    for(var i=0;i<steps;i++){
+      bucket += pulses;
+      if(bucket >= steps){ bucket -= steps; pattern.push(1); }
+      else pattern.push(0);
+    }
+    return pattern;
+  }
+
+  function generateTrack(t){
+    var hits = euclid(t.density, STEP_COUNT);
+    var newSteps = new Array(STEP_COUNT).fill(0);
+    var newDegrees = new Array(STEP_COUNT).fill(0);
+    var scale = SCALES[t.scale] || SCALES["Minor Pent"];
+    var hitIndex = 0;
+    for(var i=0;i<STEP_COUNT;i++){
+      if(hits[i]){
+        var state = 1;
+        var isDownbeat = (i % 4 === 0);
+        var r = Math.random();
+        if(t.type === "bass"){
+          if(isDownbeat && r < 0.35) state = 2;
+          else if(!isDownbeat && r < 0.22) state = 3; // slide
+          newDegrees[i] = scale[Math.floor(Math.random()*scale.length)];
+        } else {
+          if(isDownbeat) state = (Math.random() < 0.6) ? 2 : 1;
+          else state = (Math.random() < 0.18) ? 2 : 1;
+        }
+        newSteps[i] = state;
+        hitIndex++;
+      }
+    }
+    t.steps = newSteps;
+    t.degrees = newDegrees;
+  }
+
+  /* ---------- render tracks ---------- */
+  var trackListEl = document.getElementById("trackList");
+
+  function cycleState(t, i){
+    var max = (t.type === "bass") ? 3 : 2;
+    t.steps[i] = (t.steps[i] + 1) % (max + 1);
+    if(t.steps[i] > 0 && t.type === "bass" && t.degrees[i] === undefined){
+      var scale = SCALES[t.scale];
+      t.degrees[i] = scale[Math.floor(Math.random()*scale.length)];
+    }
+  }
+
+  function renderTracks(){
+    trackListEl.innerHTML = "";
+    tracks.forEach(function(t){
+      var el = document.createElement("div");
+      el.className = "track" + (t.muted ? " muted" : "") + (t.type==="bass"?" bass":"") + (t.type==="loop"?" loop":"");
+      el.dataset.idx = t.idx;
+
+      var head = document.createElement("div");
+      head.className = "track-head";
+
+      var nameInput = document.createElement("input");
+      nameInput.className = "track-name";
+      nameInput.value = t.name;
+      nameInput.maxLength = 10;
+      nameInput.addEventListener("change", function(){ t.name = nameInput.value || t.name; saveState(); });
+      head.appendChild(nameInput);
+
+      var badge = document.createElement("span");
+      badge.className = "type-badge" + (t.type==="bass"?" bass":"") + (t.type==="loop"?" loop":"");
+      badge.textContent = t.type === "bass" ? "BASS" : (t.type === "loop" ? "LOOP" : "TRACK " + (t.idx+1));
+      head.appendChild(badge);
+
+      var chField = document.createElement("span");
+      chField.className = "mini-field";
+      chField.innerHTML = "CH";
+      var chInput = document.createElement("input");
+      chInput.type = "number"; chInput.min=1; chInput.max=16; chInput.value = t.channel;
+      chInput.addEventListener("change", function(){
+        t.channel = Math.max(1, Math.min(16, parseInt(chInput.value,10) || t.channel));
+        chInput.value = t.channel; saveState();
+      });
+      chField.appendChild(chInput);
+      head.appendChild(chField);
+
+      var noteField = document.createElement("span");
+      noteField.className = "mini-field";
+      noteField.innerHTML = "NOTE";
+      var noteInput = document.createElement("input");
+      noteInput.type = "number"; noteInput.min=0; noteInput.max=127; noteInput.value = t.note;
+      var noteNameSpan = document.createElement("span");
+      noteNameSpan.className = "noteName";
+      noteNameSpan.textContent = noteName(t.note);
+      noteInput.addEventListener("input", function(){
+        t.note = Math.max(0, Math.min(127, parseInt(noteInput.value,10) || 0));
+        noteNameSpan.textContent = noteName(t.note);
+        saveState();
+      });
+      noteField.appendChild(noteInput);
+      noteField.appendChild(noteNameSpan);
+      head.appendChild(noteField);
+
+      if(t.type === "bass"){
+        var rootSel = document.createElement("select");
+        NOTE_NAMES.forEach(function(nm, ni){
+          var o = document.createElement("option"); o.value = ni; o.textContent = nm;
+          if(ni === t.root) o.selected = true;
+          rootSel.appendChild(o);
+        });
+        rootSel.addEventListener("change", function(){ t.root = parseInt(rootSel.value,10); t.note = 24 + t.root; noteInput.value=t.note; noteNameSpan.textContent = noteName(t.note); saveState(); });
+        rootSel.style.width="52px";
+        head.appendChild(rootSel);
+
+        var scaleSel = document.createElement("select");
+        Object.keys(SCALES).forEach(function(sn){
+          var o = document.createElement("option"); o.value = sn; o.textContent = sn;
+          if(sn === t.scale) o.selected = true;
+          scaleSel.appendChild(o);
+        });
+        scaleSel.addEventListener("change", function(){ t.scale = scaleSel.value; saveState(); });
+        scaleSel.style.width="90px";
+        head.appendChild(scaleSel);
+      }
+
+      var spacer = document.createElement("div"); spacer.className="spacer";
+      head.appendChild(spacer);
+
+      var genBtn = document.createElement("button");
+      genBtn.type = "button"; genBtn.className = "icon-btn"; genBtn.title = "Generate";
+      genBtn.textContent = "⚄";
+      genBtn.addEventListener("click", function(){ generateTrack(t); renderSteps(t, stepsEl); saveState(); });
+      head.appendChild(genBtn);
+
+      var clearBtn = document.createElement("button");
+      clearBtn.type="button"; clearBtn.className="icon-btn"; clearBtn.title="Clear";
+      clearBtn.textContent = "×";
+      clearBtn.addEventListener("click", function(){ t.steps = new Array(STEP_COUNT).fill(0); renderSteps(t, stepsEl); saveState(); });
+      head.appendChild(clearBtn);
+
+      var muteBtn = document.createElement("button");
+      muteBtn.type="button"; muteBtn.className = "icon-btn" + (t.muted ? " danger-active" : ""); muteBtn.title="Mute";
+      muteBtn.textContent = "M";
+      muteBtn.addEventListener("click", function(){
+        t.muted = !t.muted;
+        el.classList.toggle("muted", t.muted);
+        muteBtn.classList.toggle("danger-active", t.muted);
+        saveState();
+      });
+      head.appendChild(muteBtn);
+
+      el.appendChild(head);
+
+      var stepsEl = document.createElement("div");
+      stepsEl.className = "steps";
+      renderSteps(t, stepsEl);
+      el.appendChild(stepsEl);
+
+      var controls = document.createElement("div");
+      controls.className = "track-controls";
+      var df = document.createElement("div"); df.className = "density-field";
+      var dLabel = document.createElement("label"); dLabel.textContent = "Density";
+      var dRange = document.createElement("input");
+      dRange.type = "range"; dRange.min = 0; dRange.max = STEP_COUNT; dRange.value = t.density;
+      var dVal = document.createElement("span"); dVal.className = "val"; dVal.textContent = t.density + "/16";
+      dRange.addEventListener("input", function(){ t.density = parseInt(dRange.value,10); dVal.textContent = t.density + "/16"; saveState(); });
+      df.appendChild(dLabel); df.appendChild(dRange); df.appendChild(dVal);
+      controls.appendChild(df);
+      el.appendChild(controls);
+
+      trackListEl.appendChild(el);
+    });
+  }
+
+  function renderSteps(t, container){
+    container.innerHTML = "";
+    for(var i=0;i<STEP_COUNT;i++){
+      (function(i){
+        var s = document.createElement("button");
+        s.type = "button";
+        s.className = "step" + (i%4===0 ? " beat" : "");
+        s.dataset.state = t.steps[i];
+        s.dataset.trackIdx = t.idx;
+        s.dataset.stepIdx = i;
+        var fill = document.createElement("div"); fill.className = "fill";
+        s.appendChild(fill);
+        s.addEventListener("click", function(){
+          cycleState(t, i);
+          s.dataset.state = t.steps[i];
+          saveState();
+        });
+        container.appendChild(s);
+      })(i);
+    }
+  }
+
+  renderTracks();
+
+  /* ---------- CC panel ---------- */
+  var TRACK_CCS = [
+    ["Sound",12],["Tune",13],["Tone",14],["Move",15],["Attack",16],["Decay",17],
+    ["Reverb send",18],["Delay send",19],["Pan",20],["Level",21],
+    ["Random velocity",22],["Sound bank",24],["Accent hard",25],["Accent soft",26]
+  ];
+  var BASS_CCS = [
+    ["Filter cutoff",33],["Filter resonance",34],["Filter env depth",35],["Filter env decay",36],
+    ["Accent",37],["Drive",38],["Level",39],["Drive bypass",40],["Glide curve",41]
+  ];
+  var PATTERN_CCS = [
+    ["Isolator low",51],["Isolator mid",52],["Isolator high",53],
+    ["Reverb type",54],["Reverb",55],["Delay mix",56],["Delay time",57],["Delay feedback",58],
+    ["Delay ping pong",59],["Delay sync",60],["Delay to reverb",61],
+    ["Master FX bypass",62],["Master FX type",63],["Master FX param",64],
+    ["Pattern swing",65],["Pattern swing res",66],["Feel",67],["Pattern level",68],
+    ["Octave",42],["Swing",43],["Swing resolution",44]
+  ];
+
+  var ccBody = document.getElementById("ccBody");
+
+  function buildCcGroup(titleText, ccList, getChannelFn, extraFieldHTML){
+    var wrap = document.createElement("div");
+    var titleRow = document.createElement("div");
+    titleRow.className = "cc-group-title";
+    var span = document.createElement("span"); span.textContent = titleText;
+    titleRow.appendChild(span);
+    wrap.appendChild(titleRow);
+
+    if(extraFieldHTML){
+      wrap.appendChild(extraFieldHTML);
+    }
+
+    var grid = document.createElement("div");
+    grid.className = "cc-grid";
+    ccList.forEach(function(pair){
+      var name = pair[0], cc = pair[1];
+      var item = document.createElement("div");
+      item.className = "cc-item";
+      var row = document.createElement("div"); row.className = "row";
+      var nm = document.createElement("span"); nm.className = "name"; nm.textContent = name;
+      var num = document.createElement("span"); num.className = "num"; num.textContent = "CC" + cc;
+      var v = document.createElement("span"); v.className = "v"; v.textContent = "64";
+      row.appendChild(nm); row.appendChild(num); row.appendChild(v);
+      var slider = document.createElement("input");
+      slider.type = "range"; slider.min = 0; slider.max = 127; slider.value = 64;
+      slider.style.width = "100%";
+      slider.addEventListener("input", function(){
+        v.textContent = slider.value;
+        sendCC(getChannelFn(), cc, parseInt(slider.value,10));
+      });
+      item.appendChild(row); item.appendChild(slider);
+      grid.appendChild(item);
+    });
+    wrap.appendChild(grid);
+    return wrap;
+  }
+
+  var trackChSel = document.createElement("select");
+  trackChSel.className = "plain";
+  tracks.forEach(function(t){
+    var o = document.createElement("option");
+    o.value = t.idx; o.textContent = t.name + " (ch " + t.channel + ")";
+    trackChSel.appendChild(o);
+  });
+  var trackChWrap = document.createElement("div");
+  trackChWrap.style.marginBottom = "8px";
+  trackChWrap.innerHTML = '<label style="font-family:var(--mono);font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;margin-right:8px;">Target track</label>';
+  trackChWrap.appendChild(trackChSel);
+
+  ccBody.appendChild(buildCcGroup("Track parameters", TRACK_CCS, function(){
+    var idx = parseInt(trackChSel.value,10);
+    return tracks[idx].channel;
+  }, trackChWrap));
+
+  var bassTrack = tracks[10];
+  ccBody.appendChild(buildCcGroup("Bass (track 11)", BASS_CCS, function(){ return bassTrack.channel; }));
+
+  var patCh = { value: 12 };
+  var patField = document.createElement("div");
+  patField.style.marginBottom = "8px";
+  patField.innerHTML = '<label style="font-family:var(--mono);font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;margin-right:8px;">Pattern channel</label>';
+  var patInput = document.createElement("input");
+  patInput.type = "number"; patInput.min = 1; patInput.max = 16; patInput.value = 12;
+  patInput.style.width = "48px";
+  patInput.style.background = "var(--panel-2)"; patInput.style.color = "var(--text)";
+  patInput.style.border = "1px solid var(--border)"; patInput.style.borderRadius = "5px";
+  patInput.style.padding = "4px 6px"; patInput.style.fontFamily = "var(--mono)";
+  patInput.addEventListener("change", function(){ patCh.value = parseInt(patInput.value,10) || 12; });
+  patField.appendChild(patInput);
+  ccBody.appendChild(buildCcGroup("Pattern / FX", PATTERN_CCS, function(){ return patCh.value; }, patField));
+
+  document.getElementById("ccToggle").addEventListener("click", function(){
+    var open = ccBody.classList.toggle("open");
+    document.getElementById("ccChevron").textContent = open ? "−" : "＋";
+  });
+
+  /* ---------- Web MIDI ---------- */
+  var midiAccess = null, output = null;
+  var outputSelect = document.getElementById("outputSelect");
+  var statusPill = document.getElementById("statusPill");
+  var statusText = document.getElementById("statusText");
+  var liveDot = document.getElementById("liveDot");
+  var unsupportedNote = document.getElementById("unsupportedNote");
+  var connectBtn = document.getElementById("connectBtn");
+  var rescanBtn = document.getElementById("rescanBtn");
+  var midiRequestTimer = null;
+
+  function setStatus(mode, text){
+    statusPill.className = "status-pill" + (mode ? " " + mode : "");
+    statusText.textContent = text;
+    liveDot.classList.toggle("live", mode === "ok");
+  }
+
+  function populateOutputs(){
+    outputSelect.innerHTML = "";
+    if(!midiAccess){ return; }
+    var outs = Array.from(midiAccess.outputs.values());
+    if(outs.length === 0){
+      var o = document.createElement("option");
+      o.textContent = "No MIDI outputs found";
+      outputSelect.appendChild(o);
+      outputSelect.disabled = true;
+      setStatus("err", "Access granted, but no device found — check the cable/port setting");
+      output = null;
+      return;
+    }
+    outputSelect.disabled = false;
+    outs.forEach(function(o){
+      var opt = document.createElement("option");
+      opt.value = o.id; opt.textContent = o.name || o.id;
+      outputSelect.appendChild(opt);
+    });
+    var preferred = outs.find(function(o){ return /deconstruct|minimal|sonicware/i.test(o.name||""); });
+    var chosen = preferred || outs[0];
+    outputSelect.value = chosen.id;
+    output = chosen;
+    setStatus("ok", "Connected: " + (chosen.name || chosen.id));
+  }
+
+  outputSelect.addEventListener("change", function(){
+    if(!midiAccess) return;
+    output = midiAccess.outputs.get(outputSelect.value) || null;
+    if(output) setStatus("ok", "Connected: " + (output.name || output.id));
+  });
+
+  rescanBtn.addEventListener("click", function(){
+    if(midiAccess) populateOutputs();
+    else requestMidi();
+  });
+
+  function showDiagnostic(text){
+    var d = document.getElementById("diagLine");
+    if(!d){
+      d = document.createElement("div");
+      d.id = "diagLine";
+      d.className = "note-line";
+      d.style.color = "var(--danger)";
+      document.getElementById("midiPanel").appendChild(d);
+    }
+    d.textContent = text;
+  }
+
+  function requestMidi(){
+    if(!navigator.requestMIDIAccess){
+      unsupportedNote.hidden = false;
+      setStatus("err", "Web MIDI unsupported");
+      return;
+    }
+    setStatus(null, "Requesting MIDI access… (check for a Chrome permission prompt)");
+    connectBtn.disabled = true;
+    connectBtn.textContent = "Connecting…";
+
+    clearTimeout(midiRequestTimer);
+    midiRequestTimer = setTimeout(function(){
+      setStatus("err", "No response after 8s");
+      showDiagnostic("The request never resolved or rejected — this points to something blocking the API entirely on this page/browser, not a permission you can flip. Send me this line so I can adjust the tool.");
+      connectBtn.disabled = false;
+      connectBtn.textContent = "Try again";
+    }, 8000);
+
+    // Wrap the call itself in try/catch: some Chromium builds throw a
+    // synchronous DOMException here (rather than returning a rejected
+    // promise) when a Permissions-Policy or similar restriction blocks the
+    // feature outright — without this, that throw is silently swallowed by
+    // the click handler and the UI just sits on "Connecting…".
+    try{
+      var midiPromise = navigator.requestMIDIAccess({ sysex:false });
+    } catch(syncErr){
+      clearTimeout(midiRequestTimer);
+      setStatus("err", "Blocked immediately: " + syncErr.name);
+      showDiagnostic((syncErr.name || "Error") + ": " + (syncErr.message || "no message") + " — the browser refused the request before any prompt could appear.");
+      connectBtn.disabled = false;
+      connectBtn.textContent = "Try again";
+      return;
+    }
+
+    midiPromise.then(function(access){
+      clearTimeout(midiRequestTimer);
+      midiAccess = access;
+      outputSelect.hidden = false;
+      rescanBtn.hidden = false;
+      connectBtn.textContent = "Reconnect";
+      connectBtn.disabled = false;
+      populateOutputs();
+      access.onstatechange = function(){ populateOutputs(); };
+    }).catch(function(err){
+      clearTimeout(midiRequestTimer);
+      setStatus("err", "Rejected: " + (err && err.name ? err.name : "unknown"));
+      showDiagnostic((err && err.name ? err.name : "Error") + ": " + (err && err.message ? err.message : "no message"));
+      connectBtn.disabled = false;
+      connectBtn.textContent = "Try again";
+    });
+  }
+  connectBtn.addEventListener("click", requestMidi);
+
+  /* ---------- MIDI send helpers ---------- */
+  function sendNoteOn(channel, note, velocity, time){
+    if(!output) return;
+    output.send([0x90 | ((channel-1) & 0x0f), note & 0x7f, velocity & 0x7f], time);
+  }
+  function sendNoteOff(channel, note, time){
+    if(!output) return;
+    output.send([0x80 | ((channel-1) & 0x0f), note & 0x7f, 0], time);
+  }
+  function sendCC(channel, cc, value, time){
+    if(!output) return;
+    output.send([0xB0 | ((channel-1) & 0x0f), cc & 0x7f, value & 0x7f], time);
+  }
+  function sendRealtime(status, time){
+    if(!output) return;
+    output.send([status], time);
+  }
+
+  document.getElementById("panicBtn").addEventListener("click", function(){
+    if(!output) return;
+    for(var ch=1; ch<=16; ch++){
+      output.send([0xB0 | ((ch-1)&0x0f), 123, 0]);
+      output.send([0xB0 | ((ch-1)&0x0f), 120, 0]);
+    }
+  });
+
+  /* ---------- transport UI ---------- */
+  var bpmRange = document.getElementById("bpmRange"), bpmVal = document.getElementById("bpmVal");
+  bpmRange.value = bpm; bpmVal.textContent = bpm;
+  bpmRange.addEventListener("input", function(){ bpm = parseInt(bpmRange.value,10); bpmVal.textContent = bpm; saveState(); });
+
+  var swingRange = document.getElementById("swingRange"), swingVal = document.getElementById("swingVal");
+  swingRange.value = swing; swingVal.textContent = swing + "%";
+  swingRange.addEventListener("input", function(){ swing = parseInt(swingRange.value,10); swingVal.textContent = swing + "%"; saveState(); });
+
+  var gateRange = document.getElementById("gateRange"), gateVal = document.getElementById("gateVal");
+  gateRange.value = gate; gateVal.textContent = gate + "%";
+  gateRange.addEventListener("input", function(){ gate = parseInt(gateRange.value,10); gateVal.textContent = gate + "%"; saveState(); });
+
+  var clockToggle = document.getElementById("clockToggle");
+  clockToggle.checked = sendClock;
+  clockToggle.addEventListener("change", function(){ sendClock = clockToggle.checked; saveState(); });
+
+  document.getElementById("generateAllBtn").addEventListener("click", function(){
+    tracks.forEach(function(t){
+      if(!t.muted){ generateTrack(t); }
+    });
+    renderTracks();
+    saveState();
+  });
+
+  /* ---------- scheduler ---------- */
+  var playing = false;
+  var currentStep = 0;
+  var nextStepTimeMs = 0;
+  var nextClockTimeMs = 0;
+  var lookaheadMs = 25;
+  var scheduleAheadMs = 120;
+  var timerId = null;
+  var playBtn = document.getElementById("playBtn");
+
+  function stepDurationMs(){ return 60000 / bpm / 4; }
+  function clockTickMs(){ return 60000 / bpm / 24; }
+
+  function scheduleStep(stepIdx, timeMs){
+    tracks.forEach(function(t){
+      if(t.muted) return;
+      var state = t.steps[stepIdx];
+      if(!state) return;
+      var velocity = state === 2 ? 127 : (state === 1 ? 96 : 108);
+      var note = t.note;
+      if(t.type === "bass" && t.degrees && typeof t.degrees[stepIdx] === "number"){
+        note = 24 + t.root + t.degrees[stepIdx];
+      }
+      var gateMs = stepDurationMs() * (gate/100);
+      var isSlide = (state === 3);
+      sendNoteOn(t.channel, note, velocity, timeMs);
+      if(!isSlide){
+        sendNoteOff(t.channel, note, timeMs + Math.max(20, gateMs));
+      } else {
+        // legato: hold slightly past the next step so the device can glide into it
+        sendNoteOff(t.channel, note, timeMs + stepDurationMs() * 1.05);
+      }
+    });
+    highlightStep(stepIdx);
+  }
+
+  function highlightStep(stepIdx){
+    document.querySelectorAll(".step.playhead").forEach(function(el){ el.classList.remove("playhead"); });
+    document.querySelectorAll('.step[data-step-idx="' + stepIdx + '"]').forEach(function(el){ el.classList.add("playhead"); });
+  }
+
+  function scheduler(){
+    var now = performance.now();
+    while(nextStepTimeMs < now + scheduleAheadMs){
+      scheduleStep(currentStep, nextStepTimeMs);
+      var dur = stepDurationMs();
+      var swingOffset = (currentStep % 2 === 1) ? dur * ((swing-50)/50) * 0.5 : 0;
+      nextStepTimeMs += dur + swingOffset;
+      currentStep = (currentStep + 1) % STEP_COUNT;
+    }
+    if(sendClock){
+      while(nextClockTimeMs < now + scheduleAheadMs){
+        sendRealtime(0xF8, nextClockTimeMs);
+        nextClockTimeMs += clockTickMs();
+      }
+    }
+  }
+
+  function start(){
+    if(playing) return;
+    playing = true;
+    currentStep = 0;
+    var now = performance.now();
+    nextStepTimeMs = now + 20;
+    nextClockTimeMs = now + 20;
+    if(sendClock) sendRealtime(0xFA, now); // start
+    timerId = setInterval(scheduler, lookaheadMs);
+    playBtn.textContent = "■ Stop";
+    playBtn.classList.add("playing");
+  }
+  function stop(){
+    if(!playing) return;
+    playing = false;
+    clearInterval(timerId);
+    timerId = null;
+    if(sendClock) sendRealtime(0xFC, performance.now()); // stop
+    playBtn.textContent = "▶ Play";
+    playBtn.classList.remove("playing");
+    document.querySelectorAll(".step.playhead").forEach(function(el){ el.classList.remove("playhead"); });
+    if(output){
+      for(var ch=1; ch<=16; ch++){ output.send([0xB0 | ((ch-1)&0x0f), 123, 0]); }
+    }
+  }
+  playBtn.addEventListener("click", function(){
+    if(playing) stop(); else start();
+  });
+
+  /* ---------- hot reload state (artifact republish continuity) ---------- */
+  function snapshot(){ return { bpm:bpm, swing:swing, gate:gate }; }
+  try{
+    if(window.claude && window.claude.hot){
+      window.claude.hot.snapshot(snapshot);
+      var boot = function(data){ /* state already restored from localStorage */ };
+      window.claude.hot.ready ? window.claude.hot.ready(boot) : boot(window.claude.hot.data || {});
+    }
+  }catch(e){}
+
+})();
+</script>
