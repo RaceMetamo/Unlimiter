@@ -166,6 +166,16 @@
   <div class="panel">
     <div class="panel-title">Transport</div>
     <div class="transport">
+      <div class="field">
+        <label>Genre</label>
+        <select class="plain" id="genreSelect">
+          <option value="techno">Techno</option>
+          <option value="house">House</option>
+          <option value="dubtechno">Dub Techno</option>
+          <option value="minimal">Minimal</option>
+          <option value="acid">Acid</option>
+        </select>
+      </div>
       <button class="btn primary" id="playBtn" type="button">▶ Play</button>
       <button class="btn danger" id="panicBtn" type="button">Panic</button>
       <div class="field">
@@ -189,7 +199,7 @@
       </div>
     </div>
     <div class="legend" style="margin-top:10px;">
-      Tap a step to cycle <b>off → hit → accent</b> (bass also gets a fourth state, <b>slide</b>, in teal, for legato glide runs).
+      <b>Genre</b> shapes what ⚄ Generate produces (and sets BPM/swing) — track 1 is treated as kick, 2 as snare/clap, 3 as closed hat, 4 as open hat, 5–9 as percussion, using whatever channel/note you've set per track. Rename tracks to match your own Sound Bank patching. Tap a step to cycle <b>off → hit → accent</b> (bass also gets a fourth state, <b>slide</b>, in teal, for legato glide runs). If a track stays silent or triggers the wrong sound, tap its <b>▸</b> button to fire a single test note, and on the unit make sure that track's MIDI channel isn't set to OFF under <code>func + midi</code>.
     </div>
   </div>
 
@@ -229,7 +239,7 @@
   function saveState(){
     try{
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        bpm: bpm, swing: swing, gate: gate, sendClock: sendClock,
+        bpm: bpm, swing: swing, gate: gate, sendClock: sendClock, genre: currentGenre,
         tracks: tracks.map(function(t){
           return { name:t.name, channel:t.channel, note:t.note, muted:t.muted,
                    density:t.density, steps:t.steps, degrees:t.degrees,
@@ -272,12 +282,13 @@
   var tracks = [];
   for(var i=0;i<11;i++){ tracks.push(defaultTrack(i)); }
 
-  var bpm = 120, swing = 50, gate = 45, sendClock = false;
+  var bpm = 120, swing = 50, gate = 45, sendClock = false, currentGenre = "techno";
   if(saved){
     bpm = saved.bpm || 120;
     swing = saved.swing || 50;
     gate = saved.gate || 45;
     sendClock = !!saved.sendClock;
+    currentGenre = saved.genre || "techno";
     if(saved.tracks && saved.tracks.length === 11){
       saved.tracks.forEach(function(st, i){
         var t = tracks[i];
@@ -305,28 +316,117 @@
     }
     return pattern;
   }
+  function rotate(arr, n){
+    n = ((n % arr.length) + arr.length) % arr.length;
+    return arr.slice(n).concat(arr.slice(0, n));
+  }
+
+  /* ---------- genre presets ----------
+     Roles are assigned by track position, since the tool has no way to know
+     which Sound Bank a physical track is actually patched to: track 1 = kick,
+     2 = snare/clap, 3 = closed hat, 4 = open hat, 5-9 = percussion, plus the
+     Loop and Bass tracks. Rename tracks to match your own patching; the roles
+     just decide which rhythmic shape a track gets when generated. */
+  var GENRES = {
+    techno: { label:"Techno", bpm:132, swing:52,
+      patterns:{
+        kick:      [2,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        snare:     [0,0,0,0, 0,0,0,0, 0,0,0,0, 2,0,0,0],
+        hat_closed:[0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0],
+        hat_open:  [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,1]
+      },
+      percDensity:3, loopDensity:2,
+      bass:{ scale:"Minor Pent", density:8, slideProb:0.25, accentProb:0.30, octaveBase:1 }
+    },
+    house: { label:"House", bpm:124, swing:54,
+      patterns:{
+        kick:      [2,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        snare:     [0,0,0,0, 2,0,0,0, 0,0,0,0, 2,0,0,0],
+        hat_closed:[0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1],
+        hat_open:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,2,0]
+      },
+      percDensity:4, loopDensity:2,
+      bass:{ scale:"Natural Min", density:6, slideProb:0.15, accentProb:0.25, octaveBase:1 }
+    },
+    dubtechno: { label:"Dub Techno", bpm:118, swing:50,
+      patterns:{
+        kick:      [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        snare:     [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0],
+        hat_closed:[0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0],
+        hat_open:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+      },
+      percDensity:2, loopDensity:3,
+      bass:{ scale:"Natural Min", density:4, slideProb:0.5, accentProb:0.15, octaveBase:0 }
+    },
+    minimal: { label:"Minimal", bpm:128, swing:50,
+      patterns:{
+        kick:      [2,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        snare:     [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0],
+        hat_closed:[1,1,0,1, 1,0,1,1, 0,1,1,0, 1,1,0,1],
+        hat_open:  [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0]
+      },
+      percDensity:5, loopDensity:2,
+      bass:{ scale:"Minor Pent", density:5, slideProb:0.2, accentProb:0.2, octaveBase:1 }
+    },
+    acid: { label:"Acid", bpm:130, swing:50,
+      patterns:{
+        kick:      [2,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        snare:     [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+        hat_closed:[0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1],
+        hat_open:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,0]
+      },
+      percDensity:2, loopDensity:1,
+      bass:{ scale:"Chromatic", density:13, slideProb:0.45, accentProb:0.35, octaveBase:1 }
+    }
+  };
+
+  function roleForTrack(t){
+    if(t.type === "bass") return "bass";
+    if(t.type === "loop") return "loop";
+    if(t.idx === 0) return "kick";
+    if(t.idx === 1) return "snare";
+    if(t.idx === 2) return "hat_closed";
+    if(t.idx === 3) return "hat_open";
+    return "perc";
+  }
+
+  function humanize(base){
+    return base.map(function(v){
+      var r = Math.random();
+      if(v === 0) return (r < 0.06) ? 1 : 0;               // rare ghost hit
+      if(v === 1) return (r < 0.08) ? 0 : ((r > 0.92) ? 2 : 1); // occasional drop/accent
+      return (r < 0.05) ? 1 : 2;                             // occasional de-accent
+    });
+  }
 
   function generateTrack(t){
-    var hits = euclid(t.density, STEP_COUNT);
+    var genre = GENRES[currentGenre] || GENRES.techno;
+    var role = roleForTrack(t);
     var newSteps = new Array(STEP_COUNT).fill(0);
     var newDegrees = new Array(STEP_COUNT).fill(0);
-    var scale = SCALES[t.scale] || SCALES["Minor Pent"];
-    var hitIndex = 0;
-    for(var i=0;i<STEP_COUNT;i++){
-      if(hits[i]){
-        var state = 1;
+
+    if(genre.patterns[role]){
+      newSteps = humanize(genre.patterns[role]);
+    } else if(role === "perc"){
+      var density = Math.max(1, genre.percDensity + (t.idx % 3) - 1);
+      var hits = rotate(euclid(density, STEP_COUNT), t.idx * 3);
+      newSteps = hits.map(function(h){ return h ? ((Math.random() < 0.2) ? 2 : 1) : 0; });
+    } else if(role === "loop"){
+      var lhits = euclid(genre.loopDensity, STEP_COUNT);
+      newSteps = lhits.map(function(h, i){ return h ? (i % 8 === 0 ? 2 : 1) : 0; });
+    } else if(role === "bass"){
+      var b = genre.bass;
+      var scale = SCALES[t.scale] || SCALES[b.scale] || SCALES["Minor Pent"];
+      var bhits = euclid(b.density, STEP_COUNT);
+      for(var i=0;i<STEP_COUNT;i++){
+        if(!bhits[i]) continue;
         var isDownbeat = (i % 4 === 0);
         var r = Math.random();
-        if(t.type === "bass"){
-          if(isDownbeat && r < 0.35) state = 2;
-          else if(!isDownbeat && r < 0.22) state = 3; // slide
-          newDegrees[i] = scale[Math.floor(Math.random()*scale.length)];
-        } else {
-          if(isDownbeat) state = (Math.random() < 0.6) ? 2 : 1;
-          else state = (Math.random() < 0.18) ? 2 : 1;
-        }
+        var state = 1;
+        if(isDownbeat && r < b.accentProb) state = 2;
+        else if(!isDownbeat && r < b.slideProb) state = 3;
         newSteps[i] = state;
-        hitIndex++;
+        newDegrees[i] = scale[Math.floor(Math.random()*scale.length)] + (b.octaveBase * 12);
       }
     }
     t.steps = newSteps;
@@ -420,6 +520,18 @@
 
       var spacer = document.createElement("div"); spacer.className="spacer";
       head.appendChild(spacer);
+
+      var testBtn = document.createElement("button");
+      testBtn.type = "button"; testBtn.className = "icon-btn"; testBtn.title = "Test this track's channel/note";
+      testBtn.textContent = "▸";
+      testBtn.addEventListener("click", function(){
+        var n = (t.type === "bass") ? (24 + t.root) : t.note;
+        sendNoteOn(t.channel, n, 120);
+        setTimeout(function(){ sendNoteOff(t.channel, n); }, 180);
+        testBtn.style.color = "var(--accent)";
+        setTimeout(function(){ testBtn.style.color = ""; }, 180);
+      });
+      head.appendChild(testBtn);
 
       var genBtn = document.createElement("button");
       genBtn.type = "button"; genBtn.className = "icon-btn"; genBtn.title = "Generate";
@@ -749,6 +861,16 @@
   var clockToggle = document.getElementById("clockToggle");
   clockToggle.checked = sendClock;
   clockToggle.addEventListener("change", function(){ sendClock = clockToggle.checked; saveState(); });
+
+  var genreSelect = document.getElementById("genreSelect");
+  genreSelect.value = currentGenre;
+  genreSelect.addEventListener("change", function(){
+    currentGenre = genreSelect.value;
+    var g = GENRES[currentGenre];
+    bpm = g.bpm; bpmRange.value = bpm; bpmVal.textContent = bpm;
+    swing = g.swing; swingRange.value = swing; swingVal.textContent = swing + "%";
+    saveState();
+  });
 
   document.getElementById("generateAllBtn").addEventListener("click", function(){
     tracks.forEach(function(t){
