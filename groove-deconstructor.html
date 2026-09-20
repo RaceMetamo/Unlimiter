@@ -93,12 +93,14 @@
   .track.collapsed .collapse-btn{transform:rotate(-90deg);}
   .track.bass{border-color:#2a4440;}
   .track.loop{border-color:#2a3a4a;}
+  .track.sample{border-color:#3a2a4a;}
   .track-head{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px;}
   .track-name{font-family:var(--mono); font-weight:600; font-size:13px; background:transparent; border:none; color:var(--text); width:64px; padding:2px 0; border-bottom:1px solid transparent;}
   .track-name:focus{outline:none; border-bottom:1px solid var(--accent);}
   .type-badge{font-family:var(--mono); font-size:9px; letter-spacing:.08em; text-transform:uppercase; padding:3px 7px; border-radius:4px; background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border);}
   .type-badge.bass{color:var(--cool); border-color:#1f4a43;}
   .type-badge.loop{color:#6fa8ff; border-color:#1f3a5a;}
+  .type-badge.sample{color:#c99bff; border-color:#3a2a5a;}
   .mini-field{display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:11px; color:var(--text-faint);}
   .mini-field input, .mini-field select{width:48px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:5px; padding:4px 5px; font-family:var(--mono); font-size:11px;}
   .mini-field .noteName{color:var(--text-dim); width:30px;}
@@ -213,7 +215,7 @@
       </div>
     </div>
     <div class="legend" style="margin-top:10px;">
-      <b>Genre</b> shapes what ⚄ Generate produces (and sets BPM/swing) — track 1 is treated as kick, 2 as snare/clap, 3 as closed hat, 4 as open hat, 5–9 as percussion. <b>BANK</b>/<b>SND</b> on each track pick which sample/drum voice actually plays there (CC24/CC12) — that's what makes track 1 a kick and track 3 a hat, not the note number. <b>NOTE</b> only tunes/transposes whatever sound is loaded, so leave it near the middle unless you want a deliberate pitch shift. Rename tracks once BANK/SND are set so labels match what's really patched. Tap a step to cycle <b>off → hit → accent</b> (bass also gets a fourth state, <b>slide</b>, in teal). If a track stays silent, tap its <b>▸</b> button to test, and check that track's MIDI channel isn't OFF under <code>func + midi</code> on the unit.
+      <b>Genre</b> shapes what ⚄ Generate produces (and sets BPM/swing) — tracks 1–6 are treated as drums (1 kick, 2 snare/clap, 3 closed hat, 4 open hat, 5–6 perc), 7–9 as one-shot samples, 10 as the loop, 11 as bass. <b>BANK</b>/<b>SND</b> pick which sample/drum voice actually plays (CC24/CC12) — that's what makes track 1 a kick and track 3 a hat, not the note number. <b>NOTE</b> only tunes/transposes what's loaded. <b>TONE</b> matches the front-panel knob (−60..+60) and gets pushed to the unit on connect, so it won't drift from whatever was last dialed in by hand. <b>HOLD</b> sets how long a note stays on before Note Off — leave it blank ("auto") for drum hits to use the Gate slider, or give one-shot/loop/bass tracks a real value (ms) so the sample actually plays out instead of being cut off. Tap a step to cycle <b>off → hit → accent</b> (bass also gets <b>slide</b>, in teal). Tap <b>▸</b> to test a track using its current Hold length.
     </div>
   </div>
 
@@ -257,7 +259,8 @@
         tracks: tracks.map(function(t){
           return { name:t.name, channel:t.channel, note:t.note, muted:t.muted,
                    density:t.density, steps:t.steps, degrees:t.degrees,
-                   root:t.root, scale:t.scale, sound:t.sound, soundBank:t.soundBank, collapsed:t.collapsed };
+                   root:t.root, scale:t.scale, sound:t.sound, soundBank:t.soundBank, collapsed:t.collapsed,
+                   tone:t.tone, holdMs:t.holdMs };
         })
       }));
     }catch(e){ /* private mode / storage blocked — ignore */ }
@@ -274,18 +277,28 @@
   };
   var NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
   function noteName(n){ return NOTE_NAMES[((n%12)+12)%12] + (Math.floor(n/12)-1); }
+  // Maps the device's on-screen Tone range (-60..+60) to a MIDI CC value (0-127).
+  function toneToCC(tone){ return Math.max(0, Math.min(127, Math.round((tone + 60) / 120 * 127))); }
 
+  // Track layout (1-indexed, as Race described the hardware):
+  // 1-6 = drum tracks, 7-9 = one-shot sample tracks (2-4s, plays out on hold),
+  // 10 = loop track (up to 8s, auto-quantized to the beat), 11 = bass.
+  var HOLD_DEFAULTS = { drum:null, sample:2200, loop:7500, bass:280 };
   function defaultTrack(i){
     var isBass = (i === 10);
     var isLoop = (i === 9);
+    var isSample = (i >= 6 && i <= 8);
+    var type = isBass ? "bass" : (isLoop ? "loop" : (isSample ? "sample" : "drum"));
     return {
       idx:i,
-      name: isBass ? "Bass" : (isLoop ? "Loop" : "Trk " + (i+1)),
-      type: isBass ? "bass" : (isLoop ? "loop" : "drum"),
+      name: isBass ? "Bass" : (isLoop ? "Loop" : (isSample ? "Smp " + (i+1) : "Trk " + (i+1))),
+      type: type,
       channel: i+1,
       note: isBass ? 36 : 60,
       sound: null,
       soundBank: isBass ? null : (i+1),
+      tone: 0, // displayed -60..+60 to match the device's Tone knob; 0 = neutral (CC 64)
+      holdMs: HOLD_DEFAULTS[type],
       collapsed:false,
       muted:false,
       density: isBass ? 6 : (i===0?6:4),
@@ -320,6 +333,8 @@
         t.scale = st.scale || t.scale;
         t.sound = (typeof st.sound === "number") ? st.sound : t.sound;
         t.soundBank = (typeof st.soundBank === "number") ? st.soundBank : t.soundBank;
+        t.tone = (typeof st.tone === "number") ? st.tone : t.tone;
+        t.holdMs = (typeof st.holdMs === "number") ? st.holdMs : (st.holdMs === null ? null : t.holdMs);
         t.collapsed = !!st.collapsed;
       });
     }
@@ -344,9 +359,10 @@
   /* ---------- genre presets ----------
      Roles are assigned by track position, since the tool has no way to know
      which Sound Bank a physical track is actually patched to: track 1 = kick,
-     2 = snare/clap, 3 = closed hat, 4 = open hat, 5-9 = percussion, plus the
-     Loop and Bass tracks. Rename tracks to match your own patching; the roles
-     just decide which rhythmic shape a track gets when generated. */
+     2 = snare/clap, 3 = closed hat, 4 = open hat, 5-6 = percussion, 7-9 = the
+     one-shot sample tracks, plus the Loop and Bass tracks. Rename tracks to
+     match your own patching; the roles just decide which rhythmic shape a
+     track gets when generated. */
   var GENRES = {
     techno: { label:"Techno", bpm:132, swing:52,
       patterns:{
@@ -355,7 +371,7 @@
         hat_closed:[0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0],
         hat_open:  [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,1]
       },
-      percDensity:3, loopDensity:2,
+      percDensity:3, sampleDensity:1, loopDensity:1,
       bass:{ scale:"Minor Pent", density:8, slideProb:0.25, accentProb:0.30, octaveBase:1 }
     },
     house: { label:"House", bpm:124, swing:54,
@@ -365,7 +381,7 @@
         hat_closed:[0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1],
         hat_open:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,2,0]
       },
-      percDensity:4, loopDensity:2,
+      percDensity:4, sampleDensity:2, loopDensity:1,
       bass:{ scale:"Natural Min", density:6, slideProb:0.15, accentProb:0.25, octaveBase:1 }
     },
     dubtechno: { label:"Dub Techno", bpm:118, swing:50,
@@ -375,7 +391,7 @@
         hat_closed:[0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0],
         hat_open:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
       },
-      percDensity:2, loopDensity:3,
+      percDensity:2, sampleDensity:1, loopDensity:1,
       bass:{ scale:"Natural Min", density:4, slideProb:0.5, accentProb:0.15, octaveBase:0 }
     },
     minimal: { label:"Minimal", bpm:128, swing:50,
@@ -385,7 +401,7 @@
         hat_closed:[1,1,0,1, 1,0,1,1, 0,1,1,0, 1,1,0,1],
         hat_open:  [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0]
       },
-      percDensity:5, loopDensity:2,
+      percDensity:5, sampleDensity:2, loopDensity:1,
       bass:{ scale:"Minor Pent", density:5, slideProb:0.2, accentProb:0.2, octaveBase:1 }
     },
     acid: { label:"Acid", bpm:130, swing:50,
@@ -395,7 +411,7 @@
         hat_closed:[0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1],
         hat_open:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,0]
       },
-      percDensity:2, loopDensity:1,
+      percDensity:2, sampleDensity:1, loopDensity:1,
       bass:{ scale:"Chromatic", density:13, slideProb:0.45, accentProb:0.35, octaveBase:1 }
     }
   };
@@ -403,6 +419,7 @@
   function roleForTrack(t){
     if(t.type === "bass") return "bass";
     if(t.type === "loop") return "loop";
+    if(t.type === "sample") return "sample";
     if(t.idx === 0) return "kick";
     if(t.idx === 1) return "snare";
     if(t.idx === 2) return "hat_closed";
@@ -431,9 +448,17 @@
       var density = Math.max(1, genre.percDensity + (t.idx % 3) - 1);
       var hits = rotate(euclid(density, STEP_COUNT), t.idx * 3);
       newSteps = hits.map(function(h){ return h ? ((Math.random() < 0.2) ? 2 : 1) : 0; });
+    } else if(role === "sample"){
+      // Sparse one-shot stabs — these ring out over 2-4s (see Hold), so they
+      // shouldn't retrigger densely. Spread the 3 sample tracks across
+      // different bar positions so they interlock rather than pile up.
+      var sDensity = genre.sampleDensity || 1;
+      var shits = rotate(euclid(sDensity, STEP_COUNT), (t.idx - 6) * 5 + 2);
+      newSteps = shits.map(function(h){ return h ? ((Math.random() < 0.3) ? 2 : 1) : 0; });
     } else if(role === "loop"){
-      var lhits = euclid(genre.loopDensity, STEP_COUNT);
-      newSteps = lhits.map(function(h, i){ return h ? (i % 8 === 0 ? 2 : 1) : 0; });
+      // One hit per bar on the downbeat — the unit auto-quantizes an 8s loop
+      // to the beat, so a dense retrigger pattern would just chop it up.
+      newSteps[0] = 2;
     } else if(role === "bass"){
       var b = genre.bass;
       var scale = SCALES[t.scale] || SCALES[b.scale] || SCALES["Minor Pent"];
@@ -469,7 +494,7 @@
     trackListEl.innerHTML = "";
     tracks.forEach(function(t){
       var el = document.createElement("div");
-      el.className = "track" + (t.muted ? " muted" : "") + (t.type==="bass"?" bass":"") + (t.type==="loop"?" loop":"") + (t.collapsed ? " collapsed" : "");
+      el.className = "track " + t.type + (t.muted ? " muted" : "") + (t.collapsed ? " collapsed" : "");
       el.dataset.idx = t.idx;
 
       var head = document.createElement("div");
@@ -493,8 +518,8 @@
       head.appendChild(nameInput);
 
       var badge = document.createElement("span");
-      badge.className = "type-badge" + (t.type==="bass"?" bass":"") + (t.type==="loop"?" loop":"");
-      badge.textContent = t.type === "bass" ? "BASS" : (t.type === "loop" ? "LOOP" : "TRACK " + (t.idx+1));
+      badge.className = "type-badge " + t.type;
+      badge.textContent = { bass:"BASS", loop:"LOOP 8s", sample:"SAMPLE " + (t.idx+1) }[t.type] || ("TRACK " + (t.idx+1));
       head.appendChild(badge);
 
       var chField = document.createElement("span");
@@ -563,6 +588,46 @@
         head.appendChild(sndField);
       }
 
+      // Tone (CC14): same -60..+60 range as the physical knob. This is the
+      // parameter most likely to make a track sound "off" vs playing it
+      // locally, since it's easy to leave at whatever the hardware already
+      // has dialed in.
+      var toneField = document.createElement("span");
+      toneField.className = "mini-field";
+      toneField.innerHTML = "TONE";
+      var toneInput = document.createElement("input");
+      toneInput.type = "number"; toneInput.min = -60; toneInput.max = 60; toneInput.value = t.tone;
+      toneInput.addEventListener("change", function(){
+        t.tone = Math.max(-60, Math.min(60, parseInt(toneInput.value,10) || 0));
+        toneInput.value = t.tone;
+        sendCC(t.channel, 14, toneToCC(t.tone));
+        saveState();
+      });
+      toneField.appendChild(toneInput);
+      head.appendChild(toneField);
+
+      // Hold: how long the note stays on before Note Off. Drum hits want the
+      // short global Gate; one-shot samples and the loop need to ring out
+      // for real (2-8s), and the bass usually wants more than a 16th note.
+      // Blank = "Auto" (use the global Gate% instead).
+      var holdField = document.createElement("span");
+      holdField.className = "mini-field";
+      holdField.innerHTML = "HOLD";
+      var holdInput = document.createElement("input");
+      holdInput.type = "number"; holdInput.min = 0; holdInput.max = 8000; holdInput.step = 50;
+      holdInput.placeholder = "auto";
+      holdInput.style.width = "58px";
+      if(t.holdMs !== null) holdInput.value = t.holdMs;
+      holdInput.addEventListener("change", function(){
+        if(holdInput.value === ""){ t.holdMs = null; saveState(); return; }
+        t.holdMs = Math.max(0, Math.min(8000, parseInt(holdInput.value,10) || 0));
+        saveState();
+      });
+      holdField.appendChild(holdInput);
+      var holdUnit = document.createElement("span"); holdUnit.textContent = "ms"; holdUnit.style.color = "var(--text-faint)";
+      holdField.appendChild(holdUnit);
+      head.appendChild(holdField);
+
       if(t.type === "bass"){
         var rootSel = document.createElement("select");
         NOTE_NAMES.forEach(function(nm, ni){
@@ -593,10 +658,11 @@
       testBtn.textContent = "▸";
       testBtn.addEventListener("click", function(){
         var n = (t.type === "bass") ? (24 + t.root) : t.note;
+        var holdLen = (typeof t.holdMs === "number") ? t.holdMs : 180;
         sendNoteOn(t.channel, n, 120);
-        setTimeout(function(){ sendNoteOff(t.channel, n); }, 180);
+        setTimeout(function(){ sendNoteOff(t.channel, n); }, holdLen);
         testBtn.style.color = "var(--accent)";
-        setTimeout(function(){ testBtn.style.color = ""; }, 180);
+        setTimeout(function(){ testBtn.style.color = ""; }, Math.min(holdLen, 600));
       });
       head.appendChild(testBtn);
 
@@ -901,13 +967,17 @@
     output.send([0xB0 | ((channel-1) & 0x0f), cc & 0x7f, value & 0x7f], time);
   }
   function syncBanks(){
-    // Push each track's BANK/SND down to the unit once on connect, so what
-    // the tool shows actually matches what's loaded — otherwise the default
-    // values are just labels until something triggers a change event.
+    // Push each track's BANK/SND/TONE down to the unit once on connect, so
+    // what the tool shows actually matches what's loaded — otherwise these
+    // are just labels until something triggers a change event, and the
+    // unit keeps whatever was last dialed in by hand (this was the source
+    // of tracks sounding "off" vs playing them locally).
     tracks.forEach(function(t){
-      if(t.type === "bass") return;
-      if(t.soundBank !== null) sendCC(t.channel, 24, t.soundBank);
-      if(t.sound !== null) sendCC(t.channel, 12, t.sound);
+      if(t.type !== "bass"){
+        if(t.soundBank !== null) sendCC(t.channel, 24, t.soundBank);
+        if(t.sound !== null) sendCC(t.channel, 12, t.sound);
+      }
+      sendCC(t.channel, 14, toneToCC(t.tone));
     });
   }
   function sendRealtime(status, time){
@@ -983,14 +1053,19 @@
       if(t.type === "bass" && t.degrees && typeof t.degrees[stepIdx] === "number"){
         note = 24 + t.root + t.degrees[stepIdx];
       }
-      var gateMs = stepDurationMs() * (gate/100);
       var isSlide = (state === 3);
       sendNoteOn(t.channel, note, velocity, timeMs);
-      if(!isSlide){
-        sendNoteOff(t.channel, note, timeMs + Math.max(20, gateMs));
-      } else {
+      if(isSlide){
         // legato: hold slightly past the next step so the device can glide into it
         sendNoteOff(t.channel, note, timeMs + stepDurationMs() * 1.05);
+      } else if(typeof t.holdMs === "number"){
+        // explicit hold length — for one-shot samples and the loop this is
+        // how long the note stays on so the sample actually plays out,
+        // independent of the sequencer's step rate.
+        sendNoteOff(t.channel, note, timeMs + t.holdMs);
+      } else {
+        var gateMs = stepDurationMs() * (gate/100);
+        sendNoteOff(t.channel, note, timeMs + Math.max(20, gateMs));
       }
     });
     highlightStep(stepIdx);
