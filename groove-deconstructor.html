@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Groove Deconstructor</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -80,6 +85,12 @@
   .tracks{display:flex; flex-direction:column; gap:10px;}
   .track{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
   .track.muted{opacity:.45;}
+  .track.collapsed .steps{gap:2px;}
+  .track.collapsed .steps .step{flex-basis:0; min-width:0; height:16px; aspect-ratio:auto; border-radius:2px;}
+  .track.collapsed .steps .step .deg{display:none;}
+  .track.collapsed .track-controls{display:none;}
+  .collapse-btn{transform:rotate(0deg); transition:transform .15s ease;}
+  .track.collapsed .collapse-btn{transform:rotate(-90deg);}
   .track.bass{border-color:#2a4440;}
   .track.loop{border-color:#2a3a4a;}
   .track-head{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px;}
@@ -135,7 +146,10 @@
     .midi-row select{flex-basis:100%;}
     h1{font-size:19px;}
   }
+  [hidden]{display:none !important;}
 </style>
+</head>
+<body>
 
 <div class="wrap">
 
@@ -243,7 +257,7 @@
         tracks: tracks.map(function(t){
           return { name:t.name, channel:t.channel, note:t.note, muted:t.muted,
                    density:t.density, steps:t.steps, degrees:t.degrees,
-                   root:t.root, scale:t.scale, sound:t.sound, soundBank:t.soundBank };
+                   root:t.root, scale:t.scale, sound:t.sound, soundBank:t.soundBank, collapsed:t.collapsed };
         })
       }));
     }catch(e){ /* private mode / storage blocked — ignore */ }
@@ -271,7 +285,8 @@
       channel: i+1,
       note: isBass ? 36 : 60,
       sound: null,
-      soundBank: null,
+      soundBank: isBass ? null : (i+1),
+      collapsed:false,
       muted:false,
       density: isBass ? 6 : (i===0?6:4),
       root: 0,
@@ -305,6 +320,7 @@
         t.scale = st.scale || t.scale;
         t.sound = (typeof st.sound === "number") ? st.sound : t.sound;
         t.soundBank = (typeof st.soundBank === "number") ? st.soundBank : t.soundBank;
+        t.collapsed = !!st.collapsed;
       });
     }
   }
@@ -453,11 +469,21 @@
     trackListEl.innerHTML = "";
     tracks.forEach(function(t){
       var el = document.createElement("div");
-      el.className = "track" + (t.muted ? " muted" : "") + (t.type==="bass"?" bass":"") + (t.type==="loop"?" loop":"");
+      el.className = "track" + (t.muted ? " muted" : "") + (t.type==="bass"?" bass":"") + (t.type==="loop"?" loop":"") + (t.collapsed ? " collapsed" : "");
       el.dataset.idx = t.idx;
 
       var head = document.createElement("div");
       head.className = "track-head";
+
+      var collapseBtn = document.createElement("button");
+      collapseBtn.type = "button"; collapseBtn.className = "icon-btn collapse-btn"; collapseBtn.title = "Collapse/expand";
+      collapseBtn.textContent = "▾";
+      collapseBtn.addEventListener("click", function(){
+        t.collapsed = !t.collapsed;
+        el.classList.toggle("collapsed", t.collapsed);
+        saveState();
+      });
+      head.appendChild(collapseBtn);
 
       var nameInput = document.createElement("input");
       nameInput.className = "track-name";
@@ -849,6 +875,7 @@
       connectBtn.textContent = "Reconnect";
       connectBtn.disabled = false;
       populateOutputs();
+      syncBanks();
       access.onstatechange = function(){ populateOutputs(); };
     }).catch(function(err){
       clearTimeout(midiRequestTimer);
@@ -872,6 +899,16 @@
   function sendCC(channel, cc, value, time){
     if(!output) return;
     output.send([0xB0 | ((channel-1) & 0x0f), cc & 0x7f, value & 0x7f], time);
+  }
+  function syncBanks(){
+    // Push each track's BANK/SND down to the unit once on connect, so what
+    // the tool shows actually matches what's loaded — otherwise the default
+    // values are just labels until something triggers a change event.
+    tracks.forEach(function(t){
+      if(t.type === "bass") return;
+      if(t.soundBank !== null) sendCC(t.channel, 24, t.soundBank);
+      if(t.sound !== null) sendCC(t.channel, 12, t.sound);
+    });
   }
   function sendRealtime(status, time){
     if(!output) return;
@@ -905,21 +942,23 @@
 
   var genreSelect = document.getElementById("genreSelect");
   genreSelect.value = currentGenre;
-  genreSelect.addEventListener("change", function(){
-    currentGenre = genreSelect.value;
-    var g = GENRES[currentGenre];
-    bpm = g.bpm; bpmRange.value = bpm; bpmVal.textContent = bpm;
-    swing = g.swing; swingRange.value = swing; swingVal.textContent = swing + "%";
-    saveState();
-  });
-
-  document.getElementById("generateAllBtn").addEventListener("click", function(){
+  function generateAll(){
     tracks.forEach(function(t){
       if(!t.muted){ generateTrack(t); }
     });
     renderTracks();
     saveState();
+  }
+
+  genreSelect.addEventListener("change", function(){
+    currentGenre = genreSelect.value;
+    var g = GENRES[currentGenre];
+    bpm = g.bpm; bpmRange.value = bpm; bpmVal.textContent = bpm;
+    swing = g.swing; swingRange.value = swing; swingVal.textContent = swing + "%";
+    generateAll();
   });
+
+  document.getElementById("generateAllBtn").addEventListener("click", generateAll);
 
   /* ---------- scheduler ---------- */
   var playing = false;
@@ -1020,3 +1059,5 @@
 
 })();
 </script>
+</body>
+</html>
