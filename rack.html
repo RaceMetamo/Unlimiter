@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Unlimiter — Rack</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+<script src="unlimiter-drive.js"></script>
+<style>
+:root{
+  --bg:#14161d; --panel:#1c1f29; --panel-2:#171a22; --line:#2a2e3c; --line-soft:#232735;
+  --text:#e8e9ee; --dim:#8b90a0; --faint:#575c6c; --accent:#38c7d8; --warm:#ffb02e;
+  --live:#6fce62; --danger:#ff5d5d; --radius:6px;
+  font-size:15px;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  background:var(--bg); color:var(--text); overflow:hidden;
+  font-family:"Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+button,input,select{ font-family:inherit; font-size:.82rem; color:var(--text); }
+button{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:5px 10px; cursor:pointer;
+}
+button:hover{ border-color:var(--dim); }
+button:focus-visible,input:focus-visible,select:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+button.on{ border-color:var(--accent); color:var(--accent); }
+button.warn{ color:var(--warm); }
+select{ background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:3px 5px; width:100%; }
+input[type=range]{ width:100%; accent-color:var(--accent); }
+
+#app{ display:grid; grid-template-rows:48px 1fr; height:100%; }
+header{
+  display:flex; align-items:center; gap:12px; padding:0 14px;
+  background:var(--panel-2); border-bottom:1px solid var(--line);
+}
+header h1{ font-size:1rem; font-weight:700; white-space:nowrap; }
+header h1 span{ color:var(--dim); font-weight:400; }
+.spacer{ flex:1; }
+#beat{ width:9px; height:9px; border-radius:50%; background:var(--faint); }
+#beat.hit{ background:var(--live); }
+#fps{ color:var(--dim); font-variant-numeric:tabular-nums; min-width:54px; text-align:right; font-size:.78rem; }
+
+main{ display:grid; grid-template-columns:284px 1fr 320px; min-height:0; }
+.rail{ background:var(--panel-2); overflow-y:auto; padding:11px; }
+.rail.left{ border-right:1px solid var(--line); }
+.rail.right{ border-left:1px solid var(--line); }
+.rail h2{
+  font-size:.74rem; font-weight:500; color:var(--dim); margin:13px 0 7px;
+  display:flex; align-items:center; gap:7px;
+}
+.rail h2:first-child{ margin-top:0; }
+
+/* ---- layer strips ---- */
+.layer{ border:1px solid var(--line); border-radius:var(--radius); margin-bottom:9px; background:var(--panel); overflow:hidden; }
+.layer.muted{ opacity:.5; }
+.layer .lhead{ display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid var(--line-soft); }
+.layer .lhead b{ font-weight:500; font-size:.8rem; flex:1; }
+.layer .dot{ width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none; }
+.layer .dot.live{ background:var(--live); }
+.layer .dot.err{ background:var(--danger); }
+.layer .lhead button{ padding:1px 6px; font-size:.7rem; }
+.layer .thumb{ display:block; width:100%; height:78px; background:#0c0e14; object-fit:cover; }
+.layer .lbody{ padding:7px 8px; display:grid; gap:5px; }
+.layer .row{ display:grid; grid-template-columns:38px 1fr 34px; align-items:center; gap:6px; font-size:.7rem; color:var(--dim); }
+.layer .row .val{ text-align:right; font-variant-numeric:tabular-nums; }
+.layer .srcrow{ display:grid; grid-template-columns:38px 1fr; align-items:center; gap:6px; font-size:.7rem; color:var(--dim); }
+
+/* ---- stage ---- */
+#stage{ display:grid; grid-template-rows:1fr 1fr; min-height:0; background:var(--bg); }
+.pane{ position:relative; min-height:0; border-bottom:1px solid var(--line); overflow:hidden; }
+.pane:last-child{ border-bottom:none; }
+.pane .tag{
+  position:absolute; left:9px; top:8px; z-index:2; font-size:.7rem; color:var(--dim);
+  background:rgba(20,22,29,.72); padding:2px 7px; border-radius:4px; pointer-events:none;
+}
+#mixCanvas{ width:100%; height:100%; object-fit:contain; display:block; background:#000; }
+#volFrame{ width:100%; height:100%; border:0; display:block; background:#0e1016; }
+
+/* ---- params / drive ---- */
+.pgroup{ border:1px solid var(--line); border-radius:var(--radius); margin-bottom:8px; background:var(--panel); }
+.pgroup > summary{ padding:6px 9px; cursor:pointer; font-size:.78rem; font-weight:500; list-style:none; }
+.pgroup > summary::-webkit-details-marker{ display:none; }
+.pgroup > summary::before{ content:"▸ "; color:var(--dim); }
+.pgroup[open] > summary::before{ content:"▾ "; }
+.pgroup .pbody{ padding:4px 9px 9px; display:grid; gap:6px; }
+.prm{ font-size:.72rem; }
+.prm .plab{ display:flex; justify-content:space-between; color:var(--dim); }
+.prm .plab .pv{ font-variant-numeric:tabular-nums; }
+.prm.mod .plab{ color:var(--accent); }
+
+#note{
+  margin-top:10px; padding:8px 9px; border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--panel); color:var(--dim); font-size:.72rem; line-height:1.45;
+}
+#banner{
+  display:none; position:fixed; inset:0; z-index:50; background:rgba(15,17,22,.95);
+  place-items:center; padding:30px; text-align:center;
+}
+#banner div{ max-width:520px; line-height:1.55; color:var(--dim); }
+#banner b{ color:var(--text); display:block; margin-bottom:8px; font-size:1.05rem; }
+#banner code{ background:var(--panel); padding:2px 6px; border-radius:4px; color:var(--warm); }
+#farm{ position:fixed; left:-10000px; top:0; width:1280px; height:720px; }
+#farm iframe{ width:1280px; height:720px; border:0; display:block; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>The Unlimiter <span>· Rack</span></h1>
+    <button id="bStartAll">Start all</button>
+    <button id="bOutput">Output window</button>
+    <div class="spacer"></div>
+    <div id="beat"></div>
+    <div id="fps">—</div>
+  </header>
+
+  <main>
+    <div class="rail left">
+      <h2>Layers <span style="color:var(--faint)">— bottom of the list draws last</span></h2>
+      <div id="layerList"></div>
+      <h2>Mix</h2>
+      <div class="layer"><div class="lbody">
+        <div class="row"><span>gain</span><input type="range" id="mixGain" min="0" max="2" step="0.01" value="1"><span class="val" id="mixGainV">1.00</span></div>
+        <div class="srcrow"><span>bg</span>
+          <select id="mixBg"><option value="#000000">black</option><option value="clear">keep (trails)</option></select>
+        </div>
+      </div></div>
+    </div>
+
+    <div id="stage">
+      <div class="pane"><div class="tag">MIX — what OBS captures</div><canvas id="mixCanvas"></canvas></div>
+      <div class="pane"><div class="tag">VOLUME — the mix as a live 3D relief</div><iframe id="volFrame" src="volume-renderer.html?embed=1" title="Volume renderer"></iframe></div>
+    </div>
+
+    <div class="rail right">
+      <h2>Drive — audio, MIDI, modulation</h2>
+      <div id="g-drive"></div>
+      <h2>Rack targets</h2>
+      <div id="targets"></div>
+      <div id="note">
+        Everything in <b style="color:var(--text)">Rack targets</b> is registered with the drive, so it can be
+        routed from audio, LFOs or MIDI in the panel above — layer opacities included. Routing an LFO to two
+        layer opacities is how you get a hands-free crossfade between tools.
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="farm"></div>
+
+<div id="banner"><div>
+  <b>The rack needs to be served over http, not opened as a file.</b>
+  Browsers treat <code>file://</code> pages as cross-origin, so the rack can't reach into the tool frames to
+  capture or drive them. Run a local server in the repo folder — <code>python -m http.server</code> — and open
+  <code>http://localhost:8000/rack.html</code>, or use the GitHub&nbsp;Pages URL.
+</div></div>
+
+<script>
+"use strict";
+/* ============================================================
+   THE RACK — a template control surface for the whole suite.
+
+   Five real tools run in hidden same-origin iframes. The rack
+   captures each tool's output canvas, blends the layers, and
+   feeds the result to the volume renderer as a live 3D source.
+   One drive instance (unlimiter-drive.js) modulates everything:
+   layer opacities AND each tool's own registered parameters.
+
+   Capture has two paths, because the tools differ:
+     pull — canvas reads back fine (2D, or WebGL with
+            preserveDrawingBuffer). We drawImage it each frame.
+     push — WebGL with preserveDrawingBuffer off. Those tools
+            already call Drive.pushFrame(canvas) at the end of
+            their own render, so we wrap that method and take a
+            copy as it goes by. No edits to the tool required.
+   ============================================================ */
+
+const MIX_W = 1280, MIX_H = 720;
+const LAYER_W = 640, LAYER_H = 360;
+
+/* Per-tool wiring. `params` is a *preference* list — the real bounds and
+   labels come from each tool's own Drive.targets at runtime, so nothing here
+   has to be kept in sync with the tools by hand. */
+const TOOLS = [
+  { id:"fw", file:"flow-weave.html",   label:"Flow Weave",   sel:"#c",    capture:"pull",
+    prefer:["curl","vort","inj","relief"], boot:["bDripNow"], accepts:null, blend:"source-over", op:1.0,
+    init:"" },
+  { id:"mw", file:"melted-world.html", label:"Melted World", sel:"#gl",   capture:"push",
+    prefer:["power","drift","slice","sat"], boot:["bTest"], accepts:"texture", blend:"screen", op:0.65,
+    init:"typeof setPlaying === 'function' && setPlaying(true);" },
+  { id:"se", file:"sediment.html",     label:"Sediment",     sel:"#view", capture:"pull",
+    prefer:["xSpeedS","drift","brightness","sizeS"], boot:["btnPattern"], accepts:"image", blend:"screen", op:0.55,
+    init:"" },
+  { id:"an", file:"anchor.html",       label:"Anchor",       sel:"#view", capture:"pull",
+    prefer:["waveAmp","noiseAmp","scatter","sizeS"], boot:[], accepts:null, blend:"lighter", op:0.5,
+    init:"P.anim = true; typeof startRender === 'function' && startRender();" },
+  { id:"ou", file:"ouroboros.html",    label:"Ouroboros",    sel:"#gl",   capture:"push",
+    prefer:["zoom","twist","noiseAmp","decay"], boot:["bSeed"], accepts:"frame", blend:"screen", op:0.6,
+    init:"" },
+];
+const BLENDS = ["source-over","screen","lighter","multiply","overlay","difference","soft-light","hard-light"];
+
+/* ---- rack parameter store: RP is the user's values, RQ is RP + modulation ---- */
+const RP = {};                 // rack params, exactly the P/Q contract the tools use
+let   RQ = RP;
+const RACK_TARGETS = [];       // {key, label, min, max, apply(v)}
+
+const mixCanvas = document.getElementById("mixCanvas");
+mixCanvas.width = MIX_W; mixCanvas.height = MIX_H;
+const mixCtx = mixCanvas.getContext("2d");
+
+const layers = [];             // runtime state per tool
+let volAPI = null, volReady = false;
+
+/* ============================================================
+   Drive — one instance for the whole rack
+   ============================================================ */
+const Drive = (window.UnlimiterDrive)
+  ? UnlimiterDrive.create({ onChange: () => {}, getOutputCanvas: () => mixCanvas })
+  : null;
+
+function registerTarget(key, label, min, max, apply){
+  RACK_TARGETS.push({ key, label, min, max, apply });
+  if(Drive) Drive.registerTarget(key, label, min, max);
+}
+
+/* ============================================================
+   Layer construction
+   ============================================================ */
+function buildLayers(){
+  const list = document.getElementById("layerList");
+  TOOLS.forEach((tool, idx) => {
+    const cv = document.createElement("canvas");
+    cv.width = LAYER_W; cv.height = LAYER_H;
+    const ctx = cv.getContext("2d");
+
+    const L = {
+      tool, idx, canvas: cv, ctx,
+      frame: null, win: null, doc: null, toolCanvas: null,
+      drive: null, P: null, targets: null,
+      op: tool.op, blend: tool.blend, muted: false, solo: false,
+      ready: false, error: null, lastPush: 0, srcRoute: "none", lastFeed: 0,
+    };
+    layers.push(L);
+
+    const el = document.createElement("div");
+    el.className = "layer";
+    el.innerHTML =
+      `<div class="lhead">
+         <span class="dot" data-dot></span>
+         <b>${tool.label}</b>
+         <button data-mute title="Mute this layer">M</button>
+         <button data-solo title="Solo this layer">S</button>
+         <button data-open title="Open this tool full-size in a new tab">↗</button>
+       </div>
+       <canvas class="thumb" data-thumb width="200" height="112"></canvas>
+       <div class="lbody">
+         <div class="row"><span>opacity</span><input type="range" data-op min="0" max="1" step="0.01" value="${tool.op}"><span class="val" data-opv>${tool.op.toFixed(2)}</span></div>
+         <div class="srcrow"><span>blend</span><select data-blend>${
+            BLENDS.map(b => `<option value="${b}"${b===tool.blend?" selected":""}>${b}</option>`).join("")
+         }</select></div>
+         ${tool.accepts ? `<div class="srcrow"><span>src ←</span><select data-src></select></div>` : ""}
+       </div>`;
+    list.appendChild(el);
+    L.el = el;
+    L.dot = el.querySelector("[data-dot]");
+    L.thumb = el.querySelector("[data-thumb]");
+    L.thumbCtx = L.thumb.getContext("2d");
+
+    el.querySelector("[data-op]").addEventListener("input", e => {
+      L.op = parseFloat(e.target.value);
+      RP[tool.id + ".opacity"] = L.op;
+      el.querySelector("[data-opv]").textContent = L.op.toFixed(2);
+    });
+    el.querySelector("[data-blend]").addEventListener("change", e => { L.blend = e.target.value; });
+    el.querySelector("[data-mute]").addEventListener("click", e => {
+      L.muted = !L.muted;
+      e.target.classList.toggle("on", L.muted);
+      el.classList.toggle("muted", L.muted);
+    });
+    el.querySelector("[data-solo]").addEventListener("click", e => {
+      L.solo = !L.solo;
+      e.target.classList.toggle("on", L.solo);
+    });
+    el.querySelector("[data-open]").addEventListener("click", () => window.open(tool.file, "_blank"));
+
+    // layer opacity is a rack-level modulation target — this is the blending
+    RP[tool.id + ".opacity"] = L.op;
+    registerTarget(tool.id + ".opacity", tool.label + " — opacity", 0, 1, v => {
+      L.op = v;
+      const r = el.querySelector("[data-op]"), o = el.querySelector("[data-opv]");
+      if(r && !r.matches(":active")) r.value = v;
+      if(o) o.textContent = v.toFixed(2);
+    });
+  });
+
+  // source-route dropdowns, once every layer exists
+  layers.forEach(L => {
+    if(!L.tool.accepts) return;
+    const sel = L.el.querySelector("[data-src]");
+    const opts = ['<option value="none">none (its own)</option>', '<option value="mix">MIX (feedback)</option>']
+      .concat(layers.filter(o => o !== L).map(o => `<option value="${o.tool.id}">${o.tool.label}</option>`));
+    sel.innerHTML = opts.join("");
+    sel.value = L.tool.id === "ou" ? "mix" : "none";
+    L.srcRoute = sel.value;
+    sel.addEventListener("change", e => { L.srcRoute = e.target.value; L.lastFeed = 0; });
+  });
+}
+
+/* ============================================================
+   Frame loading + reach-in
+   ============================================================ */
+function loadTools(){
+  const farm = document.getElementById("farm");
+  layers.forEach(L => {
+    const f = document.createElement("iframe");
+    f.src = L.tool.file;
+    f.title = L.tool.label;
+    farm.appendChild(f);
+    L.frame = f;
+    f.addEventListener("load", () => setTimeout(() => attach(L), 450));
+  });
+}
+
+/* Same-origin reach-in. Top-level `const` in a classic script lives in the
+   realm's global lexical environment, not on window — so we resolve names
+   through the frame's own eval rather than reading window properties. */
+function peek(win, expr){
+  try{ return win.eval("(typeof " + expr + " !== 'undefined') ? " + expr + " : undefined"); }
+  catch(e){ return undefined; }
+}
+
+function attach(L){
+  try{
+    const win = L.frame.contentWindow;
+    const doc = L.frame.contentDocument;
+    if(!doc) throw new Error("no same-origin document");
+    L.win = win; L.doc = doc;
+
+    L.toolCanvas = doc.querySelector(L.tool.sel);
+    if(!L.toolCanvas) throw new Error("canvas " + L.tool.sel + " not found");
+
+    L.drive = peek(win, "Drive") || null;
+    L.P = peek(win, "P") || null;
+
+    // push-capture: wrap the tool's own frame push so a copy lands in our layer
+    if(L.tool.capture === "push" && L.drive && typeof L.drive.pushFrame === "function"){
+      const orig = L.drive.pushFrame.bind(L.drive);
+      L.drive.pushFrame = (src) => {
+        try{
+          if(src && src.width){
+            L.ctx.drawImage(src, 0, 0, LAYER_W, LAYER_H);
+            L.lastPush = performance.now();
+          }
+        }catch(e){}
+        return orig(src);
+      };
+    }
+
+    // anchor renders at full size into an offscreen `work` canvas
+    const work = peek(win, "work");
+    if(work && work.width) L.toolCanvas = work;
+
+    // give the tools that need content something to chew on, and start the ones
+    // that idle until asked. `init` is an expression, so it stays idempotent —
+    // clicking a Play *toggle* twice would stop the tool again.
+    wake(L);
+
+    registerToolTargets(L);
+    L.ready = true;
+    L.dot.classList.add("live");
+  }catch(err){
+    L.error = err.message || String(err);
+    L.dot.classList.add("err");
+    L.dot.title = L.error;
+    if(/origin|same-origin|no same-origin/i.test(L.error)) document.getElementById("banner").style.display = "grid";
+    console.warn("[rack]", L.tool.label, err);
+  }
+}
+
+/* Seed content and start motion. Safe to call again at any time. */
+function wake(L){
+  if(!L.doc) return;
+  L.tool.boot.forEach(id => {
+    const b = L.doc.getElementById(id);
+    if(b) try{ b.click(); }catch(e){}
+  });
+  if(L.tool.init){
+    try{ L.win.eval(L.tool.init); }catch(e){ console.warn("[rack] init", L.tool.label, e); }
+  }
+}
+
+/* Each tool already told its own drive which parameters are modulatable, with
+   real bounds and labels. We read that list back rather than keeping our own. */
+function registerToolTargets(L){
+  const t = L.drive && L.drive.targets;
+  if(!t || !L.P) return;
+  L.targets = t;
+  const keys = Object.keys(t);
+  const chosen = L.tool.prefer.filter(k => keys.includes(k));
+  // fall back to the first few the tool registered, whatever they are
+  if(chosen.length < 2) for(const k of keys){ if(chosen.length >= 4) break; if(!chosen.includes(k)) chosen.push(k); }
+
+  chosen.forEach(k => {
+    const spec = t[k];
+    const rackKey = L.tool.id + "." + k;
+    const base = Number(L.P[k]);
+    RP[rackKey] = isFinite(base) ? base : (spec.min + spec.max) / 2;
+    registerTarget(rackKey, L.tool.label + " — " + (spec.label || k), spec.min, spec.max, v => {
+      try{ L.P[k] = v; }catch(e){}
+    });
+  });
+}
+
+/* ============================================================
+   Source routing — tools feeding each other
+   ============================================================ */
+function sourceCanvasFor(L){
+  if(L.srcRoute === "none") return null;
+  if(L.srcRoute === "mix") return mixCanvas;
+  const other = layers.find(o => o.tool.id === L.srcRoute);
+  return other && other.ready ? other.canvas : null;
+}
+function feedSources(now){
+  layers.forEach(L => {
+    if(!L.ready || !L.tool.accepts) return;
+    const src = sourceCanvasFor(L);
+    if(!src || !src.width) return;
+    try{
+      if(L.tool.accepts === "frame"){
+        // per-frame texture feed — this is what makes Ouroboros eat the mix
+        const up = peek(L.win, "uploadInput");
+        if(typeof up === "function"){
+          up(src);
+          L.win.eval("hasIn = true; inIsVideo = false;");
+        }
+      } else if(L.tool.accepts === "texture"){
+        if(now - L.lastFeed < 120) return;           // ~8/sec is plenty
+        L.lastFeed = now;
+        const up = peek(L.win, "upload"), tex = peek(L.win, "texSrc");
+        if(typeof up === "function" && tex){
+          up(src, tex, 0);
+          // hand the canvas across the realm boundary by property, then bind it
+          L.win.__rackSrc = src;
+          L.win.eval("img = window.__rackSrc; imgW = img.width; imgH = img.height;");
+          if(!L.fedOnce){
+            L.fedOnce = true;
+            try{ L.win.eval("typeof resize === 'function' && resize();"); }catch(e){}
+            const empty = L.doc.getElementById("empty");
+            if(empty) empty.classList.add("hide");
+          }
+          try{ L.win.eval("typeof draw === 'function' && draw();"); }catch(e){}
+        }
+      } else if(L.tool.accepts === "image"){
+        if(now - L.lastFeed < 6000) return;          // setSource() restarts the sim — go easy
+        L.lastFeed = now;
+        const set = peek(L.win, "setSource");
+        if(typeof set === "function") set(src);
+      }
+    }catch(e){ /* a tool that refuses a feed keeps its own content */ }
+  });
+}
+
+/* ============================================================
+   Capture + mix
+   ============================================================ */
+function captureAndMix(now){
+  const soloed = layers.some(L => L.solo);
+
+  layers.forEach(L => {
+    if(!L.ready) return;
+    if(L.tool.capture === "pull"){
+      try{
+        if(L.toolCanvas && L.toolCanvas.width) L.ctx.drawImage(L.toolCanvas, 0, 0, LAYER_W, LAYER_H);
+      }catch(e){}
+    }
+    // push layers are filled by the wrapped pushFrame; nothing to do here
+  });
+
+  const bg = document.getElementById("mixBg").value;
+  if(bg === "clear"){
+    mixCtx.globalAlpha = 0.22; mixCtx.globalCompositeOperation = "source-over";
+    mixCtx.fillStyle = "#000"; mixCtx.fillRect(0, 0, MIX_W, MIX_H);
+  } else {
+    mixCtx.globalAlpha = 1; mixCtx.globalCompositeOperation = "source-over";
+    mixCtx.fillStyle = bg; mixCtx.fillRect(0, 0, MIX_W, MIX_H);
+  }
+
+  const gain = parseFloat(document.getElementById("mixGain").value);
+  layers.forEach(L => {
+    if(!L.ready) return;
+    const audible = soloed ? L.solo : !L.muted;
+    const a = audible ? L.op * gain : 0;
+    if(a <= 0.002) return;
+    mixCtx.globalAlpha = Math.min(1, a);
+    mixCtx.globalCompositeOperation = L.blend;
+    try{ mixCtx.drawImage(L.canvas, 0, 0, MIX_W, MIX_H); }catch(e){}
+  });
+  mixCtx.globalAlpha = 1;
+  mixCtx.globalCompositeOperation = "source-over";
+}
+
+function updateThumbs(now){
+  layers.forEach(L => {
+    if(!L.ready) return;
+    try{ L.thumbCtx.drawImage(L.canvas, 0, 0, L.thumb.width, L.thumb.height); }catch(e){}
+  });
+}
+
+/* ============================================================
+   Volume renderer link
+   ============================================================ */
+function linkVolume(){
+  const f = document.getElementById("volFrame");
+  f.addEventListener("load", () => {
+    const tryLink = (n) => {
+      try{
+        const api = f.contentWindow && f.contentWindow.UnlimiterVolumeAPI;
+        if(api){
+          if(api.ready){
+            volAPI = api; volReady = true;
+            buildVolumeTargets();
+          } else {
+            volNote(api.reason === "webgpu-unavailable"
+              ? "Volume renderer needs WebGPU — the mix still runs and OBS can capture it."
+              : "Volume renderer unavailable.");
+          }
+          return;
+        }
+      }catch(e){
+        volNote("Volume renderer is cross-origin here — serve the rack over http.");
+        return;
+      }
+      if(n < 40) setTimeout(() => tryLink(n + 1), 250);
+      else volNote("Volume renderer did not report in.");
+    };
+    tryLink(0);
+  });
+}
+function volNote(msg){
+  const pane = document.getElementById("volFrame").parentElement;
+  let n = pane.querySelector(".volnote");
+  if(!n){
+    n = document.createElement("div");
+    n.className = "volnote tag";
+    n.style.cssText = "left:9px;top:30px;color:var(--warm);max-width:min(460px,80%);white-space:normal;line-height:1.4";
+    pane.appendChild(n);
+  }
+  n.textContent = msg;
+}
+function buildVolumeTargets(){
+  if(!volAPI) return;
+  let plist = [];
+  try{ plist = volAPI.params() || []; }catch(e){}
+  const want = ["cameraOrbitSpeed","splatScale","opacityBoost","colorShift"];
+  plist.filter(p => want.includes(p.id)).forEach(p => {
+    const key = "vol." + p.id;
+    RP[key] = p.default;
+    registerTarget(key, "Volume — " + p.label, p.range[0], p.range[1], v => {
+      try{ volAPI.setParam(p.id, v); }catch(e){}
+    });
+  });
+  // mix relief is rack-side, applied through setMix
+  RP["vol.relief"] = 0.55;
+  registerTarget("vol.relief", "Volume — mix relief", 0, 1.6, v => {
+    try{ volAPI.setMix({ relief: v }); }catch(e){}
+  });
+  buildTargetPanel();
+  if(Drive) Drive.rebuildMatrix();
+}
+
+/* ============================================================
+   Rack target panel
+   ============================================================ */
+function buildTargetPanel(){
+  const wrap = document.getElementById("targets");
+  wrap.innerHTML = "";
+  const groups = new Map();
+  RACK_TARGETS.forEach(t => {
+    const g = t.label.split("—")[0].trim();
+    if(!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(t);
+  });
+  groups.forEach((list, name) => {
+    const d = document.createElement("details");
+    d.className = "pgroup";
+    d.open = name === "Volume";
+    d.innerHTML = `<summary>${name}</summary><div class="pbody"></div>`;
+    const body = d.querySelector(".pbody");
+    list.forEach(t => {
+      const row = document.createElement("div");
+      row.className = "prm";
+      row.innerHTML =
+        `<div class="plab"><span>${t.label.split("—").slice(1).join("—").trim() || t.label}</span><span class="pv"></span></div>
+         <input type="range" min="${t.min}" max="${t.max}" step="${(t.max-t.min)/200}" value="${RP[t.key]}">`;
+      const r = row.querySelector("input"), v = row.querySelector(".pv");
+      r.addEventListener("input", e => { RP[t.key] = parseFloat(e.target.value); });
+      t._row = row; t._range = r; t._val = v;
+      body.appendChild(row);
+    });
+    wrap.appendChild(d);
+  });
+}
+function refreshTargetPanel(){
+  const modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
+  RACK_TARGETS.forEach(t => {
+    if(!t._val) return;
+    const v = RQ[t.key];
+    if(v == null) return;
+    t._val.textContent = (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2));
+    const isMod = modded.has(t.key);
+    t._row.classList.toggle("mod", isMod);
+    if(isMod && t._range && !t._range.matches(":active")) t._range.value = v;
+  });
+}
+
+/* ============================================================
+   Main loop
+   ============================================================ */
+function boot(){
+  buildLayers();
+  buildTargetPanel();
+  loadTools();
+  linkVolume();
+
+  const panel = document.getElementById("g-drive");
+  if(Drive){
+    Drive.mountPanel(panel);
+  } else {
+    panel.innerHTML = '<div style="color:var(--danger);font-size:.75rem">unlimiter-drive.js not found — the rack needs it alongside this file.</div>';
+  }
+
+  document.getElementById("bOutput").addEventListener("click", () => {
+    if(Drive) Drive.openOutput(() => mixCanvas);
+  });
+  document.getElementById("bStartAll").addEventListener("click", () => {
+    layers.forEach(L => { if(L.ready) wake(L); });
+  });
+  document.getElementById("mixGain").addEventListener("input", e => {
+    document.getElementById("mixGainV").textContent = parseFloat(e.target.value).toFixed(2);
+  });
+
+  let last = performance.now(), fpsEma = 0, beatWas = 0;
+  const fpsEl = document.getElementById("fps"), beatEl = document.getElementById("beat");
+
+  function frame(now){
+    const dt = Math.min(60, now - last);
+    last = now;
+
+    // the P/Q contract, rack-wide: resolve once, then apply
+    RQ = Drive ? Drive.resolve(RP) : RP;
+    RACK_TARGETS.forEach(t => {
+      const v = RQ[t.key];
+      if(typeof v === "number" && isFinite(v)) t.apply(v);
+    });
+
+    feedSources(now);
+    captureAndMix(now);
+    updateThumbs(now);
+
+    if(volReady && volAPI){
+      try{ volAPI.pushMixFrame(mixCanvas); }catch(e){}
+    }
+
+    if(Drive){
+      const bp = Drive.beatPhase;
+      if(bp < beatWas){ beatEl.classList.add("hit"); setTimeout(() => beatEl.classList.remove("hit"), 80); }
+      beatWas = bp;
+    }
+    refreshTargetPanel();
+
+    fpsEma = fpsEma * 0.94 + (1000 / Math.max(1, dt)) * 0.06;
+    if((now | 0) % 12 === 0) fpsEl.textContent = fpsEma.toFixed(0) + " fps";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+if(location.protocol === "file:") document.getElementById("banner").style.display = "grid";
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,2294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Unlimiter — Volume</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#14161d; --panel:rgba(23,26,34,0.92); --line:#2a2e3c; --text:#e8e9ee; --dim:#8b90a0; --faint:#575c6c;
+  --band:#ffb02e; --env:#38c7d8; --onset:#f0459c; --tempo:#6fce62; --scalar:#9d7bff;
+  --radius:6px; font-size:15px;
+}
+:root:not([data-theme="light"]){ color-scheme:dark; }
+:root[data-theme="dark"]{ color-scheme:dark; }
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  background:var(--bg); color:var(--text); overflow:hidden;
+  font-family:"Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+#gpu{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+button, input, select{ font-family:inherit; font-size:.82rem; color:var(--text); }
+button{ background:rgba(28,31,41,.9); border:1px solid var(--line); border-radius:var(--radius); padding:5px 10px; cursor:pointer; }
+button:hover{ border-color:var(--dim); }
+button:focus-visible, input:focus-visible, select:focus-visible{ outline:2px solid var(--env); outline-offset:1px; }
+button.on{ border-color:var(--env); color:var(--env); }
+select{ background:rgba(20,22,29,.9); border:1px solid var(--line); border-radius:4px; padding:3px 5px; max-width:118px; }
+input[type=range]{ width:100%; accent-color:var(--env); }
+
+#topbar{
+  position:fixed; top:0; left:0; right:0; height:46px; z-index:5;
+  display:flex; align-items:center; gap:12px; padding:0 14px;
+  background:linear-gradient(rgba(20,22,29,.9), rgba(20,22,29,0));
+}
+#topbar h1{ font-size:.98rem; font-weight:700; }
+#topbar h1 span{ color:var(--dim); font-weight:400; }
+.spacer{ flex:1; }
+#fps{ color:var(--dim); font-variant-numeric:tabular-nums; font-size:.8rem; min-width:56px; text-align:right; }
+#beatDot{ width:9px; height:9px; border-radius:50%; background:var(--faint); }
+#beatDot.hit{ background:var(--tempo); }
+
+.panel{
+  position:fixed; z-index:4; background:var(--panel); border:1px solid var(--line);
+  border-radius:8px; padding:12px; width:248px; max-height:calc(100vh - 78px);
+  overflow-y:auto; backdrop-filter:blur(6px);
+}
+#srcPanel{ left:12px; top:58px; }
+#paramPanel{ right:12px; top:58px; width:270px; }
+.panel h2{ font-size:.8rem; font-weight:500; color:var(--dim); margin:12px 0 8px; }
+.panel h2:first-child{ margin-top:0; }
+.panel .row{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
+.src{ border:1px solid var(--line); border-radius:var(--radius); padding:8px; margin-bottom:8px; background:rgba(20,22,29,.55); }
+.src .head{ display:flex; align-items:center; gap:8px; font-size:.8rem; }
+.src .head b{ font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.src .head small{ color:var(--dim); }
+.src .head button{ padding:1px 7px; }
+.src label{ display:block; color:var(--dim); font-size:.72rem; margin-top:6px; }
+.param{ margin-bottom:10px; }
+.param .lab{ display:flex; justify-content:space-between; font-size:.78rem; }
+.param .lab span:last-child{ color:var(--dim); font-variant-numeric:tabular-nums; }
+.param .react{ display:flex; gap:6px; align-items:center; margin-top:3px; font-size:.72rem; color:var(--dim); }
+.param .react input[type=range]{ width:70px; accent-color:var(--scalar); }
+#msg{
+  position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:6;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:7px 14px; font-size:.82rem; color:var(--dim); display:none; max-width:80vw; text-align:center;
+}
+#nogpu{
+  position:fixed; inset:0; display:none; place-items:center; z-index:10; background:var(--bg);
+  padding:24px; text-align:center; line-height:1.5;
+}
+#nogpu div{ max-width:420px; color:var(--dim); }
+#nogpu b{ color:var(--text); font-weight:500; }
+#drop{ position:fixed; inset:0; z-index:8; display:none; place-items:center; background:rgba(20,22,29,.7); border:2px dashed var(--env); font-size:1rem; color:var(--env); }
+@media (max-width:820px){ #paramPanel{ display:none; } .panel{ width:200px; } }
+/* embed mode: the rack supplies the controls, so the renderer shows only the view.
+   Panels stay in the DOM (the API and their listeners keep working) but hidden. */
+body.embed #topbar, body.embed #srcPanel, body.embed #paramPanel{ display:none; }
+</style>
+</head>
+<body>
+<canvas id="gpu"></canvas>
+
+<div id="topbar">
+  <h1>The Unlimiter <span>· Volume</span></h1>
+  <button id="btnDemoSig" class="on">Demo signal</button>
+  <button id="btnMic">Mic input</button>
+  <div class="spacer"></div>
+  <div id="beatDot"></div>
+  <div id="fps">—</div>
+</div>
+
+<div class="panel" id="srcPanel">
+  <h2>Scenes</h2>
+  <div class="row">
+    <button id="addGalaxy">Galaxy splats</button>
+    <button id="addNebula">Nebula field</button>
+    <button id="addShell">Point shell</button>
+    <button id="addGIScene">GI test scene</button>
+  </div>
+  <div class="row">
+    <button id="btnLoadPly">Load .ply</button>
+    <input type="file" id="plyFile" accept=".ply" style="display:none">
+  </div>
+  <h2>Active sources</h2>
+  <div id="srcList"></div>
+</div>
+
+<div class="panel" id="paramPanel">
+  <h2>Render</h2>
+  <div id="params"></div>
+  <h2>Performance</h2>
+  <label style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--dim)">
+    <input type="checkbox" id="gpuSortToggle"> GPU sort <small style="color:var(--faint)">(experimental — CPU sort is the tested default)</small>
+  </label>
+  <div id="sortInfo" style="font-size:.72rem;color:var(--faint);margin-top:5px">sort: —</div>
+  <label style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--dim);margin-top:8px">
+    <input type="checkbox" id="shToggle" checked> View-dependent color <small style="color:var(--faint)">(SH1 — loaded splats only)</small>
+  </label>
+  <label style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--dim);margin-top:8px">
+    <input type="checkbox" id="xfadeToggle"> A/B crossfade <small style="color:var(--faint)">(first two sources, drive it from the crossfade param)</small>
+  </label>
+  <h2>Bloom</h2>
+  <label style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--dim)">
+    <input type="checkbox" id="bloomToggle"> enabled <small style="color:var(--faint)">(off changes nothing else on screen)</small>
+  </label>
+  <div class="param" style="margin-top:8px">
+    <div class="lab"><span>threshold</span><span id="bloomThreshVal">0.85</span></div>
+    <input type="range" id="bloomThresh" min="0.3" max="1.5" step="0.01" value="0.85" aria-label="bloom threshold">
+  </div>
+  <div class="param">
+    <div class="lab"><span>intensity</span><span id="bloomIntVal">0.60</span></div>
+    <input type="range" id="bloomInt" min="0" max="2" step="0.02" value="0.6" aria-label="bloom intensity">
+  </div>
+  <h2>Global illumination</h2>
+  <label style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--dim)">
+    <input type="checkbox" id="giToggle" checked> voxel cone tracing <small style="color:var(--faint)">(needs a mesh source — add the GI test scene)</small>
+  </label>
+  <div class="param" style="margin-top:8px">
+    <div class="lab"><span>GI intensity</span><span id="giIntVal">1.20</span></div>
+    <input type="range" id="giInt" min="0" max="3" step="0.05" value="1.2" aria-label="GI intensity">
+  </div>
+</div>
+
+<div id="msg"></div>
+<div id="drop">drop a 3DGS .ply anywhere</div>
+<div id="nogpu"><div><b>WebGPU is needed for this renderer.</b><br>
+Open this page in a current Chrome or Edge (or Safari 18+). The rest of the Unlimiter suite runs everywhere; this engine leans on the GPU harder than the others.</div></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Small math kit — column-major mat4, just what the renderer needs
+   ============================================================ */
+const M4 = {
+  perspective(fovY, aspect, near, far){
+    const f = 1 / Math.tan(fovY / 2), o = new Float32Array(16);
+    o[0]=f/aspect; o[5]=f; o[10]=far/(near-far); o[11]=-1; o[14]=near*far/(near-far);
+    return o;
+  },
+  // closed-form inverse of the exact matrix perspective() builds above
+  invPerspective(fovY, aspect, near, far){
+    const f = 1 / Math.tan(fovY / 2);
+    const A = f/aspect, B = f, C = far/(near-far), D = near*far/(near-far);
+    const o = new Float32Array(16);
+    o[0]=1/A; o[5]=1/B; o[11]=1/D; o[14]=-1; o[15]=C/D;
+    return o;
+  },
+  lookAt(eye, at, up){
+    const z = V3.norm(V3.sub(eye, at));
+    const x = V3.norm(V3.cross(up, z));
+    const y = V3.cross(z, x);
+    return new Float32Array([
+      x[0], y[0], z[0], 0,
+      x[1], y[1], z[1], 0,
+      x[2], y[2], z[2], 0,
+      -V3.dot(x, eye), -V3.dot(y, eye), -V3.dot(z, eye), 1,
+    ]);
+  },
+  mul(a, b){
+    const o = new Float32Array(16);
+    for(let c = 0; c < 4; c++) for(let r = 0; r < 4; r++){
+      o[c*4+r] = a[r]*b[c*4] + a[4+r]*b[c*4+1] + a[8+r]*b[c*4+2] + a[12+r]*b[c*4+3];
+    }
+    return o;
+  },
+};
+const V3 = {
+  sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]],
+  dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  norm(a){ const l = Math.hypot(a[0],a[1],a[2]) || 1; return [a[0]/l,a[1]/l,a[2]/l]; },
+};
+
+/* ============================================================
+   UnlimiterBus — same bus as the Control Surface / unlimiter-bus.js
+   ============================================================ */
+const UnlimiterBus = (() => {
+  const SCHEMA_VERSION = 1;
+  const channels = new Map(), values = new Map(), subs = new Map();
+  function register(spec){
+    if(!spec || !spec.id || !spec.type) throw new Error("UnlimiterBus.register: {id, type} required");
+    channels.set(spec.id, { range:[0,1], updateHz:60, ...spec });
+    if(!values.has(spec.id)) values.set(spec.id, 0);
+  }
+  function publish(id, value){
+    values.set(id, value);
+    const s = subs.get(id);
+    if(s) s.forEach(fn => { try{ fn(value); }catch(e){ console.error(e); } });
+  }
+  function get(id){ return values.get(id) ?? 0; }
+  function subscribe(id, fn){
+    if(!subs.has(id)) subs.set(id, new Set());
+    subs.get(id).add(fn);
+    return () => subs.get(id).delete(fn);
+  }
+  function list(){ return [...channels.values()]; }
+  function has(id){ return channels.has(id); }
+  return { SCHEMA_VERSION, register, publish, get, subscribe, list, has };
+})();
+
+/* ============================================================
+   AudioEngine — compact version of the Control Surface engine.
+   Demo generator by default, live mic on request.
+   ============================================================ */
+const AudioEngine = (() => {
+  [
+    { id:"band.low", type:"band" }, { id:"band.mid", type:"band" }, { id:"band.high", type:"band" },
+    { id:"env.mix", type:"envelope" }, { id:"onset.beat", type:"onset" },
+    { id:"tempo.phase", type:"tempo" }, { id:"scalar.lfo", type:"scalar" },
+  ].forEach(c => UnlimiterBus.register(c));
+
+  let mode = "demo", analyser = null, freqData = null, fluxPrev = null, fluxAvg = 0;
+  let env = 0, pulse = 0, lastBeatAt = 0, bpm = 0;
+  const beatTimes = [], onBeatFns = [];
+  const demo = { t:0, nextBeat:0, interval:483 };
+
+  function registerBeat(now){
+    pulse = 1; lastBeatAt = now;
+    beatTimes.push(now); if(beatTimes.length > 12) beatTimes.shift();
+    if(beatTimes.length >= 4){
+      const iois = beatTimes.slice(1).map((t,i) => t - beatTimes[i]).sort((a,b)=>a-b);
+      const med = iois[Math.floor(iois.length/2)];
+      if(med > 200 && med < 2000) bpm = Math.round(60000/med);
+    }
+    onBeatFns.forEach(fn => fn());
+  }
+  function stepDemo(now){
+    demo.t = now/1000;
+    if(now >= demo.nextBeat){ registerBeat(now); demo.nextBeat = now + demo.interval + (Math.random()*30-15); }
+    const kick = Math.max(0, 1 - (now - lastBeatAt)/180);
+    return {
+      low: Math.min(1, 0.18 + kick*0.82 + Math.random()*0.04),
+      mid: Math.max(0, Math.min(1, 0.30 + 0.25*Math.sin(demo.t*2.1) + 0.18*Math.sin(demo.t*5.7+1.3) + Math.random()*0.06)),
+      high: Math.max(0, Math.min(1, 0.22 + 0.20*Math.sin(demo.t*9.3+0.5) + Math.random()*0.12 + kick*0.15)),
+    };
+  }
+  async function startMic(){
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.5;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    fluxPrev = null; fluxAvg = 0; mode = "mic";
+  }
+  function bandAvg(from, to){
+    let s = 0; for(let i = from; i < to; i++) s += freqData[i];
+    return s / ((to - from) * 255);
+  }
+  function stepMic(now){
+    analyser.getByteFrequencyData(freqData);
+    const n = freqData.length;
+    const b = { low:bandAvg(1, n*0.06|0), mid:bandAvg(n*0.06|0, n*0.35|0), high:bandAvg(n*0.35|0, n*0.9|0) };
+    let flux = 0;
+    const upTo = n*0.35|0;
+    if(fluxPrev){
+      for(let i = 1; i < upTo; i++){ const d = freqData[i]-fluxPrev[i]; if(d>0) flux += d; }
+      flux /= upTo*255;
+    } else fluxPrev = new Uint8Array(n);
+    fluxPrev.set(freqData);
+    fluxAvg = fluxAvg*0.95 + flux*0.05;
+    if(flux > Math.max(0.02, fluxAvg*1.9) && now - lastBeatAt > 180) registerBeat(now);
+    return b;
+  }
+  function tick(now, dtMs){
+    const b = (mode === "mic" && analyser) ? stepMic(now) : stepDemo(now);
+    pulse = Math.max(0, pulse - dtMs/260);
+    const mix = (b.low + b.mid + b.high)/3;
+    env += (mix - env) * Math.min(1, dtMs / (mix > env ? 30 : 300));
+    const beatLen = bpm > 0 ? 60000/bpm : 500;
+    UnlimiterBus.publish("band.low", b.low);
+    UnlimiterBus.publish("band.mid", b.mid);
+    UnlimiterBus.publish("band.high", b.high);
+    UnlimiterBus.publish("env.mix", env);
+    UnlimiterBus.publish("onset.beat", pulse);
+    UnlimiterBus.publish("tempo.phase", ((now - lastBeatAt) % beatLen) / beatLen);
+    UnlimiterBus.publish("scalar.lfo", 0.5 + 0.5*Math.sin(now/1600));
+  }
+  return { tick, startMic, setDemo(){ mode = "demo"; }, onBeat(fn){ onBeatFns.push(fn); } };
+})();
+</script>
+<script>
+"use strict";
+/* ============================================================
+   WGSL — one pipeline for every source kind.
+   kind 0 = gsplat (full covariance projection, EWA-style)
+   kind 1 = pointcloud (screen-space soft sprite)
+   kind 2 = voxel field (soft sprite + turbulence displacement)
+   ============================================================ */
+const SHADER = /* wgsl */`
+struct U {
+  view: mat4x4f,
+  proj: mat4x4f,
+  viewportPx: vec2f,
+  focal: vec2f,
+  camPos: vec4f,
+  params: vec4f,   // x splatScale, y opacityBoost, z colorShift, w time
+  params2: vec4f,  // x fieldTurbulence
+};
+struct Splat {
+  pos: vec4f,    // xyz, w unused
+  color: vec4f,  // rgb, a opacity
+  covA: vec4f,   // c00 c01 c02 c11
+  covB: vec4f,   // c12 c22, unused
+};
+struct SrcU {
+  tint: vec4f,   // rgb multiplier, a = source opacity
+  info: vec4f,   // x kind, y pointSizePx, z animAmp, w seed
+  extra: vec4f,  // x = has SH1 coefficients (0/1)
+};
+@group(0) @binding(0) var<uniform> u: U;
+@group(1) @binding(0) var<storage, read> splats: array<Splat>;
+@group(1) @binding(1) var<storage, read> order: array<u32>;
+@group(1) @binding(2) var<uniform> src: SrcU;
+@group(1) @binding(3) var<storage, read> shcoef: array<vec4f>; // 3 vec4 per splat: deg-1 SH, rgb in xyz
+
+struct VSOut {
+  @builtin(position) position: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) color: vec4f,
+};
+
+fn hueShift(c: vec3f, ang: f32) -> vec3f {
+  let k = vec3f(0.5773502691896258);
+  let cosA = cos(ang);
+  let sinA = sin(ang);
+  return c*cosA + cross(k, c)*sinA + k*dot(k, c)*(1.0 - cosA);
+}
+
+@vertex
+fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VSOut {
+  var corners = array<vec2f, 6>(
+    vec2f(-1.0,-1.0), vec2f(1.0,-1.0), vec2f(1.0,1.0),
+    vec2f(-1.0,-1.0), vec2f(1.0,1.0), vec2f(-1.0,1.0));
+  let corner = corners[vi];
+  let idx = order[ii];
+  let s = splats[idx];
+  let kind = u32(src.info.x + 0.5);
+
+  var worldPos = s.pos.xyz;
+  if (kind == 2u) {
+    // turbulence displacement for procedural fields — cheap layered sines
+    let t = u.params.w * 0.6;
+    let amp = src.info.z * u.params2.x;
+    let p = worldPos * 2.3 + vec3f(src.info.w);
+    worldPos += amp * vec3f(
+      sin(p.y + t*1.3) + 0.5*sin(p.z*1.7 + t*0.7),
+      sin(p.z + t*1.1) + 0.5*sin(p.x*1.9 + t*0.9),
+      sin(p.x + t*0.8) + 0.5*sin(p.y*1.3 + t*1.2));
+  }
+
+  let viewPos4 = u.view * vec4f(worldPos, 1.0);
+  let t3 = viewPos4.xyz;
+  var out: VSOut;
+  if (t3.z > -0.05) { // behind the camera
+    out.position = vec4f(10.0, 10.0, 0.0, 1.0);
+    out.uv = vec2f(0.0); out.color = vec4f(0.0);
+    return out;
+  }
+  let clip = u.proj * viewPos4;
+  let ndc = clip.xy / clip.w;
+
+  var offsetPx: vec2f;
+  var uvScale = 3.0;
+  if (kind == 0u) {
+    // project 3D covariance -> 2D (EWA), reference-splat-renderer formulation
+    let Vrk = mat3x3f(
+      vec3f(s.covA.x, s.covA.y, s.covA.z),
+      vec3f(s.covA.y, s.covA.w, s.covB.x),
+      vec3f(s.covA.z, s.covB.x, s.covB.y));
+    let J = mat3x3f(
+      vec3f(u.focal.x / t3.z, 0.0, 0.0),
+      vec3f(0.0, u.focal.y / t3.z, 0.0),
+      vec3f(-(u.focal.x * t3.x) / (t3.z * t3.z), -(u.focal.y * t3.y) / (t3.z * t3.z), 0.0));
+    let W = mat3x3f(u.view[0].xyz, u.view[1].xyz, u.view[2].xyz);
+    let T = J * W;
+    var cov = T * Vrk * transpose(T);
+    let a = cov[0][0] + 0.3;
+    let d = cov[1][1] + 0.3;
+    let b = cov[0][1];
+    let mid = 0.5 * (a + d);
+    let rad = length(vec2f(0.5 * (a - d), b));
+    let l1 = mid + rad;
+    let l2 = max(mid - rad, 0.05);
+    let dir = normalize(vec2f(b, l1 - a + 1e-6));
+    let axis1 = sqrt(l1) * dir;
+    let axis2 = sqrt(l2) * vec2f(dir.y, -dir.x);
+    offsetPx = (corner.x * axis1 + corner.y * axis2) * 3.0 * u.params.x;
+  } else {
+    var sizePx = src.info.y * u.params.x;
+    // keep a perspective cue for sprites: shrink with distance
+    sizePx = clamp(sizePx * (u.focal.y / (-t3.z * 300.0)), 0.75, 64.0) * 6.0;
+    offsetPx = corner * sizePx;
+    uvScale = 2.0;
+  }
+
+  out.position = vec4f(ndc + offsetPx / u.viewportPx * 2.0, clamp(clip.z / clip.w, 0.0, 1.0), 1.0);
+  out.uv = corner * uvScale;
+
+  var rgb = s.color.rgb * src.tint.rgb;
+  // degree-1 spherical harmonics: view-dependent color, reference 3DGS formulation
+  if (src.extra.x > 0.5 && u.params2.y > 0.5) {
+    let dir = normalize(worldPos - u.camPos.xyz);
+    let v0 = shcoef[3u * idx + 0u].xyz;
+    let v1 = shcoef[3u * idx + 1u].xyz;
+    let v2 = shcoef[3u * idx + 2u].xyz;
+    rgb = rgb + 0.48860251 * (-dir.y * v0 + dir.z * v1 - dir.x * v2) * src.tint.rgb;
+  }
+  if (u.params.z > 0.001) { rgb = hueShift(rgb, u.params.z * 6.2831853); }
+  let boost = 1.0 + u.params.y * 1.5;
+  out.color = vec4f(max(rgb, vec3f(0.0)), clamp(s.color.a * src.tint.a * boost, 0.0, 1.0));
+  return out;
+}
+
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4f {
+  let r2 = dot(in.uv, in.uv);
+  if (r2 > 9.0) { discard; }
+  let a = exp(-0.5 * r2) * in.color.a;
+  if (a < 0.004) { discard; }
+  return vec4f(in.color.rgb * a, a);
+}
+`;
+
+/* ============================================================
+   Renderer — WebGPU device, pipeline, per-source GPU state
+   ============================================================ */
+/* ============================================================
+   GPU sort — bitonic sort by view-space depth, back-to-front.
+   Opt-in (default off; CPU counting-sort remains the default path).
+   Three small compute shaders instead of one, so each has its own
+   bind group layout with no risk of a stale/duplicate binding.
+   ============================================================ */
+const SORT_INIT_WGSL = /* wgsl */`
+struct Splat { pos: vec4f, color: vec4f, covA: vec4f, covB: vec4f };
+struct InitU { camPos: vec4f, fwd: vec4f, count: u32, padded: u32, _p0: u32, _p1: u32 };
+@group(0) @binding(0) var<storage, read> splats: array<Splat>;
+@group(0) @binding(1) var<storage, read_write> keys: array<vec2u>;
+@group(0) @binding(2) var<uniform> u: InitU;
+
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= u.padded) { return; }
+  if (i < u.count) {
+    let p = splats[i].pos.xyz;
+    let rel = p - u.camPos.xyz;
+    let d = dot(rel, u.fwd.xyz);
+    let bits = bitcast<u32>(d);
+    let signBit = bits & 0x80000000u;
+    let mask = select(0x80000000u, 0xffffffffu, signBit != 0u);
+    let ordered = bits ^ mask;               // monotonic float->uint remap
+    let orderedClamped = max(ordered, 1u);   // keep 0xffffffff free for padding
+    let key = 0xffffffffu - orderedClamped;  // invert: ascending key = farthest first
+    keys[i] = vec2u(key, i);
+  } else {
+    keys[i] = vec2u(0xffffffffu, 0u);        // padding sorts to the tail, never drawn
+  }
+}
+`;
+const SORT_BITONIC_WGSL = /* wgsl */`
+struct PassU { stage: u32, passIdx: u32, padded: u32, _p: u32 };
+@group(0) @binding(0) var<storage, read_write> keys: array<vec2u>;
+@group(0) @binding(1) var<uniform> u: PassU;
+
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= u.padded) { return; }
+  let ixj = i ^ u.passIdx;
+  if (ixj > i) {
+    let a = keys[i];
+    let b = keys[ixj];
+    let ascending = (i & u.stage) == 0u;
+    var doSwap = false;
+    if (ascending) { doSwap = a.x > b.x; } else { doSwap = a.x < b.x; }
+    if (doSwap) { keys[i] = b; keys[ixj] = a; }
+  }
+}
+`;
+const SORT_SCATTER_WGSL = /* wgsl */`
+struct ScatterU { count: u32, _p0: u32, _p1: u32, _p2: u32 };
+@group(0) @binding(0) var<storage, read> keys: array<vec2u>;
+@group(0) @binding(1) var<storage, read_write> outOrder: array<u32>;
+@group(0) @binding(2) var<uniform> u: ScatterU;
+
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= u.count) { return; }
+  outOrder[i] = keys[i].y;
+}
+`;
+function nextPow2(n){ let p = 1; while(p < n) p *= 2; return Math.max(p, 1); }
+function buildBitonicPasses(P){
+  const passes = [];
+  for(let k = 2; k <= P; k *= 2){
+    for(let j = k >> 1; j >= 1; j >>= 1){
+      passes.push({ stage:k, passIdx:j });
+    }
+  }
+  return passes;
+}
+
+/* ============================================================
+   Raymarch — true volumetric shading for voxel sources.
+   Fullscreen-triangle vertex shader, box-bounded raymarch in the
+   fragment shader, front-to-back premultiplied accumulation.
+   Only ever drawn into the offscreen scene texture (see below) —
+   the sprite path (existing) stays the default for every source.
+   ============================================================ */
+const RAYMARCH_WGSL = /* wgsl */`
+struct GlobalU {
+  invView: mat4x4f, invProj: mat4x4f,
+  camPos: vec4f, params: vec4f, params2: vec4f, // params: splatScale,opacityBoost,colorShift,time
+};
+struct SrcU {
+  bmin: vec4f, bmax: vec4f, ctr: vec4f,
+  colorNear: vec4f, colorFar: vec4f,
+  extra: vec4f, // x seed, y densityScale, z densityMul, w absorption
+};
+@group(0) @binding(0) var<uniform> g: GlobalU;
+@group(1) @binding(0) var<uniform> src: SrcU;
+
+struct VSOut { @builtin(position) position: vec4f, @location(0) ndc: vec2f };
+
+@vertex
+fn vs(@builtin(vertex_index) vi: u32) -> VSOut {
+  var pos = array<vec2f,3>(vec2f(-1.0,-1.0), vec2f(3.0,-1.0), vec2f(-1.0,3.0));
+  var out: VSOut;
+  out.position = vec4f(pos[vi], 0.0, 1.0);
+  out.ndc = pos[vi];
+  return out;
+}
+
+fn hueShift(c: vec3f, ang: f32) -> vec3f {
+  let k = vec3f(0.5773502691896258);
+  let cosA = cos(ang); let sinA = sin(ang);
+  return c*cosA + cross(k, c)*sinA + k*dot(k, c)*(1.0 - cosA);
+}
+fn hash3(p: vec3f) -> f32 {
+  let s = sin(dot(p, vec3f(127.1, 311.7, 74.7))) * 43758.5453;
+  return fract(s);
+}
+fn vnoise(p: vec3f) -> f32 {
+  let i = floor(p); let f = fract(p);
+  let u = f*f*(3.0 - 2.0*f);
+  var acc = 0.0;
+  for (var dx = 0; dx <= 1; dx = dx + 1) {
+    for (var dy = 0; dy <= 1; dy = dy + 1) {
+      for (var dz = 0; dz <= 1; dz = dz + 1) {
+        let h = hash3(i + vec3f(f32(dx), f32(dy), f32(dz)));
+        let wx = select(1.0 - u.x, u.x, dx == 1);
+        let wy = select(1.0 - u.y, u.y, dy == 1);
+        let wz = select(1.0 - u.z, u.z, dz == 1);
+        acc = acc + h * wx * wy * wz;
+      }
+    }
+  }
+  return acc;
+}
+fn intersectBox(ro: vec3f, rd: vec3f, bmin: vec3f, bmax: vec3f) -> vec2f {
+  let inv = 1.0 / rd;
+  let t0 = (bmin - ro) * inv;
+  let t1 = (bmax - ro) * inv;
+  let tmin = min(t0, t1);
+  let tmax = max(t0, t1);
+  let tNear = max(max(tmin.x, tmin.y), tmin.z);
+  let tFar = min(min(tmax.x, tmax.y), tmax.z);
+  return vec2f(tNear, tFar);
+}
+
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4f {
+  let ro = g.camPos.xyz;
+  let clip = vec4f(in.ndc, 1.0, 1.0);
+  let viewP4 = g.invProj * clip;
+  let viewDir = normalize(viewP4.xyz / viewP4.w);
+  let rd = normalize((g.invView * vec4f(viewDir, 0.0)).xyz);
+
+  let hit = intersectBox(ro, rd, src.bmin.xyz, src.bmax.xyz);
+  if (hit.x > hit.y || hit.y < 0.0) { discard; }
+  let tStart = max(hit.x, 0.0);
+  let tEnd = hit.y;
+  if (tEnd - tStart < 0.0001) { discard; }
+
+  let steps = 64;
+  let dt = (tEnd - tStart) / f32(steps);
+  var t = tStart + dt * 0.5;
+  var accColor = vec3f(0.0);
+  var accAlpha = 0.0;
+  let time = g.params.w * 0.6;
+  let turb = g.params2.x;
+  let seed = src.extra.x;
+  let densityScale = src.extra.y;
+  let densityMul = src.extra.z * (1.0 + g.params.y * 1.5); // opacityBoost feeds density too
+  let absorption = src.extra.w;
+
+  for (var i = 0; i < steps; i = i + 1) {
+    if (accAlpha > 0.985) { break; }
+    let p = ro + rd * t;
+    let q = (p - src.ctr.xyz) * densityScale + vec3f(time * 0.3 + seed);
+    let n1 = vnoise(q * 2.3);
+    let n2 = vnoise(q * 4.7 + vec3f(seed));
+    var d = clamp(0.62*n1 + 0.38*n2 - 0.34 + turb*0.12, 0.0, 1.0);
+    d = d * densityMul;
+    if (d > 0.002) {
+      var col = mix(src.colorNear.rgb, src.colorFar.rgb, clamp(d * 1.4, 0.0, 1.0));
+      if (g.params.z > 0.001) { col = hueShift(col, g.params.z * 6.2831853); }
+      let stepAlpha = clamp(d * dt * absorption, 0.0, 1.0);
+      accColor = accColor + col * stepAlpha * (1.0 - accAlpha);
+      accAlpha = accAlpha + stepAlpha * (1.0 - accAlpha);
+    }
+    t = t + dt;
+  }
+  if (accAlpha < 0.004) { discard; }
+  return vec4f(accColor, accAlpha);
+}
+`;
+
+/* ============================================================
+   Post-process — bright-pass + separable blur + composite.
+   Runs only when bloom is on or a raymarch source is active;
+   otherwise rendering goes straight to the canvas, unchanged.
+   Fullscreen-triangle pattern repeated per pass (own module each,
+   same reasoning as the sort shaders: no shared-binding risk).
+   ============================================================ */
+const FS_VS_SNIPPET = `
+struct VSOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
+@vertex
+fn vs(@builtin(vertex_index) vi: u32) -> VSOut {
+  var pos = array<vec2f,3>(vec2f(-1.0,-1.0), vec2f(3.0,-1.0), vec2f(-1.0,3.0));
+  var out: VSOut;
+  out.position = vec4f(pos[vi], 0.0, 1.0);
+  out.uv = vec2f(pos[vi].x * 0.5 + 0.5, 1.0 - (pos[vi].y * 0.5 + 0.5)); // NDC-up -> texture-down
+  return out;
+}
+`;
+const BRIGHT_WGSL = FS_VS_SNIPPET + /* wgsl */`
+struct BrightU { threshold: f32, _p0: f32, _p1: f32, _p2: f32 };
+@group(0) @binding(0) var samp: sampler;
+@group(0) @binding(1) var srcTex: texture_2d<f32>;
+@group(0) @binding(2) var<uniform> u: BrightU;
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4f {
+  let c = textureSample(srcTex, samp, in.uv).rgb;
+  return vec4f(max(c - vec3f(u.threshold), vec3f(0.0)), 1.0);
+}
+`;
+const BLUR_WGSL = FS_VS_SNIPPET + /* wgsl */`
+struct BlurU { texel: vec2f, dir: vec2f };
+@group(0) @binding(0) var samp: sampler;
+@group(0) @binding(1) var srcTex: texture_2d<f32>;
+@group(0) @binding(2) var<uniform> u: BlurU;
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4f {
+  let w = array<f32,5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+  var result = textureSample(srcTex, samp, in.uv).rgb * w[0];
+  for (var i = 1; i < 5; i = i + 1) {
+    let off = u.texel * u.dir * f32(i);
+    result = result + textureSample(srcTex, samp, in.uv + off).rgb * w[i];
+    result = result + textureSample(srcTex, samp, in.uv - off).rgb * w[i];
+  }
+  return vec4f(result, 1.0);
+}
+`;
+const COMPOSITE_WGSL = FS_VS_SNIPPET + /* wgsl */`
+struct CompU { bloomIntensity: f32, _p0: f32, _p1: f32, _p2: f32 };
+@group(0) @binding(0) var samp: sampler;
+@group(0) @binding(1) var sceneTex: texture_2d<f32>;
+@group(0) @binding(2) var bloomTex: texture_2d<f32>;
+@group(0) @binding(3) var<uniform> u: CompU;
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4f {
+  let scene = textureSample(sceneTex, samp, in.uv).rgb;
+  let bloom = textureSample(bloomTex, samp, in.uv).rgb;
+  let combined = clamp(scene + bloom * u.bloomIntensity, vec3f(0.0), vec3f(1.0));
+  return vec4f(combined, 1.0);
+}
+`;
+
+/* ============================================================
+   Fake global illumination — voxel cone tracing (Lumen-adjacent).
+   The scene's emissive volumes are injected into a mipmapped 64³
+   radiance grid each frame; mesh surfaces cone-trace it for
+   colored diffuse bounce + soft occlusion. Meshes and GI are a
+   fully opt-in source kind — nothing here runs without one.
+   ============================================================ */
+const GI_N = 64, GI_MIPS = 7;
+const GI_INJECT_WGSL = /* wgsl */`
+struct GIU {
+  gridMin: vec4f,  // xyz min corner, w cellSize
+  gridInfo: vec4f, // x N, y emissiveGain, z time, w fieldOn
+  fieldA: vec4f,   // field centroid xyz, seed
+  fieldB: vec4f,   // densityScale, densityMul, turbulence, boost
+  em0a: vec4f, em0b: vec4f, em0c: vec4f, // emitter 0: box min / box max / color+power
+  em1a: vec4f, em1b: vec4f, em1c: vec4f, // emitter 1
+};
+@group(0) @binding(0) var<uniform> u: GIU;
+@group(0) @binding(1) var radOut: texture_storage_3d<rgba16float, write>;
+
+fn hash3(p: vec3f) -> f32 {
+  let s = sin(dot(p, vec3f(127.1, 311.7, 74.7))) * 43758.5453;
+  return fract(s);
+}
+fn vnoise(p: vec3f) -> f32 {
+  let i = floor(p); let f = fract(p);
+  let uu = f*f*(3.0 - 2.0*f);
+  var acc = 0.0;
+  for (var dx = 0; dx <= 1; dx = dx + 1) {
+    for (var dy = 0; dy <= 1; dy = dy + 1) {
+      for (var dz = 0; dz <= 1; dz = dz + 1) {
+        let h = hash3(i + vec3f(f32(dx), f32(dy), f32(dz)));
+        let wx = select(1.0 - uu.x, uu.x, dx == 1);
+        let wy = select(1.0 - uu.y, uu.y, dy == 1);
+        let wz = select(1.0 - uu.z, uu.z, dz == 1);
+        acc = acc + h * wx * wy * wz;
+      }
+    }
+  }
+  return acc;
+}
+fn emitterAdd(p: vec3f, bmin: vec4f, bmax: vec4f, cp: vec4f) -> vec4f {
+  if (all(p >= bmin.xyz) && all(p <= bmax.xyz)) {
+    return vec4f(cp.rgb * cp.w, 1.0);
+  }
+  return vec4f(0.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let N = u32(u.gridInfo.x + 0.5);
+  if (gid.x >= N || gid.y >= N || gid.z >= N) { return; }
+  let cell = u.gridMin.w;
+  let p = u.gridMin.xyz + (vec3f(gid) + vec3f(0.5)) * cell;
+
+  var rad = vec4f(0.0);
+  if (u.gridInfo.w > 0.5) {
+    // procedural field, same construction as the sprite/raymarch nebula
+    let time = u.gridInfo.z * 0.6;
+    let q = (p - u.fieldA.xyz) * u.fieldB.x + vec3f(time * 0.3 + u.fieldA.w);
+    let n1 = vnoise(q * 2.3);
+    let n2 = vnoise(q * 4.7 + vec3f(u.fieldA.w));
+    let d = clamp(0.62*n1 + 0.38*n2 - 0.34 + u.fieldB.z*0.12, 0.0, 1.0) * u.fieldB.y * u.fieldB.w;
+    if (d > 0.002) {
+      let t = clamp(d * 1.4, 0.0, 1.0);
+      let col = mix(vec3f(0.22, 0.10, 0.55), vec3f(0.94, 0.45, 0.95), t);
+      rad = vec4f(col * d, clamp(d, 0.0, 1.0));
+    }
+  }
+  rad = rad + emitterAdd(p, u.em0a, u.em0b, u.em0c);
+  rad = rad + emitterAdd(p, u.em1a, u.em1b, u.em1c);
+  rad = vec4f(rad.rgb * u.gridInfo.y, clamp(rad.a, 0.0, 1.0));
+  textureStore(radOut, vec3i(gid), rad);
+}
+`;
+const GI_MIP_WGSL = /* wgsl */`
+struct MipU { srcN: u32, _p0: u32, _p1: u32, _p2: u32 };
+@group(0) @binding(0) var srcTex: texture_3d<f32>;
+@group(0) @binding(1) var dstTex: texture_storage_3d<rgba16float, write>;
+@group(0) @binding(2) var<uniform> u: MipU;
+@compute @workgroup_size(4, 4, 4)
+fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let dstN = u.srcN / 2u;
+  if (gid.x >= dstN || gid.y >= dstN || gid.z >= dstN) { return; }
+  let b = vec3i(gid) * 2;
+  var acc = vec4f(0.0);
+  for (var dx = 0; dx <= 1; dx = dx + 1) {
+    for (var dy = 0; dy <= 1; dy = dy + 1) {
+      for (var dz = 0; dz <= 1; dz = dz + 1) {
+        acc = acc + textureLoad(srcTex, b + vec3i(dx, dy, dz), 0);
+      }
+    }
+  }
+  textureStore(dstTex, vec3i(gid), acc / 8.0);
+}
+`;
+const MESH_WGSL = /* wgsl */`
+struct MU {
+  view: mat4x4f, proj: mat4x4f,
+  camPos: vec4f,
+  gi: vec4f,       // x giOn, y giIntensity, z ambient, w maxMip
+  gridMin: vec4f,  // xyz min corner, w cellSize
+  gridInfo: vec4f, // x gridWorldSize
+};
+@group(0) @binding(0) var<uniform> u: MU;
+@group(0) @binding(1) var samp3d: sampler;
+@group(0) @binding(2) var radTex: texture_3d<f32>;
+
+struct VSOut {
+  @builtin(position) position: vec4f,
+  @location(0) worldPos: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) color: vec3f,
+  @location(3) emissive: f32,
+};
+
+@vertex
+fn vs(@location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) col: vec3f, @location(3) emi: f32) -> VSOut {
+  var out: VSOut;
+  out.position = u.proj * (u.view * vec4f(pos, 1.0));
+  out.worldPos = pos;
+  out.normal = nrm;
+  out.color = col;
+  out.emissive = emi;
+  return out;
+}
+
+fn coneTrace(origin: vec3f, dir: vec3f) -> vec3f {
+  let cell = u.gridMin.w;
+  let gsize = u.gridInfo.x;
+  var acc = vec3f(0.0);
+  var occ = 0.0;
+  var t = cell * 1.8;
+  let tanHalf = 0.577; // ~60 degree cone
+  for (var i = 0; i < 48; i = i + 1) {
+    if (occ > 0.95 || t > gsize) { break; }
+    let p = origin + dir * t;
+    let uvw = (p - u.gridMin.xyz) / gsize;
+    if (any(uvw < vec3f(0.0)) || any(uvw > vec3f(1.0))) { break; }
+    let diameter = max(cell, 2.0 * t * tanHalf);
+    let mip = clamp(log2(diameter / cell), 0.0, u.gi.w);
+    let s = textureSampleLevel(radTex, samp3d, uvw, mip);
+    let k = clamp(s.a, 0.0, 1.0);
+    acc = acc + (1.0 - occ) * s.rgb;
+    occ = occ + (1.0 - occ) * k * 0.55;
+    t = t + diameter * 0.55;
+  }
+  return acc;
+}
+
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4f {
+  let n = normalize(in.normal);
+  var lit = vec3f(u.gi.z); // ambient floor
+  if (u.gi.x > 0.5) {
+    // 6-cone hemisphere gather around the normal
+    var t0 = vec3f(0.0, 1.0, 0.0);
+    if (abs(n.y) > 0.9) { t0 = vec3f(1.0, 0.0, 0.0); }
+    let tx = normalize(cross(t0, n));
+    let ty = cross(n, tx);
+    let s = 0.7071; // 45-degree tilt for the side cones
+    var gi = coneTrace(in.worldPos + n * u.gridMin.w, n) * 1.0;
+    gi = gi + coneTrace(in.worldPos + n * u.gridMin.w, normalize(n * s + tx * s)) * 0.6;
+    gi = gi + coneTrace(in.worldPos + n * u.gridMin.w, normalize(n * s - tx * s)) * 0.6;
+    gi = gi + coneTrace(in.worldPos + n * u.gridMin.w, normalize(n * s + ty * s)) * 0.6;
+    gi = gi + coneTrace(in.worldPos + n * u.gridMin.w, normalize(n * s - ty * s)) * 0.6;
+    lit = lit + gi * u.gi.y / 3.4;
+  }
+  var rgb = in.color * lit + in.color * in.emissive;
+  return vec4f(rgb, 1.0);
+}
+`;
+
+const Renderer = (() => {
+  let device = null, context = null, pipeline = null, pipelineHDR = null, format = null;
+  let splatGroup0Layout = null, splatGroup1Layout = null;
+  let uniformBuf = null, globalBind = null;
+  let initPipeline = null, bitonicPipeline = null, scatterPipeline = null;
+  let raymarchPipeline = null, rmGlobalBuf = null, rmGlobalBind = null;
+  let brightPipeline = null, blurPipeline = null, compositePipeline = null, sampler = null;
+  let meshPipeline = null, meshUBuf = null, meshBind = null, sampler3d = null;
+  let giInjectPipeline = null, giMipPipeline = null, radTex = null, giUBuf = null, giInjectBind = null;
+  const giMipBinds = [];
+  let depthTex = null, depthView = null;
+  const meshUniforms = new Float32Array(48);
+  let sceneTex = null, sceneView = null;
+  let brightTex = null, brightView = null, blurATex = null, blurAView = null, blurBTex = null, blurBView = null;
+  let brightBind = null, blurHBind = null, blurVBind = null, compositeBind = null;
+  let brightUBuf = null, blurHUBuf = null, blurVUBuf = null, compUBuf = null;
+  const uniforms = new Float32Array(48);
+  const rmUniforms = new Float32Array(44); // invView(16) + invProj(16) + camPos(4) + params(4) + params2(4)
+  const canvas = document.getElementById("gpu");
+  let ready = false;
+
+  async function init(){
+    if(!navigator.gpu) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    if(!adapter) return false;
+    device = await adapter.requestDevice();
+    context = canvas.getContext("webgpu");
+    format = navigator.gpu.getPreferredCanvasFormat();
+    context.configure({ device, format, alphaMode:"opaque" });
+
+    const module = device.createShaderModule({ code: SHADER });
+    // explicit layouts shared by both splat pipeline variants, so one set of
+    // bind groups serves the direct (canvas-format) and offscreen (rgba16float) paths
+    splatGroup0Layout = device.createBindGroupLayout({ entries: [
+      { binding:0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer:{ type:"uniform" } },
+    ]});
+    splatGroup1Layout = device.createBindGroupLayout({ entries: [
+      { binding:0, visibility: GPUShaderStage.VERTEX, buffer:{ type:"read-only-storage" } },
+      { binding:1, visibility: GPUShaderStage.VERTEX, buffer:{ type:"read-only-storage" } },
+      { binding:2, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer:{ type:"uniform" } },
+      { binding:3, visibility: GPUShaderStage.VERTEX, buffer:{ type:"read-only-storage" } },
+    ]});
+    const splatLayout = device.createPipelineLayout({ bindGroupLayouts: [splatGroup0Layout, splatGroup1Layout] });
+    const splatBlend = {
+      color: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
+      alpha: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
+    };
+    const splatDepth = { format:"depth24plus", depthWriteEnabled:false, depthCompare:"less-equal" };
+    pipeline = device.createRenderPipeline({
+      layout: splatLayout,
+      vertex: { module, entryPoint: "vs" },
+      fragment: { module, entryPoint: "fs", targets: [{ format, blend: splatBlend }] },
+      primitive: { topology:"triangle-list", cullMode:"none" },
+      depthStencil: splatDepth,
+    });
+    pipelineHDR = device.createRenderPipeline({
+      layout: splatLayout,
+      vertex: { module, entryPoint: "vs" },
+      fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float", blend: splatBlend }] },
+      primitive: { topology:"triangle-list", cullMode:"none" },
+      depthStencil: splatDepth,
+    });
+    uniformBuf = device.createBuffer({ size: 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    globalBind = device.createBindGroup({
+      layout: splatGroup0Layout,
+      entries: [{ binding:0, resource:{ buffer: uniformBuf } }],
+    });
+
+    initPipeline = device.createComputePipeline({
+      layout: "auto", compute: { module: device.createShaderModule({ code: SORT_INIT_WGSL }), entryPoint: "main" },
+    });
+    bitonicPipeline = device.createComputePipeline({
+      layout: "auto", compute: { module: device.createShaderModule({ code: SORT_BITONIC_WGSL }), entryPoint: "main" },
+    });
+    scatterPipeline = device.createComputePipeline({
+      layout: "auto", compute: { module: device.createShaderModule({ code: SORT_SCATTER_WGSL }), entryPoint: "main" },
+    });
+
+    // raymarch pipeline — targets the offscreen scene texture only (rgba16float), never the canvas directly
+    raymarchPipeline = device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: device.createShaderModule({ code: RAYMARCH_WGSL }), entryPoint: "vs" },
+      fragment: {
+        module: device.createShaderModule({ code: RAYMARCH_WGSL }), entryPoint: "fs",
+        targets: [{ format: "rgba16float", blend: {
+          color: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
+          alpha: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
+        } }],
+      },
+      primitive: { topology:"triangle-list", cullMode:"none" },
+      depthStencil: { format:"depth24plus", depthWriteEnabled:false, depthCompare:"always" },
+    });
+    rmGlobalBuf = device.createBuffer({ size: 176, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    rmGlobalBind = device.createBindGroup({
+      layout: raymarchPipeline.getBindGroupLayout(0),
+      entries: [{ binding:0, resource:{ buffer: rmGlobalBuf } }],
+    });
+
+    sampler = device.createSampler({ magFilter:"linear", minFilter:"linear" });
+    brightPipeline = makeFullscreenPipeline(BRIGHT_WGSL, "rgba16float");
+    blurPipeline = makeFullscreenPipeline(BLUR_WGSL, "rgba16float");
+    compositePipeline = makeFullscreenPipeline(COMPOSITE_WGSL, format);
+    brightUBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    blurHUBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    blurVUBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    compUBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+    /* ---- mesh + fake GI (voxel cone tracing) ---- */
+    sampler3d = device.createSampler({ magFilter:"linear", minFilter:"linear", mipmapFilter:"linear" });
+    radTex = device.createTexture({
+      size: [GI_N, GI_N, GI_N], dimension: "3d", format: "rgba16float", mipLevelCount: GI_MIPS,
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const meshModule = device.createShaderModule({ code: MESH_WGSL });
+    meshPipeline = device.createRenderPipeline({
+      layout: "auto",
+      vertex: {
+        module: meshModule, entryPoint: "vs",
+        buffers: [{
+          arrayStride: 40,
+          attributes: [
+            { shaderLocation:0, offset:0,  format:"float32x3" },
+            { shaderLocation:1, offset:12, format:"float32x3" },
+            { shaderLocation:2, offset:24, format:"float32x3" },
+            { shaderLocation:3, offset:36, format:"float32" },
+          ],
+        }],
+      },
+      fragment: { module: meshModule, entryPoint: "fs", targets: [{ format: "rgba16float" }] },
+      primitive: { topology:"triangle-list", cullMode:"none" },
+      depthStencil: { format:"depth24plus", depthWriteEnabled:true, depthCompare:"less-equal" },
+    });
+    meshUBuf = device.createBuffer({ size: 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    meshBind = device.createBindGroup({
+      layout: meshPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding:0, resource:{ buffer: meshUBuf } },
+        { binding:1, resource: sampler3d },
+        { binding:2, resource: radTex.createView({ dimension:"3d" }) },
+      ],
+    });
+    giInjectPipeline = device.createComputePipeline({
+      layout: "auto", compute: { module: device.createShaderModule({ code: GI_INJECT_WGSL }), entryPoint: "main" },
+    });
+    giMipPipeline = device.createComputePipeline({
+      layout: "auto", compute: { module: device.createShaderModule({ code: GI_MIP_WGSL }), entryPoint: "main" },
+    });
+    giUBuf = device.createBuffer({ size: 160, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    giInjectBind = device.createBindGroup({
+      layout: giInjectPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding:0, resource:{ buffer: giUBuf } },
+        { binding:1, resource: radTex.createView({ dimension:"3d", baseMipLevel:0, mipLevelCount:1 }) },
+      ],
+    });
+    for(let i = 1; i < GI_MIPS; i++){
+      const mipU = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      device.queue.writeBuffer(mipU, 0, new Uint32Array([GI_N >> (i-1), 0, 0, 0]));
+      giMipBinds.push(device.createBindGroup({
+        layout: giMipPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding:0, resource: radTex.createView({ dimension:"3d", baseMipLevel:i-1, mipLevelCount:1 }) },
+          { binding:1, resource: radTex.createView({ dimension:"3d", baseMipLevel:i, mipLevelCount:1 }) },
+          { binding:2, resource:{ buffer: mipU } },
+        ],
+      }));
+    }
+
+    ready = true;
+    rebuildOffscreenTargets();
+    return true;
+  }
+  function makeFullscreenPipeline(code, targetFormat){
+    const module = device.createShaderModule({ code });
+    return device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module, entryPoint: "vs" },
+      fragment: { module, entryPoint: "fs", targets: [{ format: targetFormat }] },
+      primitive: { topology:"triangle-list", cullMode:"none" },
+    });
+  }
+
+  function resize(){
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+    if(canvas.width !== w || canvas.height !== h){
+      canvas.width = w; canvas.height = h;
+      if(ready) rebuildOffscreenTargets();
+    }
+  }
+  function mkTex(w, h, usage){
+    return device.createTexture({ size:[Math.max(1,w), Math.max(1,h)], format:"rgba16float", usage });
+  }
+  function rebuildOffscreenTargets(){
+    [sceneTex, brightTex, blurATex, blurBTex, depthTex].forEach(t => { if(t) t.destroy(); });
+    const w = canvas.width, h = canvas.height;
+    const bw = Math.max(1, w >> 1), bh = Math.max(1, h >> 1); // bloom chain runs at half resolution
+    const RT = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
+    sceneTex = mkTex(w, h, RT); sceneView = sceneTex.createView();
+    depthTex = device.createTexture({ size:[Math.max(1,w), Math.max(1,h)], format:"depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    depthView = depthTex.createView();
+    brightTex = mkTex(bw, bh, RT); brightView = brightTex.createView();
+    blurATex = mkTex(bw, bh, RT); blurAView = blurATex.createView();
+    blurBTex = mkTex(bw, bh, RT); blurBView = blurBTex.createView();
+
+    device.queue.writeBuffer(brightUBuf, 0, new Float32Array([0.85, 0, 0, 0]));
+    brightBind = device.createBindGroup({
+      layout: brightPipeline.getBindGroupLayout(0),
+      entries: [{ binding:0, resource: sampler }, { binding:1, resource: sceneView }, { binding:2, resource:{ buffer: brightUBuf } }],
+    });
+    device.queue.writeBuffer(blurHUBuf, 0, new Float32Array([1/bw, 1/bh, 1, 0]));
+    blurHBind = device.createBindGroup({
+      layout: blurPipeline.getBindGroupLayout(0),
+      entries: [{ binding:0, resource: sampler }, { binding:1, resource: brightView }, { binding:2, resource:{ buffer: blurHUBuf } }],
+    });
+    device.queue.writeBuffer(blurVUBuf, 0, new Float32Array([1/bw, 1/bh, 0, 1]));
+    blurVBind = device.createBindGroup({
+      layout: blurPipeline.getBindGroupLayout(0),
+      entries: [{ binding:0, resource: sampler }, { binding:1, resource: blurAView }, { binding:2, resource:{ buffer: blurVUBuf } }],
+    });
+    compositeBind = device.createBindGroup({
+      layout: compositePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding:0, resource: sampler }, { binding:1, resource: sceneView },
+        { binding:2, resource: blurBView }, { binding:3, resource:{ buffer: compUBuf } },
+      ],
+    });
+  }
+
+  // gpu-side state for one VolumeSource
+  function createSourceGPU(srcData){
+    const n = srcData.count;
+    const splatBuf = device.createBuffer({ size: n * 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(splatBuf, 0, srcData.packed);
+    const orderBuf = device.createBuffer({ size: n * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    const seq = new Uint32Array(n);
+    for(let i = 0; i < n; i++) seq[i] = i;
+    device.queue.writeBuffer(orderBuf, 0, seq);
+    const srcUBuf = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    // SH coefficients when the source carries them, a zeroed stub otherwise
+    // (robust buffer access + the shOn flag make the stub safe to bind)
+    const shBuf = srcData.sh
+      ? device.createBuffer({ size: srcData.sh.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST })
+      : device.createBuffer({ size: 48, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    if(srcData.sh) device.queue.writeBuffer(shBuf, 0, srcData.sh);
+    const bind = device.createBindGroup({
+      layout: splatGroup1Layout,
+      entries: [
+        { binding:0, resource:{ buffer: splatBuf } },
+        { binding:1, resource:{ buffer: orderBuf } },
+        { binding:2, resource:{ buffer: srcUBuf } },
+        { binding:3, resource:{ buffer: shBuf } },
+      ],
+    });
+    return { splatBuf, orderBuf, srcUBuf, shBuf, bind, count: n };
+  }
+  function writeOrder(gpuSrc, orderArray){
+    device.queue.writeBuffer(gpuSrc.orderBuf, 0, orderArray);
+  }
+  // re-upload a source's primitive data in place (live sources: the rack mix feed)
+  function updateSourceGPU(gpuSrc, packed){
+    device.queue.writeBuffer(gpuSrc.splatBuf, 0, packed);
+  }
+  function writeSrcU(gpuSrc, tintR, tintG, tintB, opacity, kind, pointSize, animAmp, seed, shOn){
+    device.queue.writeBuffer(gpuSrc.srcUBuf, 0, new Float32Array([tintR, tintG, tintB, opacity, kind, pointSize, animAmp, seed, shOn || 0, 0, 0, 0]));
+  }
+  function destroySourceGPU(gpuSrc){
+    gpuSrc.splatBuf.destroy(); gpuSrc.orderBuf.destroy(); gpuSrc.srcUBuf.destroy(); gpuSrc.shBuf.destroy();
+  }
+
+  // GPU sort state for one source — created lazily, reuses the render splatBuf/orderBuf directly
+  function createSortGPU(gpuSrc, count){
+    const P = nextPow2(Math.max(count, 1));
+    const keysBuf = device.createBuffer({ size: P * 8, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    const initUBuf = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const initBind = device.createBindGroup({
+      layout: initPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding:0, resource:{ buffer: gpuSrc.splatBuf } },
+        { binding:1, resource:{ buffer: keysBuf } },
+        { binding:2, resource:{ buffer: initUBuf } },
+      ],
+    });
+    const passes = buildBitonicPasses(P);
+    const passBinds = passes.map(p => {
+      const buf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      device.queue.writeBuffer(buf, 0, new Uint32Array([p.stage, p.passIdx, P, 0]));
+      return device.createBindGroup({
+        layout: bitonicPipeline.getBindGroupLayout(0),
+        entries: [{ binding:0, resource:{ buffer: keysBuf } }, { binding:1, resource:{ buffer: buf } }],
+      });
+    });
+    const scatterUBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(scatterUBuf, 0, new Uint32Array([count, 0, 0, 0]));
+    const scatterBind = device.createBindGroup({
+      layout: scatterPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding:0, resource:{ buffer: keysBuf } },
+        { binding:1, resource:{ buffer: gpuSrc.orderBuf } },
+        { binding:2, resource:{ buffer: scatterUBuf } },
+      ],
+    });
+    return { P, count, keysBuf, initUBuf, initBind, passBinds, scatterBind };
+  }
+  function runSort(sortState, camPos, fwd){
+    const dv = new DataView(new ArrayBuffer(48));
+    dv.setFloat32(0, camPos[0], true); dv.setFloat32(4, camPos[1], true); dv.setFloat32(8, camPos[2], true);
+    dv.setFloat32(16, fwd[0], true); dv.setFloat32(20, fwd[1], true); dv.setFloat32(24, fwd[2], true);
+    dv.setUint32(32, sortState.count, true); dv.setUint32(36, sortState.P, true);
+    device.queue.writeBuffer(sortState.initUBuf, 0, dv.buffer);
+
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    const groups = Math.ceil(sortState.P / 256);
+    pass.setPipeline(initPipeline);
+    pass.setBindGroup(0, sortState.initBind);
+    pass.dispatchWorkgroups(groups);
+    pass.setPipeline(bitonicPipeline);
+    for(const bind of sortState.passBinds){
+      pass.setBindGroup(0, bind);
+      pass.dispatchWorkgroups(groups);
+    }
+    pass.setPipeline(scatterPipeline);
+    pass.setBindGroup(0, sortState.scatterBind);
+    pass.dispatchWorkgroups(Math.ceil(sortState.count / 256));
+    pass.end();
+    device.queue.submit([encoder.finish()]);
+  }
+  function destroySortGPU(sortState){
+    if(!sortState) return;
+    sortState.keysBuf.destroy(); sortState.initUBuf.destroy();
+  }
+
+  // per-source raymarch resources — only meaningful for voxel-kind sources
+  function createRaymarchGPU(src){
+    const buf = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const [ax,ay,az,bx,by,bz] = src.bbox;
+    const cx = src.centroid[0], cy = src.centroid[1], cz = src.centroid[2];
+    const data = new Float32Array([
+      ax,ay,az,0,  bx,by,bz,0,  cx,cy,cz,0,
+      0.22,0.10,0.55,1,   0.94,0.45,0.95,1,
+      src.seed, 2.6 / Math.max(0.001, src.radius), 2.2, 3.5,
+    ]);
+    device.queue.writeBuffer(buf, 0, data);
+    const bind = device.createBindGroup({
+      layout: raymarchPipeline.getBindGroupLayout(1),
+      entries: [{ binding:0, resource:{ buffer: buf } }],
+    });
+    return { buf, bind };
+  }
+  function destroyRaymarchGPU(rm){ if(rm) rm.buf.destroy(); }
+
+  // per-source mesh resources — interleaved pos/normal/color/emissive vertices
+  function createMeshGPU(src){
+    const vbuf = device.createBuffer({ size: src.vertexData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(vbuf, 0, src.vertexData);
+    const ibuf = device.createBuffer({ size: src.indexData.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(ibuf, 0, src.indexData);
+    return { vbuf, ibuf, indexCount: src.indexData.length };
+  }
+  function destroyMeshGPU(m){ if(m){ m.vbuf.destroy(); m.ibuf.destroy(); } }
+
+  // encode the GI radiance update: inject emission at mip 0, then downsample the chain
+  function encodeGI(encoder, injectData){
+    device.queue.writeBuffer(giUBuf, 0, injectData);
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(giInjectPipeline);
+    pass.setBindGroup(0, giInjectBind);
+    const g0 = Math.ceil(GI_N / 4);
+    pass.dispatchWorkgroups(g0, g0, g0);
+    pass.setPipeline(giMipPipeline);
+    for(let i = 1; i < GI_MIPS; i++){
+      pass.setBindGroup(0, giMipBinds[i-1]);
+      const g = Math.max(1, Math.ceil((GI_N >> i) / 4));
+      pass.dispatchWorkgroups(g, g, g);
+    }
+    pass.end();
+  }
+
+  function frame(view, proj, invView, invProj, camPos, params, params2, drawList, raymarchList, bloom, meshList, gi){
+    uniforms.set(view, 0);
+    uniforms.set(proj, 16);
+    uniforms[32] = canvas.width; uniforms[33] = canvas.height;
+    const focalY = (canvas.height / 2) / Math.tan(CameraFOV / 2);
+    uniforms[34] = focalY; uniforms[35] = focalY;
+    uniforms[36] = camPos[0]; uniforms[37] = camPos[1]; uniforms[38] = camPos[2]; uniforms[39] = 1;
+    uniforms.set(params, 40);
+    uniforms.set(params2, 44);
+    device.queue.writeBuffer(uniformBuf, 0, uniforms);
+
+    const hasMeshes = meshList && meshList.length > 0;
+    const useOffscreen = (bloom && bloom.enabled) || (raymarchList && raymarchList.length > 0) || hasMeshes;
+    const encoder = device.createCommandEncoder();
+
+    if(gi && gi.run && gi.injectData){
+      encodeGI(encoder, gi.injectData);
+    }
+    if(hasMeshes){
+      meshUniforms.set(view, 0);
+      meshUniforms.set(proj, 16);
+      meshUniforms[32] = camPos[0]; meshUniforms[33] = camPos[1]; meshUniforms[34] = camPos[2]; meshUniforms[35] = 1;
+      meshUniforms[36] = gi && gi.run ? 1 : 0;
+      meshUniforms[37] = gi ? gi.intensity : 0;
+      meshUniforms[38] = gi ? gi.ambient : 0.05;
+      meshUniforms[39] = GI_MIPS - 1;
+      meshUniforms[40] = gi ? gi.gridMin[0] : -2.4; meshUniforms[41] = gi ? gi.gridMin[1] : -2.4;
+      meshUniforms[42] = gi ? gi.gridMin[2] : -2.4; meshUniforms[43] = gi ? gi.cellSize : (4.8/GI_N);
+      meshUniforms[44] = gi ? gi.gridSize : 4.8;
+      device.queue.writeBuffer(meshUBuf, 0, meshUniforms);
+    }
+
+    const sceneTarget = useOffscreen ? sceneView : context.getCurrentTexture().createView();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: sceneTarget,
+        clearValue: { r:0.055, g:0.063, b:0.086, a:1 },
+        loadOp: "clear", storeOp: "store",
+      }],
+      depthStencilAttachment: {
+        view: depthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store",
+      },
+    });
+    if(hasMeshes){
+      pass.setPipeline(meshPipeline);
+      pass.setBindGroup(0, meshBind);
+      for(const m of meshList){
+        pass.setVertexBuffer(0, m.gpu.vbuf);
+        pass.setIndexBuffer(m.gpu.ibuf, "uint32");
+        pass.drawIndexed(m.gpu.indexCount);
+      }
+    }
+    pass.setPipeline(useOffscreen ? pipelineHDR : pipeline);
+    pass.setBindGroup(0, globalBind);
+    for(const d of drawList){
+      pass.setBindGroup(1, d.gpu.bind);
+      pass.draw(6, d.gpu.count);
+    }
+    if(raymarchList && raymarchList.length){
+      rmUniforms.set(invView, 0);
+      rmUniforms.set(invProj, 16);
+      rmUniforms[32] = camPos[0]; rmUniforms[33] = camPos[1]; rmUniforms[34] = camPos[2]; rmUniforms[35] = 1;
+      rmUniforms.set(params, 36);
+      rmUniforms.set(params2, 40);
+      device.queue.writeBuffer(rmGlobalBuf, 0, rmUniforms);
+      pass.setPipeline(raymarchPipeline);
+      pass.setBindGroup(0, rmGlobalBind);
+      for(const r of raymarchList){
+        pass.setBindGroup(1, r.bind);
+        pass.draw(3);
+      }
+    }
+    pass.end();
+
+    if(useOffscreen){
+      if(bloom && bloom.enabled){
+        device.queue.writeBuffer(brightUBuf, 0, new Float32Array([bloom.threshold, 0, 0, 0]));
+        const bp = encoder.beginRenderPass({ colorAttachments:[{ view: brightView, clearValue:{r:0,g:0,b:0,a:1}, loadOp:"clear", storeOp:"store" }] });
+        bp.setPipeline(brightPipeline); bp.setBindGroup(0, brightBind); bp.draw(3); bp.end();
+        const hp = encoder.beginRenderPass({ colorAttachments:[{ view: blurAView, clearValue:{r:0,g:0,b:0,a:1}, loadOp:"clear", storeOp:"store" }] });
+        hp.setPipeline(blurPipeline); hp.setBindGroup(0, blurHBind); hp.draw(3); hp.end();
+        const vp = encoder.beginRenderPass({ colorAttachments:[{ view: blurBView, clearValue:{r:0,g:0,b:0,a:1}, loadOp:"clear", storeOp:"store" }] });
+        vp.setPipeline(blurPipeline); vp.setBindGroup(0, blurVBind); vp.draw(3); vp.end();
+      }
+      device.queue.writeBuffer(compUBuf, 0, new Float32Array([bloom && bloom.enabled ? bloom.intensity : 0, 0, 0, 0]));
+      const cp = encoder.beginRenderPass({ colorAttachments:[{ view: context.getCurrentTexture().createView(), clearValue:{r:0,g:0,b:0,a:1}, loadOp:"clear", storeOp:"store" }] });
+      cp.setPipeline(compositePipeline); cp.setBindGroup(0, compositeBind); cp.draw(3); cp.end();
+    }
+
+    device.queue.submit([encoder.finish()]);
+  }
+
+  return {
+    init, resize, frame,
+    createSourceGPU, writeOrder, writeSrcU, destroySourceGPU, updateSourceGPU,
+    createSortGPU, runSort, destroySortGPU,
+    createRaymarchGPU, destroyRaymarchGPU,
+    createMeshGPU, destroyMeshGPU,
+    get ready(){ return ready; }, get canvas(){ return canvas; },
+  };
+})();
+const CameraFOV = 55 * Math.PI / 180;
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Volume Sources — packing, procedural generators, PLY loading
+   Packed layout matches the WGSL Splat struct: 16 floats/splat
+   [px py pz _  r g b a  c00 c01 c02 c11  c12 c22 _ _]
+   ============================================================ */
+const KIND = { gsplat:0, pointcloud:1, voxel:2 };
+
+function covFromScaleRot(sx, sy, sz, qw, qx, qy, qz, out, o){
+  // R from quaternion (w,x,y,z), M = R*diag(s), Sigma = M*M^T
+  const r00 = 1-2*(qy*qy+qz*qz), r01 = 2*(qx*qy-qw*qz), r02 = 2*(qx*qz+qw*qy);
+  const r10 = 2*(qx*qy+qw*qz),   r11 = 1-2*(qx*qx+qz*qz), r12 = 2*(qy*qz-qw*qx);
+  const r20 = 2*(qx*qz-qw*qy),   r21 = 2*(qy*qz+qw*qx),   r22 = 1-2*(qx*qx+qy*qy);
+  const m00 = r00*sx, m01 = r01*sy, m02 = r02*sz;
+  const m10 = r10*sx, m11 = r11*sy, m12 = r12*sz;
+  const m20 = r20*sx, m21 = r21*sy, m22 = r22*sz;
+  out[o]   = m00*m00 + m01*m01 + m02*m02; // c00
+  out[o+1] = m00*m10 + m01*m11 + m02*m12; // c01
+  out[o+2] = m00*m20 + m01*m21 + m02*m22; // c02
+  out[o+3] = m10*m10 + m11*m11 + m12*m12; // c11
+  out[o+4] = m10*m20 + m11*m21 + m12*m22; // c12
+  out[o+5] = m20*m20 + m21*m21 + m22*m22; // c22
+}
+
+function finalizeSource(src){
+  // bbox, centroid, bounding radius from positions
+  const p = src.positions, n = src.count;
+  let minX=1e9,minY=1e9,minZ=1e9,maxX=-1e9,maxY=-1e9,maxZ=-1e9;
+  for(let i = 0; i < n; i++){
+    const x = p[i*3], y = p[i*3+1], z = p[i*3+2];
+    if(x<minX)minX=x; if(x>maxX)maxX=x;
+    if(y<minY)minY=y; if(y>maxY)maxY=y;
+    if(z<minZ)minZ=z; if(z>maxZ)maxZ=z;
+  }
+  src.bbox = [minX,minY,minZ,maxX,maxY,maxZ];
+  src.centroid = [(minX+maxX)/2, (minY+maxY)/2, (minZ+maxZ)/2];
+  src.radius = Math.max(0.001, Math.hypot(maxX-minX, maxY-minY, maxZ-minZ) / 2);
+  src.order = new Uint32Array(n);
+  for(let i = 0; i < n; i++) src.order[i] = i;
+  src.lastSortFwd = [0,0,0];
+  return src;
+}
+
+let nextSrcId = 1;
+function makeSource(kind, label, count){
+  return {
+    id: "s" + (nextSrcId++), kind, label, count,
+    packed: new Float32Array(count * 16),
+    positions: new Float32Array(count * 3),
+    opacity: 1, pointSize: 2.5, animAmp: 0, seed: Math.random() * 100,
+    gpu: null,
+  };
+}
+
+/* ---- procedural: galaxy of gaussians ---- */
+function genGalaxy(){
+  const n = 170000;
+  const src = makeSource("gsplat", "Galaxy splats", n);
+  const P = src.packed, POS = src.positions;
+  for(let i = 0; i < n; i++){
+    const arm = (Math.random() * 3) | 0;
+    const r = Math.pow(Math.random(), 0.62) * 1.55;
+    const spread = 0.28 * (0.35 + r);
+    let ang = arm * (Math.PI*2/3) + r * 3.1 + (Math.random()-0.5) * spread * 2.2;
+    const bulge = Math.random() < 0.16;
+    let x, y, z;
+    if(bulge){
+      const br = Math.pow(Math.random(), 1.6) * 0.34;
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(2*Math.random()-1);
+      x = br*Math.sin(ph)*Math.cos(th); z = br*Math.sin(ph)*Math.sin(th); y = br*Math.cos(ph)*0.62;
+    } else {
+      x = Math.cos(ang) * r + (Math.random()-0.5)*0.05;
+      z = Math.sin(ang) * r + (Math.random()-0.5)*0.05;
+      y = (Math.random()+Math.random()+Math.random()-1.5) * 0.045 * (1.7 - r);
+    }
+    POS[i*3]=x; POS[i*3+1]=y; POS[i*3+2]=z;
+    const o = i*16;
+    P[o]=x; P[o+1]=y; P[o+2]=z;
+    // palette: warm core -> cyan/violet arms
+    const t = Math.min(1, Math.hypot(x,z)/1.5);
+    const hotSpec = Math.random() < 0.04;
+    let R, G, B;
+    if(hotSpec){ R=1.0; G=0.95; B=0.9; }
+    else if(t < 0.25){ R=1.0; G=0.72+0.2*Math.random(); B=0.42; }
+    else if(Math.random() < 0.5){ R=0.22; G=0.65+0.25*Math.random(); B=0.85; }
+    else { R=0.55; G=0.42; B=0.9; }
+    P[o+4]=R; P[o+5]=G; P[o+6]=B;
+    P[o+7]=(bulge?0.5:0.34) + Math.random()*0.35;
+    const base = 0.004 + Math.random()*0.012 + (hotSpec?0.006:0);
+    const sx = base*(0.6+Math.random()), sy = base*(0.35+Math.random()*0.5), sz = base*(0.6+Math.random());
+    // random unit quaternion
+    const u1=Math.random(), u2=Math.random()*Math.PI*2, u3=Math.random()*Math.PI*2;
+    const a1=Math.sqrt(1-u1), a2=Math.sqrt(u1);
+    covFromScaleRot(sx, sy, sz, a2*Math.cos(u3), a1*Math.sin(u2), a1*Math.cos(u2), a2*Math.sin(u3), P, o+8);
+  }
+  return finalizeSource(src);
+}
+
+/* ---- procedural: nebula voxel field (value-noise density) ---- */
+function hash3(x, y, z){
+  const s = Math.sin(x*127.1 + y*311.7 + z*74.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+function vnoise(x, y, z){
+  const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor(z);
+  const xf=x-xi, yf=y-yi, zf=z-zi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf), w=zf*zf*(3-2*zf);
+  let acc = 0;
+  for(let dx=0; dx<=1; dx++) for(let dy=0; dy<=1; dy++) for(let dz=0; dz<=1; dz++){
+    const h = hash3(xi+dx, yi+dy, zi+dz);
+    acc += h * (dx?u:1-u) * (dy?v:1-v) * (dz?w:1-w);
+  }
+  return acc;
+}
+function genNebula(){
+  const target = 38000, pts = [];
+  const seed = Math.random()*40;
+  let guard = 700000;
+  while(pts.length < target && guard--){
+    const x = Math.random()*2-1, y = Math.random()*2-1, z = Math.random()*2-1;
+    const d = 0.62*vnoise(x*2.1+seed, y*2.1, z*2.1) + 0.38*vnoise(x*4.7, y*4.7+seed, z*4.7);
+    const falloff = Math.max(0, 1 - Math.hypot(x,y,z)*0.9);
+    const density = d * falloff;
+    if(density > 0.34) pts.push([x, y, z, density]);
+  }
+  const n = pts.length;
+  const src = makeSource("voxel", "Nebula field", n);
+  const P = src.packed, POS = src.positions;
+  for(let i = 0; i < n; i++){
+    const [x, y, z, d] = pts[i];
+    POS[i*3]=x; POS[i*3+1]=y; POS[i*3+2]=z;
+    const o = i*16;
+    P[o]=x; P[o+1]=y; P[o+2]=z;
+    const t = Math.min(1, (d-0.34)/0.4); // depth of field -> color ramp
+    const R = 0.22 + 0.72*t, G = 0.10 + 0.35*t*t, B = 0.55 + 0.4*Math.min(1,t*1.4);
+    P[o+4]=R; P[o+5]=G; P[o+6]=B;
+    P[o+7]=0.10 + 0.5*t;
+  }
+  src.pointSize = 3.2; src.animAmp = 0.05;
+  return finalizeSource(src);
+}
+
+/* ---- procedural: point shell ---- */
+function genShell(){
+  const n = 60000;
+  const src = makeSource("pointcloud", "Point shell", n);
+  const P = src.packed, POS = src.positions;
+  const ga = Math.PI * (3 - Math.sqrt(5));
+  for(let i = 0; i < n; i++){
+    const y = 1 - (i / (n - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y*y));
+    const th = ga * i;
+    const x = Math.cos(th)*r, z = Math.sin(th)*r;
+    POS[i*3]=x; POS[i*3+1]=y; POS[i*3+2]=z;
+    const o = i*16;
+    P[o]=x; P[o+1]=y; P[o+2]=z;
+    const band = (Math.sin(y*9)+1)/2;
+    P[o+4]=0.22+0.78*band; P[o+5]=0.69-0.3*band; P[o+6]=0.85;
+    P[o+7]=0.85;
+  }
+  src.pointSize = 1.6;
+  return finalizeSource(src);
+}
+
+/* ============================================================
+   Live source — the rack mix as a volumetric relief of points.
+   A 2D mix canvas is sampled on a fixed grid: luminance becomes
+   depth + opacity, pixel color becomes point color. Positions for
+   x/y are built once; only z, color and alpha change per frame,
+   so the per-frame cost is one writeBuffer of an existing source.
+   Uses the pointcloud kind, so no shader path changes.
+   ============================================================ */
+const MIX_W = 160, MIX_H = 90;
+function genMixSource(){
+  const n = MIX_W * MIX_H;
+  const src = makeSource("pointcloud", "Rack mix (live)", n);
+  src.isLive = true;
+  src.pointSize = 2.4;
+  src.relief = 0.55;
+  src.gain = 1.0;
+  const P = src.packed, POS = src.positions;
+  const ar = MIX_W / MIX_H;
+  for(let y = 0; y < MIX_H; y++) for(let x = 0; x < MIX_W; x++){
+    const i = y * MIX_W + x;
+    const px = (x / (MIX_W - 1) - 0.5) * 2 * ar * 0.55;
+    const py = -(y / (MIX_H - 1) - 0.5) * 2 * 0.55;
+    POS[i*3] = px; POS[i*3+1] = py; POS[i*3+2] = 0;
+    const o = i * 16;
+    P[o] = px; P[o+1] = py; P[o+2] = 0;
+    P[o+4] = 0; P[o+5] = 0; P[o+6] = 0; P[o+7] = 0;
+  }
+  finalizeSource(src);
+  // fixed bounds: z animates, so a bbox measured at z=0 would be degenerate
+  const hw = ar * 0.55, hh = 0.55, hz = 1.0;
+  src.bbox = [-hw, -hh, -hz, hw, hh, hz];
+  src.centroid = [0, 0, 0];
+  src.radius = Math.hypot(hw, hh, hz);
+  return src;
+}
+function updateMixSource(src, data){
+  const P = src.packed, POS = src.positions;
+  const relief = src.relief, gain = src.gain;
+  const n = MIX_W * MIX_H;
+  for(let i = 0; i < n; i++){
+    const r = data[i*4] / 255, g = data[i*4+1] / 255, b = data[i*4+2] / 255;
+    const lum = 0.299*r + 0.587*g + 0.114*b;
+    const z = (lum - 0.5) * 2 * relief;
+    const o = i * 16;
+    P[o+2] = z; POS[i*3+2] = z;
+    P[o+4] = r * gain; P[o+5] = g * gain; P[o+6] = b * gain;
+    P[o+7] = lum > 0.015 ? Math.min(1, 0.12 + lum * 1.25) : 0;
+  }
+  src.lastSortFwd = [0, 0, 0]; // depth changed — force a resort next frame
+}
+
+/* ---- procedural: GI test scene (meshes lit by the volumes) ---- */
+function genGITestScene(){
+  const V = [], I = [];
+  function vert(p, n, c, e){ V.push(p[0],p[1],p[2], n[0],n[1],n[2], c[0],c[1],c[2], e); return V.length/10 - 1; }
+  function quad(a, b, c, d){ I.push(a,b,c, a,c,d); }
+  function box(min, max, col, emi){
+    const [x0,y0,z0] = min, [x1,y1,z1] = max;
+    const faces = [
+      { n:[0,0,1],  p:[[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]] },
+      { n:[0,0,-1], p:[[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]] },
+      { n:[1,0,0],  p:[[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]] },
+      { n:[-1,0,0], p:[[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]] },
+      { n:[0,1,0],  p:[[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]] },
+      { n:[0,-1,0], p:[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]] },
+    ];
+    faces.forEach(f => {
+      const ids = f.p.map(p => vert(p, f.n, col, emi));
+      quad(ids[0], ids[1], ids[2], ids[3]);
+    });
+  }
+  function sphere(center, r, col){
+    const LAT = 14, LON = 22, ring = [];
+    for(let la = 0; la <= LAT; la++){
+      ring.push([]);
+      const th = la / LAT * Math.PI;
+      for(let lo = 0; lo <= LON; lo++){
+        const ph = lo / LON * Math.PI * 2;
+        const n = [Math.sin(th)*Math.cos(ph), Math.cos(th), Math.sin(th)*Math.sin(ph)];
+        ring[la].push(vert([center[0]+n[0]*r, center[1]+n[1]*r, center[2]+n[2]*r], n, col, 0));
+      }
+    }
+    for(let la = 0; la < LAT; la++) for(let lo = 0; lo < LON; lo++){
+      quad(ring[la][lo], ring[la][lo+1], ring[la+1][lo+1], ring[la+1][lo]);
+    }
+  }
+  const floorY = -1.25;
+  box([-2.2, floorY-0.08, -2.2], [2.2, floorY, 2.2], [0.80, 0.80, 0.82], 0);         // floor slab
+  box([ 0.85, floorY, 0.35], [1.35, floorY+0.9, 0.85], [0.85, 0.85, 0.88], 0);        // tall block
+  box([-1.5,  floorY, -1.3], [-0.9, floorY+0.5, -0.7], [0.85, 0.85, 0.88], 0);        // low block
+  box([ 0.1,  floorY, -1.5], [0.5, floorY+0.4, -1.1], [1.0, 0.62, 0.25], 1.6);        // emissive block
+  sphere([-0.75, floorY+0.42, 0.55], 0.42, [0.9, 0.9, 0.92]);
+  const src = {
+    id: "s" + (nextSrcId++), kind: "mesh", label: "GI test scene",
+    count: I.length / 3, opacity: 1,
+    vertexData: new Float32Array(V), indexData: new Uint32Array(I),
+    bbox: [-2.2, floorY-0.08, -2.2, 2.2, floorY+0.95, 2.2],
+    centroid: [0, floorY + 0.4, 0], radius: 2.4,
+    lastSortFwd: [0,0,0],
+    emitters: [{ min:[0.1, floorY, -1.5], max:[0.5, floorY+0.4, -1.1], color:[1.0, 0.62, 0.25], power: 5.0 }],
+  };
+  return src;
+}
+
+/* ---- 3DGS / generic PLY loading ---- */
+const SH_C0 = 0.28209479177387814;
+const PLY_TYPE_SIZE = { char:1, uchar:1, short:2, ushort:2, int:4, uint:4, float:4, double:8, int8:1, uint8:1, int16:2, uint16:2, int32:4, uint32:4, float32:4, float64:8 };
+function parsePly(buffer, label){
+  const head = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 8192));
+  let headerText = new TextDecoder().decode(head);
+  const endIdx = headerText.indexOf("end_header");
+  if(endIdx < 0) throw new Error("not a PLY file (no header end)");
+  headerText = headerText.slice(0, endIdx);
+  // binary data starts after "end_header" and its line terminator (\n or \r\n)
+  let dataStart = endIdx + 10;
+  const bytes = new Uint8Array(buffer);
+  while(dataStart < bytes.length && (bytes[dataStart] === 13 || bytes[dataStart] === 10)){
+    dataStart++;
+    if(bytes[dataStart - 1] === 10) break; // consume exactly one newline (with optional preceding \r)
+  }
+  if(!/format\s+binary_little_endian/.test(headerText)) throw new Error("only binary little-endian PLY is supported");
+  const vm = headerText.match(/element\s+vertex\s+(\d+)/);
+  if(!vm) throw new Error("no vertex element in PLY");
+  const n = parseInt(vm[1], 10);
+  // properties of the vertex element (assumes vertex is the first element, as 3DGS exports are)
+  const props = [];
+  let offset = 0;
+  const lines = headerText.slice(headerText.indexOf("element vertex")).split("\n");
+  for(const line of lines){
+    const pm = line.match(/^property\s+(\w+)\s+(\S+)/);
+    if(pm){
+      const size = PLY_TYPE_SIZE[pm[1]];
+      if(!size) throw new Error("unsupported PLY property type " + pm[1]);
+      props.push({ name: pm[2], type: pm[1], offset });
+      offset += size;
+    }
+    if(/^element\s+(?!vertex)/.test(line)) break;
+  }
+  const stride = offset;
+  const at = {};
+  props.forEach(p => at[p.name] = p);
+  const dv = new DataView(buffer, dataStart);
+  const rd = (p, base) => {
+    const t = p.type;
+    if(t === "float" || t === "float32") return dv.getFloat32(base + p.offset, true);
+    if(t === "double" || t === "float64") return dv.getFloat64(base + p.offset, true);
+    if(t === "uchar" || t === "uint8") return dv.getUint8(base + p.offset);
+    if(t === "char" || t === "int8") return dv.getInt8(base + p.offset);
+    if(t === "ushort" || t === "uint16") return dv.getUint16(base + p.offset, true);
+    if(t === "short" || t === "int16") return dv.getInt16(base + p.offset, true);
+    if(t === "uint" || t === "uint32") return dv.getUint32(base + p.offset, true);
+    return dv.getInt32(base + p.offset, true);
+  };
+  const isGS = at.scale_0 && at.rot_0 && at.opacity && at.f_dc_0;
+  // 3DGS stores f_rest channel-major: [R coeffs 0..K-1][G coeffs][B coeffs], K = restCount/3
+  let restCount = 0;
+  props.forEach(p => { if(/^f_rest_\d+$/.test(p.name)) restCount++; });
+  const K = Math.floor(restCount / 3);
+  const hasSH1 = isGS && K >= 3 && at.f_rest_0 && at["f_rest_" + K] && at["f_rest_" + (2*K)];
+  const cap = 1600000;
+  const m = Math.min(n, cap);
+  const src = makeSource(isGS ? "gsplat" : "pointcloud", label, m);
+  const P = src.packed, POS = src.positions;
+  const sh = hasSH1 ? new Float32Array(m * 12) : null;
+  for(let i = 0; i < m; i++){
+    const base = i * stride;
+    const x = rd(at.x, base), y = rd(at.y, base), z = rd(at.z, base);
+    POS[i*3]=x; POS[i*3+1]=y; POS[i*3+2]=z;
+    const o = i*16;
+    P[o]=x; P[o+1]=y; P[o+2]=z;
+    if(isGS){
+      P[o+4] = 0.5 + SH_C0 * rd(at.f_dc_0, base);
+      P[o+5] = 0.5 + SH_C0 * rd(at.f_dc_1, base);
+      P[o+6] = 0.5 + SH_C0 * rd(at.f_dc_2, base);
+      P[o+7] = 1 / (1 + Math.exp(-rd(at.opacity, base)));
+      covFromScaleRot(
+        Math.exp(rd(at.scale_0, base)), Math.exp(rd(at.scale_1, base)), Math.exp(rd(at.scale_2, base)),
+        rd(at.rot_0, base), rd(at.rot_1, base), rd(at.rot_2, base), rd(at.rot_3, base),
+        P, o+8);
+      if(sh){
+        for(let coef = 0; coef < 3; coef++){
+          for(let ch = 0; ch < 3; ch++){
+            sh[i*12 + coef*4 + ch] = rd(at["f_rest_" + (ch*K + coef)], base);
+          }
+        }
+      }
+    } else {
+      const hasRgb = at.red && at.green && at.blue;
+      P[o+4] = hasRgb ? rd(at.red, base)/255 : 0.85;
+      P[o+5] = hasRgb ? rd(at.green, base)/255 : 0.88;
+      P[o+6] = hasRgb ? rd(at.blue, base)/255 : 0.95;
+      P[o+7] = 0.9;
+    }
+  }
+  if(sh){ src.sh = sh; src.hasSH = true; }
+  finalizeSource(src);
+  return { src, truncated: n > cap, total: n };
+}
+
+/* ============================================================
+   Depth sort — counting sort, back-to-front, re-run on view change
+   ============================================================ */
+const SORT_BUCKETS = 4096;
+const sortCounts = new Uint32Array(SORT_BUCKETS);
+function sortSource(src, fwd){
+  const n = src.count, p = src.positions;
+  // depth range from bbox corners
+  const [ax, ay, az, bx, by, bz] = src.bbox;
+  let dmin = 1e9, dmax = -1e9;
+  for(let c = 0; c < 8; c++){
+    const d = (c&1?bx:ax)*fwd[0] + (c&2?by:ay)*fwd[1] + (c&4?bz:az)*fwd[2];
+    if(d < dmin) dmin = d;
+    if(d > dmax) dmax = d;
+  }
+  const span = Math.max(1e-6, dmax - dmin);
+  const scale = (SORT_BUCKETS - 1) / span;
+  sortCounts.fill(0);
+  const buckets = src._buckets && src._buckets.length === n ? src._buckets : (src._buckets = new Uint16Array(n));
+  for(let i = 0; i < n; i++){
+    const d = p[i*3]*fwd[0] + p[i*3+1]*fwd[1] + p[i*3+2]*fwd[2];
+    let q = ((d - dmin) * scale) | 0;
+    if(q < 0) q = 0; else if(q >= SORT_BUCKETS) q = SORT_BUCKETS - 1;
+    buckets[i] = q;
+    sortCounts[q]++;
+  }
+  // back-to-front: farthest (largest depth along fwd = deepest) first.
+  // fwd points from camera into the scene, so LARGER d = farther: place high buckets first.
+  let acc = 0;
+  const starts = sortCounts; // reuse in place: convert counts to start offsets, high->low
+  for(let q = SORT_BUCKETS - 1; q >= 0; q--){
+    const c = starts[q];
+    starts[q] = acc;
+    acc += c;
+  }
+  const order = src.order;
+  for(let i = 0; i < n; i++){
+    order[starts[buckets[i]]++] = i;
+  }
+  src.lastSortFwd = [fwd[0], fwd[1], fwd[2]];
+  return order;
+}
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Scene, camera, parameters + reactivity, UI, main loop
+   ============================================================ */
+const Scene = (() => {
+  const sources = [];
+  let fitTarget = [0,0,0], fitRadius = 2.2;
+
+  function add(src){
+    if(src.kind === "mesh"){
+      src.gpu = Renderer.createMeshGPU(src);
+    } else {
+      src.gpu = Renderer.createSourceGPU(src);
+      src.gpuSort = Renderer.createSortGPU(src.gpu, src.count);
+      if(src.kind === "voxel"){
+        src.raymarchGPU = Renderer.createRaymarchGPU(src);
+        src.raymarchOn = false;
+      }
+    }
+    sources.push(src);
+    if(sources.length === 1){
+      fitTarget = src.centroid.slice();
+      fitRadius = src.radius * 1.15;
+      Camera.lookAtTarget(fitTarget);
+    }
+    UI.buildSourceList();
+    UI.msg(src.label + " — " + src.count.toLocaleString() + " primitives");
+  }
+  function remove(id){
+    const i = sources.findIndex(s => s.id === id);
+    if(i < 0) return;
+    if(sources[i].kind === "mesh"){
+      Renderer.destroyMeshGPU(sources[i].gpu);
+    } else {
+      Renderer.destroySourceGPU(sources[i].gpu);
+      Renderer.destroySortGPU(sources[i].gpuSort);
+      Renderer.destroyRaymarchGPU(sources[i].raymarchGPU);
+    }
+    sources.splice(i, 1);
+    UI.buildSourceList();
+  }
+  return {
+    sources, add, remove,
+    get fitTarget(){ return fitTarget; },
+    get fitRadius(){ return fitRadius; },
+  };
+})();
+
+const Camera = (() => {
+  let yaw = 0.6, pitch = 0.35, target = [0, 0, 0];
+  let radiusMul = 1; // wheel adjustments fold into the cameraRadius param instead
+  function lookAtTarget(t){ target = t.slice(); }
+  function orbit(dYaw, dPitch){
+    yaw += dYaw;
+    pitch = Math.max(-1.45, Math.min(1.45, pitch + dPitch));
+  }
+  function state(radius){
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const eye = [
+      target[0] + radius * cp * Math.sin(yaw),
+      target[1] + radius * sp,
+      target[2] + radius * cp * Math.cos(yaw),
+    ];
+    // build view and invView from the same x,y,z basis so they're guaranteed consistent
+    const z = V3.norm(V3.sub(eye, target));
+    const x = V3.norm(V3.cross([0,1,0], z));
+    const y = V3.cross(z, x);
+    const view = new Float32Array([
+      x[0], y[0], z[0], 0,
+      x[1], y[1], z[1], 0,
+      x[2], y[2], z[2], 0,
+      -V3.dot(x, eye), -V3.dot(y, eye), -V3.dot(z, eye), 1,
+    ]);
+    const invView = new Float32Array([
+      x[0], x[1], x[2], 0,
+      y[0], y[1], y[2], 0,
+      z[0], z[1], z[2], 0,
+      eye[0], eye[1], eye[2], 1,
+    ]);
+    const fwd = [-z[0], -z[1], -z[2]]; // same as norm(target-eye), kept for the depth-sort code
+    return { eye, view, invView, fwd };
+  }
+  function autoOrbit(speed, dtMs){ yaw += speed * dtMs * 0.0012; }
+  return { lookAtTarget, orbit, state, autoOrbit };
+})();
+
+/* ---- parameters + reactivity (the bus integration) ---- */
+const PARAMS = [
+  { id:"cameraOrbitSpeed", label:"orbit speed",      range:[-1, 1],   value:0.15, react:{ channel:"tempo.phase", amount:0.3 } },
+  { id:"cameraRadius",     label:"camera radius",    range:[0.5, 4],  value:2.2,  react:{ channel:"none",        amount:0.5 } },
+  { id:"splatScale",       label:"splat scale",      range:[0.2, 3],  value:1.0,  react:{ channel:"env.mix",     amount:0.5 } },
+  { id:"opacityBoost",     label:"opacity boost",    range:[0, 1],    value:0.0,  react:{ channel:"onset.beat",  amount:1.0 } },
+  { id:"colorShift",       label:"color shift",      range:[0, 1],    value:0.0,  react:{ channel:"none",        amount:0.5 } },
+  { id:"fieldTurbulence",  label:"voxel turbulence", range:[0, 1],    value:0.35, react:{ channel:"band.high",   amount:0.7 } },
+  { id:"crossfade",        label:"A/B crossfade",    range:[0, 1],    value:0.5,  react:{ channel:"none",        amount:0.5 } },
+];
+const paramById = Object.fromEntries(PARAMS.map(p => [p.id, p]));
+function effective(id){
+  const p = paramById[id];
+  let v = p.value;
+  if(p.react.channel !== "none"){
+    v += UnlimiterBus.get(p.react.channel) * p.react.amount * (p.range[1] - p.range[0]) * 0.5;
+  }
+  return Math.max(p.range[0], Math.min(p.range[1], v));
+}
+
+/* UnlimiterParams manifest — the Control Surface target contract */
+window.UnlimiterParams = {
+  toolId: "volume-renderer",
+  label: "Volume Renderer",
+  params: PARAMS.map(p => ({ id:p.id, label:p.label, type:"float", range:p.range, default:p.value })),
+  setParam(id, value){
+    const p = paramById[id];
+    if(!p) return;
+    p.value = Math.max(p.range[0], Math.min(p.range[1], value));
+    UI.refreshParam(id);
+  },
+};
+
+/* ---- UI ---- */
+const UI = (() => {
+  const chans = ["none","band.low","band.mid","band.high","env.mix","onset.beat","tempo.phase","scalar.lfo"];
+  function buildParams(){
+    const wrap = document.getElementById("params");
+    wrap.innerHTML = "";
+    PARAMS.forEach(p => {
+      const div = document.createElement("div");
+      div.className = "param";
+      div.innerHTML =
+        `<div class="lab"><span>${p.label}</span><span id="pv-${p.id}">${p.value.toFixed(2)}</span></div>` +
+        `<input type="range" id="ps-${p.id}" min="${p.range[0]}" max="${p.range[1]}" step="0.01" value="${p.value}" aria-label="${p.label}">` +
+        `<div class="react"><span>from</span><select id="pc-${p.id}">` +
+        chans.map(c => `<option value="${c}"${c===p.react.channel?" selected":""}>${c}</option>`).join("") +
+        `</select><input type="range" id="pa-${p.id}" min="0" max="1" step="0.05" value="${p.react.amount}" aria-label="${p.label} reactivity amount"></div>`;
+      wrap.appendChild(div);
+      div.querySelector(`#ps-${p.id}`).addEventListener("input", e => { p.value = parseFloat(e.target.value); });
+      div.querySelector(`#pc-${p.id}`).addEventListener("change", e => { p.react.channel = e.target.value; });
+      div.querySelector(`#pa-${p.id}`).addEventListener("input", e => { p.react.amount = parseFloat(e.target.value); });
+    });
+  }
+  function refreshParam(id){
+    const p = paramById[id];
+    const s = document.getElementById("ps-" + id);
+    if(s) s.value = p.value;
+  }
+  function updateReadouts(){
+    PARAMS.forEach(p => {
+      const el = document.getElementById("pv-" + p.id);
+      if(el) el.textContent = effective(p.id).toFixed(2);
+    });
+  }
+  function buildSourceList(){
+    const wrap = document.getElementById("srcList");
+    wrap.innerHTML = "";
+    if(!Scene.sources.length){
+      wrap.innerHTML = '<div style="color:var(--faint);font-size:.78rem">no sources loaded — add a scene above</div>';
+      return;
+    }
+    Scene.sources.forEach(s => {
+      const div = document.createElement("div");
+      div.className = "src";
+      const rmRow = s.kind === "voxel"
+        ? `<label style="display:flex;align-items:center;gap:6px;margin-top:6px"><input type="checkbox" data-rm="${s.id}"${s.raymarchOn?" checked":""}> raymarch <small style="color:var(--faint)">(replaces the sprite render for this source)</small></label>`
+        : "";
+      div.innerHTML =
+        `<div class="head"><b title="${s.label}">${s.label}</b><small>${s.kind}</small><button data-id="${s.id}" title="Remove source">×</button></div>` +
+        `<label>opacity</label><input type="range" min="0" max="1" step="0.01" value="${s.opacity}" data-op="${s.id}" aria-label="${s.label} opacity">` +
+        rmRow;
+      wrap.appendChild(div);
+      div.querySelector("button").addEventListener("click", () => Scene.remove(s.id));
+      div.querySelector('input[data-op]').addEventListener("input", e => { s.opacity = parseFloat(e.target.value); });
+      const rmBox = div.querySelector('input[data-rm]');
+      if(rmBox) rmBox.addEventListener("change", e => { s.raymarchOn = e.target.checked; });
+    });
+  }
+  let msgTimer = null;
+  function msg(text, sticky){
+    const el = document.getElementById("msg");
+    el.textContent = text;
+    el.style.display = "block";
+    clearTimeout(msgTimer);
+    if(!sticky) msgTimer = setTimeout(() => el.style.display = "none", 4200);
+  }
+  return { buildParams, refreshParam, updateReadouts, buildSourceList, msg };
+})();
+
+/* ---- input: orbit / dolly / file drop ---- */
+(function inputs(){
+  const canvas = Renderer.canvas;
+  let dragging = false, lx = 0, ly = 0;
+  canvas.addEventListener("pointerdown", e => {
+    dragging = true; lx = e.clientX; ly = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", e => {
+    if(!dragging) return;
+    Camera.orbit((e.clientX - lx) * -0.005, (e.clientY - ly) * 0.004);
+    lx = e.clientX; ly = e.clientY;
+  });
+  canvas.addEventListener("pointerup", () => dragging = false);
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    const p = paramById.cameraRadius;
+    p.value = Math.max(p.range[0], Math.min(p.range[1], p.value * (e.deltaY > 0 ? 1.07 : 0.93)));
+    UI.refreshParam("cameraRadius");
+  }, { passive:false });
+
+  const drop = document.getElementById("drop");
+  window.addEventListener("dragover", e => { e.preventDefault(); drop.style.display = "grid"; });
+  drop.addEventListener("dragleave", () => drop.style.display = "none");
+  window.addEventListener("drop", e => {
+    e.preventDefault(); drop.style.display = "none";
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) loadPlyFile(f);
+  });
+})();
+
+function loadPlyFile(file){
+  UI.msg("parsing " + file.name + "…", true);
+  file.arrayBuffer().then(buf => {
+    setTimeout(() => {
+      try{
+        const { src, truncated, total } = parsePly(buf, file.name.replace(/\.ply$/i, ""));
+        Scene.add(src);
+        if(truncated) UI.msg("loaded first " + src.count.toLocaleString() + " of " + total.toLocaleString() + " splats (foundation cap)");
+      }catch(err){
+        UI.msg("couldn't read that PLY: " + err.message);
+      }
+    }, 30);
+  });
+}
+
+/* ---- boot + main loop ---- */
+(async function boot(){
+  const ok = await Renderer.init().catch(() => false);
+  if(!ok){
+    document.getElementById("nogpu").style.display = "grid";
+    // Still publish the API so a host page (the rack) gets a definite answer
+    // instead of waiting forever for a renderer that will never start.
+    window.UnlimiterVolumeAPI = {
+      ready: false, reason: "webgpu-unavailable",
+      pushMixFrame(){ return false; }, setMix(){}, setParam(){},
+      params(){ return []; }, addScene(){}, clearScene(){}, hasMix(){ return false; },
+    };
+    return;
+  }
+  UI.buildSourceList();
+  Renderer.resize();
+  window.addEventListener("resize", () => Renderer.resize());
+
+  document.getElementById("addGalaxy").addEventListener("click", () => Scene.add(genGalaxy()));
+  document.getElementById("addNebula").addEventListener("click", () => Scene.add(genNebula()));
+  document.getElementById("addShell").addEventListener("click", () => Scene.add(genShell()));
+  document.getElementById("addGIScene").addEventListener("click", () => Scene.add(genGITestScene()));
+  document.getElementById("btnLoadPly").addEventListener("click", () => document.getElementById("plyFile").click());
+  document.getElementById("plyFile").addEventListener("change", e => {
+    if(e.target.files[0]) loadPlyFile(e.target.files[0]);
+    e.target.value = "";
+  });
+
+  const btnDemoSig = document.getElementById("btnDemoSig"), btnMic = document.getElementById("btnMic");
+  btnDemoSig.addEventListener("click", () => { AudioEngine.setDemo(); btnDemoSig.classList.add("on"); btnMic.classList.remove("on"); UI.msg("demo signal"); });
+  btnMic.addEventListener("click", async () => {
+    try{
+      await AudioEngine.startMic();
+      btnMic.classList.add("on"); btnDemoSig.classList.remove("on");
+      UI.msg("listening to mic");
+    }catch(e){
+      UI.msg("mic unavailable here — open this page in its own tab and allow the microphone");
+    }
+  });
+  const beatDot = document.getElementById("beatDot");
+  AudioEngine.onBeat(() => {
+    beatDot.classList.add("hit");
+    setTimeout(() => beatDot.classList.remove("hit"), 90);
+  });
+
+  // opening scene: a splat cloud + a voxel field, proving multi-source compositing.
+  // In embed mode (the rack hosts this in an iframe) the scene starts empty —
+  // the rack's live mix becomes the first source instead.
+  const EMBED = new URLSearchParams(location.search).has("embed");
+  if(EMBED){
+    document.body.classList.add("embed");
+  } else {
+    Scene.add(genGalaxy());
+    Scene.add(genNebula());
+  }
+
+  /* ---- public API: how the rack (or any host page) drives this renderer ---- */
+  let mixSrc = null, mixScratch = null, mixCtx = null;
+  window.UnlimiterVolumeAPI = {
+    /** Push a 2D canvas (the rack mix) in as a live volumetric source. */
+    pushMixFrame(srcCanvas){
+      if(!srcCanvas || !srcCanvas.width) return false;
+      if(!mixScratch){
+        mixScratch = document.createElement("canvas");
+        mixScratch.width = MIX_W; mixScratch.height = MIX_H;
+        mixCtx = mixScratch.getContext("2d", { willReadFrequently: true });
+      }
+      if(!mixSrc){
+        mixSrc = genMixSource();
+        Scene.add(mixSrc);
+      }
+      try{
+        mixCtx.drawImage(srcCanvas, 0, 0, MIX_W, MIX_H);
+        const d = mixCtx.getImageData(0, 0, MIX_W, MIX_H).data;
+        updateMixSource(mixSrc, d);
+        if(mixSrc.gpu) Renderer.updateSourceGPU(mixSrc.gpu, mixSrc.packed);
+      }catch(e){ return false; }
+      return true;
+    },
+    /** relief = depth from luminance, gain = colour gain, size = point size */
+    setMix(opts){
+      if(!mixSrc || !opts) return;
+      if(isFinite(+opts.relief)) mixSrc.relief = +opts.relief;
+      if(isFinite(+opts.gain))   mixSrc.gain   = +opts.gain;
+      if(isFinite(+opts.size))   mixSrc.pointSize = +opts.size;
+      if(isFinite(+opts.opacity))mixSrc.opacity = +opts.opacity;
+    },
+    /** Drive any renderer parameter by manifest id (same ids as the Control Surface). */
+    setParam(id, value){ window.UnlimiterParams.setParam(id, value); },
+    params(){ return window.UnlimiterParams.params; },
+    addScene(which){
+      if(which === "galaxy") Scene.add(genGalaxy());
+      else if(which === "nebula") Scene.add(genNebula());
+      else if(which === "shell") Scene.add(genShell());
+      else if(which === "gi") Scene.add(genGITestScene());
+    },
+    clearScene(){ [...Scene.sources].forEach(s => Scene.remove(s.id)); mixSrc = null; },
+    hasMix(){ return !!mixSrc; },
+    ready: true,
+  };
+
+  let last = performance.now(), fpsEma = 0, persistAt = 0;
+  const fpsEl = document.getElementById("fps");
+  const sortInfoEl = document.getElementById("sortInfo");
+  const gpuSortEl = document.getElementById("gpuSortToggle");
+  const shToggle = document.getElementById("shToggle");
+  const xfadeToggle = document.getElementById("xfadeToggle");
+  const bloomToggle = document.getElementById("bloomToggle");
+  const bloomThresh = document.getElementById("bloomThresh"), bloomThreshVal = document.getElementById("bloomThreshVal");
+  const bloomInt = document.getElementById("bloomInt"), bloomIntVal = document.getElementById("bloomIntVal");
+  const giToggle = document.getElementById("giToggle");
+  const giInt = document.getElementById("giInt"), giIntVal = document.getElementById("giIntVal");
+  bloomThresh.addEventListener("input", () => bloomThreshVal.textContent = parseFloat(bloomThresh.value).toFixed(2));
+  bloomInt.addEventListener("input", () => bloomIntVal.textContent = parseFloat(bloomInt.value).toFixed(2));
+  giInt.addEventListener("input", () => giIntVal.textContent = parseFloat(giInt.value).toFixed(2));
+
+  /* ---- state persistence: params, reactivity, toggles survive reloads ---- */
+  const LSV = "unlimiter.volume.state";
+  function saveState(){
+    try{
+      const st = {
+        params: {},
+        bloom: { enabled: bloomToggle.checked, threshold: parseFloat(bloomThresh.value), intensity: parseFloat(bloomInt.value) },
+        toggles: { sh: shToggle.checked, xfade: xfadeToggle.checked, gi: giToggle.checked },
+        gi: { intensity: parseFloat(giInt.value) },
+      };
+      PARAMS.forEach(p => st.params[p.id] = { value: p.value, react: { channel: p.react.channel, amount: p.react.amount } });
+      localStorage.setItem(LSV, JSON.stringify(st));
+    }catch(e){ /* storage unavailable — fine */ }
+  }
+  function restoreState(){
+    try{
+      const raw = localStorage.getItem(LSV);
+      if(!raw) return;
+      const st = JSON.parse(raw);
+      if(st.params) PARAMS.forEach(p => {
+        const sp = st.params[p.id];
+        if(!sp) return;
+        if(typeof sp.value === "number" && isFinite(sp.value)) p.value = Math.max(p.range[0], Math.min(p.range[1], sp.value));
+        if(sp.react && typeof sp.react.channel === "string" && (sp.react.channel === "none" || UnlimiterBus.has(sp.react.channel))){
+          p.react = { channel: sp.react.channel, amount: Math.max(0, Math.min(1, +sp.react.amount || 0)) };
+        }
+      });
+      if(st.bloom){
+        bloomToggle.checked = !!st.bloom.enabled;
+        if(isFinite(+st.bloom.threshold)){ bloomThresh.value = st.bloom.threshold; bloomThreshVal.textContent = (+st.bloom.threshold).toFixed(2); }
+        if(isFinite(+st.bloom.intensity)){ bloomInt.value = st.bloom.intensity; bloomIntVal.textContent = (+st.bloom.intensity).toFixed(2); }
+      }
+      if(st.toggles){
+        shToggle.checked = st.toggles.sh !== false; // default on
+        xfadeToggle.checked = !!st.toggles.xfade;
+        giToggle.checked = st.toggles.gi !== false; // default on (inert without a mesh source)
+      }
+      if(st.gi && isFinite(+st.gi.intensity)){
+        giInt.value = st.gi.intensity;
+        giIntVal.textContent = (+st.gi.intensity).toFixed(2);
+      }
+    }catch(e){ /* ignore bad state */ }
+  }
+  restoreState();
+  UI.buildParams();
+  let lastSortLabel = "";
+  function frame(now){
+    const dt = Math.min(50, now - last);
+    last = now;
+    AudioEngine.tick(now, dt);
+
+    Camera.autoOrbit(effective("cameraOrbitSpeed"), dt);
+    const radius = Scene.fitRadius * effective("cameraRadius");
+    const cam = Camera.state(radius);
+    const aspect = Renderer.canvas.width / Math.max(1, Renderer.canvas.height);
+    const proj = M4.perspective(CameraFOV, aspect, 0.02, 400);
+    const invProj = M4.invPerspective(CameraFOV, aspect, 0.02, 400);
+
+    const params  = [effective("splatScale"), effective("opacityBoost"), effective("colorShift"), now/1000];
+    const params2 = [effective("fieldTurbulence"), shToggle.checked ? 1 : 0, 0, 0];
+
+    // A/B crossfade: equal-power fade between the first two sources when enabled
+    const xfadeOn = xfadeToggle.checked && Scene.sources.length >= 2;
+    const xf = effective("crossfade");
+    const gA = xfadeOn ? Math.cos(xf * Math.PI / 2) : 1;
+    const gB = xfadeOn ? Math.sin(xf * Math.PI / 2) : 1;
+
+    // per-source: resort when the view direction has moved enough; voxel sources with
+    // raymarch on skip the sprite path entirely and go to the raymarch list instead
+    const drawList = [];
+    const raymarchList = [];
+    const meshList = [];
+    const useGpuSort = gpuSortEl.checked;
+    for(let si = 0; si < Scene.sources.length; si++){
+      const s = Scene.sources[si];
+      const xg = si === 0 ? gA : si === 1 ? gB : 1;
+      const effOpacity = s.opacity * xg;
+      if(effOpacity < 0.004 || !s.gpu) continue;
+      if(s.kind === "mesh"){
+        meshList.push(s);
+        continue;
+      }
+      if(s.kind === "voxel" && s.raymarchOn && s.raymarchGPU){
+        raymarchList.push(s.raymarchGPU);
+        continue;
+      }
+      const dot = cam.fwd[0]*s.lastSortFwd[0] + cam.fwd[1]*s.lastSortFwd[1] + cam.fwd[2]*s.lastSortFwd[2];
+      if(dot < 0.9995){
+        const t0 = performance.now();
+        if(useGpuSort && s.gpuSort){
+          Renderer.runSort(s.gpuSort, cam.eye, cam.fwd);
+          lastSortLabel = "GPU · " + (performance.now() - t0).toFixed(2) + " ms (encode+submit, JS-side)";
+        } else {
+          Renderer.writeOrder(s.gpu, sortSource(s, cam.fwd));
+          lastSortLabel = "CPU · " + (performance.now() - t0).toFixed(2) + " ms";
+        }
+        s.lastSortFwd = [cam.fwd[0], cam.fwd[1], cam.fwd[2]];
+        sortInfoEl.textContent = "sort: " + lastSortLabel;
+      }
+      Renderer.writeSrcU(s.gpu, 1, 1, 1, effOpacity, KIND[s.kind], s.pointSize, s.animAmp, s.seed, s.hasSH ? 1 : 0);
+      const depth = (s.centroid[0]-cam.eye[0])*cam.fwd[0] + (s.centroid[1]-cam.eye[1])*cam.fwd[1] + (s.centroid[2]-cam.eye[2])*cam.fwd[2];
+      drawList.push({ gpu: s.gpu, depth });
+    }
+    drawList.sort((a, b) => b.depth - a.depth); // farthest source first
+
+    const bloom = { enabled: bloomToggle.checked, threshold: parseFloat(bloomThresh.value), intensity: parseFloat(bloomInt.value) };
+
+    // GI: only when a mesh source is active and the toggle is on
+    let gi = null;
+    if(meshList.length && giToggle.checked){
+      const half = Math.max(2.4, Scene.fitRadius * 1.5);
+      const c = Scene.fitTarget;
+      const gridMin = [c[0]-half, c[1]-half, c[2]-half];
+      const cellSize = (2*half) / GI_N;
+      const fld = Scene.sources.find(s => s.kind === "voxel" && s.opacity > 0.004);
+      const inj = new Float32Array(40);
+      inj.set([gridMin[0], gridMin[1], gridMin[2], cellSize], 0);
+      inj.set([GI_N, 1.0, now/1000, fld ? 1 : 0], 4);
+      if(fld){
+        inj.set([fld.centroid[0], fld.centroid[1], fld.centroid[2], fld.seed], 8);
+        inj.set([2.6 / Math.max(0.001, fld.radius), 2.2, effective("fieldTurbulence"), (1 + effective("opacityBoost") * 1.5) * fld.opacity], 12);
+      }
+      let emOff = 16;
+      for(const ms of meshList){
+        for(const em of (ms.emitters || [])){
+          if(emOff > 28) break;
+          inj.set([em.min[0], em.min[1], em.min[2], 0], emOff);
+          inj.set([em.max[0], em.max[1], em.max[2], 0], emOff + 4);
+          inj.set([em.color[0], em.color[1], em.color[2], em.power], emOff + 8);
+          emOff += 12;
+        }
+      }
+      gi = { run: true, injectData: inj, intensity: parseFloat(giInt.value), ambient: 0.05, gridMin, cellSize, gridSize: 2*half };
+    }
+    Renderer.frame(cam.view, proj, cam.invView, invProj, cam.eye, params, params2, drawList, raymarchList, bloom, meshList, gi);
+
+    if(now > persistAt){ saveState(); persistAt = now + 5000; }
+    fpsEma = fpsEma * 0.95 + (1000/Math.max(1, dt)) * 0.05;
+    if((now|0) % 10 === 0) fpsEl.textContent = fpsEma.toFixed(0) + " fps";
+    UI.updateReadouts();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Cross-tab bridge — tool side. Announces this renderer's manifest
+   on the shared channel and applies parameter frames sent by the
+   Control Surface. Same-origin only (the repo / local dev); values
+   land as the parameter's base, so local reactivity stacks on top.
+   ============================================================ */
+(() => {
+  let ch = null;
+  try{ ch = new BroadcastChannel("unlimiter-bridge"); }catch(e){ return; }
+  const announce = () => ch.postMessage({
+    type: "manifest",
+    toolId: window.UnlimiterParams.toolId,
+    label: window.UnlimiterParams.label,
+    params: window.UnlimiterParams.params,
+  });
+  ch.onmessage = ev => {
+    const m = ev.data || {};
+    if(m.type === "discover"){
+      announce();
+    } else if(m.type === "params" && m.toolId === window.UnlimiterParams.toolId && m.values && typeof m.values === "object"){
+      for(const k in m.values){
+        const v = m.values[k];
+        if(typeof v === "number" && isFinite(v)) window.UnlimiterParams.setParam(k, v);
+      }
+    }
+  };
+  announce();
+})();
+</script>
+</body>
+</html>
