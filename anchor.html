@@ -302,6 +302,8 @@ const DEFAULTS = {
   cloudFreq:0.0018, cloudThresh:0.1, cloudStep:9,
   // stamps
   passes:34, shape:"line", sides:5, contentType:"stroke",
+  charSet:"ANCHOR", charMode:"sequence", charFont:"ui-monospace, Menlo, Consolas, monospace",
+  charWeight:400, charInvert:false, charRamp:"__custom", charFixed:false,
   sizeS:58, sizeE:26, sizeEase:"outCubic", sizeJitMin:1, sizeJitMax:1, sizeMod:"uniform",
   rotMode:"normal", rotValue:0, rotJit:0,
   // displacement
@@ -331,6 +333,31 @@ const DEFAULTS = {
   // draw
   drawZ:0, drawSmooth:2, drawMinDist:3, drawClose:false, drawVelZ:0
 };
+const CHAR_FONTS=[
+  ["ui-monospace, Menlo, Consolas, monospace","Monospace"],
+  ["'Courier New', monospace","Courier"],
+  ["Georgia, serif","Georgia"],
+  ["'Times New Roman', serif","Times"],
+  ["Helvetica, Arial, sans-serif","Helvetica"],
+  ["'Arial Black', sans-serif","Arial Black"],
+  ["Impact, Haettenschweiler, sans-serif","Impact"],
+  ["'CustomFont'","Loaded font file"],
+  ["__type","Same as the Type source"]
+];
+const CHAR_RAMPS=[
+  ["__custom","Custom — type your own"],
+  [" .:-=+*#%@","Density ramp"],
+  ["@%#*+=-:. ","Density ramp, reversed"],
+  [" \u2591\u2592\u2593\u2588","Blocks"],
+  ["01","Binary"],
+  [".:oO0@","Dots to discs"],
+  ["\u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c","Box drawing"],
+  ["\u2571\u2572\u2502\u2500","Diagonals"],
+  ["+-*/=<>%","Operators"],
+  ["\u2190\u2191\u2192\u2193\u2196\u2197\u2198\u2199","Arrows"],
+  ["ANCHOR","A word"]
+];
+
 let P = Object.assign({}, DEFAULTS);
 let Q = P;                 // P with modulation applied, rebuilt per frame
 let userSlot = null;
@@ -437,6 +464,36 @@ const PRESETS = {
     camDist:1400, camAuto:8, depthSize:1.4, depthFade:0.7, depthSort:true,
     colorMode:"depthGradient", colA:"#ffd166", colB:"#5c2a9d",
     bgMode:"color", bg:"#0a0b10"
+  },
+  "Type in type": {
+    src:"text", text:"FORM", fontSize:280, spacing:22, contourOn:true, fillOn:false,
+    passes:1, shape:"char", contentType:"fill",
+    charSet:"UNLIMITER\u00b7", charMode:"sequence",
+    charFont:"ui-monospace, Menlo, Consolas, monospace", charWeight:700,
+    sizeS:21, sizeE:21, rotMode:"tangent", normalS:0, normalE:0,
+    colorMode:"pathGradient", colA:"#f5f1e6", colB:"#7fd1c0",
+    bgMode:"color", bg:"#12151a", opaS:1, opaE:1
+  },
+  "ASCII field": {
+    src:"text", text:"ASCII", fontSize:250, spacing:13, contourOn:true,
+    fillOn:true, fillCount:7000, minDist:13,
+    passes:1, shape:"char", contentType:"fill",
+    charSet:" .:-=+*#%@", charMode:"size", charInvert:false, charFixed:true,
+    charFont:"ui-monospace, Menlo, Consolas, monospace", charWeight:400,
+    sizeS:19, sizeE:19, sizeMod:"noise", sizeJitMin:0.35, sizeJitMax:1.5,
+    rotMode:"none", colorMode:"solid", colA:"#c9f2e6",
+    bgMode:"color", bg:"#0d1013"
+  },
+  "Glyph rain": {
+    src:"cloud", cloudType:"streamlines", cloudPaths:90, cloudLen:120,
+    cloudFreq:0.0011, cloudStep:16,
+    passes:1, shape:"char", contentType:"fill",
+    charSet:"01", charMode:"random",
+    charFont:"ui-monospace, Menlo, Consolas, monospace", charWeight:700,
+    sizeS:17, sizeE:17, sizeMod:"random", sizeJitMin:0.6, sizeJitMax:1.3,
+    rotMode:"none", opaS:0.95, opaE:0.95,
+    colorMode:"pathGradient", colA:"#9dffc8", colB:"#0d3a22",
+    bgMode:"color", bg:"#05080a"
   },
   "Contour rings": {
     src:"text", text:"O", fontSize:520, contourOn:true, spacing:26, passes:26,
@@ -611,9 +668,23 @@ const gStamp=document.getElementById("g-stamp");
 slider(gStamp,"passes","Passes",1,160,1,"");
 select(gStamp,"shape","Shape",[
   ["circle","Circle"],["square","Square"],["rect","Rectangle"],["polygon","Polygon"],
-  ["line","Line"],["cross","Cross"],["arc","Arc"],["blob","Blob"],["mixed","Mixed"]
+  ["line","Line"],["cross","Cross"],["arc","Arc"],["blob","Blob"],
+  ["char","Characters"],["mixed","Mixed"]
 ]);
 slider(gStamp,"sides","Polygon sides",3,12,1,"");
+const rampSel=select(gStamp,"charRamp","Character set",CHAR_RAMPS.map(r=>[r[0],r[1]]));
+const charField=textInput(gStamp,"charSet","Characters");
+select(gStamp,"charMode","Pick by",[
+  ["sequence","In order along the path"],["reverse","In order, backwards"],
+  ["byStamp","In order, shifting each pass"],["random","Random"],
+  ["luma","Image brightness"],["size","Stamp size"],
+  ["alongPath","Position on path"],["byPass","Pass number"],["depth","Depth"]
+]);
+select(gStamp,"charFont","Character font",CHAR_FONTS);
+slider(gStamp,"charWeight","Character weight",100,900,100,"");
+check(gStamp,"charInvert","Invert the ramp");
+check(gStamp,"charFixed","Uniform cell size");
+note(gStamp,"In order along the path writes your text around each contour. Image brightness needs an image loaded and turns the set into a density ramp — the classic ASCII treatment, darkest character first. Uniform cell size keeps every glyph the same size so only the character carries the tone.");
 select(gStamp,"contentType","Draw",[["fillStroke","Fill and stroke"],["fill","Fill only"],["stroke","Stroke only"]]);
 select(gStamp,"rotMode","Rotation",[
   ["none","None"],["value","Fixed angle"],["tangent","Follow path"],["normal","Across path"],
@@ -785,6 +856,9 @@ function vis(){
   show("cloudThresh",["noiseMask"].includes(ct));
   show("rotValue",P.rotMode==="value");
   show("sides",P.shape==="polygon");
+  const chr = P.shape==="char"||P.shape==="mixed";
+  ["charRamp","charSet","charMode","charFont","charWeight","charInvert","charFixed"].forEach(k=>show(k,chr));
+  show("charInvert", chr && ["luma","size","alongPath","byPass","depth"].includes(P.charMode));
   show("colB",["passGradient","pathGradient","depthGradient","random"].includes(P.colorMode));
   show("colA",P.colorMode!=="image");
   show("bg",P.bgMode==="color");
@@ -802,6 +876,15 @@ document.querySelectorAll("#srcTabs button").forEach(b=>{
     else if(P.src!=="draw") setArmed(false);
     vis(); changed();
   });
+});
+
+// choosing a ramp fills the character field; typing puts it back to Custom
+rampSel.querySelector("select").addEventListener("change",e=>{
+  const v=e.target.value;
+  if(v!=="__custom"){ P.charSet=v; bound.charSet&&bound.charSet(); changed(); }
+});
+charField.querySelector("input").addEventListener("input",()=>{
+  P.charRamp="__custom"; bound.charRamp&&bound.charRamp();
 });
 
 /* ============================ canvas ============================ */
@@ -1342,6 +1425,13 @@ function assignZ(fp, noise, pathIdx, pathTotal, base){
 
 /* ============================ stamp generation ============================ */
 const SHAPES=["circle","square","rect","polygon","line","cross","arc","blob"];
+const MIXED_SHAPES=SHAPES.concat(["char"]);
+
+function charFamily(){ return Q.charFont==="__type" ? Q.font : Q.charFont; }
+function charList(){
+  const a=[...String(Q.charSet||"")];
+  return a.length ? a : ["?"];
+}
 
 function blobSegments(size,seedv){
   const n=8, r=size/2, pts=[];
@@ -1386,6 +1476,8 @@ function emitPass(pass, emit, noise, T){
   const spiralR = Q.spiralR*te;
 
   camSetup();
+  const CHARS = charList();
+  const maxSize = Math.max(Q.sizeS,Q.sizeE)*Math.max(Q.sizeJitMin,Q.sizeJitMax);
   const zPush = lerp(Q.zS, Q.zE, te);
   const live = Q.anim;
   const travelAmt = live ? Q.mTravel*T : 0;
@@ -1534,9 +1626,34 @@ function emitPass(pass, emit, noise, T){
         default: col=Q.colA;
       }
       let shape=Q.shape;
-      if(shape==="mixed") shape=SHAPES[Math.floor(p.r2*SHAPES.length)];
+      if(shape==="mixed") shape=MIXED_SHAPES[Math.floor(p.r2*MIXED_SHAPES.length)];
 
-      emit({x,y,rot,size:sz,shape,col,sw,alpha,seedv:p.r1,depth});
+      let ch="";
+      if(shape==="char"){
+        const L=CHARS.length;
+        const jitter = sz;                 // the varied size still chooses the glyph
+        if(Q.charFixed) sz = size;         // ...but the drawn cell can stay uniform
+        let idx;
+        if(Q.charMode==="sequence")      idx=i%L;
+        else if(Q.charMode==="reverse")  idx=(L-1-(i%L));
+        else if(Q.charMode==="random")   idx=Math.floor(p.r2*L);
+        else if(Q.charMode==="byStamp")  idx=(i+pass)%L;
+        else {
+          let f=0;
+          switch(Q.charMode){
+            case "alongPath": f=uu; break;
+            case "byPass":    f=t; break;
+            case "size":      f=jitter/Math.max(1,maxSize); break;
+            case "luma":      f=lumaAt(p.x,p.y); break;
+            case "depth":     f=CAM.on ? depth/Math.max(1,Q.zAmount+CAM.d*0.5)*0.5+0.5 : 0.5; break;
+          }
+          if(Q.charInvert) f=1-f;
+          idx=Math.floor(Math.min(0.999,Math.max(0,f))*L);
+        }
+        ch=CHARS[((idx%L)+L)%L];
+      }
+
+      emit({x,y,rot,size:sz,shape,col,sw,alpha,seedv:p.r1,depth,ch});
     }
   }
 }
@@ -1553,8 +1670,8 @@ function emitSorted(pass, paint, noise, T){
 }
 
 /* ============================ canvas backend ============================ */
-let _fs=null,_ss=null,_lw=-1,_ga=-1;
-function resetStampCache(){ _fs=null; _ss=null; _lw=-1; _ga=-1; }
+let _fs=null,_ss=null,_lw=-1,_ga=-1,_fnt=null;
+function resetStampCache(){ _fs=null; _ss=null; _lw=-1; _ga=-1; _fnt=null; }
 function paintStamp(ctx,st,sc){
   const doFill=Q.contentType!=="stroke";
   const doStroke=Q.contentType!=="fill";
@@ -1569,6 +1686,15 @@ function paintStamp(ctx,st,sc){
     if(lw!==_lw){ ctx.lineWidth=lw; _lw=lw; }
   }
   const sz=st.size*sc, h=sz/2;
+  if(st.shape==="char"){
+    // quantised to the half pixel so the canvas font cache actually hits
+    const fs=Math.max(1,Math.round(sz*2)/2);
+    const f=`${Q.charWeight} ${fs}px ${charFamily()}`;
+    if(f!==_fnt){ ctx.font=f; _fnt=f; ctx.textAlign="center"; ctx.textBaseline="middle"; }
+    if(doFill) ctx.fillText(st.ch,0,0);
+    if(doStroke) ctx.strokeText(st.ch,0,0);
+    return;
+  }
   ctx.beginPath();
   switch(st.shape){
     case "circle": ctx.arc(0,0,h,0,Math.PI*2); break;
@@ -1595,6 +1721,10 @@ function paintStamp(ctx,st,sc){
 }
 
 /* ============================ svg backend ============================ */
+function xmlEsc(v){
+  return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
 function svgStamp(st){
   const doFill=Q.contentType!=="stroke";
   const doStroke=Q.contentType!=="fill";
@@ -1608,6 +1738,13 @@ function svgStamp(st){
   const style=`fill="${fill}" stroke="${stroke}" stroke-width="${sw}" opacity="${op}" stroke-linecap="round"`;
   const s=st.size, h=s/2;
   switch(st.shape){
+    case "char": {
+      // dy in ems rather than dominant-baseline: Illustrator honours it
+      return "<text " + tr + ' x="0" y="0" dy=".35em" text-anchor="middle"'
+        + ' font-family="' + xmlEsc(charFamily()) + '"'
+        + ' font-size="' + n(s) + '" font-weight="' + Q.charWeight + '" '
+        + style + ">" + xmlEsc(st.ch) + "</text>";
+    }
     case "circle": return `<circle r="${n(h)}" ${style} ${tr}/>`;
     case "square": return `<rect x="${n(-h)}" y="${n(-h)}" width="${n(s)}" height="${n(s)}" ${style} ${tr}/>`;
     case "rect": return `<rect x="${n(-h)}" y="${n(-h*0.4)}" width="${n(s)}" height="${n(s*0.4)}" ${style} ${tr}/>`;
