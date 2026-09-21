@@ -178,6 +178,18 @@
     </div>
   </div>
 
+  <!-- learn from unit -->
+  <div class="panel" id="learnPanel" hidden>
+    <div class="panel-title">Learn From Unit <span class="hint">rebuild a pattern from what the deconstruct plays</span></div>
+    <div class="midi-row">
+      <select id="inputSelect" class="plain"><option>—</option></select>
+      <button class="btn primary" id="learnBtn" type="button">● Learn</button>
+    </div>
+    <div class="note-line" id="learnStatus">
+      On the unit: <code>func + midi</code> &rarr; set <b>Control Change</b> to ON, and <b>MIDI Clock</b> to ON if you want tempo detected automatically. Pick the input above, tap <b>Learn</b>, then press <b>PLAY</b> on the deconstruct itself (not in this tool) and let it run at least one full bar. Tracks are matched by channel, so set each track's CH here to match what's assigned on the unit first.
+    </div>
+  </div>
+
   <!-- transport -->
   <div class="panel">
     <div class="panel-title">Transport</div>
@@ -279,6 +291,7 @@
   function noteName(n){ return NOTE_NAMES[((n%12)+12)%12] + (Math.floor(n/12)-1); }
   // Maps the device's on-screen Tone range (-60..+60) to a MIDI CC value (0-127).
   function toneToCC(tone){ return Math.max(0, Math.min(127, Math.round((tone + 60) / 120 * 127))); }
+  function ccToTone(cc){ return Math.round(cc / 127 * 120) - 60; }
 
   // Track layout (1-indexed, as Race described the hardware):
   // 1-6 = drum tracks, 7-9 = one-shot sample tracks (2-4s, plays out on hold),
@@ -834,8 +847,10 @@
   });
 
   /* ---------- Web MIDI ---------- */
-  var midiAccess = null, output = null;
+  var midiAccess = null, output = null, input = null;
   var outputSelect = document.getElementById("outputSelect");
+  var inputSelect = document.getElementById("inputSelect");
+  var learnPanel = document.getElementById("learnPanel");
   var statusPill = document.getElementById("statusPill");
   var statusText = document.getElementById("statusText");
   var liveDot = document.getElementById("liveDot");
@@ -880,6 +895,39 @@
     if(!midiAccess) return;
     output = midiAccess.outputs.get(outputSelect.value) || null;
     if(output) setStatus("ok", "Connected: " + (output.name || output.id));
+  });
+
+  function populateInputs(){
+    inputSelect.innerHTML = "";
+    if(!midiAccess) return;
+    var ins = Array.from(midiAccess.inputs.values());
+    if(ins.length === 0){
+      var o = document.createElement("option");
+      o.textContent = "No MIDI inputs found";
+      inputSelect.appendChild(o);
+      input = null;
+      return;
+    }
+    ins.forEach(function(i){
+      var opt = document.createElement("option");
+      opt.value = i.id; opt.textContent = i.name || i.id;
+      inputSelect.appendChild(opt);
+    });
+    var preferred = ins.find(function(i){ return /deconstruct|minimal|sonicware/i.test(i.name||""); });
+    var chosen = preferred || ins[0];
+    inputSelect.value = chosen.id;
+    attachInput(chosen);
+  }
+
+  function attachInput(i){
+    if(input) input.onmidimessage = null;
+    input = i;
+    if(input) input.onmidimessage = onLearnMessage;
+  }
+
+  inputSelect.addEventListener("change", function(){
+    if(!midiAccess) return;
+    attachInput(midiAccess.inputs.get(inputSelect.value) || null);
   });
 
   rescanBtn.addEventListener("click", function(){
@@ -941,8 +989,10 @@
       connectBtn.textContent = "Reconnect";
       connectBtn.disabled = false;
       populateOutputs();
+      populateInputs();
+      learnPanel.hidden = false;
       syncBanks();
-      access.onstatechange = function(){ populateOutputs(); };
+      access.onstatechange = function(){ populateOutputs(); populateInputs(); };
     }).catch(function(err){
       clearTimeout(midiRequestTimer);
       setStatus("err", "Rejected: " + (err && err.name ? err.name : "unknown"));
@@ -1029,6 +1079,109 @@
   });
 
   document.getElementById("generateAllBtn").addEventListener("click", generateAll);
+
+  /* ---------- learn from unit ----------
+     Listens on the MIDI input while the deconstruct MINIMAL plays its own
+     loaded pattern. Notes are matched to a track by MIDI channel (so the
+     CH fields here need to match what's assigned on the unit first) and
+     quantized to the nearest 16th using either the unit's own MIDI Clock
+     (if Clock TX is on) or the tool's current BPM as a fallback. CC12/24/14
+     messages (Sound / Sound bank / Tone) update those fields live as you
+     turn the knobs, so touching a knob during Learn captures it too. */
+  var learning = false;
+  var learnStartTime = null;
+  var learnClockTimes = [];
+  var learnMeasuredBpm = null;
+  var learnHitCount = 0;
+  var learnBtn = document.getElementById("learnBtn");
+  var learnStatusEl = document.getElementById("learnStatus");
+
+  function learnStepLenMs(){
+    return 60000 / (learnMeasuredBpm || bpm) / 4;
+  }
+
+  function onLearnMessage(e){
+    if(!learning) return;
+    var data = e.data;
+    var cmd = data[0];
+    var status = cmd & 0xF0;
+    var channel = (cmd & 0x0f) + 1;
+    var t = timestampForEvent(e);
+
+    if(cmd === 0xFA || cmd === 0xFB){ // Start / Continue
+      learnStartTime = t;
+      learnClockTimes = [];
+      learnStatusEl.textContent = "Capturing… (0 hits)";
+      return;
+    }
+    if(cmd === 0xF8){ // clock tick, 24 per quarter note
+      learnClockTimes.push(t);
+      if(learnClockTimes.length >= 25){
+        var n = learnClockTimes.length;
+        var dtPerTick = (learnClockTimes[n-1] - learnClockTimes[n-25]) / 24;
+        learnMeasuredBpm = Math.round(60000 / (dtPerTick * 24));
+      }
+      return;
+    }
+    if(cmd === 0xFC){ // Stop from the unit
+      stopLearn();
+      return;
+    }
+    if(learnStartTime === null) return; // ignore anything before Start
+
+    if(status === 0x90 && data[2] > 0){ // note on
+      var track = tracks.find(function(tr){ return tr.channel === channel; });
+      if(!track) return;
+      var stepIdx = Math.round((t - learnStartTime) / learnStepLenMs()) % STEP_COUNT;
+      var vel = data[2];
+      track.steps[stepIdx] = vel >= 110 ? 2 : 1;
+      if(track.type === "bass"){
+        track.degrees[stepIdx] = data[1] - 24 - track.root;
+      }
+      learnHitCount++;
+      learnStatusEl.textContent = "Capturing… (" + learnHitCount + " hits" + (learnMeasuredBpm ? ", " + learnMeasuredBpm + " BPM detected" : "") + ")";
+    } else if(status === 0xB0){ // control change
+      var track2 = tracks.find(function(tr){ return tr.channel === channel; });
+      if(!track2) return;
+      if(data[1] === 24) track2.soundBank = data[2];
+      else if(data[1] === 12) track2.sound = data[2];
+      else if(data[1] === 14) track2.tone = ccToTone(data[2]);
+    }
+  }
+
+  function timestampForEvent(e){
+    // Web MIDI event.timeStamp shares the performance.now() clock, same
+    // basis used for output.send()'s scheduling timestamps elsewhere here.
+    return (typeof e.timeStamp === "number") ? e.timeStamp : performance.now();
+  }
+
+  function startLearn(){
+    learning = true;
+    learnStartTime = null;
+    learnClockTimes = [];
+    learnMeasuredBpm = null;
+    learnHitCount = 0;
+    learnBtn.textContent = "■ Stop";
+    learnBtn.classList.add("playing");
+    learnStatusEl.textContent = "Listening — press PLAY on the deconstruct MINIMAL itself now.";
+  }
+
+  function stopLearn(){
+    learning = false;
+    learnBtn.textContent = "● Learn";
+    learnBtn.classList.remove("playing");
+    if(learnMeasuredBpm){
+      bpm = learnMeasuredBpm; bpmRange.value = bpm; bpmVal.textContent = bpm;
+    }
+    renderTracks();
+    saveState();
+    learnStatusEl.textContent = "Captured " + learnHitCount + " hits" + (learnMeasuredBpm ? " at " + learnMeasuredBpm + " BPM" : "") + ". Review the steps below, then adjust anything that landed wrong.";
+  }
+
+  learnBtn.addEventListener("click", function(){
+    if(!input){ learnStatusEl.textContent = "No MIDI input selected."; return; }
+    if(learning) stopLearn(); else startLearn();
+  });
 
   /* ---------- scheduler ---------- */
   var playing = false;
