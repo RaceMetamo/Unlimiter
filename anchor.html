@@ -128,10 +128,12 @@
           <button data-src="text">Type</button>
           <button data-src="cloud">Cloud</button>
           <button data-src="image">Image</button>
+          <button data-src="draw">Draw</button>
         </div>
         <div id="srcText"></div>
         <div id="srcCloud"></div>
         <div id="srcImage"></div>
+        <div id="srcDraw"></div>
         <div id="srcCommon"></div>
       </div>
     </details>
@@ -164,6 +166,16 @@
     <details class="group" open>
       <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
       <div class="body" id="g-drive"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Depth<span class="chev"></span></summary>
+      <div class="body" id="g-depth"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Camera<span class="chev"></span></summary>
+      <div class="body" id="g-cam"></div>
     </details>
 
     <details class="group">
@@ -307,7 +319,17 @@ const DEFAULTS = {
   // ambient motion
   anim:false, animSpeed:0.14, animPhase:"alongPath", animSpread:1,
   mBreathe:0, mSway:0, mSwayAxis:"normal", mWander:0, mWanderFreq:0.0022,
-  mWobble:0, mSpin:0, mShimmer:0, mTravel:0
+  mWobble:0, mSpin:0, mShimmer:0, mTravel:0,
+  // depth — where each anchor sits on the z axis (geometry time)
+  dim3:false, zMode:"flat", zAmount:220, zNoiseFreq:0.0022, zByPath:0,
+  // depth displacement (render time, across passes)
+  zS:0, zE:0, zWave:0, zWaveFreq:3, zScatter:0,
+  mSwayZ:0, mTumble:0,
+  // camera
+  camYaw:-24, camPitch:16, camRoll:0, camDist:1500, persp:1,
+  camAuto:0, depthSize:1, depthFade:0, depthSort:true,
+  // draw
+  drawZ:0, drawSmooth:2, drawMinDist:3, drawClose:false, drawVelZ:0
 };
 let P = Object.assign({}, DEFAULTS);
 let Q = P;                 // P with modulation applied, rebuilt per frame
@@ -322,7 +344,8 @@ const Drive = (window.UnlimiterDrive)
 const NO_MOD = new Set(["text","font","weight","fontSize","leading","tracking","wordSpace",
   "align","autoFit","contourOn","spacing","smooth","fillOn","fillCount","minDist",
   "invertMask","threshold","seed","cloudType","cloudCount","cloudPaths","cloudLen",
-  "cloudStep","cloudFreq","cloudThresh","aspect","animSpeed"]);
+  "cloudStep","cloudFreq","cloudThresh","aspect","animSpeed",
+  "zMode","zAmount","zNoiseFreq","zByPath","drawSmooth","drawMinDist","drawZ","drawClose","drawVelZ"]);
 let GRP="";
 function registerMod(key,label,min,max){
   if(!Drive || NO_MOD.has(key)) return;
@@ -387,6 +410,33 @@ const PRESETS = {
     sizeS:26, sizeE:9, normalS:0, normalE:26, swS:1, swE:0.6,
     colorMode:"pathGradient", colA:"#7fd1c0", colB:"#e0714f",
     bgMode:"color", bg:"#101314", opaS:0.9, opaE:0.5
+  },
+  "Standing type": {
+    src:"text", text:"DEPTH", font:"Helvetica, Arial, sans-serif", weight:700,
+    spacing:8, passes:30, shape:"circle", contentType:"stroke",
+    sizeS:20, sizeE:5, normalS:0, normalE:0, rotMode:"none", swS:1, swE:0.6,
+    dim3:true, zMode:"flat", zS:-200, zE:220, posEase:"linear",
+    camYaw:-34, camPitch:12, camDist:2200, persp:1, depthSize:1, depthFade:0.45,
+    colorMode:"passGradient", colA:"#f7f3ea", colB:"#1b3a6b",
+    bgMode:"color", bg:"#0e1113", opaS:0.95, opaE:0.35
+  },
+  "Terrain of type": {
+    src:"text", text:"RELIEF", fontSize:230, spacing:5, passes:1,
+    shape:"circle", contentType:"fill", sizeS:7, sizeE:7, rotMode:"none",
+    fillOn:true, fillCount:9000, minDist:5, contourOn:true,
+    dim3:true, zMode:"noise", zAmount:190, zNoiseFreq:0.0028,
+    camYaw:-12, camPitch:34, camDist:2100, depthSize:0.9, depthFade:0.35,
+    colorMode:"depthGradient", colA:"#e0714f", colB:"#7fd1c0",
+    bgMode:"color", bg:"#0b0e10", swS:1.1, swE:1.1
+  },
+  "Depth cloud": {
+    src:"cloud", cloudType:"poisson", cloudCount:2600, passes:1,
+    shape:"circle", contentType:"fill", sizeS:9, sizeE:9,
+    sizeMod:"random", sizeJitMin:0.3, sizeJitMax:1.6, rotMode:"none",
+    dim3:true, zMode:"random", zAmount:700, camYaw:-20, camPitch:10,
+    camDist:1400, camAuto:8, depthSize:1.4, depthFade:0.7, depthSort:true,
+    colorMode:"depthGradient", colA:"#ffd166", colB:"#5c2a9d",
+    bgMode:"color", bg:"#0a0b10"
   },
   "Contour rings": {
     src:"text", text:"O", fontSize:520, contourOn:true, spacing:26, passes:26,
@@ -527,6 +577,24 @@ check(elImage,"invertMask","Invert mask");
 note(elImage,"The image is thresholded to a mask, then sampled exactly like a glyph. It also feeds the image colour mode.");
 
 // --- sampling common to type + image
+// --- draw
+const elDraw=document.getElementById("srcDraw");
+const drawBtnRow=document.createElement("div"); drawBtnRow.className="btnrow";
+const bDraw=document.createElement("button"); bDraw.textContent="Draw";
+const bUndo=document.createElement("button"); bUndo.textContent="Undo";
+const bClearDraw=document.createElement("button"); bClearDraw.textContent="Clear";
+drawBtnRow.append(bDraw,bUndo,bClearDraw); elDraw.appendChild(drawBtnRow);
+const drawLbl=document.createElement("div"); drawLbl.className="note";
+drawLbl.textContent="No strokes yet.";
+elDraw.appendChild(drawLbl);
+GRP="Draw";
+slider(elDraw,"drawZ","Depth of plane",-600,600,5,"");
+slider(elDraw,"drawSmooth","Smoothing",0,8,1,"");
+slider(elDraw,"drawMinDist","Point spacing",1,20,0.5,"px");
+slider(elDraw,"drawVelZ","Speed to depth",0,400,5,"");
+check(elDraw,"drawClose","Close each stroke");
+note(elDraw,"Arm Draw, then draw on the canvas. Each stroke becomes a path of anchors like any other source. Set the plane depth between strokes to stack your writing in space; with Draw off, dragging orbits the camera instead.");
+
 GRP="Sampling";
 subhead(elCommon,"Sampling");
 check(elCommon,"contourOn","Trace contours");
@@ -609,7 +677,8 @@ GRP="Colour";
 const gCol=document.getElementById("g-col");
 select(gCol,"colorMode","Colour from",[
   ["solid","One colour"],["passGradient","Gradient across passes"],
-  ["pathGradient","Gradient along path"],["image","Sampled image"],["random","Random between two"]
+  ["pathGradient","Gradient along path"],["depthGradient","Gradient by depth"],
+  ["image","Sampled image"],["random","Random between two"]
 ]);
 colorPick(gCol,"colA","Colour A");
 colorPick(gCol,"colB","Colour B");
@@ -636,7 +705,47 @@ slider(gAnim,"mWobble","Wobble",0,180,1,"°");
 slider(gAnim,"mSpin","Spin",0,4,0.25,"t");
 slider(gAnim,"mShimmer","Shimmer",0,1,0.01,"");
 slider(gAnim,"mTravel","Travel",0,3,0.01,"");
-note(gAnim,"Everything here is a full cycle per loop, so the motion returns exactly to where it started. Travel slides stamps along their own path — whole numbers of turns for spin keep the loop clean.");
+slider(gAnim,"mSwayZ","Sway in depth",0,500,1,"");
+slider(gAnim,"mTumble","Tumble",0,180,0.5,"°");
+note(gAnim,"Sway in depth and tumble only do anything with depth switched on. Everything here is a full cycle per loop, so the motion returns exactly to where it started. Travel slides stamps along their own path — whole numbers of turns for spin keep the loop clean.");
+
+// --- depth
+const gDepth=document.getElementById("g-depth");
+check(gDepth,"dim3","Use depth");
+select(gDepth,"zMode","Anchor depth from",[
+  ["flat","Flat — all on one plane"],["noise","Noise"],["image","Image brightness"],
+  ["alongPath","Position on path"],["byPath","Which path"],["radial","Distance from centre"],
+  ["random","Random"],["velocity","Drawing speed"]
+]);
+slider(gDepth,"zAmount","Spread",0,900,5,"");
+slider(gDepth,"zNoiseFreq","Noise scale",0.0002,0.01,0.0001,"");
+slider(gDepth,"zByPath","Stagger by path",0,600,5,"");
+subhead(gDepth,"Push across passes");
+slider(gDepth,"zS","Start",-900,900,5,"");
+slider(gDepth,"zE","End",-900,900,5,"");
+subhead(gDepth,"Shape in depth");
+slider(gDepth,"zWave","Wave",0,500,1,"");
+slider(gDepth,"zWaveFreq","Wave cycles",0.25,24,0.25,"");
+slider(gDepth,"zScatter","Scatter",0,500,1,"");
+note(gDepth,"Depth is just a third coordinate on each anchor. Everything that already moves a point on the page can now move it toward or away from you as well.");
+
+// --- camera
+const gCam=document.getElementById("g-cam");
+slider(gCam,"camYaw","Yaw",-180,180,0.5,"°");
+slider(gCam,"camPitch","Pitch",-89,89,0.5,"°");
+slider(gCam,"camRoll","Roll",-180,180,0.5,"°");
+slider(gCam,"camDist","Distance",200,6000,10,"");
+slider(gCam,"persp","Perspective",0,1,0.01,"");
+slider(gCam,"camAuto","Auto orbit",-60,60,0.5,"°/s");
+subhead(gCam,"Depth cues");
+slider(gCam,"depthSize","Size falloff",0,2,0.01,"");
+slider(gCam,"depthFade","Fade with distance",0,1,0.01,"");
+check(gCam,"depthSort","Draw back to front");
+const camBtnRow=document.createElement("div"); camBtnRow.className="btnrow";
+const bCamFront=document.createElement("button"); bCamFront.textContent="Front on";
+const bCamThree=document.createElement("button"); bCamThree.textContent="Three quarter";
+camBtnRow.append(bCamFront,bCamThree); gCam.appendChild(camBtnRow);
+note(gCam,"Drag on the canvas to orbit. Perspective at 0 is an orthographic view, where depth changes position but not size.");
 
 // --- canvas
 const gCanvas=document.getElementById("g-canvas");
@@ -650,9 +759,22 @@ function vis(){
   elText.classList.toggle("hidden",P.src!=="text");
   elCloud.classList.toggle("hidden",P.src!=="cloud");
   elImage.classList.toggle("hidden",P.src!=="image");
+  elDraw.classList.toggle("hidden",P.src!=="draw");
+  const d3=!!P.dim3;
+  ["zMode","zAmount","zNoiseFreq","zByPath","zS","zE","zWave","zWaveFreq","zScatter"]
+    .forEach(k=>show(k,d3));
+  show("zNoiseFreq", d3 && P.zMode==="noise");
+  show("zWaveFreq", d3 && P.zWave>0);
+  ["camYaw","camPitch","camRoll","camDist","persp","camAuto","depthSize","depthFade","depthSort"]
+    .forEach(k=>show(k,d3));
+  gCam.querySelectorAll(".subhead,.note,.btnrow").forEach(e=>e.classList.toggle("hidden",!d3));
+  gDepth.querySelectorAll(".subhead").forEach(e=>e.classList.toggle("hidden",!d3));
+  show("mSwayZ",d3); show("mTumble",d3);
+  bDraw.classList.toggle("on",drawArmed);
   const maskish = P.src==="text"||P.src==="image";
   ["contourOn","spacing","smooth","fillOn","fillCount","minDist"].forEach(k=>show(k,maskish));
-  show("spacing",maskish&&P.contourOn); show("smooth",maskish&&P.contourOn);
+  show("spacing",(maskish&&P.contourOn) || P.src==="draw");
+  show("smooth",maskish&&P.contourOn);
   show("fillCount",maskish&&P.fillOn); show("minDist",maskish&&P.fillOn);
   const ct=P.cloudType;
   show("cloudCount",["uniform","grid","poisson","noiseMask","spiral","rings"].includes(ct));
@@ -663,7 +785,7 @@ function vis(){
   show("cloudThresh",["noiseMask"].includes(ct));
   show("rotValue",P.rotMode==="value");
   show("sides",P.shape==="polygon");
-  show("colB",["passGradient","pathGradient","random"].includes(P.colorMode));
+  show("colB",["passGradient","pathGradient","depthGradient","random"].includes(P.colorMode));
   show("colA",P.colorMode!=="image");
   show("bg",P.bgMode==="color");
   show("sizeJitMin",P.sizeMod!=="uniform");
@@ -674,7 +796,12 @@ function vis(){
   document.querySelectorAll("#srcTabs button").forEach(b=>b.classList.toggle("on",b.dataset.src===P.src));
 }
 document.querySelectorAll("#srcTabs button").forEach(b=>{
-  b.addEventListener("click",()=>{P.src=b.dataset.src;vis();changed();});
+  b.addEventListener("click",()=>{
+    P.src=b.dataset.src;
+    if(P.src==="draw" && !STROKES.length) setArmed(true);
+    else if(P.src!=="draw") setArmed(false);
+    vis(); changed();
+  });
 });
 
 /* ============================ canvas ============================ */
@@ -693,7 +820,7 @@ function dims(){
 /* ============================ mask + contours ============================ */
 const mask=document.createElement("canvas");
 const mctx=mask.getContext("2d",{willReadFrequently:true});
-let sourceImg=null;                       // uploaded Image/canvas
+let sourceImg=null, imgRev=0;             // uploaded Image/canvas
 const colorSampler=document.createElement("canvas");
 const csctx=colorSampler.getContext("2d",{willReadFrequently:true});
 let csData=null, csW=0, csH=0;
@@ -850,8 +977,10 @@ function resample(pts,spacing,closed){
 }
 
 /* ============================ point sources ============================ */
-// A path = {pts:[{x,y,tx,ty,nx,ny,u,r1,r2}], closed:bool}
+// A path = {pts:[{x,y,z,tx,ty,nx,ny,u,r1,r2,v}], closed:bool}
 let PATHS=[], POINT_COUNT=0;
+let camDragYaw=0, camDragPitch=0, camAutoYaw=0;   // live offsets
+let STROKES=[], strokeRev=0;               // hand-drawn point sources
 
 function finishPath(raw,closed,rnd){
   const n=raw.length;
@@ -864,7 +993,7 @@ function finishPath(raw,closed,rnd){
     else if(!closed && i===n-1){ tx=b[0]-raw[n-2][0]; ty=b[1]-raw[n-2][1]; }
     else { tx=c[0]-a[0]; ty=c[1]-a[1]; }
     const L=Math.hypot(tx,ty)||1; tx/=L; ty/=L;
-    pts[i]={x:b[0],y:b[1],tx,ty,nx:ty,ny:-tx,u:n>1?i/(n-1):0,r1:rnd(),r2:rnd()};
+    pts[i]={x:b[0],y:b[1],z:0,tx,ty,nx:ty,ny:-tx,u:n>1?i/(n-1):0,r1:rnd(),r2:rnd(),v:0};
   }
   return {pts,closed};
 }
@@ -874,6 +1003,7 @@ function buildFromMask(){
   const inv=1/s;
   const bin=maskBits(mw,mh);
   const rnd=mulberry32(P.seed*2654435761+11);
+  const zNoise=new Simplex(mulberry32(P.seed*104729+3));
   const paths=[];
   if(P.contourOn){
     const raw=traceMask(bin,mw,mh);
@@ -925,6 +1055,7 @@ function buildFromMask(){
       }
     }
   }
+  paths.forEach((fp,i)=>assignZ(fp,zNoise,i,paths.length,0));
   return paths;
 }
 
@@ -1032,11 +1163,67 @@ function buildCloud(){
       const fp=finishPath(acc,false,rnd); if(fp) paths.push(fp);
     }
   }
+  paths.forEach((fp,i)=>assignZ(fp,noise,i,paths.length,0));
   return paths;
 }
 
-function buildSource(){
-  PATHS = (P.src==="cloud") ? buildCloud() : buildFromMask();
+/* ---- hand-drawn strokes as a point source ---- */
+function smoothOpen(pts,iter){
+  let p=pts;
+  for(let k=0;k<iter;k++){
+    const n=p.length, q=new Array(n);
+    q[0]=p[0]; q[n-1]=p[n-1];
+    for(let i=1;i<n-1;i++)
+      q[i]=[(p[i-1][0]+p[i][0]*2+p[i+1][0])/4, (p[i-1][1]+p[i][1]*2+p[i+1][1])/4];
+    p=q;
+  }
+  return p;
+}
+function buildDrawn(){
+  const {w,h}=dims();
+  const rnd=mulberry32(P.seed*40503+7);
+  const zNoise=new Simplex(mulberry32(P.seed*104729+3));
+  const paths=[];
+  for(const st of STROKES){
+    if(!st.pts || st.pts.length<2) continue;
+    let raw=st.pts.map(q=>[q[0]*w, q[1]*h]);
+    if(P.drawSmooth>0) raw=smoothOpen(raw,P.drawSmooth);
+    const rs=resample(raw, Math.max(2,P.spacing), !!st.closed);
+    if(rs.length<2) continue;
+    const fp=finishPath(rs,!!st.closed,rnd);
+    if(!fp) continue;
+    // carry the drawing speed across to the resampled anchors
+    if(P.drawVelZ){
+      const src=st.pts, m=src.length;
+      for(let i=0;i<fp.pts.length;i++){
+        const j=Math.min(m-1, Math.round(fp.pts[i].u*(m-1)));
+        fp.pts[i].v = src[j][2]||0;
+      }
+    }
+    fp.baseZ = st.z||0;
+    paths.push(fp);
+  }
+  paths.forEach((fp,i)=>assignZ(fp,zNoise,i,paths.length,fp.baseZ));
+  if(P.drawVelZ) for(const fp of paths)
+    for(const p of fp.pts) p.z += (p.v*2-1)*P.drawVelZ;
+  return paths;
+}
+
+let geoKey="";
+function geoSig(){
+  return [P.src,P.text,P.font,P.weight,P.fontSize,P.leading,P.tracking,P.wordSpace,
+    P.align,P.autoFit,P.contourOn,P.spacing,P.smooth,P.fillOn,P.fillCount,P.minDist,
+    P.invertMask,P.threshold,P.seed,P.cloudType,P.cloudCount,P.cloudPaths,P.cloudLen,
+    P.cloudStep,P.cloudFreq,P.cloudThresh,P.aspect,P.zMode,P.zAmount,P.zNoiseFreq,
+    P.zByPath,P.drawSmooth,P.drawVelZ,strokeRev,imgRev].join("|");
+}
+function buildSource(force){
+  const k=geoSig();
+  if(!force && k===geoKey && PATHS.length){ return; }   // camera-only change
+  geoKey=k;
+  PATHS = P.src==="cloud" ? buildCloud()
+        : P.src==="draw"  ? buildDrawn()
+        : buildFromMask();
   POINT_COUNT = PATHS.reduce((a,p)=>a+p.pts.length,0);
 }
 
@@ -1060,6 +1247,97 @@ function sampleHex(x,y){
   sx=sx<0?0:sx>=csW?csW-1:sx; sy=sy<0?0:sy>=csH?csH-1:sy;
   const i=(sy*csW+sx)*4;
   return rgb2hex(csData[i],csData[i+1],csData[i+2]);
+}
+
+
+/* ============================ camera & depth ============================ */
+// The point model stays 2D on the page plane plus a z offset. Stamps always
+// face the viewer — billboards — which is what keeps a stamp tool readable
+// once it is turned in space.
+const CAM = {cy:1,sy:0,cp:1,sp:0,cr:1,sr:0,d:1500,persp:1,on:false,k:1};
+function camSetup(){
+  const yaw=(Q.camYaw+camDragYaw+camAutoYaw)*Math.PI/180;
+  const pitch=(Q.camPitch+camDragPitch)*Math.PI/180;
+  const roll=Q.camRoll*Math.PI/180;
+  CAM.cy=Math.cos(yaw); CAM.sy=Math.sin(yaw);
+  CAM.cp=Math.cos(pitch); CAM.sp=Math.sin(pitch);
+  CAM.cr=Math.cos(roll); CAM.sr=Math.sin(roll);
+  CAM.d=Math.max(120,Q.camDist);
+  CAM.persp=Q.persp;
+  CAM.on=!!Q.dim3;
+}
+// returns [screenX, screenY, scale, depth]
+const PRJ=[0,0,1,0];   // scratch: read it out before calling project() again
+function project(x,y,z){
+  if(!CAM.on){ PRJ[0]=x; PRJ[1]=y; PRJ[2]=1; PRJ[3]=0; return PRJ; }
+  const px=x-CW*0.5, py=y-CH*0.5;
+  const X1 = px*CAM.cy + z*CAM.sy;
+  const Z1 = -px*CAM.sy + z*CAM.cy;
+  const Y2 = py*CAM.cp - Z1*CAM.sp;
+  const Z2 = py*CAM.sp + Z1*CAM.cp;
+  const X3 = X1*CAM.cr - Y2*CAM.sr;
+  const Y3 = X1*CAM.sr + Y2*CAM.cr;
+  const d=CAM.d, den=d+Z2;
+  const sp = den>1 ? d/den : d;            // behind the lens: push it far away
+  const s = 1 + (sp-1)*CAM.persp;
+  PRJ[0]=CW*0.5 + X3*s; PRJ[1]=CH*0.5 + Y3*s; PRJ[2]=s; PRJ[3]=Z2;
+  return PRJ;
+}
+// screen point -> the world point on the z=0 plane that lands there.
+// Solved exactly: with z fixed at 0 the projected depth varies as K/s, which
+// turns the scale into a quadratic rather than something to iterate at.
+function unproject(sx,sy){
+  if(!CAM.on) return [sx,sy];
+  const u=sx-CW*0.5, v=sy-CH*0.5;
+  const a1=CAM.cy, b1=CAM.sy*CAM.sp, b2=CAM.cp;
+  const c1=-CAM.sy*CAM.cp, c2=CAM.sp;
+  const A1=a1*CAM.cr - b1*CAM.sr, A2=-b2*CAM.sr;
+  const B1=a1*CAM.sr + b1*CAM.cr, B2=b2*CAM.cr;
+  let det=A1*B2-A2*B1;                                  // = cos(pitch)*cos(yaw)
+  if(Math.abs(det)<1e-6) det = det<0 ? -1e-6 : 1e-6;    // plane seen edge-on
+  const solve=(sc)=>{
+    const uu=u/sc, vv=v/sc;
+    return [(uu*B2 - A2*vv)/det, (A1*vv - B1*uu)/det];
+  };
+  const p1=solve(1);
+  const K=c1*p1[0] + c2*p1[1];                          // depth at unit scale
+  const d=CAM.d, q=CAM.persp;
+  let s=1;
+  const disc=(K-d)*(K-d) + 4*d*K*(1-q);
+  if(disc>=0){
+    const r=(d-K+Math.sqrt(disc))/(2*d);
+    if(r>0.02 && isFinite(r)) s=r;
+  }
+  const pf=solve(s);
+  return [pf[0]+CW*0.5, pf[1]+CH*0.5];
+}
+
+function lumaAt(x,y){
+  if(!csData) return 0.5;
+  let sx=(x*csW/CW)|0, sy=(y*csH/CH)|0;
+  sx=sx<0?0:sx>=csW?csW-1:sx; sy=sy<0?0:sy>=csH?csH-1:sy;
+  const i=(sy*csW+sx)*4;
+  return (0.2126*csData[i]+0.7152*csData[i+1]+0.0722*csData[i+2])/255;
+}
+// gives every anchor on a path its resting depth
+function assignZ(fp, noise, pathIdx, pathTotal, base){
+  const amt=P.zAmount, mode=P.zMode, n=fp.pts.length;
+  const pi = pathTotal>1 ? pathIdx/(pathTotal-1) : 0;
+  for(let i=0;i<n;i++){
+    const p=fp.pts[i];
+    let z=0;
+    switch(mode){
+      case "noise":     z=noise.n2(p.x*P.zNoiseFreq, p.y*P.zNoiseFreq); break;
+      case "image":     z=lumaAt(p.x,p.y)*2-1; break;
+      case "alongPath": z=p.u*2-1; break;
+      case "random":    z=p.r1*2-1; break;
+      case "radial":    z=1-2*Math.min(1,Math.hypot(p.x-CW*0.5,p.y-CH*0.5)/(Math.hypot(CW,CH)*0.5)); break;
+      case "byPath":    z=pi*2-1; break;
+      case "velocity":  z=p.v*2-1; break;
+      default:          z=0;
+    }
+    p.z = z*amt + (P.zByPath ? (pi*2-1)*P.zByPath : 0) + (base||0);
+  }
 }
 
 /* ============================ stamp generation ============================ */
@@ -1107,6 +1385,8 @@ function emitPass(pass, emit, noise, T){
   const spiralA = Q.spiralTurns*TAU*te;
   const spiralR = Q.spiralR*te;
 
+  camSetup();
+  const zPush = lerp(Q.zS, Q.zE, te);
   const live = Q.anim;
   const travelAmt = live ? Q.mTravel*T : 0;
   const passPhase = PN>1 ? pass/(PN-1) : 0;
@@ -1118,7 +1398,7 @@ function emitPass(pass, emit, noise, T){
     const n=pts.length;
     for(let i=0;i<n;i++){
       const p=pts[i];
-      let bx=p.x, by=p.y, ttx=p.tx, tty=p.ty, tnx=p.nx, tny=p.ny, uu=p.u;
+      let bx=p.x, by=p.y, bz=p.z, ttx=p.tx, tty=p.ty, tnx=p.nx, tny=p.ny, uu=p.u;
 
       // --- travel: slide the stamp along its own path
       if(travelAmt){
@@ -1128,7 +1408,7 @@ function emitPass(pass, emit, noise, T){
         else { f=Math.max(0,Math.min(n-1.001,f)); i0=Math.floor(f); i1=Math.min(n-1,i0+1); }
         fr=f-i0;
         const a=pts[i0], b=pts[i1];
-        bx=a.x+(b.x-a.x)*fr; by=a.y+(b.y-a.y)*fr;
+        bx=a.x+(b.x-a.x)*fr; by=a.y+(b.y-a.y)*fr; bz=a.z+(b.z-a.z)*fr;
         ttx=a.tx; tty=a.ty; tnx=a.nx; tny=a.ny; uu=a.u;
       }
 
@@ -1148,7 +1428,11 @@ function emitPass(pass, emit, noise, T){
         w2 = Math.cos((T+ph)*TAU);
       }
 
-      let x=bx, y=by;
+      let x=bx, y=by, z=bz;
+      // along the depth axis
+      z += zPush;
+      if(Q.zWave) z += Math.sin(uu*TAU*Q.zWaveFreq + t*TAU)*Q.zWave;
+      if(Q.zScatter) z += (p.r2*2-1)*Q.zScatter*te;
       // across the path
       x += tnx*normal; y += tny*normal;
       // wave along the path
@@ -1179,6 +1463,15 @@ function emitPass(pass, emit, noise, T){
           const a=noise.noise3D(bx*Q.mWanderFreq, by*Q.mWanderFreq, 40.5)*TAU;
           x += Math.cos(a)*Q.mWander*w; y += Math.sin(a)*Q.mWander*w2;
         }
+        if(Q.mSwayZ) z += Q.mSwayZ*w;
+        if(Q.mTumble){
+          // swing the whole anchor around the vertical axis through the centre
+          const ang=Q.mTumble*Math.PI/180*w;
+          const ca=Math.cos(ang), sa=Math.sin(ang);
+          const rx=x-CW*0.5;
+          x = CW*0.5 + rx*ca + z*sa;
+          z = -rx*sa + z*ca;
+        }
       }
 
       // size
@@ -1205,9 +1498,24 @@ function emitPass(pass, emit, noise, T){
         if(Q.mSpin) rot += (T+ph)*TAU*Q.mSpin;
       }
 
+      // project into the frame
+      let depth=0;
+      if(CAM.on){
+        const pr=project(x,y,z);
+        const persScale=pr[2];
+        x=pr[0]; y=pr[1]; depth=pr[3];
+        if(Q.depthSize) sz *= 1 + (persScale-1)*Q.depthSize;
+        if(sz<=0.08) continue;
+        if(x<-CW||x>CW*2||y<-CH||y>CH*2) continue;   // well off frame
+      }
+
       // opacity
       let alpha=opa;
       if(live && Q.mShimmer) alpha *= 1 - Q.mShimmer*(0.5-0.5*w2);
+      if(CAM.on && Q.depthFade){
+        const f=Math.min(1,Math.max(0,(depth/Math.max(1,Q.zAmount+Q.camDist*0.5))*0.5+0.5));
+        alpha *= 1 - Q.depthFade*f;
+      }
       if(alpha<=0.004) continue;
 
       // colour
@@ -1217,15 +1525,31 @@ function emitPass(pass, emit, noise, T){
         case "passGradient": col=mixHex(Q.colA,Q.colB,t); break;
         case "pathGradient": col=mixHex(Q.colA,Q.colB,uu); break;
         case "random": col=mixHex(Q.colA,Q.colB,p.r1); break;
+        case "depthGradient": {
+          const span=Math.max(1,Q.zAmount+Math.abs(Q.zE-Q.zS)*0.5);
+          col=mixHex(Q.colA,Q.colB,Math.min(1,Math.max(0,depth/span*0.5+0.5)));
+          break;
+        }
         case "image": col=sampleHex(p.x,p.y); break;
         default: col=Q.colA;
       }
       let shape=Q.shape;
       if(shape==="mixed") shape=SHAPES[Math.floor(p.r2*SHAPES.length)];
 
-      emit({x,y,rot,size:sz,shape,col,sw,alpha,seedv:p.r1});
+      emit({x,y,rot,size:sz,shape,col,sw,alpha,seedv:p.r1,depth});
     }
   }
+}
+
+// One pass, drawn back to front when depth is in play. Sorting per pass keeps
+// the cost bounded and preserves the pass-over-pass layering the tool is built on.
+let sortBuf=[];
+function emitSorted(pass, paint, noise, T){
+  if(!Q.dim3 || !Q.depthSort){ emitPass(pass, paint, noise, T); return; }
+  sortBuf.length=0;
+  emitPass(pass, st=>sortBuf.push(st), noise, T);
+  sortBuf.sort((a,b)=>b.depth-a.depth);
+  for(let i=0;i<sortBuf.length;i++) paint(sortBuf[i]);
 }
 
 /* ============================ canvas backend ============================ */
@@ -1316,7 +1640,7 @@ function buildSVG(){
   for(let pass=0;pass<Q.passes;pass++) order.push(pass);
   for(const pass of order){
     parts.push(`<g id="pass-${pass+1}">`);
-    emitPass(pass, st=>parts.push(svgStamp(st)), noise, curT);
+    emitSorted(pass, st=>parts.push(svgStamp(st)), noise, curT);
     parts.push(`</g>`);
   }
   if(P.blend!=="source-over") parts.push(`</g>`);
@@ -1329,7 +1653,7 @@ const statusText=document.getElementById("statusText");
 const barFill=document.getElementById("barFill");
 const statLine=document.getElementById("statLine");
 let pass=0, running=false, rafId=0, noiseInst=null;
-let animRAF=0, animT0=0, curT=0, fpsN=0, fpsT0=0, fps=0;
+let animRAF=0, animT0=0, curT=0, fpsN=0, fpsT0=0, fps=0, animLast=0;
 const work=document.createElement("canvas");
 const wctx=work.getContext("2d");
 
@@ -1355,7 +1679,7 @@ function renderAll(ctx,sc,T,noise){
   paintBackground(ctx,ctx.canvas.width,ctx.canvas.height);
   prepCtx(ctx);
   const n=Math.max(1,Math.round(Q.passes));
-  for(let p2=0;p2<n;p2++) emitPass(p2, st=>paintStamp(ctx,st,sc), noise, T);
+  for(let p2=0;p2<n;p2++) emitSorted(p2, st=>paintStamp(ctx,st,sc), noise, T);
   ctx.setTransform(1,0,0,1,0,0);
 }
 
@@ -1370,10 +1694,10 @@ function startRender(){
   const {w,h}=dims();
   buildSource();
   updateStats();
-  work.width=w; work.height=h;
-  view.width=w; view.height=h;
+  if(work.width!==w||work.height!==h){ work.width=w; work.height=h; }
+  if(view.width!==w||view.height!==h){ view.width=w; view.height=h; }
   noiseInst=new Simplex(mulberry32(P.seed*7919+5));
-  const driven = Drive && Drive.isLive();
+  const driven = (Drive && Drive.isLive()) || (P.dim3 && Math.abs(P.camAuto)>0.01);
   if(P.anim || driven){
     animT0=performance.now()-curT*1000/Math.max(0.001,P.animSpeed);
     fpsN=0; fpsT0=performance.now();
@@ -1394,7 +1718,7 @@ function tick(){
   if(!running) return;
   const t0=performance.now();
   while(pass<Q.passes && performance.now()-t0<16){
-    emitPass(pass, st=>paintStamp(wctx,st,1), noiseInst, 0);
+    emitSorted(pass, st=>paintStamp(wctx,st,1), noiseInst, 0);
     pass++;
   }
   wctx.setTransform(1,0,0,1,0,0);
@@ -1408,23 +1732,34 @@ function tick(){
 // playback: clear and redraw the whole stack every frame
 function animFrame(now){
   animRAF=0;
-  if(!P.anim && !(Drive && Drive.isLive())) return;
+  const spin = P.dim3 && Math.abs(P.camAuto)>0.01;
+  if(!P.anim && !spin && !(Drive && Drive.isLive())) return;
+  const dt=Math.min(0.1,(now-(animLast||now))/1000); animLast=now;
   curT = (((now-animT0)/1000*P.animSpeed)%1+1)%1;
   Q = Drive ? Drive.resolve(P) : P;
+  if(spin) camAutoYaw = (camAutoYaw + Q.camAuto*dt) % 360;
   renderAll(wctx,1,curT,noiseInst);
   blit();
   fpsN++;
   if(now-fpsT0>500){ fps=Math.round(fpsN*1000/(now-fpsT0)); fpsN=0; fpsT0=now; }
-  statusText.textContent=(P.anim?"playing":"driven")+` · ${fps} fps`
+  statusText.textContent=(P.anim?"playing":spin?"orbiting":"driven")+` · ${fps} fps`
     + (Drive && Drive.state.midi.clockOk ? ` · ${Drive.bpm.toFixed(0)} bpm` : "");
   barFill.style.width=(curT*100).toFixed(1)+"%";
   animRAF=requestAnimationFrame(animFrame);
 }
 
 function updateStats(){
+  if(!POINT_COUNT){
+    statLine.textContent = P.src==="image" && !sourceImg ? "Load an image to sample points from."
+      : P.src==="draw" ? "Arm Draw and sketch on the canvas."
+      : "No points — try wider spacing or a different source.";
+    return;
+  }
   const stamps=POINT_COUNT*P.passes;
   let msg=`${PATHS.length} paths · ${POINT_COUNT} anchors · ${stamps.toLocaleString()} stamps`;
+  if(P.dim3) msg+=" · 3D";
   if(P.anim && stamps>25000) msg+=" — heavy to animate";
+  else if(P.dim3 && P.depthSort && stamps>40000) msg+=" — heavy to depth sort";
   else if(stamps>60000) msg+=" — heavy for SVG";
   statLine.textContent=msg;
 }
@@ -1451,7 +1786,7 @@ async function exportPNG(){
   prepCtx(bx);
   const np=Math.max(1,Math.round(Q.passes));
   for(let p2=0;p2<np;p2++){
-    emitPass(p2, st=>paintStamp(bx,st,sc), noise, curT);
+    emitSorted(p2, st=>paintStamp(bx,st,sc), noise, curT);
     if(p2%3===0){ ovText.textContent=`Rendering pass ${p2+1} of ${np}`; await new Promise(r=>setTimeout(r,0)); }
   }
   bx.setTransform(1,0,0,1,0,0);
@@ -1510,6 +1845,119 @@ btnRec.addEventListener("click",()=>{
   setTimeout(()=>{ if(recorder && recorder.state==="recording") recorder.stop(); }, dur);
 });
 
+/* ============================ canvas interaction ============================ */
+let drawArmed=false, curStroke=null, lastPt=null, lastT2=0;
+let orbiting=false, orbitX=0, orbitY=0;
+
+function viewToCanvas(e){
+  const r=view.getBoundingClientRect();
+  return [ (e.clientX-r.left)/r.width*CW, (e.clientY-r.top)/r.height*CH ];
+}
+function setArmed(on){
+  drawArmed=on;
+  bDraw.classList.toggle("on",on);
+  view.style.cursor = on ? "crosshair" : "grab";
+}
+bDraw.addEventListener("click",()=>{
+  if(!drawArmed && P.src!=="draw"){ P.src="draw"; bound.src&&bound.src(); }
+  setArmed(!drawArmed);
+  vis();
+  if(P.src==="draw") startRender();
+});
+bUndo.addEventListener("click",()=>{
+  if(!STROKES.length) return;
+  STROKES.pop(); strokeRev++; drawInfo(); startRender();
+});
+bClearDraw.addEventListener("click",()=>{
+  STROKES.length=0; strokeRev++; drawInfo(); startRender();
+});
+function drawInfo(){
+  const n=STROKES.length;
+  const pts=STROKES.reduce((a,s2)=>a+s2.pts.length,0);
+  drawLbl.textContent = n ? `${n} stroke${n===1?"":"s"} · ${pts} raw points` : "No strokes yet.";
+}
+
+view.addEventListener("pointerdown",e=>{
+  view.setPointerCapture(e.pointerId);
+  if(drawArmed){
+    const c=viewToCanvas(e);
+    const w0=unproject(c[0],c[1]);
+    curStroke={pts:[[w0[0]/CW, w0[1]/CH, 0]], z:P.drawZ, closed:!!P.drawClose};
+    lastPt=c; lastT2=performance.now();
+  } else {
+    orbiting=true; orbitX=e.clientX; orbitY=e.clientY;
+    view.style.cursor="grabbing";
+  }
+});
+view.addEventListener("pointermove",e=>{
+  if(drawArmed && curStroke){
+    const c=viewToCanvas(e);
+    const dx=c[0]-lastPt[0], dy=c[1]-lastPt[1];
+    const d=Math.hypot(dx,dy);
+    if(d < P.drawMinDist) return;
+    const now=performance.now();
+    const spd=Math.min(1, d/Math.max(1,now-lastT2)*14);
+    lastPt=c; lastT2=now;
+    const w0=unproject(c[0],c[1]);
+    curStroke.pts.push([w0[0]/CW, w0[1]/CH, spd]);
+    // live feedback while the stroke is still being drawn
+    vctx.save();
+    vctx.strokeStyle="rgba(127,209,192,0.9)"; vctx.lineWidth=2;
+    vctx.lineCap="round"; vctx.beginPath();
+    const a=curStroke.pts[curStroke.pts.length-2], b=curStroke.pts[curStroke.pts.length-1];
+    const pa=project(a[0]*CW,a[1]*CH,curStroke.z), ax=pa[0], ay=pa[1];
+    const pb=project(b[0]*CW,b[1]*CH,curStroke.z);
+    vctx.moveTo(ax,ay); vctx.lineTo(pb[0],pb[1]); vctx.stroke();
+    vctx.restore();
+  } else if(orbiting){
+    camDragYaw   += (e.clientX-orbitX)*0.35;
+    camDragPitch += (e.clientY-orbitY)*0.35;
+    orbitX=e.clientX; orbitY=e.clientY;
+    if(!P.dim3){ P.dim3=true; bound.dim3&&bound.dim3(); vis(); }
+    orbitRender();
+  }
+});
+function endPointer(){
+  if(drawArmed && curStroke){
+    if(curStroke.pts.length>2){ STROKES.push(curStroke); strokeRev++; drawInfo(); startRender(); }
+    curStroke=null;
+  }
+  if(orbiting){
+    orbiting=false;
+    view.style.cursor = drawArmed ? "crosshair" : "grab";
+    // fold the drag back into the real parameters so presets keep it
+    P.camYaw   = ((P.camYaw+camDragYaw+180)%360+360)%360-180;
+    P.camPitch = Math.max(-89,Math.min(89,P.camPitch+camDragPitch));
+    camDragYaw=0; camDragPitch=0;
+    bound.camYaw&&bound.camYaw(); bound.camPitch&&bound.camPitch();
+    startRender();
+  }
+}
+view.addEventListener("pointerup",endPointer);
+view.addEventListener("pointercancel",endPointer);
+view.addEventListener("wheel",e=>{
+  if(!P.dim3) return;
+  e.preventDefault();
+  P.camDist=Math.max(200,Math.min(6000,P.camDist*(1+Math.sign(e.deltaY)*0.08)));
+  bound.camDist&&bound.camDist();
+  orbitRender();
+},{passive:false});
+
+let orbitPending=false;
+function orbitRender(){
+  if(orbitPending) return;
+  orbitPending=true;
+  requestAnimationFrame(()=>{ orbitPending=false; if(!running && !animRAF) startRender(); });
+}
+bCamFront.addEventListener("click",()=>{
+  P.camYaw=0; P.camPitch=0; P.camRoll=0;
+  bound.camYaw(); bound.camPitch(); bound.camRoll(); startRender();
+});
+bCamThree.addEventListener("click",()=>{
+  P.camYaw=-24; P.camPitch=16; P.camRoll=0;
+  bound.camYaw(); bound.camPitch(); bound.camRoll(); startRender();
+});
+
 /* ============================ presets & files ============================ */
 const presetSel=document.getElementById("presetSel");
 Object.keys(PRESETS).forEach(k=>{
@@ -1563,6 +2011,7 @@ document.getElementById("btnSaveSession").addEventListener("click",()=>{
 });
 document.getElementById("btnExportPreset").addEventListener("click",()=>{
   const out=Object.assign({},P);
+  if(STROKES.length) out._strokes=STROKES;
   if(Drive) out._drive=Drive.serialize();
   const blob=new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
   download(URL.createObjectURL(blob),`anchor_preset_${P.seed}.json`);
@@ -1575,7 +2024,8 @@ filePreset.addEventListener("change",e=>{
   r.onload=()=>{ try{
       const j=JSON.parse(r.result);
       if(Drive && j._drive) Drive.load(j._drive);
-      delete j._drive;
+      if(Array.isArray(j._strokes)){ STROKES=j._strokes; strokeRev++; drawInfo(); }
+      delete j._drive; delete j._strokes;
       P=Object.assign({},DEFAULTS,j);
       userSlot=JSON.parse(JSON.stringify(P)); presetSel.value="*User preset";
       syncUI(); startRender();
@@ -1589,7 +2039,7 @@ imgClr.addEventListener("click",()=>{ sourceImg=null; csData=null; startRender()
 fileImg.addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadImage(f); e.target.value=""; });
 function loadImage(f){
   const url=URL.createObjectURL(f), im=new Image();
-  im.onload=()=>{ sourceImg=im; updateColorSampler(); P.src="image"; vis(); startRender(); URL.revokeObjectURL(url); };
+  im.onload=()=>{ sourceImg=im; imgRev++; updateColorSampler(); P.src="image"; vis(); startRender(); URL.revokeObjectURL(url); };
   im.src=url;
 }
 const fileFont=document.getElementById("fileFont");
