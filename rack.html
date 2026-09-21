@@ -19,137 +19,160 @@ body{
   background:var(--bg); color:var(--text); overflow:hidden;
   font-family:"Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-button,input,select{ font-family:inherit; font-size:.82rem; color:var(--text); }
-button{
-  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
-  padding:5px 10px; cursor:pointer;
-}
+button,input,select{ font-family:inherit; font-size:.8rem; color:var(--text); }
+button{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:4px 9px; cursor:pointer; }
 button:hover{ border-color:var(--dim); }
 button:focus-visible,input:focus-visible,select:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
 button.on{ border-color:var(--accent); color:var(--accent); }
-button.warn{ color:var(--warm); }
-select{ background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:3px 5px; width:100%; }
+button.sm{ padding:1px 6px; font-size:.7rem; }
+select,input[type=text],input[type=search]{
+  background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:3px 6px; width:100%;
+}
 input[type=range]{ width:100%; accent-color:var(--accent); }
 
-#app{ display:grid; grid-template-rows:48px 1fr; height:100%; }
-header{
-  display:flex; align-items:center; gap:12px; padding:0 14px;
-  background:var(--panel-2); border-bottom:1px solid var(--line);
-}
-header h1{ font-size:1rem; font-weight:700; white-space:nowrap; }
+#app{ display:grid; grid-template-rows:46px 1fr; height:100%; }
+header{ display:flex; align-items:center; gap:10px; padding:0 13px; background:var(--panel-2); border-bottom:1px solid var(--line); }
+header h1{ font-size:.98rem; font-weight:700; white-space:nowrap; }
 header h1 span{ color:var(--dim); font-weight:400; }
 .spacer{ flex:1; }
 #beat{ width:9px; height:9px; border-radius:50%; background:var(--faint); }
 #beat.hit{ background:var(--live); }
-#fps{ color:var(--dim); font-variant-numeric:tabular-nums; min-width:54px; text-align:right; font-size:.78rem; }
+#fps{ color:var(--dim); font-variant-numeric:tabular-nums; min-width:52px; text-align:right; font-size:.76rem; }
 
-main{ display:grid; grid-template-columns:284px 1fr 320px; min-height:0; }
-.rail{ background:var(--panel-2); overflow-y:auto; padding:11px; }
-.rail.left{ border-right:1px solid var(--line); }
-.rail.right{ border-left:1px solid var(--line); }
-.rail h2{
-  font-size:.74rem; font-weight:500; color:var(--dim); margin:13px 0 7px;
-  display:flex; align-items:center; gap:7px;
+main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35fr) 320px; min-height:0; }
+.col{ min-width:0; min-height:0; display:flex; flex-direction:column; }
+.col.graph{ border-right:1px solid var(--line); background:var(--panel-2); }
+/* the inspector scrolls its own content — it must NOT be a flex column, or its
+   children (the parameter list above all) get shrunk to zero height */
+.col.right{ display:block; border-left:1px solid var(--line); background:var(--panel-2); overflow-y:auto; padding:11px; }
+.colhead{
+  display:flex; align-items:center; gap:8px; padding:7px 11px; border-bottom:1px solid var(--line);
+  font-size:.74rem; color:var(--dim); flex:none;
 }
-.rail h2:first-child{ margin-top:0; }
+.colhead b{ color:var(--text); font-weight:500; font-size:.78rem; }
 
-/* ---- layer strips ---- */
-.layer{ border:1px solid var(--line); border-radius:var(--radius); margin-bottom:9px; background:var(--panel); overflow:hidden; }
-.layer.muted{ opacity:.5; }
-.layer .lhead{ display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid var(--line-soft); }
-.layer .lhead b{ font-weight:500; font-size:.8rem; flex:1; }
-.layer .dot{ width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none; }
-.layer .dot.live{ background:var(--live); }
-.layer .dot.err{ background:var(--danger); }
-.layer .lhead button{ padding:1px 6px; font-size:.7rem; }
-.layer .thumb{ display:block; width:100%; height:78px; background:#0c0e14; object-fit:cover; }
-.layer .lbody{ padding:7px 8px; display:grid; gap:5px; }
-.layer .row{ display:grid; grid-template-columns:38px 1fr 34px; align-items:center; gap:6px; font-size:.7rem; color:var(--dim); }
-.layer .row .val{ text-align:right; font-variant-numeric:tabular-nums; }
-.layer .srcrow{ display:grid; grid-template-columns:38px 1fr; align-items:center; gap:6px; font-size:.7rem; color:var(--dim); }
-
-/* ---- stage ---- */
-#stage{ display:grid; grid-template-rows:1fr 1fr; min-height:0; background:var(--bg); }
-.pane{ position:relative; min-height:0; border-bottom:1px solid var(--line); overflow:hidden; }
-.pane:last-child{ border-bottom:none; }
-.pane .tag{
-  position:absolute; left:9px; top:8px; z-index:2; font-size:.7rem; color:var(--dim);
-  background:rgba(20,22,29,.72); padding:2px 7px; border-radius:4px; pointer-events:none;
+/* ---------- node graph ---------- */
+#graphWrap{ position:relative; flex:1; min-height:0; overflow:hidden;
+  background:
+    radial-gradient(circle at 18% 22%, #1a1e29 0%, var(--panel-2) 62%),
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(255,255,255,.017) 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, rgba(255,255,255,.017) 23px 24px);
 }
-#mixCanvas{ width:100%; height:100%; object-fit:contain; display:block; background:#000; }
-#volFrame{ width:100%; height:100%; border:0; display:block; background:#0e1016; }
-
-/* ---- params / drive ---- */
-.pgroup{ border:1px solid var(--line); border-radius:var(--radius); margin-bottom:8px; background:var(--panel); }
-.pgroup > summary{ padding:6px 9px; cursor:pointer; font-size:.78rem; font-weight:500; list-style:none; }
-.pgroup > summary::-webkit-details-marker{ display:none; }
-.pgroup > summary::before{ content:"▸ "; color:var(--dim); }
-.pgroup[open] > summary::before{ content:"▾ "; }
-.pgroup .pbody{ padding:4px 9px 9px; display:grid; gap:6px; }
-.prm{ font-size:.72rem; }
-.prm .plab{ display:flex; justify-content:space-between; color:var(--dim); }
-.prm .plab .pv{ font-variant-numeric:tabular-nums; }
-.prm.mod .plab{ color:var(--accent); }
-
-#note{
-  margin-top:10px; padding:8px 9px; border:1px solid var(--line); border-radius:var(--radius);
-  background:var(--panel); color:var(--dim); font-size:.72rem; line-height:1.45;
+#cables{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+#cables path.cable{ fill:none; stroke-linecap:round; pointer-events:stroke; cursor:pointer; }
+#cables path.hit{ fill:none; stroke:transparent; stroke-width:16; pointer-events:stroke; cursor:pointer; }
+#cables path.sel{ stroke-dasharray:7 5; }
+#nodes{ position:absolute; inset:0; }
+.node{
+  position:absolute; width:152px; background:var(--panel); border:1px solid var(--line);
+  border-radius:8px; overflow:hidden; user-select:none; cursor:grab;
+  box-shadow:0 6px 18px rgba(0,0,0,.34);
 }
-#banner{
-  display:none; position:fixed; inset:0; z-index:50; background:rgba(15,17,22,.95);
-  place-items:center; padding:30px; text-align:center;
+.node.dragging{ cursor:grabbing; }
+.node.sel{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 6px 20px rgba(0,0,0,.4); }
+.node .nh{ display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid var(--line-soft); }
+.node .nh .sw{ width:8px; height:8px; border-radius:2px; flex:none; }
+.node .nh b{ font-size:.75rem; font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.node .nh .st{ width:6px; height:6px; border-radius:50%; background:var(--faint); flex:none; }
+.node .nh .st.live{ background:var(--live); }
+.node .nh .st.err{ background:var(--danger); }
+.node canvas.nt{ display:block; width:100%; height:62px; background:#0b0d13; }
+.node .nf{ padding:3px 8px 5px; font-size:.64rem; color:var(--faint); display:flex; justify-content:space-between; }
+.node.out{ width:176px; }
+.node.out canvas.nt{ height:78px; }
+.node.vol{ width:150px; }
+.node.vol .vbody{ padding:9px 8px; font-size:.68rem; color:var(--dim); line-height:1.4; }
+.port{
+  position:absolute; width:13px; height:13px; border-radius:50%; background:var(--panel);
+  border:2px solid var(--dim); cursor:crosshair; z-index:3;
 }
+.port:hover{ border-color:var(--accent); background:var(--accent); }
+.port.in{ left:-7px; top:50%; transform:translateY(-50%); }
+.port.out{ right:-7px; top:50%; transform:translateY(-50%); }
+.port.act{ border-color:var(--accent); }
+
+/* ---------- stage ---------- */
+.col.stage{ background:var(--bg); }
+#work{ position:relative; flex:1; min-height:0; overflow:hidden; background:#000; }
+#mixCanvas{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; }
+#farm{ position:absolute; inset:0; overflow:hidden; }
+#farm iframe{
+  position:absolute; left:-20000px; top:0; width:1440px; height:810px; border:0;
+  transform-origin:top left; background:#0e1016;
+}
+#farm iframe.show{ left:0; }
+#volPane{ position:relative; height:44%; min-height:150px; border-top:1px solid var(--line); background:#0e1016; }
+#volFrame{ width:100%; height:100%; border:0; display:block; }
+.tag{
+  position:absolute; left:8px; top:7px; z-index:4; font-size:.67rem; color:var(--dim);
+  background:rgba(18,20,27,.8); padding:2px 7px; border-radius:4px; pointer-events:none; max-width:86%;
+}
+.tag.warm{ color:var(--warm); top:26px; white-space:normal; line-height:1.35; }
+
+/* ---------- inspector ---------- */
+.ins h2{ font-size:.73rem; color:var(--dim); font-weight:500; margin:14px 0 7px; }
+.ins h2:first-child{ margin-top:0; }
+.ihead{ display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+.ihead .sw{ width:11px; height:11px; border-radius:3px; flex:none; }
+.ihead b{ font-size:.92rem; font-weight:600; flex:1; }
+.fld{ margin-bottom:8px; }
+.fld .lab{ display:flex; justify-content:space-between; font-size:.7rem; color:var(--dim); margin-bottom:2px; }
+.fld .lab .v{ font-variant-numeric:tabular-nums; }
+.fld.mod .lab{ color:var(--accent); }
+.row2{ display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; }
+.lyr{ display:grid; grid-template-columns:auto 1fr auto auto; gap:5px; align-items:center;
+      padding:5px 6px; border:1px solid var(--line); border-radius:5px; margin-bottom:5px; background:var(--panel); font-size:.72rem; }
+.lyr .sw{ width:8px; height:8px; border-radius:2px; }
+.plist{ max-height:320px; overflow-y:auto; padding-right:3px; }
+.prow{ display:grid; grid-template-columns:1fr 26px; gap:5px; align-items:start; margin-bottom:7px; }
+.prow .mb{ font-size:.62rem; padding:2px 0; border-radius:4px; }
+.prow .mb.on{ border-color:var(--accent); color:var(--accent); }
+.empty{ color:var(--faint); font-size:.73rem; line-height:1.5; }
+#drivePanelWrap{ border-top:1px solid var(--line); margin-top:14px; padding-top:12px; }
+
+#banner{ display:none; position:fixed; inset:0; z-index:60; background:rgba(15,17,22,.96); place-items:center; padding:30px; text-align:center; }
 #banner div{ max-width:520px; line-height:1.55; color:var(--dim); }
 #banner b{ color:var(--text); display:block; margin-bottom:8px; font-size:1.05rem; }
 #banner code{ background:var(--panel); padding:2px 6px; border-radius:4px; color:var(--warm); }
-#farm{ position:fixed; left:-10000px; top:0; width:1280px; height:720px; }
-#farm iframe{ width:1280px; height:720px; border:0; display:block; }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <h1>The Unlimiter <span>· Rack</span></h1>
-    <button id="bStartAll">Start all</button>
+    <button id="bStartAll">Wake all</button>
     <button id="bOutput">Output window</button>
+    <button id="bReset">Reset layout</button>
     <div class="spacer"></div>
     <div id="beat"></div>
     <div id="fps">—</div>
   </header>
 
   <main>
-    <div class="rail left">
-      <h2>Layers <span style="color:var(--faint)">— bottom of the list draws last</span></h2>
-      <div id="layerList"></div>
-      <h2>Mix</h2>
-      <div class="layer"><div class="lbody">
-        <div class="row"><span>gain</span><input type="range" id="mixGain" min="0" max="2" step="0.01" value="1"><span class="val" id="mixGainV">1.00</span></div>
-        <div class="srcrow"><span>bg</span>
-          <select id="mixBg"><option value="#000000">black</option><option value="clear">keep (trails)</option></select>
-        </div>
-      </div></div>
-    </div>
-
-    <div id="stage">
-      <div class="pane"><div class="tag">MIX — what OBS captures</div><canvas id="mixCanvas"></canvas></div>
-      <div class="pane"><div class="tag">VOLUME — the mix as a live 3D relief</div><iframe id="volFrame" src="volume-renderer.html?embed=1" title="Volume renderer"></iframe></div>
-    </div>
-
-    <div class="rail right">
-      <h2>Drive — audio, MIDI, modulation</h2>
-      <div id="g-drive"></div>
-      <h2>Rack targets</h2>
-      <div id="targets"></div>
-      <div id="note">
-        Everything in <b style="color:var(--text)">Rack targets</b> is registered with the drive, so it can be
-        routed from audio, LFOs or MIDI in the panel above — layer opacities included. Routing an LFO to two
-        layer opacities is how you get a hands-free crossfade between tools.
+    <div class="col graph">
+      <div class="colhead"><b>Signal graph</b><span>drag ports to patch · click a node to edit it</span></div>
+      <div id="graphWrap">
+        <svg id="cables" xmlns="http://www.w3.org/2000/svg"><g id="cableG"></g><path id="pending" fill="none" stroke="#8b90a0" stroke-dasharray="5 4" stroke-width="2"></path></svg>
+        <div id="nodes"></div>
       </div>
     </div>
+
+    <div class="col stage">
+      <div class="colhead"><b id="workTitle">Output</b><span id="workSub">the mix — what OBS captures</span>
+        <div class="spacer"></div><button id="bBackToMix" class="sm" style="display:none">← back to mix</button></div>
+      <div id="work">
+        <canvas id="mixCanvas"></canvas>
+        <div id="farm"></div>
+      </div>
+      <div id="volPane">
+        <div class="tag">VOLUME — the mix as a live 3D relief</div>
+        <iframe id="volFrame" src="volume-renderer.html?embed=1" title="Volume renderer"></iframe>
+      </div>
+    </div>
+
+    <div class="col right ins" id="inspector"></div>
   </main>
 </div>
-
-<div id="farm"></div>
 
 <div id="banner"><div>
   <b>The rack needs to be served over http, not opened as a file.</b>
@@ -161,301 +184,269 @@ main{ display:grid; grid-template-columns:284px 1fr 320px; min-height:0; }
 <script>
 "use strict";
 /* ============================================================
-   THE RACK — a template control surface for the whole suite.
+   THE UNLIMITER — RACK
+   A node graph over the whole suite. Each tool runs in its own
+   same-origin iframe; the graph says what feeds what; the OUTPUT
+   node is the mix OBS captures, and it also feeds the volume
+   renderer. Selecting a node puts its real controls in the
+   inspector, and its own full UI can take over the stage while
+   the output keeps running.
 
-   Five real tools run in hidden same-origin iframes. The rack
-   captures each tool's output canvas, blends the layers, and
-   feeds the result to the volume renderer as a live 3D source.
-   One drive instance (unlimiter-drive.js) modulates everything:
-   layer opacities AND each tool's own registered parameters.
-
-   Capture has two paths, because the tools differ:
-     pull — canvas reads back fine (2D, or WebGL with
-            preserveDrawingBuffer). We drawImage it each frame.
+   Capture has two paths because the tools differ:
+     pull — canvas reads back (2D, or WebGL with
+            preserveDrawingBuffer). drawImage it each frame.
      push — WebGL with preserveDrawingBuffer off. Those tools
-            already call Drive.pushFrame(canvas) at the end of
-            their own render, so we wrap that method and take a
-            copy as it goes by. No edits to the tool required.
+            already call Drive.pushFrame() at the end of their
+            render, so we wrap that and copy the frame as it
+            passes. No edits to the tools themselves.
    ============================================================ */
 
 const MIX_W = 1280, MIX_H = 720;
 const LAYER_W = 640, LAYER_H = 360;
+const FRAME_W = 1440, FRAME_H = 810;
 
-/* Per-tool wiring. `params` is a *preference* list — the real bounds and
-   labels come from each tool's own Drive.targets at runtime, so nothing here
-   has to be kept in sync with the tools by hand. */
 const TOOLS = [
-  { id:"fw", file:"flow-weave.html",   label:"Flow Weave",   sel:"#c",    capture:"pull",
-    prefer:["curl","vort","inj","relief"], boot:["bDripNow"], accepts:null, blend:"source-over", op:1.0,
-    init:"" },
-  { id:"mw", file:"melted-world.html", label:"Melted World", sel:"#gl",   capture:"push",
-    prefer:["power","drift","slice","sat"], boot:["bTest"], accepts:"texture", blend:"screen", op:0.65,
-    init:"typeof setPlaying === 'function' && setPlaying(true);" },
-  { id:"se", file:"sediment.html",     label:"Sediment",     sel:"#view", capture:"pull",
-    prefer:["xSpeedS","drift","brightness","sizeS"], boot:["btnPattern"], accepts:"image", blend:"screen", op:0.55,
-    init:"" },
-  { id:"an", file:"anchor.html",       label:"Anchor",       sel:"#view", capture:"pull",
-    prefer:["waveAmp","noiseAmp","scatter","sizeS"], boot:[], accepts:null, blend:"lighter", op:0.5,
-    init:"P.anim = true; typeof startRender === 'function' && startRender();" },
-  { id:"ou", file:"ouroboros.html",    label:"Ouroboros",    sel:"#gl",   capture:"push",
-    prefer:["zoom","twist","noiseAmp","decay"], boot:["bSeed"], accepts:"frame", blend:"screen", op:0.6,
-    init:"" },
+  { id:"fw", file:"flow-weave.html",   label:"Flow Weave",   sel:"#c",    capture:"pull", color:"#38c7d8",
+    prefer:["curl","vort","inj","relief"],            boot:["bDripNow"],   accepts:null,       init:"" },
+  { id:"mw", file:"melted-world.html", label:"Melted World", sel:"#gl",   capture:"push", color:"#ffb02e",
+    prefer:["power","drift","slice","sat"],           boot:["bTest"],      accepts:"texture",  init:"typeof setPlaying === 'function' && setPlaying(true);" },
+  { id:"se", file:"sediment.html",     label:"Sediment",     sel:"#view", capture:"pull", color:"#f0459c",
+    prefer:["xSpeedS","drift","brightness","sizeS"],  boot:["btnPattern"], accepts:"image",    init:"" },
+  { id:"an", file:"anchor.html",       label:"Anchor",       sel:"#view", capture:"pull", color:"#9d7bff",
+    prefer:["waveAmp","noiseAmp","scatter","sizeS"],  boot:[],             accepts:null,       init:"P.anim = true; typeof startRender === 'function' && startRender();" },
+  { id:"ou", file:"ouroboros.html",    label:"Ouroboros",    sel:"#gl",   capture:"push", color:"#6fce62",
+    prefer:["zoom","twist","noiseAmp","decay"],       boot:["bSeed"],      accepts:"frame",    init:"" },
 ];
 const BLENDS = ["source-over","screen","lighter","multiply","overlay","difference","soft-light","hard-light"];
+const LS_KEY = "unlimiter.rack.graph.v1";
 
-/* ---- rack parameter store: RP is the user's values, RQ is RP + modulation ---- */
-const RP = {};                 // rack params, exactly the P/Q contract the tools use
+/* ---- rack parameter store: the same P/Q contract the tools use ---- */
+const RP = {};
 let   RQ = RP;
-const RACK_TARGETS = [];       // {key, label, min, max, apply(v)}
+const RACK_TARGETS = [];
+const targetByKey = new Map();
 
 const mixCanvas = document.getElementById("mixCanvas");
 mixCanvas.width = MIX_W; mixCanvas.height = MIX_H;
 const mixCtx = mixCanvas.getContext("2d");
 
-const layers = [];             // runtime state per tool
+const layers = new Map();       // toolId -> runtime state
 let volAPI = null, volReady = false;
+let editingTool = null;         // toolId whose own UI is on the stage
 
-/* ============================================================
-   Drive — one instance for the whole rack
-   ============================================================ */
 const Drive = (window.UnlimiterDrive)
   ? UnlimiterDrive.create({ onChange: () => {}, getOutputCanvas: () => mixCanvas })
   : null;
 
 function registerTarget(key, label, min, max, apply){
-  RACK_TARGETS.push({ key, label, min, max, apply });
+  if(targetByKey.has(key)) return targetByKey.get(key);
+  const t = { key, label, min, max, apply };
+  RACK_TARGETS.push(t); targetByKey.set(key, t);
   if(Drive) Drive.registerTarget(key, label, min, max);
+  return t;
+}
+function unregisterTarget(key){
+  const i = RACK_TARGETS.findIndex(t => t.key === key);
+  if(i < 0) return;
+  RACK_TARGETS.splice(i, 1); targetByKey.delete(key);
+  if(Drive){                       // no removeTarget in the drive — re-declare the set
+    Drive.clearTargets();
+    RACK_TARGETS.forEach(t => Drive.registerTarget(t.key, t.label, t.min, t.max));
+    Drive.rebuildMatrix();
+  }
 }
 
 /* ============================================================
-   Layer construction
+   Graph model
    ============================================================ */
-function buildLayers(){
-  const list = document.getElementById("layerList");
-  TOOLS.forEach((tool, idx) => {
+const G = { nodes: [], conns: [] };
+let nextId = 1;
+const uid = p => p + (nextId++);
+
+function defaultGraph(){
+  G.nodes = []; G.conns = [];
+  TOOLS.forEach((t, i) => G.nodes.push({ id:"n_"+t.id, kind:"tool", toolId:t.id, x:16, y:14 + i * 120 }));
+  G.nodes.push({ id:"n_out", kind:"output", x:236, y:196 });
+  G.nodes.push({ id:"n_vol", kind:"volume", x:236, y:392 });
+  const defs = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"] };
+  TOOLS.forEach((t, i) => {
+    const [op, blend] = defs[t.id];
+    G.conns.push({ id:uid("c"), from:"n_"+t.id, to:"n_out", opacity:op, blend, order:i, muted:false });
+  });
+  G.conns.push({ id:uid("c"), from:"n_out", to:"n_vol", opacity:1, blend:"source-over", order:0, muted:false });
+  // the signature move: the composite feeds the recursive engine that draws into it
+  G.conns.push({ id:uid("c"), from:"n_out", to:"n_ou", opacity:1, blend:"source-over", order:0, muted:false });
+}
+const nodeById = id => G.nodes.find(n => n.id === id);
+const nodeSize = n => n.kind === "output" ? {w:176,h:124} : n.kind === "volume" ? {w:150,h:86} : {w:152,h:108};
+function outConns(){ return G.conns.filter(c => c.to === "n_out").sort((a,b) => a.order - b.order); }
+function inputConnFor(nodeId){ return G.conns.find(c => c.to === nodeId && nodeId !== "n_out"); }
+function volumeLinked(){ return G.conns.some(c => c.from === "n_out" && c.to === "n_vol" && !c.muted); }
+function canAccept(n){
+  if(n.kind === "output" || n.kind === "volume") return true;
+  const t = TOOLS.find(t => t.id === n.toolId);
+  return !!(t && t.accepts);
+}
+function hasOut(n){ return n.kind !== "volume"; }
+
+function saveGraph(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      nodes: G.nodes.map(n => ({ id:n.id, kind:n.kind, toolId:n.toolId, x:Math.round(n.x), y:Math.round(n.y) })),
+      conns: G.conns.map(c => ({ id:c.id, from:c.from, to:c.to, opacity:c.opacity, blend:c.blend, order:c.order, muted:!!c.muted })),
+      mix: { gain: mixGain, bg: mixBg },
+    }));
+  }catch(e){}
+}
+function loadGraph(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return false;
+    const s = JSON.parse(raw);
+    if(!s.nodes || !s.nodes.length) return false;
+    G.nodes = s.nodes; G.conns = s.conns || [];
+    let mx = 0; [...G.nodes, ...G.conns].forEach(o => { const m = /(\d+)$/.exec(o.id); if(m) mx = Math.max(mx, +m[1]); });
+    nextId = mx + 1;
+    if(s.mix){ if(isFinite(+s.mix.gain)) mixGain = +s.mix.gain; if(s.mix.bg) mixBg = s.mix.bg; }
+    return true;
+  }catch(e){ return false; }
+}
+
+let mixGain = 1, mixBg = "#000000";
+
+/* ============================================================
+   Tool frames — load, reach in, capture
+   ============================================================ */
+function initLayers(){
+  const farm = document.getElementById("farm");
+  TOOLS.forEach(tool => {
     const cv = document.createElement("canvas");
     cv.width = LAYER_W; cv.height = LAYER_H;
-    const ctx = cv.getContext("2d");
-
     const L = {
-      tool, idx, canvas: cv, ctx,
+      tool, canvas: cv, ctx: cv.getContext("2d"),
       frame: null, win: null, doc: null, toolCanvas: null,
       drive: null, P: null, targets: null,
-      op: tool.op, blend: tool.blend, muted: false, solo: false,
-      ready: false, error: null, lastPush: 0, srcRoute: "none", lastFeed: 0,
+      ready: false, error: null, lastPush: 0, lastFeed: 0, fedOnce: false,
     };
-    layers.push(L);
-
-    const el = document.createElement("div");
-    el.className = "layer";
-    el.innerHTML =
-      `<div class="lhead">
-         <span class="dot" data-dot></span>
-         <b>${tool.label}</b>
-         <button data-mute title="Mute this layer">M</button>
-         <button data-solo title="Solo this layer">S</button>
-         <button data-open title="Open this tool full-size in a new tab">↗</button>
-       </div>
-       <canvas class="thumb" data-thumb width="200" height="112"></canvas>
-       <div class="lbody">
-         <div class="row"><span>opacity</span><input type="range" data-op min="0" max="1" step="0.01" value="${tool.op}"><span class="val" data-opv>${tool.op.toFixed(2)}</span></div>
-         <div class="srcrow"><span>blend</span><select data-blend>${
-            BLENDS.map(b => `<option value="${b}"${b===tool.blend?" selected":""}>${b}</option>`).join("")
-         }</select></div>
-         ${tool.accepts ? `<div class="srcrow"><span>src ←</span><select data-src></select></div>` : ""}
-       </div>`;
-    list.appendChild(el);
-    L.el = el;
-    L.dot = el.querySelector("[data-dot]");
-    L.thumb = el.querySelector("[data-thumb]");
-    L.thumbCtx = L.thumb.getContext("2d");
-
-    el.querySelector("[data-op]").addEventListener("input", e => {
-      L.op = parseFloat(e.target.value);
-      RP[tool.id + ".opacity"] = L.op;
-      el.querySelector("[data-opv]").textContent = L.op.toFixed(2);
-    });
-    el.querySelector("[data-blend]").addEventListener("change", e => { L.blend = e.target.value; });
-    el.querySelector("[data-mute]").addEventListener("click", e => {
-      L.muted = !L.muted;
-      e.target.classList.toggle("on", L.muted);
-      el.classList.toggle("muted", L.muted);
-    });
-    el.querySelector("[data-solo]").addEventListener("click", e => {
-      L.solo = !L.solo;
-      e.target.classList.toggle("on", L.solo);
-    });
-    el.querySelector("[data-open]").addEventListener("click", () => window.open(tool.file, "_blank"));
-
-    // layer opacity is a rack-level modulation target — this is the blending
-    RP[tool.id + ".opacity"] = L.op;
-    registerTarget(tool.id + ".opacity", tool.label + " — opacity", 0, 1, v => {
-      L.op = v;
-      const r = el.querySelector("[data-op]"), o = el.querySelector("[data-opv]");
-      if(r && !r.matches(":active")) r.value = v;
-      if(o) o.textContent = v.toFixed(2);
-    });
-  });
-
-  // source-route dropdowns, once every layer exists
-  layers.forEach(L => {
-    if(!L.tool.accepts) return;
-    const sel = L.el.querySelector("[data-src]");
-    const opts = ['<option value="none">none (its own)</option>', '<option value="mix">MIX (feedback)</option>']
-      .concat(layers.filter(o => o !== L).map(o => `<option value="${o.tool.id}">${o.tool.label}</option>`));
-    sel.innerHTML = opts.join("");
-    sel.value = L.tool.id === "ou" ? "mix" : "none";
-    L.srcRoute = sel.value;
-    sel.addEventListener("change", e => { L.srcRoute = e.target.value; L.lastFeed = 0; });
-  });
-}
-
-/* ============================================================
-   Frame loading + reach-in
-   ============================================================ */
-function loadTools(){
-  const farm = document.getElementById("farm");
-  layers.forEach(L => {
+    layers.set(tool.id, L);
     const f = document.createElement("iframe");
-    f.src = L.tool.file;
-    f.title = L.tool.label;
+    f.src = tool.file; f.title = tool.label;
+    f.width = FRAME_W; f.height = FRAME_H;
     farm.appendChild(f);
     L.frame = f;
     f.addEventListener("load", () => setTimeout(() => attach(L), 450));
   });
 }
 
-/* Same-origin reach-in. Top-level `const` in a classic script lives in the
-   realm's global lexical environment, not on window — so we resolve names
-   through the frame's own eval rather than reading window properties. */
+/* Same-origin reach-in. The tools declare Drive, P, work, upload… as top-level
+   const/let, which live in the realm's global *lexical* environment and never
+   appear on window — so we resolve them through the frame's own eval. */
 function peek(win, expr){
   try{ return win.eval("(typeof " + expr + " !== 'undefined') ? " + expr + " : undefined"); }
   catch(e){ return undefined; }
 }
-
 function attach(L){
   try{
-    const win = L.frame.contentWindow;
-    const doc = L.frame.contentDocument;
+    const win = L.frame.contentWindow, doc = L.frame.contentDocument;
     if(!doc) throw new Error("no same-origin document");
     L.win = win; L.doc = doc;
-
     L.toolCanvas = doc.querySelector(L.tool.sel);
     if(!L.toolCanvas) throw new Error("canvas " + L.tool.sel + " not found");
-
     L.drive = peek(win, "Drive") || null;
     L.P = peek(win, "P") || null;
 
-    // push-capture: wrap the tool's own frame push so a copy lands in our layer
     if(L.tool.capture === "push" && L.drive && typeof L.drive.pushFrame === "function"){
       const orig = L.drive.pushFrame.bind(L.drive);
       L.drive.pushFrame = (src) => {
         try{
-          if(src && src.width){
-            L.ctx.drawImage(src, 0, 0, LAYER_W, LAYER_H);
-            L.lastPush = performance.now();
-          }
+          if(src && src.width){ L.ctx.drawImage(src, 0, 0, LAYER_W, LAYER_H); L.lastPush = performance.now(); }
         }catch(e){}
         return orig(src);
       };
     }
-
-    // anchor renders at full size into an offscreen `work` canvas
-    const work = peek(win, "work");
+    const work = peek(win, "work");          // anchor renders full-size offscreen
     if(work && work.width) L.toolCanvas = work;
 
-    // give the tools that need content something to chew on, and start the ones
-    // that idle until asked. `init` is an expression, so it stays idempotent —
-    // clicking a Play *toggle* twice would stop the tool again.
     wake(L);
-
     registerToolTargets(L);
     L.ready = true;
-    L.dot.classList.add("live");
+    GraphView.markState(L.tool.id, "live");
+    if(selected && selected.kind === "node" && nodeById(selected.id) && nodeById(selected.id).toolId === L.tool.id) Inspector.render();
   }catch(err){
     L.error = err.message || String(err);
-    L.dot.classList.add("err");
-    L.dot.title = L.error;
-    if(/origin|same-origin|no same-origin/i.test(L.error)) document.getElementById("banner").style.display = "grid";
+    GraphView.markState(L.tool.id, "err", L.error);
+    if(/origin|same-origin/i.test(L.error)) document.getElementById("banner").style.display = "grid";
     console.warn("[rack]", L.tool.label, err);
   }
 }
-
-/* Seed content and start motion. Safe to call again at any time. */
+/* Seed content and start motion. `init` is an expression, not a click, so this
+   stays idempotent — clicking a Play *toggle* twice would stop the tool again. */
 function wake(L){
   if(!L.doc) return;
-  L.tool.boot.forEach(id => {
-    const b = L.doc.getElementById(id);
-    if(b) try{ b.click(); }catch(e){}
-  });
-  if(L.tool.init){
-    try{ L.win.eval(L.tool.init); }catch(e){ console.warn("[rack] init", L.tool.label, e); }
-  }
+  L.tool.boot.forEach(id => { const b = L.doc.getElementById(id); if(b) try{ b.click(); }catch(e){} });
+  if(L.tool.init){ try{ L.win.eval(L.tool.init); }catch(e){ console.warn("[rack] init", L.tool.label, e); } }
 }
-
-/* Each tool already told its own drive which parameters are modulatable, with
-   real bounds and labels. We read that list back rather than keeping our own. */
+/* Each tool already told its own drive what is modulatable, with real bounds and
+   labels. Read that back instead of keeping a list here. */
 function registerToolTargets(L){
   const t = L.drive && L.drive.targets;
   if(!t || !L.P) return;
   L.targets = t;
   const keys = Object.keys(t);
   const chosen = L.tool.prefer.filter(k => keys.includes(k));
-  // fall back to the first few the tool registered, whatever they are
   if(chosen.length < 2) for(const k of keys){ if(chosen.length >= 4) break; if(!chosen.includes(k)) chosen.push(k); }
-
-  chosen.forEach(k => {
-    const spec = t[k];
-    const rackKey = L.tool.id + "." + k;
-    const base = Number(L.P[k]);
-    RP[rackKey] = isFinite(base) ? base : (spec.min + spec.max) / 2;
-    registerTarget(rackKey, L.tool.label + " — " + (spec.label || k), spec.min, spec.max, v => {
-      try{ L.P[k] = v; }catch(e){}
-    });
+  chosen.forEach(k => addToolTarget(L, k));
+}
+function toolTargetKey(L, k){ return L.tool.id + "." + k; }
+function addToolTarget(L, k){
+  const spec = L.targets && L.targets[k];
+  if(!spec) return null;
+  const key = toolTargetKey(L, k);
+  const base = Number(L.P[k]);
+  if(RP[key] == null) RP[key] = isFinite(base) ? base : (spec.min + spec.max) / 2;
+  return registerTarget(key, L.tool.label + " — " + (spec.label || k), spec.min, spec.max, v => {
+    try{ L.P[k] = v; }catch(e){}
   });
 }
 
 /* ============================================================
-   Source routing — tools feeding each other
+   Source routing — driven by the graph
    ============================================================ */
-function sourceCanvasFor(L){
-  if(L.srcRoute === "none") return null;
-  if(L.srcRoute === "mix") return mixCanvas;
-  const other = layers.find(o => o.tool.id === L.srcRoute);
-  return other && other.ready ? other.canvas : null;
+function canvasForNode(id){
+  if(id === "n_out") return mixCanvas;
+  const n = nodeById(id);
+  if(!n || n.kind !== "tool") return null;
+  const L = layers.get(n.toolId);
+  return L && L.ready ? L.canvas : null;
 }
 function feedSources(now){
   layers.forEach(L => {
     if(!L.ready || !L.tool.accepts) return;
-    const src = sourceCanvasFor(L);
+    const c = inputConnFor("n_" + L.tool.id);
+    if(!c || c.muted) return;
+    const src = canvasForNode(c.from);
     if(!src || !src.width) return;
     try{
       if(L.tool.accepts === "frame"){
-        // per-frame texture feed — this is what makes Ouroboros eat the mix
         const up = peek(L.win, "uploadInput");
-        if(typeof up === "function"){
-          up(src);
-          L.win.eval("hasIn = true; inIsVideo = false;");
-        }
+        if(typeof up === "function"){ up(src); L.win.eval("hasIn = true; inIsVideo = false;"); }
       } else if(L.tool.accepts === "texture"){
-        if(now - L.lastFeed < 120) return;           // ~8/sec is plenty
+        if(now - L.lastFeed < 120) return;                 // ~8/s is plenty
         L.lastFeed = now;
         const up = peek(L.win, "upload"), tex = peek(L.win, "texSrc");
         if(typeof up === "function" && tex){
           up(src, tex, 0);
-          // hand the canvas across the realm boundary by property, then bind it
-          L.win.__rackSrc = src;
+          L.win.__rackSrc = src;                            // hand the canvas across realms by property
           L.win.eval("img = window.__rackSrc; imgW = img.width; imgH = img.height;");
           if(!L.fedOnce){
             L.fedOnce = true;
             try{ L.win.eval("typeof resize === 'function' && resize();"); }catch(e){}
-            const empty = L.doc.getElementById("empty");
-            if(empty) empty.classList.add("hide");
+            const empty = L.doc.getElementById("empty"); if(empty) empty.classList.add("hide");
           }
           try{ L.win.eval("typeof draw === 'function' && draw();"); }catch(e){}
         }
       } else if(L.tool.accepts === "image"){
-        if(now - L.lastFeed < 6000) return;          // setSource() restarts the sim — go easy
+        if(now - L.lastFeed < 6000) return;                 // setSource() restarts the sim
         L.lastFeed = now;
         const set = peek(L.win, "setSource");
         if(typeof set === "function") set(src);
@@ -467,73 +458,529 @@ function feedSources(now){
 /* ============================================================
    Capture + mix
    ============================================================ */
-function captureAndMix(now){
-  const soloed = layers.some(L => L.solo);
-
+function captureAndMix(){
   layers.forEach(L => {
-    if(!L.ready) return;
-    if(L.tool.capture === "pull"){
-      try{
-        if(L.toolCanvas && L.toolCanvas.width) L.ctx.drawImage(L.toolCanvas, 0, 0, LAYER_W, LAYER_H);
-      }catch(e){}
-    }
-    // push layers are filled by the wrapped pushFrame; nothing to do here
+    if(!L.ready || L.tool.capture !== "pull") return;
+    try{ if(L.toolCanvas && L.toolCanvas.width) L.ctx.drawImage(L.toolCanvas, 0, 0, LAYER_W, LAYER_H); }catch(e){}
   });
 
-  const bg = document.getElementById("mixBg").value;
-  if(bg === "clear"){
+  if(mixBg === "clear"){
     mixCtx.globalAlpha = 0.22; mixCtx.globalCompositeOperation = "source-over";
     mixCtx.fillStyle = "#000"; mixCtx.fillRect(0, 0, MIX_W, MIX_H);
   } else {
     mixCtx.globalAlpha = 1; mixCtx.globalCompositeOperation = "source-over";
-    mixCtx.fillStyle = bg; mixCtx.fillRect(0, 0, MIX_W, MIX_H);
+    mixCtx.fillStyle = mixBg; mixCtx.fillRect(0, 0, MIX_W, MIX_H);
   }
-
-  const gain = parseFloat(document.getElementById("mixGain").value);
-  layers.forEach(L => {
-    if(!L.ready) return;
-    const audible = soloed ? L.solo : !L.muted;
-    const a = audible ? L.op * gain : 0;
+  outConns().forEach(c => {
+    if(c.muted) return;
+    const src = canvasForNode(c.from);
+    if(!src) return;
+    const a = c.opacity * mixGain;
     if(a <= 0.002) return;
     mixCtx.globalAlpha = Math.min(1, a);
-    mixCtx.globalCompositeOperation = L.blend;
-    try{ mixCtx.drawImage(L.canvas, 0, 0, MIX_W, MIX_H); }catch(e){}
+    mixCtx.globalCompositeOperation = c.blend;
+    try{ mixCtx.drawImage(src, 0, 0, MIX_W, MIX_H); }catch(e){}
   });
-  mixCtx.globalAlpha = 1;
-  mixCtx.globalCompositeOperation = "source-over";
+  mixCtx.globalAlpha = 1; mixCtx.globalCompositeOperation = "source-over";
 }
 
-function updateThumbs(now){
-  layers.forEach(L => {
-    if(!L.ready) return;
-    try{ L.thumbCtx.drawImage(L.canvas, 0, 0, L.thumb.width, L.thumb.height); }catch(e){}
+/* ============================================================
+   Graph view — HTML nodes over an SVG cable layer
+   ============================================================ */
+let selected = null;   // {kind:'node'|'conn', id}
+const GraphView = (() => {
+  const wrap = document.getElementById("graphWrap");
+  const nodesEl = document.getElementById("nodes");
+  const cableG = document.getElementById("cableG");
+  const pending = document.getElementById("pending");
+  const els = new Map();       // nodeId -> {el, thumb, ctx, st}
+  let drag = null, wire = null;
+
+  function colorOf(n){
+    if(n.kind === "output") return "#e8e9ee";
+    if(n.kind === "volume") return "#8b90a0";
+    const t = TOOLS.find(t => t.id === n.toolId);
+    return t ? t.color : "#8b90a0";
+  }
+  function build(){
+    nodesEl.innerHTML = ""; els.clear();
+    G.nodes.forEach(n => {
+      const d = document.createElement("div");
+      const col = colorOf(n);
+      d.className = "node" + (n.kind === "output" ? " out" : n.kind === "volume" ? " vol" : "");
+      d.dataset.id = n.id;
+      const title = n.kind === "output" ? "OUTPUT" : n.kind === "volume" ? "Volume" :
+                    (TOOLS.find(t => t.id === n.toolId) || {}).label;
+      const sub = n.kind === "output" ? "mix → OBS" : n.kind === "volume" ? "" : n.toolId;
+      d.innerHTML =
+        `<div class="nh"><span class="sw" style="background:${col}"></span><b>${title}</b>` +
+        (n.kind === "tool" ? `<span class="st"></span>` : "") + `</div>` +
+        (n.kind === "volume"
+          ? `<div class="vbody" data-vb>3D relief of the mix</div>`
+          : `<canvas class="nt" width="180" height="72"></canvas><div class="nf"><span>${sub}</span><span data-info></span></div>`);
+      if(canAccept(n)) d.insertAdjacentHTML("beforeend", `<div class="port in" data-port="in" data-node="${n.id}"></div>`);
+      if(hasOut(n))   d.insertAdjacentHTML("beforeend", `<div class="port out" data-port="out" data-node="${n.id}"></div>`);
+      nodesEl.appendChild(d);
+      const thumb = d.querySelector("canvas.nt");
+      els.set(n.id, { el:d, thumb, ctx: thumb ? thumb.getContext("2d") : null, st: d.querySelector(".st"), info: d.querySelector("[data-info]") });
+
+      d.addEventListener("pointerdown", e => {
+        if(e.target.classList.contains("port")) return;
+        select({ kind:"node", id:n.id });
+        const r = wrap.getBoundingClientRect();
+        drag = { id:n.id, dx:e.clientX - r.left - n.x, dy:e.clientY - r.top - n.y };
+        d.classList.add("dragging");
+        d.setPointerCapture(e.pointerId);
+      });
+      d.querySelectorAll(".port").forEach(p => {
+        p.addEventListener("pointerdown", e => {
+          e.stopPropagation();
+          const r = wrap.getBoundingClientRect();
+          wire = { node:n.id, dir:p.dataset.port, x:e.clientX - r.left, y:e.clientY - r.top };
+          wrap.setPointerCapture(e.pointerId);
+        });
+      });
+    });
+    layout(); drawCables();
+  }
+  function portPos(nodeId, dir){
+    const n = nodeById(nodeId); if(!n) return {x:0,y:0};
+    const s = nodeSize(n);
+    return { x: n.x + (dir === "out" ? s.w : 0), y: n.y + s.h / 2 };
+  }
+  function layout(){
+    G.nodes.forEach(n => { const e = els.get(n.id); if(e) e.el.style.transform = `translate(${n.x}px, ${n.y}px)`; });
+  }
+  function path(a, b){
+    const dx = Math.max(38, Math.abs(b.x - a.x) * 0.55);
+    return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`;
+  }
+  function drawCables(){
+    cableG.innerHTML = "";
+    G.conns.forEach(c => {
+      const a = portPos(c.from, "out"), b = portPos(c.to, "in");
+      const n = nodeById(c.from);
+      const col = n ? colorOf(n) : "#8b90a0";
+      const d = path(a, b);
+      const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      hit.setAttribute("d", d); hit.setAttribute("class", "hit");
+      hit.addEventListener("pointerdown", e => { e.stopPropagation(); select({ kind:"conn", id:c.id }); });
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", d);
+      p.setAttribute("class", "cable" + (selected && selected.kind === "conn" && selected.id === c.id ? " sel" : ""));
+      p.setAttribute("stroke", col);
+      p.setAttribute("stroke-width", String(1.4 + 3.2 * (c.muted ? 0 : c.opacity)));
+      p.setAttribute("stroke-opacity", String(c.muted ? 0.18 : 0.3 + 0.6 * c.opacity));
+      cableG.appendChild(hit); cableG.appendChild(p);
+    });
+  }
+  wrap.addEventListener("pointermove", e => {
+    const r = wrap.getBoundingClientRect();
+    if(drag){
+      const n = nodeById(drag.id);
+      if(n){ n.x = Math.max(0, e.clientX - r.left - drag.dx); n.y = Math.max(0, e.clientY - r.top - drag.dy); layout(); drawCables(); }
+    } else if(wire){
+      const p = { x:e.clientX - r.left, y:e.clientY - r.top };
+      const a = portPos(wire.node, wire.dir);
+      pending.setAttribute("d", wire.dir === "out" ? path(a, p) : path(p, a));
+    }
   });
+  wrap.addEventListener("pointerup", e => {
+    if(drag){ const el = els.get(drag.id); if(el) el.el.classList.remove("dragging"); drag = null; saveGraph(); }
+    if(wire){
+      const tgt = document.elementFromPoint(e.clientX, e.clientY);
+      if(tgt && tgt.classList && tgt.classList.contains("port") && tgt.dataset.port !== wire.dir){
+        const from = wire.dir === "out" ? wire.node : tgt.dataset.node;
+        const to   = wire.dir === "out" ? tgt.dataset.node : wire.node;
+        connect(from, to);
+      }
+      wire = null; pending.setAttribute("d", "");
+    }
+  });
+  wrap.addEventListener("pointerdown", e => { if(e.target === wrap || e.target.id === "cables") select(null); });
+  window.addEventListener("keydown", e => {
+    if((e.key === "Delete" || e.key === "Backspace") && selected && selected.kind === "conn"
+       && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)){
+      G.conns = G.conns.filter(c => c.id !== selected.id);
+      select(null); drawCables(); saveGraph();
+    }
+  });
+  function refreshThumbs(){
+    G.nodes.forEach(n => {
+      const e = els.get(n.id); if(!e || !e.ctx) return;
+      const src = n.kind === "output" ? mixCanvas : canvasForNode(n.id);
+      if(src) { try{ e.ctx.drawImage(src, 0, 0, e.thumb.width, e.thumb.height); }catch(err){} }
+    });
+  }
+  function markState(toolId, state, title){
+    const e = els.get("n_" + toolId); if(!e || !e.st) return;
+    e.st.className = "st " + state;
+    if(title) e.st.title = title;
+  }
+  function refreshSel(){
+    els.forEach((e, id) => e.el.classList.toggle("sel", !!selected && selected.kind === "node" && selected.id === id));
+    drawCables();
+  }
+  return { build, layout, drawCables, refreshThumbs, markState, refreshSel, colorOf };
+})();
+
+function connect(from, to){
+  if(from === to) return;
+  const target = nodeById(to);
+  if(!target || !canAccept(target)) return;
+  if(G.conns.some(c => c.from === from && c.to === to)) return;
+  // tool inputs and the volume node take exactly one feed
+  if(to !== "n_out") G.conns = G.conns.filter(c => c.to !== to);
+  const order = to === "n_out" ? (outConns().length ? Math.max(...outConns().map(c => c.order)) + 1 : 0) : 0;
+  G.conns.push({ id:uid("c"), from, to, opacity:1, blend:"screen", order, muted:false });
+  GraphView.drawCables(); saveGraph(); Inspector.render();
 }
+function select(sel){
+  selected = sel;
+  GraphView.refreshSel();
+  Inspector.render();
+}
+
+/* ============================================================
+   Stage — the tool's own UI can take over while output runs
+   ============================================================ */
+function showTool(toolId){
+  editingTool = toolId;
+  layers.forEach(L => L.frame.classList.toggle("show", L.tool.id === toolId));
+  fitFrames();
+  const t = TOOLS.find(t => t.id === toolId);
+  document.getElementById("workTitle").textContent = t ? t.label : "Tool";
+  document.getElementById("workSub").textContent = "its own controls — the mix keeps running";
+  document.getElementById("bBackToMix").style.display = "";
+  mixCanvas.style.display = "none";
+}
+function showMix(){
+  editingTool = null;
+  layers.forEach(L => L.frame.classList.remove("show"));
+  document.getElementById("workTitle").textContent = "Output";
+  document.getElementById("workSub").textContent = "the mix — what OBS captures";
+  document.getElementById("bBackToMix").style.display = "none";
+  mixCanvas.style.display = "";
+}
+function fitFrames(){
+  const w = document.getElementById("work");
+  const s = Math.min(w.clientWidth / FRAME_W, w.clientHeight / FRAME_H);
+  layers.forEach(L => { L.frame.style.transform = `scale(${s})`; });
+}
+
+/* ============================================================
+   Inspector
+   ============================================================ */
+const Inspector = (() => {
+  const root = document.getElementById("inspector");
+  let paramFilter = "";
+
+  function fld(label, valueText, inputHTML, modded){
+    return `<div class="fld${modded ? " mod" : ""}"><div class="lab"><span>${label}</span><span class="v">${valueText}</span></div>${inputHTML}</div>`;
+  }
+  function render(){
+    const modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
+    if(!selected){ renderNone(); return; }
+    if(selected.kind === "conn"){ renderConn(); return; }
+    const n = nodeById(selected.id);
+    if(!n){ renderNone(); return; }
+    if(n.kind === "output") renderOutput(modded);
+    else if(n.kind === "volume") renderVolume(modded);
+    else renderTool(n, modded);
+  }
+  function renderNone(){
+    root.innerHTML =
+      `<div class="empty">Nothing selected.<br><br>
+        Click a <b style="color:var(--text)">node</b> to get its controls here, or a
+        <b style="color:var(--text)">cable</b> to set how that layer blends into the output.<br><br>
+        Drag from a node's right port to another's left port to patch. Tool inputs take one
+        feed; OUTPUT takes as many as you like.</div>` + driveSection();
+    mountDrive();
+  }
+  function renderConn(){
+    const c = G.conns.find(x => x.id === selected.id);
+    if(!c){ renderNone(); return; }
+    const a = nodeById(c.from), b = nodeById(c.to);
+    const nameOf = n => !n ? "?" : n.kind === "output" ? "OUTPUT" : n.kind === "volume" ? "Volume" : (TOOLS.find(t => t.id === n.toolId) || {}).label;
+    const toOut = c.to === "n_out";
+    root.innerHTML =
+      `<div class="ihead"><span class="sw" style="background:${GraphView.colorOf(a || {})}"></span><b>${nameOf(a)} → ${nameOf(b)}</b></div>` +
+      (toOut
+        ? fld("opacity", c.opacity.toFixed(2), `<input type="range" id="cOp" min="0" max="1" step="0.01" value="${c.opacity}">`) +
+          `<div class="fld"><div class="lab"><span>blend</span></div>
+             <select id="cBlend">${BLENDS.map(x => `<option value="${x}"${x===c.blend?" selected":""}>${x}</option>`).join("")}</select></div>`
+        : `<div class="empty">This cable feeds a tool's input. Its opacity and blend only apply to cables landing on OUTPUT.</div>`) +
+      `<div class="row2" style="margin-top:10px">
+         <button id="cMute" class="${c.muted ? "on" : ""}">${c.muted ? "unmute" : "mute"}</button>
+         <button id="cDel" style="color:var(--danger)">delete</button>
+       </div>` + driveSection();
+    const op = root.querySelector("#cOp");
+    if(op) op.addEventListener("input", e => { c.opacity = parseFloat(e.target.value); GraphView.drawCables(); saveGraph(); touchVal(op, c.opacity.toFixed(2)); });
+    const bl = root.querySelector("#cBlend");
+    if(bl) bl.addEventListener("change", e => { c.blend = e.target.value; saveGraph(); });
+    root.querySelector("#cMute").addEventListener("click", () => { c.muted = !c.muted; GraphView.drawCables(); saveGraph(); render(); });
+    root.querySelector("#cDel").addEventListener("click", () => { G.conns = G.conns.filter(x => x.id !== c.id); select(null); GraphView.drawCables(); saveGraph(); });
+    mountDrive();
+  }
+  function renderOutput(modded){
+    const list = outConns();
+    root.innerHTML =
+      `<div class="ihead"><span class="sw" style="background:#e8e9ee"></span><b>OUTPUT</b></div>
+       <div class="empty" style="margin-bottom:10px">The mix. This canvas is what the output window and OBS capture, and what feeds the volume renderer.</div>` +
+      `<h2>Layers — top draws first</h2><div id="lyrs">` +
+      (list.length ? list.map((c, i) => {
+        const n = nodeById(c.from);
+        const nm = !n ? "?" : n.kind === "output" ? "OUTPUT" : (TOOLS.find(t => t.id === n.toolId) || {}).label;
+        return `<div class="lyr" data-c="${c.id}">
+            <span class="sw" style="background:${GraphView.colorOf(n || {})}"></span>
+            <span>${nm}<br><span style="color:var(--faint)">${c.blend} · ${c.opacity.toFixed(2)}</span></span>
+            <button class="sm" data-up ${i===0?"disabled":""}>↑</button>
+            <button class="sm" data-dn ${i===list.length-1?"disabled":""}>↓</button>
+          </div>`;
+      }).join("") : `<div class="empty">Nothing patched into OUTPUT yet.</div>`) + `</div>` +
+      `<h2>Mix</h2>` +
+      fld("gain", mixGain.toFixed(2), `<input type="range" id="mGain" min="0" max="2" step="0.01" value="${mixGain}">`) +
+      `<div class="fld"><div class="lab"><span>background</span></div>
+        <select id="mBg"><option value="#000000"${mixBg==="#000000"?" selected":""}>black</option>
+        <option value="clear"${mixBg==="clear"?" selected":""}>keep (trails)</option></select></div>` +
+      driveSection();
+
+    root.querySelectorAll(".lyr").forEach(el => {
+      const c = G.conns.find(x => x.id === el.dataset.c);
+      el.addEventListener("click", e => { if(!e.target.closest("button")) select({ kind:"conn", id:c.id }); });
+      const up = el.querySelector("[data-up]"), dn = el.querySelector("[data-dn]");
+      up.addEventListener("click", () => reorder(c, -1));
+      dn.addEventListener("click", () => reorder(c, +1));
+    });
+    const g = root.querySelector("#mGain");
+    g.addEventListener("input", e => { mixGain = parseFloat(e.target.value); touchVal(g, mixGain.toFixed(2)); saveGraph(); });
+    root.querySelector("#mBg").addEventListener("change", e => { mixBg = e.target.value; saveGraph(); });
+    mountDrive();
+  }
+  function reorder(c, dir){
+    const list = outConns();
+    const i = list.indexOf(c), j = i + dir;
+    if(j < 0 || j >= list.length) return;
+    const a = list[i].order, b = list[j].order;
+    list[i].order = b; list[j].order = a;
+    saveGraph(); render();
+  }
+  function renderVolume(modded){
+    const linked = volumeLinked();
+    let body = `<div class="ihead"><span class="sw" style="background:#8b90a0"></span><b>Volume</b></div>`;
+    if(!volReady){
+      body += `<div class="empty">${volAPI ? "WebGPU is unavailable in this browser, so the renderer can't start. The mix still runs and OBS can capture it."
+        : "Waiting for the renderer to report in…"}</div>`;
+    } else {
+      body += `<div class="empty" style="margin-bottom:10px">${linked
+        ? "Fed from OUTPUT. Luminance becomes depth, pixel colour becomes point colour."
+        : "Not patched — connect OUTPUT's port to this node's input to feed it."}</div>`;
+      body += `<h2>Mix relief</h2>`;
+      VOL_LOCAL.forEach(v => {
+        body += fld(v.label, (RP[v.key] ?? v.def).toFixed(2),
+          `<input type="range" data-vk="${v.key}" min="${v.min}" max="${v.max}" step="0.01" value="${RP[v.key] ?? v.def}">`,
+          Drive && Drive.modulatedKeys().includes(v.key));
+      });
+      body += `<h2>Renderer</h2>`;
+      volParams.forEach(p => {
+        const key = "vol." + p.id;
+        body += fld(p.label, (RP[key] ?? p.default).toFixed(2),
+          `<input type="range" data-vk="${key}" min="${p.range[0]}" max="${p.range[1]}" step="0.01" value="${RP[key] ?? p.default}">`,
+          Drive && Drive.modulatedKeys().includes(key));
+      });
+      body += `<h2>Add a scene</h2><div class="row2" style="grid-template-columns:1fr 1fr">
+        <button data-scene="galaxy">galaxy</button><button data-scene="nebula">nebula</button>
+        <button data-scene="gi">GI meshes</button><button data-scene="clear" style="color:var(--danger)">clear</button></div>`;
+    }
+    root.innerHTML = body + driveSection();
+    root.querySelectorAll("[data-vk]").forEach(r => r.addEventListener("input", e => {
+      RP[e.target.dataset.vk] = parseFloat(e.target.value);
+      touchVal(e.target, parseFloat(e.target.value).toFixed(2));
+    }));
+    root.querySelectorAll("[data-scene]").forEach(b => b.addEventListener("click", () => {
+      if(!volAPI) return;
+      const w = b.dataset.scene;
+      if(w === "clear") volAPI.clearScene(); else volAPI.addScene(w);
+    }));
+    mountDrive();
+  }
+  function renderTool(n, modded){
+    const tool = TOOLS.find(t => t.id === n.toolId);
+    const L = layers.get(n.toolId);
+    const outC = G.conns.find(c => c.from === n.id && c.to === "n_out");
+    const inC = inputConnFor(n.id);
+    let body = `<div class="ihead"><span class="sw" style="background:${tool.color}"></span><b>${tool.label}</b></div>`;
+    if(!L || !L.ready){
+      body += `<div class="empty">${L && L.error ? "Couldn't attach: " + L.error : "Loading…"}</div>`;
+      root.innerHTML = body + driveSection(); mountDrive(); return;
+    }
+    body += `<div class="row2" style="grid-template-columns:1fr 1fr;margin-bottom:10px">
+      <button id="tEdit" class="${editingTool === n.toolId ? "on" : ""}">${editingTool === n.toolId ? "editing" : "Edit in stage"}</button>
+      <button id="tPop">Open tab ↗</button></div>
+      <div class="row2" style="grid-template-columns:1fr 1fr;margin-bottom:4px">
+      <button id="tWake">Wake</button>
+      <button id="tSolo">Solo to OUTPUT</button></div>`;
+
+    body += `<h2>Into OUTPUT</h2>`;
+    if(outC){
+      body += fld("opacity", outC.opacity.toFixed(2), `<input type="range" id="lOp" min="0" max="1" step="0.01" value="${outC.opacity}">`);
+      body += `<div class="fld"><div class="lab"><span>blend</span></div>
+        <select id="lBlend">${BLENDS.map(x => `<option value="${x}"${x===outC.blend?" selected":""}>${x}</option>`).join("")}</select></div>`;
+    } else {
+      body += `<div class="empty">Not patched into OUTPUT. Drag this node's right port to the OUTPUT node.</div>`;
+    }
+
+    if(tool.accepts){
+      const fromName = inC ? (nodeById(inC.from) || {}).kind === "output" ? "OUTPUT"
+                           : (TOOLS.find(t => "n_" + t.id === inC.from) || {}).label : null;
+      body += `<h2>Input <span style="color:var(--faint)">— ${tool.accepts === "frame" ? "per frame" : tool.accepts === "texture" ? "~8/s" : "on a 6s cycle"}</span></h2>`;
+      body += `<div class="empty">${inC ? "Fed from <b style='color:var(--text)'>" + fromName + "</b>." : "No input patched — the tool uses its own content."}</div>`;
+    }
+
+    const keys = L.targets ? Object.keys(L.targets) : [];
+    body += `<h2>Parameters <span style="color:var(--faint)">— ${keys.length}</span></h2>
+      <input type="search" id="pFind" placeholder="filter…" value="${paramFilter}" style="margin-bottom:8px">
+      <div class="plist" id="plist"></div>` + driveSection();
+    root.innerHTML = body;
+
+    root.querySelector("#tEdit").addEventListener("click", () => {
+      if(editingTool === n.toolId) showMix(); else showTool(n.toolId);
+      render();
+    });
+    root.querySelector("#tPop").addEventListener("click", () => window.open(tool.file, "_blank"));
+    root.querySelector("#tWake").addEventListener("click", () => wake(L));
+    root.querySelector("#tSolo").addEventListener("click", () => {
+      outConns().forEach(c => { c.muted = (c.from !== n.id); });
+      GraphView.drawCables(); saveGraph(); render();
+    });
+    const lo = root.querySelector("#lOp");
+    if(lo) lo.addEventListener("input", e => { outC.opacity = parseFloat(e.target.value); GraphView.drawCables(); saveGraph(); touchVal(lo, outC.opacity.toFixed(2)); });
+    const lb = root.querySelector("#lBlend");
+    if(lb) lb.addEventListener("change", e => { outC.blend = e.target.value; saveGraph(); });
+    const find = root.querySelector("#pFind");
+    find.addEventListener("input", e => { paramFilter = e.target.value; buildParams(L); });
+    buildParams(L);
+    mountDrive();
+  }
+
+  /* the tool's own registered parameters — real bounds, real labels */
+  function buildParams(L){
+    const host = root.querySelector("#plist");
+    if(!host || !L.targets) return;
+    const q = paramFilter.trim().toLowerCase();
+    const prefer = L.tool.prefer;
+    const keys = Object.keys(L.targets).sort((a, b) => {
+      const ap = prefer.indexOf(a), bp = prefer.indexOf(b);
+      if(ap >= 0 || bp >= 0) return (ap < 0 ? 99 : ap) - (bp < 0 ? 99 : bp);
+      return (L.targets[a].label || a).localeCompare(L.targets[b].label || b);
+    }).filter(k => !q || ((L.targets[k].label || k) + " " + k).toLowerCase().includes(q));
+
+    const modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
+    host.innerHTML = keys.map(k => {
+      const s = L.targets[k], key = toolTargetKey(L, k);
+      const isT = targetByKey.has(key);
+      const val = isT ? (RP[key] ?? Number(L.P[k])) : Number(L.P[k]);
+      const v = isFinite(val) ? val : s.min;
+      const step = (s.max - s.min) / 200 || 0.01;
+      return `<div class="prow${modded.has(key) ? " mod" : ""}" data-k="${k}">
+        <div class="fld" style="margin:0">
+          <div class="lab"><span>${s.label || k}</span><span class="v">${fmt(v)}</span></div>
+          <input type="range" min="${s.min}" max="${s.max}" step="${step}" value="${v}">
+        </div>
+        <button class="mb sm ${isT ? "on" : ""}" title="${isT ? "Registered with the drive — routable in the matrix" : "Make this routable from audio, LFOs or MIDI"}">◎</button>
+      </div>`;
+    }).join("") || `<div class="empty">No parameter matches “${paramFilter}”.</div>`;
+
+    host.querySelectorAll(".prow").forEach(row => {
+      const k = row.dataset.k, key = toolTargetKey(L, k);
+      const r = row.querySelector("input"), v = row.querySelector(".v");
+      r.addEventListener("input", e => {
+        const val = parseFloat(e.target.value);
+        v.textContent = fmt(val);
+        if(targetByKey.has(key)) RP[key] = val;      // modulation resolves from RP
+        else { try{ L.P[k] = val; }catch(err){} }    // otherwise write the tool directly
+      });
+      row.querySelector(".mb").addEventListener("click", () => {
+        if(targetByKey.has(key)) unregisterTarget(key);
+        else { RP[key] = parseFloat(r.value); addToolTarget(L, k); }
+        buildParams(L);
+      });
+    });
+  }
+  function fmt(v){ return Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2); }
+  function touchVal(input, text){
+    const f = input.closest(".fld"); if(f) f.querySelector(".v").textContent = text;
+  }
+  function driveSection(){
+    return `<div id="drivePanelWrap"><h2>Drive — audio, MIDI, modulation</h2><div id="g-drive"></div></div>`;
+  }
+  /* The drive panel is one live DOM tree; move it into whatever inspector view
+     is on screen rather than rebuilding it (rebuilding would drop its state). */
+  function mountDrive(){
+    const host = root.querySelector("#g-drive");
+    if(!host) return;
+    if(!drivePanel){
+      drivePanel = document.createElement("div");
+      if(Drive) Drive.mountPanel(drivePanel);
+      else drivePanel.innerHTML = `<div style="color:var(--danger);font-size:.74rem">unlimiter-drive.js not found — it must sit next to this file.</div>`;
+    }
+    host.appendChild(drivePanel);
+  }
+  /* live values for whatever is on screen, without rebuilding the panel */
+  function tick(){
+    if(!selected) return;
+    const modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
+    root.querySelectorAll(".prow").forEach(row => {
+      const n = selected.kind === "node" ? nodeById(selected.id) : null;
+      if(!n || n.kind !== "tool") return;
+      const L = layers.get(n.toolId); if(!L || !L.P) return;
+      const k = row.dataset.k, key = toolTargetKey(L, k);
+      if(!modded.has(key)) return;
+      const v = Number(L.P[k]);
+      if(!isFinite(v)) return;
+      row.querySelector(".v").textContent = fmt(v);
+      const r = row.querySelector("input");
+      if(!r.matches(":active")) r.value = v;
+      row.classList.add("mod");
+    });
+    root.querySelectorAll("[data-vk]").forEach(r => {
+      const key = r.dataset.vk;
+      if(!modded.has(key)) return;
+      const v = RQ[key];
+      if(typeof v !== "number" || !isFinite(v)) return;
+      if(!r.matches(":active")) r.value = v;
+      const f = r.closest(".fld"); if(f) f.querySelector(".v").textContent = v.toFixed(2);
+    });
+  }
+  let drivePanel = null;
+  return { render, tick };
+})();
 
 /* ============================================================
    Volume renderer link
    ============================================================ */
+const VOL_LOCAL = [
+  { key:"vol.relief", label:"relief (depth from luminance)", min:0, max:1.6, def:0.55, apply:v => volAPI && volAPI.setMix({ relief:v }) },
+  { key:"vol.gain",   label:"colour gain",                   min:0, max:2.5, def:1.0,  apply:v => volAPI && volAPI.setMix({ gain:v }) },
+  { key:"vol.size",   label:"point size",                    min:0.5, max:8, def:2.4,  apply:v => volAPI && volAPI.setMix({ size:v }) },
+];
+let volParams = [];
 function linkVolume(){
   const f = document.getElementById("volFrame");
   f.addEventListener("load", () => {
-    const tryLink = (n) => {
+    const tryLink = n => {
       try{
         const api = f.contentWindow && f.contentWindow.UnlimiterVolumeAPI;
         if(api){
-          if(api.ready){
-            volAPI = api; volReady = true;
-            buildVolumeTargets();
-          } else {
-            volNote(api.reason === "webgpu-unavailable"
-              ? "Volume renderer needs WebGPU — the mix still runs and OBS can capture it."
-              : "Volume renderer unavailable.");
-          }
+          volAPI = api;
+          if(api.ready){ volReady = true; buildVolumeTargets(); }
+          else volNote(api.reason === "webgpu-unavailable"
+            ? "Volume renderer needs WebGPU — the mix still runs and OBS can capture it."
+            : "Volume renderer unavailable.");
+          Inspector.render();
           return;
         }
-      }catch(e){
-        volNote("Volume renderer is cross-origin here — serve the rack over http.");
-        return;
-      }
+      }catch(e){ volNote("Volume renderer is cross-origin here — serve the rack over http."); return; }
       if(n < 40) setTimeout(() => tryLink(n + 1), 250);
       else volNote("Volume renderer did not report in.");
     };
@@ -541,139 +988,69 @@ function linkVolume(){
   });
 }
 function volNote(msg){
-  const pane = document.getElementById("volFrame").parentElement;
+  const pane = document.getElementById("volPane");
   let n = pane.querySelector(".volnote");
-  if(!n){
-    n = document.createElement("div");
-    n.className = "volnote tag";
-    n.style.cssText = "left:9px;top:30px;color:var(--warm);max-width:min(460px,80%);white-space:normal;line-height:1.4";
-    pane.appendChild(n);
-  }
+  if(!n){ n = document.createElement("div"); n.className = "volnote tag warm"; pane.appendChild(n); }
   n.textContent = msg;
 }
 function buildVolumeTargets(){
   if(!volAPI) return;
-  let plist = [];
-  try{ plist = volAPI.params() || []; }catch(e){}
-  const want = ["cameraOrbitSpeed","splatScale","opacityBoost","colorShift"];
-  plist.filter(p => want.includes(p.id)).forEach(p => {
+  try{ volParams = (volAPI.params() || []).filter(p => ["cameraOrbitSpeed","splatScale","opacityBoost","colorShift"].includes(p.id)); }catch(e){ volParams = []; }
+  volParams.forEach(p => {
     const key = "vol." + p.id;
-    RP[key] = p.default;
-    registerTarget(key, "Volume — " + p.label, p.range[0], p.range[1], v => {
-      try{ volAPI.setParam(p.id, v); }catch(e){}
-    });
+    if(RP[key] == null) RP[key] = p.default;
+    registerTarget(key, "Volume — " + p.label, p.range[0], p.range[1], v => { try{ volAPI.setParam(p.id, v); }catch(e){} });
   });
-  // mix relief is rack-side, applied through setMix
-  RP["vol.relief"] = 0.55;
-  registerTarget("vol.relief", "Volume — mix relief", 0, 1.6, v => {
-    try{ volAPI.setMix({ relief: v }); }catch(e){}
+  VOL_LOCAL.forEach(v => {
+    if(RP[v.key] == null) RP[v.key] = v.def;
+    registerTarget(v.key, "Volume — " + v.label, v.min, v.max, v.apply);
   });
-  buildTargetPanel();
   if(Drive) Drive.rebuildMatrix();
 }
 
 /* ============================================================
-   Rack target panel
-   ============================================================ */
-function buildTargetPanel(){
-  const wrap = document.getElementById("targets");
-  wrap.innerHTML = "";
-  const groups = new Map();
-  RACK_TARGETS.forEach(t => {
-    const g = t.label.split("—")[0].trim();
-    if(!groups.has(g)) groups.set(g, []);
-    groups.get(g).push(t);
-  });
-  groups.forEach((list, name) => {
-    const d = document.createElement("details");
-    d.className = "pgroup";
-    d.open = name === "Volume";
-    d.innerHTML = `<summary>${name}</summary><div class="pbody"></div>`;
-    const body = d.querySelector(".pbody");
-    list.forEach(t => {
-      const row = document.createElement("div");
-      row.className = "prm";
-      row.innerHTML =
-        `<div class="plab"><span>${t.label.split("—").slice(1).join("—").trim() || t.label}</span><span class="pv"></span></div>
-         <input type="range" min="${t.min}" max="${t.max}" step="${(t.max-t.min)/200}" value="${RP[t.key]}">`;
-      const r = row.querySelector("input"), v = row.querySelector(".pv");
-      r.addEventListener("input", e => { RP[t.key] = parseFloat(e.target.value); });
-      t._row = row; t._range = r; t._val = v;
-      body.appendChild(row);
-    });
-    wrap.appendChild(d);
-  });
-}
-function refreshTargetPanel(){
-  const modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
-  RACK_TARGETS.forEach(t => {
-    if(!t._val) return;
-    const v = RQ[t.key];
-    if(v == null) return;
-    t._val.textContent = (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2));
-    const isMod = modded.has(t.key);
-    t._row.classList.toggle("mod", isMod);
-    if(isMod && t._range && !t._range.matches(":active")) t._range.value = v;
-  });
-}
-
-/* ============================================================
-   Main loop
+   Boot + main loop
    ============================================================ */
 function boot(){
-  buildLayers();
-  buildTargetPanel();
-  loadTools();
+  if(!loadGraph()) defaultGraph();
+  initLayers();
+  GraphView.build();
   linkVolume();
+  select({ kind:"node", id:"n_out" });
 
-  const panel = document.getElementById("g-drive");
-  if(Drive){
-    Drive.mountPanel(panel);
-  } else {
-    panel.innerHTML = '<div style="color:var(--danger);font-size:.75rem">unlimiter-drive.js not found — the rack needs it alongside this file.</div>';
-  }
+  document.getElementById("bOutput").addEventListener("click", () => { if(Drive) Drive.openOutput(() => mixCanvas); });
+  document.getElementById("bStartAll").addEventListener("click", () => layers.forEach(L => { if(L.ready) wake(L); }));
+  document.getElementById("bBackToMix").addEventListener("click", () => { showMix(); Inspector.render(); });
+  document.getElementById("bReset").addEventListener("click", () => {
+    try{ localStorage.removeItem(LS_KEY); }catch(e){}
+    defaultGraph(); GraphView.build(); select({ kind:"node", id:"n_out" }); saveGraph();
+  });
+  window.addEventListener("resize", fitFrames);
+  setTimeout(fitFrames, 300);
 
-  document.getElementById("bOutput").addEventListener("click", () => {
-    if(Drive) Drive.openOutput(() => mixCanvas);
-  });
-  document.getElementById("bStartAll").addEventListener("click", () => {
-    layers.forEach(L => { if(L.ready) wake(L); });
-  });
-  document.getElementById("mixGain").addEventListener("input", e => {
-    document.getElementById("mixGainV").textContent = parseFloat(e.target.value).toFixed(2);
-  });
-
-  let last = performance.now(), fpsEma = 0, beatWas = 0;
+  let last = performance.now(), fpsEma = 0, beatWas = 0, thumbAt = 0, insAt = 0, fpsAt = 0;
   const fpsEl = document.getElementById("fps"), beatEl = document.getElementById("beat");
 
   function frame(now){
-    const dt = Math.min(60, now - last);
-    last = now;
+    const dt = Math.min(60, now - last); last = now;
 
-    // the P/Q contract, rack-wide: resolve once, then apply
     RQ = Drive ? Drive.resolve(RP) : RP;
-    RACK_TARGETS.forEach(t => {
-      const v = RQ[t.key];
-      if(typeof v === "number" && isFinite(v)) t.apply(v);
-    });
+    RACK_TARGETS.forEach(t => { const v = RQ[t.key]; if(typeof v === "number" && isFinite(v)) t.apply(v); });
 
     feedSources(now);
-    captureAndMix(now);
-    updateThumbs(now);
+    captureAndMix();
+    if(volReady && volAPI && volumeLinked()){ try{ volAPI.pushMixFrame(mixCanvas); }catch(e){} }
 
-    if(volReady && volAPI){
-      try{ volAPI.pushMixFrame(mixCanvas); }catch(e){}
-    }
+    if(now - thumbAt > 100){ thumbAt = now; GraphView.refreshThumbs(); }
+    if(now - insAt > 160){ insAt = now; Inspector.tick(); }
 
     if(Drive){
       const bp = Drive.beatPhase;
       if(bp < beatWas){ beatEl.classList.add("hit"); setTimeout(() => beatEl.classList.remove("hit"), 80); }
       beatWas = bp;
     }
-    refreshTargetPanel();
-
-    fpsEma = fpsEma * 0.94 + (1000 / Math.max(1, dt)) * 0.06;
-    if((now | 0) % 12 === 0) fpsEl.textContent = fpsEma.toFixed(0) + " fps";
+    fpsEma = fpsEma ? fpsEma * 0.9 + (1000 / Math.max(1, dt)) * 0.1 : 1000 / Math.max(1, dt);
+    if(now - fpsAt > 500){ fpsAt = now; fpsEl.textContent = fpsEma.toFixed(fpsEma < 10 ? 1 : 0) + " fps"; }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
