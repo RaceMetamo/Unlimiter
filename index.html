@@ -149,6 +149,9 @@
    Tool registry. Add a tool by adding a line here.
    --------------------------------------------------------------- */
 const TOOLS = [
+  { file:"relief.html", name:"Relief", motif:"relief",
+    desc:"Turns a depth camera into geometry \u2014 points, scanlines or a connected surface you can orbit. A single sensor sees one side of the world, so what you get is a relief rather than a full cloud.",
+    tags:["depth","kinect","webcam","3d","drive"] },
   { file:"ouroboros.html", name:"Ouroboros", motif:"ouro",
     desc:"Recursive video feedback. Each frame is transformed, warped and coloured, then fed back in as the next frame's source. The oldest trick in video art, running on a GPU.",
     tags:["webcam","feedback","realtime","drive"] },
@@ -179,6 +182,9 @@ const TOOLS = [
 ];
 
 const UTILS = [
+  { file:"depth-check.html", name:"Depth Check", motif:"depthscope",
+    desc:"The presence layer on its own \u2014 depth, mask, a histogram for placing the working volume, and every movement scalar traced live.",
+    tags:["depth","kinect","utility"] },
   { file:"drive-check.html", name:"Drive Check", motif:"scope",
     desc:"Every modulation source drawn live on one screen. Set your levels and confirm MIDI clock before loading anything heavy.",
     tags:["audio","midi","utility"] }
@@ -222,6 +228,23 @@ const MOTIF = {
         g.arc(x,y,1.6+pass*0.22,0,TAU);
         g.stroke();
       }
+    }
+  },
+  relief(g,w,h,t){
+    // a scanned surface seen at an angle
+    const rows=16, cols=26;
+    for(let r=0;r<rows;r++){
+      g.beginPath();
+      for(let c=0;c<cols;c++){
+        const u=c/(cols-1), v=r/(rows-1);
+        const d=Math.exp(-(Math.pow((u-0.5)*2.6,2)+Math.pow((v-0.55)*2.2,2)))
+              * (1+0.25*Math.sin(t*1.2+v*4));
+        const x=(u-0.5)*w*0.82 + (v-0.5)*w*0.20 + w/2;
+        const y=(v-0.5)*h*0.72 + h/2 - d*h*0.40;
+        c===0 ? g.moveTo(x,y) : g.lineTo(x,y);
+      }
+      g.strokeStyle=`hsla(${168+r*3},62%,${38+r*3}%,${0.35+r*0.04})`;
+      g.lineWidth=1.1; g.stroke();
     }
   },
   ouro(g,w,h,t){
@@ -338,6 +361,19 @@ const MOTIF = {
         g.closePath(); g.fill();
       }
     }
+  },
+  depthscope(g,w,h,t){
+    const bins=42;
+    for(let i=0;i<bins;i++){
+      const u=i/bins;
+      const person=Math.exp(-Math.pow((u-0.34)*11,2));
+      const wall=Math.exp(-Math.pow((u-0.76)*26,2));
+      const v=person*(0.75+0.2*Math.sin(t*1.6))+wall*0.95;
+      const inVol = u>0.2 && u<0.52;
+      g.fillStyle = inVol ? "#7fd1c0" : "#3f484c";
+      g.fillRect(i*(w/bins), h-8-v*(h-26), w/bins-1.5, v*(h-26));
+    }
+    g.fillStyle="#8d9490"; g.fillRect(0,h-7,w,1);
   },
   scope(g,w,h,t){
     const rows=5;

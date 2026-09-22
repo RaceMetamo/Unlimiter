@@ -69,6 +69,7 @@ if(!window.UnlimiterDepth){
   const Depth = window.Depth = UnlimiterDepth.create({drive:Drive});
   Depth.mountPanel(panel);
 
+  document.getElementById("hud").addEventListener("click",()=>Depth.resetHealth());
   const cD=document.getElementById("cDepth"), cM=document.getElementById("cMask");
   const cH=document.getElementById("cHist"), cS=document.getElementById("cScope");
   const gD=cD.getContext("2d"), gM=cM.getContext("2d");
@@ -84,8 +85,12 @@ if(!window.UnlimiterDepth){
   function draw(){
     requestAnimationFrame(draw);
     const w=Depth.width, h=Depth.height;
+    const st=Depth.state;
     document.getElementById("hud").textContent = w
-      ? `${w}×${h} · ${Depth.state.fps} fps · ${Depth.state.frames} frames`
+      ? `${w}×${h} · ${st.fps} fps · ${st.frames} frames · `
+        + `proc ${st.procMs.toFixed(1)}ms (peak ${st.procPeak.toFixed(0)}) · `
+        + `stalls ${st.stalls} (worst gap ${st.worstGap.toFixed(0)}ms) · `
+        + `reconnects ${st.reconnects}`
       : "no source";
 
     if(w){

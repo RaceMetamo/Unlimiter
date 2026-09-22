@@ -294,8 +294,24 @@ def downscale(depth, body, w, h, factor):
 def capture_loop(src, slot, stop, fps, scale, mirror):
     period = 1.0 / max(1.0, fps)
     nxt = time.time()
+    last_good = time.time()
+    dry = False
+    got_total = 0
     while not stop.is_set():
         depth, body, got = src.read()
+        now = time.time()
+        # watchdog: the sensor dropping out looks identical to a quiet scene
+        # from up here, so say so rather than silently repeating a stale frame
+        if got:
+            got_total += 1
+            if dry:
+                print("  sensor back after %.1fs" % (now - last_good))
+                dry = False
+            last_good = now
+        elif not dry and now - last_good > 1.5:
+            dry = True
+            print("  !! no frames from the sensor for %.1fs — it is dropping out, "
+                  "not the network" % (now - last_good))
         if got:
             w, h = src.width, src.height
             if mirror:
@@ -306,8 +322,8 @@ def capture_loop(src, slot, stop, fps, scale, mirror):
                 "<4sBBHHHHHII d",
                 MAGIC, KIND_DEPTH_BODY, 1 if mirror else 0,
                 w, h, src.min_mm, src.max_mm, 0,
-                0, 0, time.time() * 1000.0)
-            slot.put(head + depth.tobytes() + body.tobytes(), time.time())
+                got_total & 0xFFFFFFFF, 0, time.time() * 1000.0)
+            slot.put(head + depth.tobytes() + body.tobytes(), now)
         rest = nxt + period - time.time()
         if rest > 0:
             time.sleep(rest)
@@ -343,17 +359,46 @@ async def main():
             print("comtypes  : MISSING (%s)" % e)
         print("-- trying the sensor --")
         src = KinectSource()
-        d, b, got = src.read()
         import time as _t
-        _t.sleep(0.5)
-        d, b, got = src.read()
-        valid = d[d > 0]
-        print("depth     : %d px, %d with a reading" % (d.size, valid.size))
-        if valid.size:
-            print("            %d-%d mm" % (valid.min(), valid.max()))
-        print("body index: %d px flagged as a person" % int((b != NO_BODY).sum()))
-        print("\nLooks alive." if valid.size else
-              "\nNo depth came back — is the sensor powered and on USB 3?")
+        t0 = _t.time()
+        nd = nb = 0
+        best_d = best_b = 0
+        raw_note = ""
+        while _t.time() - t0 < 5.0:
+            if src.rt.has_new_depth_frame():
+                d = src.rt.get_last_depth_frame()
+                if d is not None:
+                    nd += 1
+                    if not raw_note:
+                        raw_note = "depth frame: dtype=%s size=%s" % (
+                            getattr(d, "dtype", "?"), getattr(d, "size", len(d)))
+                    a = np.asarray(d).reshape(-1)
+                    best_d = max(best_d, int((a > 0).sum()))
+            if src.rt.has_new_body_index_frame():
+                b = src.rt.get_last_body_index_frame()
+                if b is not None:
+                    nb += 1
+                    a = np.asarray(b).reshape(-1)
+                    best_b = max(best_b, int((a != NO_BODY).sum()))
+            _t.sleep(0.005)
+        secs = _t.time() - t0
+        if raw_note:
+            print(raw_note)
+        print("depth frames : %d in %.1fs (%.1f fps), best frame had %d px with a reading"
+              % (nd, secs, nd / secs, best_d))
+        print("body frames  : %d in %.1fs, best frame flagged %d px as a person"
+              % (nb, secs, best_b))
+        if nd == 0:
+            print("\nNo depth frames arrived at all.\n"
+                  "  * Close Kinect Studio. It holds the sensor and other apps get nothing.\n"
+                  "  * Check the Kinect Monitor service is running (services.msc).\n"
+                  "  * Unplug and replug the adapter, then try again.")
+        elif best_d == 0:
+            print("\nFrames are arriving but every pixel reads zero — the sensor is\n"
+                  "streaming but not ranging. Usually means it is still warming up,\n"
+                  "or something opaque is right against the lens.")
+        else:
+            print("\nLooks alive.")
         src.close()
         return
 
@@ -383,6 +428,8 @@ async def main():
         clients.add(ws)
         peer = getattr(ws, "remote_address", ("?",))[0]
         print("client connected (%s) — %d total" % (peer, len(clients)))
+        sent = skipped = 0
+        t0 = time.time()
         try:
             await ws.send(hello)
             last = -1
@@ -390,14 +437,31 @@ async def main():
             while True:
                 payload, idx, _ = slot.get()
                 if payload is not None and idx != last:
+                    # if the browser is behind, drop this frame rather than
+                    # queue it: stale depth is worse than no depth, and a
+                    # growing write buffer is what stalls the connection
+                    buffered = 0
+                    tr = getattr(ws, "transport", None)
+                    if tr is not None:
+                        try: buffered = tr.get_write_buffer_size()
+                        except Exception: buffered = 0
                     last = idx
-                    await ws.send(payload)
+                    if buffered > len(payload) * 2:
+                        skipped += 1
+                    else:
+                        await ws.send(payload)
+                        sent += 1
+                    if (sent + skipped) % 150 == 0:
+                        el = time.time() - t0
+                        print("  %d sent, %d dropped (%.1f fps out)"
+                              % (sent, skipped, sent / el if el else 0))
                 await asyncio.sleep(period * 0.5)
-        except Exception:
-            pass
+        except Exception as e:
+            # never swallow this: it is the only clue when a link keeps dying
+            print("client dropped: %s: %s" % (type(e).__name__, e))
         finally:
             clients.discard(ws)
-            print("client gone — %d left" % len(clients))
+            print("client gone after %d frames — %d left" % (sent, len(clients)))
 
     bytes_per = HEADER + sw * sh * 3
     print("serving ws://%s:%d   %dx%d  %.0f fps  %.1f MB/s  (%s)"

@@ -90,9 +90,11 @@ function create(opts){
     body:null,                         // Uint8Array, 255 = no body
     prevDepth:null,
     frames:0, fps:0, fpsN:0, fpsT:0, lastFrame:0,
+    // health: a stall and a real disconnect look identical from the outside
+    reconnects:0, stalls:0, worstGap:0, lastArrive:0, procMs:0, procPeak:0,
     // controls
     nearMm:900, farMm:3200, maskFrom:"body", mirror:false,
-    smooth:0.35, clean:1, fillHoles:true, invert:false,
+    smooth:0.35, clean:0, fillHoles:false, invert:false,
     gamma:1.0, motionGain:1.0,
     // derived, all 0..1 except where noted
     m:{present:0, area:0, x:0.5, y:0.5, near:0, far:0, spread:0, motion:0}
@@ -101,20 +103,25 @@ function create(opts){
   // canvases every tool can use as an ordinary image source
   const maskCanvas = document.createElement("canvas");
   const depthCanvas = document.createElement("canvas");
+  const colorCanvas = document.createElement("canvas");   // camera colour, when there is one
+  let cctx=null, hasColor=false;
   let mctx=null, dctx=null, mImg=null, dImg=null;
-  let maskBuf=null, workBuf=null;
+  let maskBuf=null, workBuf=null, morphTmp=null;
 
   function alloc(w,h){
     if(S.w===w && S.h===h && maskBuf) return;
     S.w=w; S.h=h;
     maskCanvas.width=w; maskCanvas.height=h;
     depthCanvas.width=w; depthCanvas.height=h;
+    colorCanvas.width=w; colorCanvas.height=h;
+    cctx=colorCanvas.getContext("2d");
     mctx=maskCanvas.getContext("2d",{willReadFrequently:true});
     dctx=depthCanvas.getContext("2d",{willReadFrequently:true});
     mImg=mctx.createImageData(w,h);
     dImg=dctx.createImageData(w,h);
     maskBuf=new Uint8Array(w*h);
     workBuf=new Uint8Array(w*h);
+    morphTmp=new Uint8Array(w*h);
     S.prevDepth=new Uint16Array(w*h);
     if(!S.depth || S.depth.length!==w*h){
       S.depth=new Uint16Array(w*h);
@@ -155,7 +162,7 @@ function create(opts){
       S.ws=null;
       if(S.wantOpen){
         S.status="reconnecting";
-        S.retry++;
+        S.retry++; S.reconnects++;
         clearTimeout(S.retryTimer);
         S.retryTimer=setTimeout(()=>{ if(S.wantOpen) connect(); },
                                 Math.min(6000, 600*S.retry));
@@ -181,9 +188,19 @@ function create(opts){
     S.minMm=dv.getUint16(10,true)||S.minMm;
     S.maxMm=dv.getUint16(12,true)||S.maxMm;
     alloc(w,h);
+    const now=performance.now();
+    if(S.lastArrive){
+      const gap=now-S.lastArrive;
+      if(gap>S.worstGap) S.worstGap=gap;
+      if(gap>250) S.stalls++;
+    }
+    S.lastArrive=now;
     S.depth=new Uint16Array(buf,32,w*h);
     S.body=new Uint8Array(buf,32+w*h*2,w*h);
+    const t0=performance.now();
     onNewFrame();
+    S.procMs=S.procMs*0.9+(performance.now()-t0)*0.1;
+    if(performance.now()-t0>S.procPeak) S.procPeak=performance.now()-t0;
   }
 
   /* ---------------- webcam fallback ---------------- */
@@ -217,6 +234,7 @@ function create(opts){
     if(!vid || vid.readyState<2) return;
     const w=S.w,h=S.h;
     camCtx.drawImage(vid,0,0,w,h);
+    if(cctx){ cctx.drawImage(vid,0,0,w,h); hasColor=true; }
     const px=camCtx.getImageData(0,0,w,h).data;
     const d=S.depth, b=S.body;
     const span=S.maxMm-S.minMm;
@@ -344,22 +362,23 @@ function create(opts){
     return 1;
   }
 
-  // 3x3 min (erode, op 0) or max (dilate, op 1)
+  // 3x3 min (erode, op 0) or max (dilate, op 1), done separably: a 1x3 pass
+  // then a 3x1 pass gives the same result for 6 samples instead of 9, and
+  // reads along the row rather than jumping across three of them
   function morph(src,dst,w,h,op){
+    const t=morphTmp;
     for(let y=0;y<h;y++){
-      const y0=y>0?y-1:0, y1=y<h-1?y+1:h-1;
+      const r=y*w;
       for(let x=0;x<w;x++){
-        const x0=x>0?x-1:0, x1=x<w-1?x+1:w-1;
-        let v = op ? 0 : 1;
-        for(let yy=y0;yy<=y1;yy++){
-          const r=yy*w;
-          for(let xx=x0;xx<=x1;xx++){
-            const s=src[r+xx];
-            if(op){ if(s){ v=1; yy=y1; break; } }
-            else   { if(!s){ v=0; yy=y1; break; } }
-          }
-        }
-        dst[y*w+x]=v;
+        const a=src[r+(x>0?x-1:0)], b=src[r+x], c=src[r+(x<w-1?x+1:w-1)];
+        t[r+x] = op ? (a|b|c) : (a&b&c);
+      }
+    }
+    for(let y=0;y<h;y++){
+      const r=y*w, u=(y>0?y-1:0)*w, d=(y<h-1?y+1:h-1)*w;
+      for(let x=0;x<w;x++){
+        const a=t[u+x], b=t[r+x], c=t[d+x];
+        dst[r+x] = op ? (a|b|c) : (a&b&c);
       }
     }
   }
@@ -452,6 +471,7 @@ function create(opts){
 
     sub(host,"Clean up");
     sld(host,"Despeckle",()=>S.clean,v=>S.clean=Math.round(v),0,3,1,v=>String(v));
+    note(host,"Each despeckle step is two passes over every pixel. Leave it at 0 unless the mask is actually crawling — body index rarely needs it.");
     chk(host,"Fill holes",()=>S.fillHoles,v=>S.fillHoles=v);
     chk(host,"Invert mask",()=>S.invert,v=>S.invert=v);
     chk(host,"Mirror",()=>S.mirror,v=>S.mirror=v);
@@ -533,7 +553,10 @@ function create(opts){
   return {
     version:VERSION,
     connect, disconnect, useWebcam, mountPanel,
+    resetHealth(){ S.stalls=0; S.worstGap=0; S.reconnects=0; S.procPeak=0; },
     get maskCanvas(){ return maskCanvas; },
+    get colorCanvas(){ return colorCanvas; },
+    get hasColor(){ return hasColor; },
     get depthCanvas(){ return depthCanvas; },
     get depth(){ return S.depth; },
     get body(){ return S.body; },

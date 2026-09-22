@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relief — depth as geometry</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px}
+  #gl{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#000;cursor:grab}
+  #gl.dragging{cursor:grabbing}
+  #panel{width:352px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  .group{border-bottom:1px solid var(--line)}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:28px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:56px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--accent);margin-top:-4.5px;border:none}
+  select{width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--line);
+    border-radius:var(--radius);padding:5px 7px;font-size:12px;font-family:inherit}
+  input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);
+    border-radius:var(--radius);background:var(--panel-2);cursor:pointer;flex:none}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;
+    border-radius:var(--radius);background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);
+    border-radius:var(--radius);padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.on{border-color:var(--accent);color:var(--accent)}
+  .btnrow{display:flex;gap:6px;padding:6px 0}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
+    border-top:1px solid var(--line);margin-top:8px}
+  #footer{border-top:1px solid var(--line);padding:12px 16px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Relief <span>— depth as geometry</span></h1>
+    <div id="status">starting</div>
+  </div>
+  <div id="canvasWrap"><canvas id="gl"></canvas></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+    <details class="group" open>
+      <summary>Presets<span class="chev"></span></summary>
+      <div class="body">
+        <div class="row"><label>Preset</label><div class="ctl"><select id="presetSel"></select></div></div>
+        <div class="btnrow"><button id="bReset">Reset view</button><button id="bSpin">Auto orbit</button></div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Form<span class="chev"></span></summary>
+      <div class="body" id="g-form"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Depth<span class="chev"></span></summary>
+      <div class="body" id="g-depth"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Camera<span class="chev"></span></summary>
+      <div class="body" id="g-cam"></div>
+    </details>
+
+    <details class="group">
+      <summary>Colour<span class="chev"></span></summary>
+      <div class="body" id="g-col"></div>
+    </details>
+
+    <details class="group">
+      <summary>Displacement<span class="chev"></span></summary>
+      <div class="body" id="g-disp"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Input — depth or webcam<span class="chev"></span></summary>
+      <div class="body" id="g-input"></div>
+    </details>
+
+    <details class="group">
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+  </div>
+
+  <div id="footer">
+    <div class="btnrow">
+      <button class="primary" id="bPNG">PNG</button>
+      <button class="primary" id="bRec">● Record</button>
+      <button id="bOut">Output</button>
+    </div>
+  </div>
+</div>
+
+<script src="unlimiter-drive.js"></script>
+<script src="unlimiter-depth.js"></script>
+<script>
+"use strict";
+
+/* ============================ parameters ============================ */
+const DEFAULTS = {
+  mode:"points", step:2, pointSize:2.4, sizeByDepth:0.6, maskOnly:true,
+  zScale:520, zOffset:0, zCurve:1, flatten:0,
+  camYaw:-24, camPitch:12, camDist:1250, fov:46, spin:0, roll:0,
+  colorMode:"depth", colA:"#7fd1c0", colB:"#2b1b4a", solid:"#e8e6e1",
+  bg:"#0a0c0e", persist:0, fogNear:0.2, fogFar:1.6,
+  noiseAmp:0, noiseFreq:2.4, noiseSpeed:0.3, wave:0, waveFreq:3, explode:0,
+  lineAlpha:0.85
+};
+let P = Object.assign({}, DEFAULTS);
+let Q = P;
+
+const PRESETS = {
+  "Point relief": {},
+  "Scanlines": { mode:"hlines", step:3, zScale:640, colorMode:"depth",
+    colA:"#ffffff", colB:"#123b57", lineAlpha:0.75, camYaw:-18, camPitch:8, bg:"#05080b" },
+  "Wire surface": { mode:"mesh", step:4, zScale:560, colorMode:"depth",
+    colA:"#e0714f", colB:"#1b1030", camYaw:-26, camPitch:16, persist:0 },
+  "Ghost": { mode:"points", step:1, pointSize:1.3, zScale:600, persist:0.86,
+    colorMode:"solid", solid:"#bfe9df", bg:"#07090c", spin:6, maskOnly:true },
+  "Camera skin": { mode:"mesh", step:3, zScale:480, colorMode:"camera",
+    camYaw:-16, camPitch:10, bg:"#0b0b0e", maskOnly:false },
+  "Shatter": { mode:"points", step:2, pointSize:3.2, zScale:520, explode:140,
+    noiseAmp:60, noiseFreq:3.2, noiseSpeed:0.6, colorMode:"depth",
+    colA:"#ffd166", colB:"#7a1f3d", persist:0.4, bg:"#0a0608" },
+  "Columns": { mode:"vlines", step:5, zScale:700, lineAlpha:0.9,
+    colorMode:"height", colA:"#9dffc8", colB:"#0d3a22", camPitch:22, bg:"#04070a" }
+};
+
+/* ============================ shared layers ============================ */
+const cv=document.getElementById("gl");
+const statusEl=document.getElementById("status");
+const Drive = window.UnlimiterDrive
+  ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
+  : null;
+const Depth = window.UnlimiterDepth
+  ? UnlimiterDepth.create({ drive:Drive })
+  : null;
+
+const NO_MOD = new Set(["step","mode","colorMode"]);
+let GRP="";
+function registerMod(k,l,mn,mx){
+  if(!Drive || NO_MOD.has(k)) return;
+  Drive.registerTarget(k, GRP ? GRP+" — "+l : l, mn, mx);
+}
+
+/* ============================ controls ============================ */
+const bound={}, rows={};
+function row(p,label,nodes,key){
+  const r=document.createElement("div"); r.className="row";
+  const l=document.createElement("label"); l.textContent=label;
+  const c=document.createElement("div"); c.className="ctl";
+  nodes.forEach(n=>c.appendChild(n));
+  r.appendChild(l); r.appendChild(c); p.appendChild(r);
+  if(key) rows[key]=r;
+  return r;
+}
+function note(p,t){const d=document.createElement("div");d.className="note";d.textContent=t;p.appendChild(d);}
+function subhead(p,t){const d=document.createElement("div");d.className="subhead";d.textContent=t;p.appendChild(d);}
+function fmt(v,s){ if(s>=1) return String(Math.round(v));
+  return v.toFixed(Math.min(4,Math.max(0,Math.round(-Math.log10(s))))); }
+function slider(p,key,label,min,max,step,suffix){
+  const i=document.createElement("input");
+  i.type="range"; i.min=min; i.max=max; i.step=step; i.value=P[key];
+  const v=document.createElement("span"); v.className="val";
+  const show=()=>v.textContent=fmt(Number(P[key]),step)+(suffix||"");
+  show();
+  i.addEventListener("input",()=>{P[key]=Number(i.value);show();onParam(key);});
+  bound[key]=()=>{i.value=P[key];show();};
+  registerMod(key,label,min,max);
+  return row(p,label,[i,v],key);
+}
+function select(p,key,label,opts){
+  const s=document.createElement("select");
+  opts.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;s.appendChild(o);});
+  s.value=P[key];
+  s.addEventListener("change",()=>{P[key]=s.value;onParam(key);vis();});
+  bound[key]=()=>{s.value=P[key];};
+  return row(p,label,[s],key);
+}
+function check(p,key,label){
+  const c=document.createElement("input"); c.type="checkbox"; c.checked=!!P[key];
+  c.addEventListener("change",()=>{P[key]=c.checked;onParam(key);});
+  bound[key]=()=>{c.checked=!!P[key];};
+  return row(p,label,[c],key);
+}
+function colorPick(p,key,label){
+  const c=document.createElement("input"); c.type="color"; c.value=P[key];
+  c.addEventListener("input",()=>{P[key]=c.value;});
+  bound[key]=()=>{c.value=P[key];};
+  return row(p,label,[c],key);
+}
+function onParam(k){ if(k==="mode"||k==="step") rebuildGrid(); }
+
+GRP="Form";
+const gF=document.getElementById("g-form");
+select(gF,"mode","Draw as",[
+  ["points","Points"],["hlines","Horizontal scanlines"],["vlines","Vertical scanlines"],
+  ["mesh","Connected surface"]
+]);
+slider(gF,"step","Sampling step",1,8,1,"px");
+slider(gF,"pointSize","Point size",0.5,14,0.1,"");
+slider(gF,"sizeByDepth","Size by nearness",0,2,0.01,"");
+slider(gF,"lineAlpha","Line opacity",0.05,1,0.01,"");
+check(gF,"maskOnly","Masked subject only");
+note(gF,"Sampling step is the quality and speed dial in one: every step of 1 is four times the geometry. Step 2 on a 512×424 sensor is still 54,000 points.");
+
+GRP="Depth";
+const gD=document.getElementById("g-depth");
+slider(gD,"zScale","Depth scale",0,2000,5,"");
+slider(gD,"zOffset","Depth offset",-900,900,5,"");
+slider(gD,"zCurve","Depth curve",0.25,3,0.01,"");
+slider(gD,"flatten","Flatten",0,1,0.01,"");
+note(gD,"Depth curve reshapes how the incoming range maps to distance — under 1 pushes everything toward the far plane, over 1 exaggerates whatever is closest.");
+
+GRP="Camera";
+const gC=document.getElementById("g-cam");
+slider(gC,"camYaw","Yaw",-180,180,0.5,"°");
+slider(gC,"camPitch","Pitch",-89,89,0.5,"°");
+slider(gC,"roll","Roll",-180,180,0.5,"°");
+slider(gC,"camDist","Distance",200,5000,10,"");
+slider(gC,"fov","Field of view",12,100,0.5,"°");
+slider(gC,"spin","Auto orbit",-90,90,0.5,"°/s");
+note(gC,"Drag on the canvas to orbit, wheel to dolly.");
+
+GRP="Colour";
+const gCol=document.getElementById("g-col");
+select(gCol,"colorMode","Colour from",[
+  ["depth","Depth gradient"],["camera","The camera image"],
+  ["height","Height gradient"],["solid","One colour"]
+]);
+colorPick(gCol,"colA","Near / top");
+colorPick(gCol,"colB","Far / bottom");
+colorPick(gCol,"solid","Solid");
+colorPick(gCol,"bg","Background");
+slider(gCol,"persist","Trails",0,0.97,0.01,"");
+slider(gCol,"fogNear","Fade starts",0,2,0.01,"");
+slider(gCol,"fogFar","Fade ends",0,3,0.01,"");
+note(gCol,"Trails leave the previous frame behind instead of clearing, so movement smears through space rather than snapping.");
+
+GRP="Displacement";
+const gDi=document.getElementById("g-disp");
+slider(gDi,"noiseAmp","Noise",0,300,1,"");
+slider(gDi,"noiseFreq","Noise scale",0.2,12,0.05,"");
+slider(gDi,"noiseSpeed","Noise drift",0,3,0.01,"");
+slider(gDi,"wave","Wave",0,300,1,"");
+slider(gDi,"waveFreq","Wave cycles",0.25,20,0.25,"");
+slider(gDi,"explode","Explode along normal",0,600,1,"");
+GRP="";
+
+function vis(){
+  const show=(k,on)=>{ if(rows[k]) rows[k].classList.toggle("hidden",!on); };
+  show("pointSize",P.mode==="points");
+  show("sizeByDepth",P.mode==="points");
+  show("lineAlpha",P.mode!=="points");
+  show("colA",P.colorMode==="depth"||P.colorMode==="height");
+  show("colB",P.colorMode==="depth"||P.colorMode==="height");
+  show("solid",P.colorMode==="solid");
+}
+
+/* ============================ GL ============================ */
+const gl=cv.getContext("webgl2",{antialias:true,preserveDrawingBuffer:false,alpha:false});
+if(!gl) statusEl.textContent="WebGL2 unavailable";
+
+const VS=`#version 300 es
+precision highp float;
+uniform sampler2D uDepth, uMask, uColor;
+uniform mat4 uMVP;
+uniform vec2 uGrid;          // grid columns, rows
+uniform float uStepPx;
+uniform vec2 uTexSize;
+uniform float uZScale, uZOffset, uZCurve, uFlatten;
+uniform float uPointSize, uSizeByDepth;
+uniform int uMaskOnly, uColorMode, uMode;
+uniform vec3 uColA, uColB, uSolid;
+uniform float uTime, uNoiseAmp, uNoiseFreq, uNoiseSpeed, uWave, uWaveFreq, uExplode;
+uniform float uFogNear, uFogFar, uLineAlpha;
+out vec4 vCol;
+
+float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+float vnoise(vec3 p){
+  vec2 i=floor(p.xy); vec2 f=fract(p.xy);
+  f=f*f*(3.0-2.0*f);
+  float z=floor(p.z), fz=fract(p.z);
+  float a=mix(mix(hash(i+z*7.1),hash(i+vec2(1,0)+z*7.1),f.x),
+              mix(hash(i+vec2(0,1)+z*7.1),hash(i+vec2(1,1)+z*7.1),f.x),f.y);
+  float b=mix(mix(hash(i+(z+1.0)*7.1),hash(i+vec2(1,0)+(z+1.0)*7.1),f.x),
+              mix(hash(i+vec2(0,1)+(z+1.0)*7.1),hash(i+vec2(1,1)+(z+1.0)*7.1),f.x),f.y);
+  return mix(a,b,fz);
+}
+
+void main(){
+  int gw = int(uGrid.x);
+  int ix = gl_VertexID % gw;
+  int iy = gl_VertexID / gw;
+  vec2 texel = (vec2(float(ix), float(iy)) * uStepPx + 0.5) / uTexSize;
+
+  float d = texture(uDepth, texel).r;          // 1 = near, 0 = far
+  float m = texture(uMask, texel).r;
+
+  bool alive = !(uMaskOnly == 1 && m < 0.5) && d > 0.002;
+
+  float dc = pow(clamp(d, 0.0, 1.0), uZCurve);
+  dc = mix(dc, 0.5, uFlatten);
+
+  // the sensor plane sits in xy, depth runs along z toward the viewer
+  vec2 uv = vec2(float(ix), float(iy)) / max(vec2(1.0), uGrid - 1.0);
+  // a fixed world size: the subject must not change scale when the sampling
+  // step changes, and camera distance must mean the same thing on any sensor
+  float aspect = uTexSize.x / max(1.0, uTexSize.y);
+  vec3 pos;
+  pos.x = (uv.x - 0.5) * 1000.0 * aspect;
+  pos.y = (0.5 - uv.y) * 1000.0;
+  pos.z = (dc - 0.5) * uZScale + uZOffset;
+
+  if(uWave > 0.001) pos.z += sin(uv.x * 6.2831 * uWaveFreq + uTime) * uWave;
+  if(uNoiseAmp > 0.001){
+    float n = vnoise(vec3(uv * uNoiseFreq * 6.0, uTime * uNoiseSpeed));
+    pos += (vec3(n, vnoise(vec3(uv.yx * uNoiseFreq * 6.0, uTime * uNoiseSpeed + 9.0)), n) - 0.5)
+           * uNoiseAmp * 2.0;
+  }
+  if(uExplode > 0.001){
+    float e = hash(vec2(float(ix), float(iy)));
+    pos.z += (e - 0.3) * uExplode * (1.0 - dc);
+  }
+
+  gl_Position = uMVP * vec4(pos, 1.0);
+  if(!alive) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);   // outside clip space
+
+  float ps = uPointSize * (1.0 + (dc - 0.5) * 2.0 * uSizeByDepth);
+  gl_PointSize = max(1.0, ps);
+
+  vec3 c;
+  if(uColorMode == 0)      c = mix(uColB, uColA, dc);
+  else if(uColorMode == 1) c = texture(uColor, texel).rgb;
+  else if(uColorMode == 2) c = mix(uColB, uColA, 1.0 - uv.y);
+  else                     c = uSolid;
+
+  // distance fade, in clip depth
+  float zf = clamp(gl_Position.w / max(0.001, uFogFar * 1000.0), 0.0, 1.0);
+  float fade = 1.0 - smoothstep(uFogNear, 1.0, zf);
+  float a = (uMode == 0 ? 1.0 : uLineAlpha) * mix(0.15, 1.0, fade);
+  vCol = vec4(c, alive ? a : 0.0);
+}`;
+
+const FS=`#version 300 es
+precision highp float;
+in vec4 vCol;
+out vec4 fragColor;
+uniform int uRound;
+void main(){
+  if(vCol.a <= 0.004) discard;
+  if(uRound == 1){
+    vec2 d = gl_PointCoord - 0.5;
+    if(dot(d,d) > 0.25) discard;
+  }
+  fragColor = vCol;
+}`;
+
+const QVS=`#version 300 es
+void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position=vec4(p*2.0-1.0,0.0,1.0); }`;
+const QFS=`#version 300 es
+precision highp float;
+uniform vec4 uCol;
+out vec4 fragColor;
+void main(){ fragColor=uCol; }`;
+
+function sh(src,type){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(s)); statusEl.textContent="shader error — see console"; return null;
+  }
+  return s;
+}
+function prog(vs,fs){
+  const p=gl.createProgram();
+  gl.attachShader(p,sh(vs,gl.VERTEX_SHADER));
+  gl.attachShader(p,sh(fs,gl.FRAGMENT_SHADER));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(p)); return null; }
+  return p;
+}
+let progMain=null, progQuad=null, vao=null, idxBuf=null, idxCount=0, idxType=0;
+let texD=null, texM=null, texC=null;
+let GW=0, GH=0;
+
+function mkTex(){
+  const t=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,255]));
+  return t;
+}
+function upload(t,src){
+  if(!src || !src.width) return;
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src); }catch(e){}
+}
+
+function rebuildGrid(){
+  if(!gl||!Depth) return;
+  const w=Depth.width||320, h=Depth.height||240;
+  const st=Math.max(1,Math.round(Q.step));
+  GW=Math.max(2,Math.floor(w/st)); GH=Math.max(2,Math.floor(h/st));
+  const n=GW*GH;
+  const big = n > 65535;
+  const Arr = big ? Uint32Array : Uint16Array;
+  idxType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+  let idx=null;
+  if(Q.mode==="hlines"){
+    idx=new Arr((GW-1)*GH*2); let k=0;
+    for(let y=0;y<GH;y++) for(let x=0;x<GW-1;x++){ idx[k++]=y*GW+x; idx[k++]=y*GW+x+1; }
+  } else if(Q.mode==="vlines"){
+    idx=new Arr(GW*(GH-1)*2); let k=0;
+    for(let x=0;x<GW;x++) for(let y=0;y<GH-1;y++){ idx[k++]=y*GW+x; idx[k++]=(y+1)*GW+x; }
+  } else if(Q.mode==="mesh"){
+    idx=new Arr((GW-1)*(GH-1)*6); let k=0;
+    for(let y=0;y<GH-1;y++) for(let x=0;x<GW-1;x++){
+      const a=y*GW+x, b=a+1, c=a+GW, d=c+1;
+      idx[k++]=a; idx[k++]=b; idx[k++]=c;
+      idx[k++]=b; idx[k++]=d; idx[k++]=c;
+    }
+  }
+  if(idx){
+    if(!idxBuf) idxBuf=gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,idxBuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,idx,gl.STATIC_DRAW);
+    idxCount=idx.length;
+  } else idxCount=0;
+}
+
+/* ---- matrices ---- */
+function mul(a,b){
+  const o=new Float32Array(16);
+  for(let i=0;i<4;i++) for(let j=0;j<4;j++){
+    let s=0; for(let k=0;k<4;k++) s+=a[k*4+j]*b[i*4+k];
+    o[i*4+j]=s;
+  }
+  return o;
+}
+function perspective(fovDeg,aspect,near,far){
+  const f=1/Math.tan(fovDeg*Math.PI/360), nf=1/(near-far);
+  return new Float32Array([f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0]);
+}
+function rotY(a){const c=Math.cos(a),s=Math.sin(a);
+  return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]);}
+function rotX(a){const c=Math.cos(a),s=Math.sin(a);
+  return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]);}
+function rotZ(a){const c=Math.cos(a),s=Math.sin(a);
+  return new Float32Array([c,s,0,0, -s,c,0,0, 0,0,1,0, 0,0,0,1]);}
+function translate(x,y,z){
+  return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]);}
+
+/* ---- interaction ---- */
+let dragging=false, lx=0, ly=0, spinAcc=0;
+cv.addEventListener("pointerdown",e=>{dragging=true;lx=e.clientX;ly=e.clientY;
+  cv.setPointerCapture(e.pointerId);cv.classList.add("dragging");});
+cv.addEventListener("pointermove",e=>{
+  if(!dragging) return;
+  P.camYaw=((P.camYaw+(e.clientX-lx)*0.35+180)%360+360)%360-180;
+  P.camPitch=Math.max(-89,Math.min(89,P.camPitch+(e.clientY-ly)*0.35));
+  lx=e.clientX; ly=e.clientY;
+  bound.camYaw(); bound.camPitch();
+});
+const endDrag=()=>{dragging=false;cv.classList.remove("dragging");};
+cv.addEventListener("pointerup",endDrag);
+cv.addEventListener("pointercancel",endDrag);
+cv.addEventListener("wheel",e=>{
+  e.preventDefault();
+  P.camDist=Math.max(200,Math.min(5000,P.camDist*(1+Math.sign(e.deltaY)*0.08)));
+  bound.camDist();
+},{passive:false});
+
+function resize(){
+  const wrap=document.getElementById("canvasWrap");
+  const dpr=Math.min(1.5,window.devicePixelRatio||1);
+  const w=Math.max(320,Math.floor((wrap.clientWidth-44)*dpr));
+  const h=Math.max(240,Math.floor((wrap.clientHeight-44)*dpr));
+  const cap=1920, k=Math.max(w,h)>cap?cap/Math.max(w,h):1;
+  cv.width=Math.floor(w*k); cv.height=Math.floor(h*k);
+  cv.style.width=Math.floor(cv.width/dpr)+"px";
+  cv.style.height=Math.floor(cv.height/dpr)+"px";
+}
+
+/* ---- frame ---- */
+const hex=h=>{const n=parseInt(h.slice(1),16);return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255];};
+const t0=performance.now();
+let frames=0,fpsT=performance.now(),fps=0,lastT=performance.now();
+function U(p,n){ return gl.getUniformLocation(p,n); }
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if(!gl||!progMain||!Depth) return;
+  Q = Drive ? Drive.resolve(P) : P;
+  const dt=Math.min(0.1,(now-lastT)/1000); lastT=now;
+  const time=(now-t0)/1000;
+
+  const dw=Depth.width;
+  if(dw && (GW===0 || Math.floor(dw/Math.max(1,Math.round(Q.step)))!==GW)) rebuildGrid();
+
+  upload(texD,Depth.depthCanvas);
+  upload(texM,Depth.maskCanvas);
+  if(Q.colorMode==="camera") upload(texC,Depth.colorCanvas);
+
+  gl.viewport(0,0,cv.width,cv.height);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+
+  // clear, or lay a veil over the last frame so movement leaves a trail
+  const bg=hex(Q.bg);
+  if(Q.persist>0.005){
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(progQuad);
+    gl.uniform4f(U(progQuad,"uCol"),bg[0],bg[1],bg[2],1-Q.persist);
+    gl.bindVertexArray(vao);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+  } else {
+    gl.clearColor(bg[0],bg[1],bg[2],1);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  }
+
+  if(!Depth.live || !GW){
+    statusEl.textContent="no depth source — connect the bridge or use the webcam";
+    return;
+  }
+
+  spinAcc=(spinAcc+Q.spin*dt)%360;
+  const asp=cv.width/cv.height;
+  const proj=perspective(Q.fov,asp,10,20000);
+  let view=translate(0,0,-Q.camDist);
+  view=mul(view,rotZ(Q.roll*Math.PI/180));
+  view=mul(view,rotX(Q.camPitch*Math.PI/180));
+  view=mul(view,rotY((Q.camYaw+spinAcc)*Math.PI/180));
+  const mvp=mul(proj,view);
+
+  gl.useProgram(progMain);
+  gl.bindVertexArray(vao);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,texD); gl.uniform1i(U(progMain,"uDepth"),0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,texM); gl.uniform1i(U(progMain,"uMask"),1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,texC); gl.uniform1i(U(progMain,"uColor"),2);
+  gl.uniformMatrix4fv(U(progMain,"uMVP"),false,mvp);
+  gl.uniform2f(U(progMain,"uGrid"),GW,GH);
+  gl.uniform1f(U(progMain,"uStepPx"),Math.max(1,Math.round(Q.step)));
+  gl.uniform2f(U(progMain,"uTexSize"),Depth.width,Depth.height);
+  gl.uniform1f(U(progMain,"uZScale"),Q.zScale);
+  gl.uniform1f(U(progMain,"uZOffset"),Q.zOffset);
+  gl.uniform1f(U(progMain,"uZCurve"),Q.zCurve);
+  gl.uniform1f(U(progMain,"uFlatten"),Q.flatten);
+  gl.uniform1f(U(progMain,"uPointSize"),Q.pointSize);
+  gl.uniform1f(U(progMain,"uSizeByDepth"),Q.sizeByDepth);
+  gl.uniform1i(U(progMain,"uMaskOnly"),Q.maskOnly?1:0);
+  gl.uniform1i(U(progMain,"uColorMode"),
+    {depth:0,camera:1,height:2,solid:3}[Q.colorMode]||0);
+  gl.uniform1i(U(progMain,"uMode"),Q.mode==="points"?0:1);
+  const A=hex(Q.colA),B=hex(Q.colB),SD=hex(Q.solid);
+  gl.uniform3f(U(progMain,"uColA"),A[0],A[1],A[2]);
+  gl.uniform3f(U(progMain,"uColB"),B[0],B[1],B[2]);
+  gl.uniform3f(U(progMain,"uSolid"),SD[0],SD[1],SD[2]);
+  gl.uniform1f(U(progMain,"uTime"),time);
+  gl.uniform1f(U(progMain,"uNoiseAmp"),Q.noiseAmp);
+  gl.uniform1f(U(progMain,"uNoiseFreq"),Q.noiseFreq);
+  gl.uniform1f(U(progMain,"uNoiseSpeed"),Q.noiseSpeed);
+  gl.uniform1f(U(progMain,"uWave"),Q.wave);
+  gl.uniform1f(U(progMain,"uWaveFreq"),Q.waveFreq);
+  gl.uniform1f(U(progMain,"uExplode"),Q.explode);
+  gl.uniform1f(U(progMain,"uFogNear"),Q.fogNear);
+  gl.uniform1f(U(progMain,"uFogFar"),Q.fogFar);
+  gl.uniform1f(U(progMain,"uLineAlpha"),Q.lineAlpha);
+  gl.uniform1i(U(progMain,"uRound"),Q.mode==="points"?1:0);
+
+  if(Q.mode==="points"){
+    gl.drawArrays(gl.POINTS,0,GW*GH);
+  } else if(idxCount){
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,idxBuf);
+    gl.drawElements(Q.mode==="mesh"?gl.TRIANGLES:gl.LINES, idxCount, idxType, 0);
+  }
+
+  if(Drive) Drive.pushFrame(cv);
+
+  frames++;
+  if(now-fpsT>500){
+    fps=Math.round(frames*1000/(now-fpsT)); frames=0; fpsT=now;
+    const n=Q.mode==="points"?GW*GH:idxCount;
+    statusEl.textContent=`${fps} fps · ${GW}×${GH} grid · ${n.toLocaleString()} `
+      + (Q.mode==="mesh"?"indices":Q.mode==="points"?"points":"line ends")
+      + (Drive && Drive.state.midi.clockOk ? ` · ${Drive.bpm.toFixed(0)} bpm` : "");
+  }
+}
+
+/* ============================ presets & export ============================ */
+const presetSel=document.getElementById("presetSel");
+Object.keys(PRESETS).forEach(k=>{
+  const o=document.createElement("option");o.value=k;o.textContent=k;presetSel.appendChild(o);
+});
+presetSel.addEventListener("change",()=>{
+  P=Object.assign({},DEFAULTS,PRESETS[presetSel.value]||{});
+  Object.keys(bound).forEach(k=>bound[k]&&bound[k]());
+  vis(); rebuildGrid();
+});
+document.getElementById("bReset").addEventListener("click",()=>{
+  P.camYaw=-24;P.camPitch=12;P.roll=0;P.camDist=1250;spinAcc=0;
+  ["camYaw","camPitch","roll","camDist"].forEach(k=>bound[k]&&bound[k]());
+});
+const bSpin=document.getElementById("bSpin");
+bSpin.addEventListener("click",()=>{
+  P.spin = Math.abs(P.spin)>0.01 ? 0 : 10;
+  bound.spin(); bSpin.classList.toggle("on",Math.abs(P.spin)>0.01);
+});
+function download(blob,name){
+  const u=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),5000);
+}
+document.getElementById("bPNG").addEventListener("click",()=>{
+  cv.toBlob(b=>download(b,"relief-"+cv.width+"x"+cv.height+".png"));
+});
+let rec=null,chunks=[];
+const bRec=document.getElementById("bRec");
+bRec.addEventListener("click",()=>{
+  if(rec){ rec.stop(); return; }
+  const want=["video/mp4;codecs=avc1.42E01E","video/mp4","video/webm;codecs=vp9","video/webm"];
+  const mime=want.find(m=>window.MediaRecorder&&MediaRecorder.isTypeSupported(m));
+  if(!mime){ statusEl.textContent="this browser can't record"; return; }
+  const stream=cv.captureStream(60);
+  const ac=Drive&&Drive.audioContext(), an=Drive&&Drive.analyserNode();
+  if(ac&&an){ try{ const d=ac.createMediaStreamDestination(); an.connect(d);
+    d.stream.getAudioTracks().forEach(t=>stream.addTrack(t)); }catch(e){} }
+  chunks=[];
+  rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:40e6});
+  rec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+  rec.onstop=()=>{
+    const ext=mime.indexOf("mp4")>=0?"mp4":"webm";
+    if(chunks.length) download(new Blob(chunks,{type:mime}),"relief."+ext);
+    rec=null; bRec.textContent="● Record"; bRec.classList.remove("on");
+  };
+  rec.start(); bRec.textContent="■ Stop"; bRec.classList.add("on");
+});
+document.getElementById("bOut").addEventListener("click",()=>{ if(Drive) Drive.openOutput(()=>cv); });
+
+/* ============================ boot ============================ */
+if(gl){
+  progMain=prog(VS,FS); progQuad=prog(QVS,QFS);
+  vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+  texD=mkTex(); texM=mkTex(); texC=mkTex();
+  gl.depthFunc(gl.LEQUAL);
+  resize();
+  let rt=0;
+  window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(resize,200);});
+  requestAnimationFrame(frame);
+}
+const dp=document.getElementById("g-input");
+if(Depth){ Depth.mountPanel(dp); }
+else dp.innerHTML='<div class="note">unlimiter-depth.js not found — it must sit in this folder.</div>';
+const gdr=document.getElementById("g-drive");
+if(Drive){ Drive.mountPanel(gdr); }
+else gdr.innerHTML='<div class="note">unlimiter-drive.js not found.</div>';
+vis();
+</script>
+</body>
+</html>
