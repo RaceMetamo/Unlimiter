@@ -169,6 +169,11 @@
     </details>
 
     <details class="group" open>
+      <summary>Outline layer<span class="chev"></span></summary>
+      <div class="body" id="g-ghost"></div>
+    </details>
+
+    <details class="group" open>
       <summary>Depth<span class="chev"></span></summary>
       <div class="body" id="g-depth"></div>
     </details>
@@ -331,7 +336,12 @@ const DEFAULTS = {
   camYaw:-24, camPitch:16, camRoll:0, camDist:1500, persp:1,
   camAuto:0, depthSize:1, depthFade:0, depthSort:true,
   // draw
-  drawZ:0, drawSmooth:2, drawMinDist:3, drawClose:false, drawVelZ:0
+  drawZ:0, drawSmooth:2, drawMinDist:3, drawClose:false, drawVelZ:0,
+  // outline layer — the source itself, kept legible
+  ghostOn:false, ghostMode:"stroke", ghostOrder:"over",
+  ghostCol:"#ffffff", ghostFill:"#101314", ghostWidth:2, ghostAlpha:0.9,
+  ghostBlend:"source-over", ghostDash:0, ghostDetail:3, ghostSmooth:2,
+  ghostZ:0, ghostRepeat:1, ghostSpread:0
 };
 const CHAR_FONTS=[
   ["ui-monospace, Menlo, Consolas, monospace","Monospace"],
@@ -372,7 +382,8 @@ const NO_MOD = new Set(["text","font","weight","fontSize","leading","tracking","
   "align","autoFit","contourOn","spacing","smooth","fillOn","fillCount","minDist",
   "invertMask","threshold","seed","cloudType","cloudCount","cloudPaths","cloudLen",
   "cloudStep","cloudFreq","cloudThresh","aspect","animSpeed",
-  "zMode","zAmount","zNoiseFreq","zByPath","drawSmooth","drawMinDist","drawZ","drawClose","drawVelZ"]);
+  "zMode","zAmount","zNoiseFreq","zByPath","drawSmooth","drawMinDist","drawZ","drawClose","drawVelZ",
+  "ghostOn","ghostMode","ghostOrder","ghostDetail","ghostSmooth","ghostBlend"]);
 let GRP="";
 function registerMod(key,label,min,max){
   if(!Drive || NO_MOD.has(key)) return;
@@ -494,6 +505,33 @@ const PRESETS = {
     rotMode:"none", opaS:0.95, opaE:0.95,
     colorMode:"pathGradient", colA:"#9dffc8", colB:"#0d3a22",
     bgMode:"color", bg:"#05080a"
+  },
+  "Logo lockup": {
+    src:"text", text:"METAMO", font:"Helvetica, Arial, sans-serif", weight:700,
+    fontSize:210, spacing:9, contourOn:true, fillOn:false,
+    passes:26, shape:"line", contentType:"stroke", rotMode:"normal",
+    sizeS:46, sizeE:8, sizeEase:"outCubic", normalS:0, normalE:74, swS:0.9, swE:0.5,
+    opaS:0.55, opaE:0.12, colorMode:"passGradient", colA:"#e0714f", colB:"#1b2b5c",
+    bgMode:"color", bg:"#0e1114",
+    ghostOn:true, ghostMode:"stroke", ghostOrder:"over", ghostCol:"#f5f1e6",
+    ghostWidth:2.4, ghostAlpha:1, ghostDetail:2.5
+  },
+  "Knocked out": {
+    src:"text", text:"VOID", fontSize:260, spacing:6, contourOn:true,
+    fillOn:true, fillCount:5000, minDist:8,
+    passes:20, shape:"circle", contentType:"fill", sizeS:26, sizeE:5,
+    colorMode:"passGradient", colA:"#7fd1c0", colB:"#123b57",
+    bgMode:"color", bg:"#07090b", opaS:0.8, opaE:0.3,
+    ghostOn:true, ghostMode:"both", ghostOrder:"over", ghostBlend:"destination-out",
+    ghostFill:"#000000", ghostCol:"#000000", ghostWidth:6, ghostAlpha:1
+  },
+  "Echo mark": {
+    src:"text", text:"ECHO", fontSize:240, spacing:14, contourOn:true,
+    passes:1, shape:"circle", contentType:"stroke", sizeS:10, sizeE:10,
+    colorMode:"solid", colA:"#2a3340", bgMode:"color", bg:"#0b0d10",
+    ghostOn:true, ghostMode:"stroke", ghostOrder:"over", ghostCol:"#9dffc8",
+    ghostWidth:1.4, ghostAlpha:0.85, ghostRepeat:8, ghostSpread:1.4,
+    ghostBlend:"screen", ghostDetail:2.5
   },
   "Contour rings": {
     src:"text", text:"O", fontSize:520, contourOn:true, spacing:26, passes:26,
@@ -780,6 +818,32 @@ slider(gAnim,"mSwayZ","Sway in depth",0,500,1,"");
 slider(gAnim,"mTumble","Tumble",0,180,0.5,"°");
 note(gAnim,"Sway in depth and tumble only do anything with depth switched on. Everything here is a full cycle per loop, so the motion returns exactly to where it started. Travel slides stamps along their own path — whole numbers of turns for spin keep the loop clean.");
 
+// --- outline layer
+GRP="Outline";
+const gGhost=document.getElementById("g-ghost");
+check(gGhost,"ghostOn","Show the outline");
+select(gGhost,"ghostMode","Draw as",[
+  ["stroke","Outline only"],["fill","Solid fill"],["both","Fill and outline"]
+]);
+select(gGhost,"ghostOrder","Position",[["over","In front of the stamps"],["under","Behind the stamps"]]);
+colorPick(gGhost,"ghostCol","Outline colour");
+colorPick(gGhost,"ghostFill","Fill colour");
+slider(gGhost,"ghostWidth","Outline width",0.2,24,0.1,"");
+slider(gGhost,"ghostAlpha","Opacity",0,1,0.01,"");
+select(gGhost,"ghostBlend","Blending",[
+  ["source-over","Normal"],["multiply","Multiply"],["screen","Screen"],["lighter","Add"],
+  ["overlay","Overlay"],["difference","Difference"],["destination-out","Knock out"]
+]);
+slider(gGhost,"ghostDash","Dashes",0,60,0.5,"");
+subhead(gGhost,"Echo");
+slider(gGhost,"ghostRepeat","Copies",1,12,1,"");
+slider(gGhost,"ghostSpread","Growth each copy",0,6,0.05,"%");
+subhead(gGhost,"Trace");
+slider(gGhost,"ghostDetail","Detail",1.5,30,0.5,"px");
+slider(gGhost,"ghostSmooth","Smoothing",0,8,1,"");
+slider(gGhost,"ghostZ","Depth offset",-900,900,5,"");
+note(gGhost,"Traces the source shape itself as real vector, at its own detail — so the stamps can be as sparse or as wild as you like and the logo still reads. It traces contours even when the stamp layer does not.");
+
 // --- depth
 const gDepth=document.getElementById("g-depth");
 check(gDepth,"dim3","Use depth");
@@ -856,6 +920,16 @@ function vis(){
   show("cloudThresh",["noiseMask"].includes(ct));
   show("rotValue",P.rotMode==="value");
   show("sides",P.shape==="polygon");
+  const gh=!!P.ghostOn;
+  ["ghostMode","ghostOrder","ghostCol","ghostFill","ghostWidth","ghostAlpha","ghostBlend",
+   "ghostDash","ghostRepeat","ghostSpread","ghostDetail","ghostSmooth","ghostZ"]
+   .forEach(k=>show(k,gh));
+  show("ghostCol", gh && P.ghostMode!=="fill");
+  show("ghostFill", gh && P.ghostMode!=="stroke");
+  show("ghostWidth", gh && P.ghostMode!=="fill");
+  show("ghostDash", gh && P.ghostMode!=="fill");
+  show("ghostZ", gh && P.dim3);
+  gGhost.querySelectorAll(".subhead,.note").forEach(e=>e.classList.toggle("hidden",!gh));
   const chr = P.shape==="char"||P.shape==="mixed";
   ["charRamp","charSet","charMode","charFont","charWeight","charInvert","charFixed"].forEach(k=>show(k,chr));
   show("charInvert", chr && ["luma","size","alongPath","byPass","depth"].includes(P.charMode));
@@ -1298,8 +1372,46 @@ function geoSig(){
     P.align,P.autoFit,P.contourOn,P.spacing,P.smooth,P.fillOn,P.fillCount,P.minDist,
     P.invertMask,P.threshold,P.seed,P.cloudType,P.cloudCount,P.cloudPaths,P.cloudLen,
     P.cloudStep,P.cloudFreq,P.cloudThresh,P.aspect,P.zMode,P.zAmount,P.zNoiseFreq,
-    P.zByPath,P.drawSmooth,P.drawVelZ,strokeRev,imgRev].join("|");
+    P.zByPath,P.drawSmooth,P.drawVelZ,strokeRev,imgRev,
+    P.ghostOn,P.ghostDetail,P.ghostSmooth,P.ghostZ].join("|");
 }
+// The outline layer traces the source at its own detail, independent of the
+// stamp spacing — so a sparse field of stamps can still carry a crisp edge.
+// It also traces contours even when the stamps do not, which is the whole
+// point: stipple the inside, keep the shape readable.
+let GHOST=[];
+function buildGhostPaths(){
+  if(!P.ghostOn) return [];
+  const out=[];
+  const det=Math.max(1.5,P.ghostDetail);
+  if(P.src==="cloud"){
+    for(const fp of PATHS)
+      out.push({pts:fp.pts.map(p=>({x:p.x,y:p.y,z:p.z})), closed:fp.closed});
+  } else if(P.src==="draw"){
+    const {w,h}=dims();
+    for(const st of STROKES){
+      if(!st.pts || st.pts.length<2) continue;
+      let raw=st.pts.map(q=>[q[0]*w, q[1]*h]);
+      if(P.drawSmooth>0) raw=smoothOpen(raw,P.drawSmooth);
+      const rs=resample(raw,det,!!st.closed);
+      if(rs.length<2) continue;
+      out.push({pts:rs.map(q=>({x:q[0],y:q[1],z:st.z||0})), closed:!!st.closed});
+    }
+  } else {
+    const {mw,mh,s}=(P.src==="image") ? drawImageMask() : drawTextMask();
+    const inv=1/s;
+    const bin=maskBits(mw,mh);
+    for(const c of traceMask(bin,mw,mh)){
+      let p=smoothPts(c,Math.max(0,P.ghostSmooth));
+      p=resample(p,det*s,true);
+      if(p.length<3) continue;
+      out.push({pts:p.map(q=>({x:q[0]*inv,y:q[1]*inv,z:0})), closed:true});
+    }
+  }
+  if(P.ghostZ) for(const g of out) for(const q of g.pts) q.z+=P.ghostZ;
+  return out;
+}
+
 function buildSource(force){
   const k=geoSig();
   if(!force && k===geoKey && PATHS.length){ return; }   // camera-only change
@@ -1308,6 +1420,7 @@ function buildSource(force){
         : P.src==="draw"  ? buildDrawn()
         : buildFromMask();
   POINT_COUNT = PATHS.reduce((a,p)=>a+p.pts.length,0);
+  GHOST = buildGhostPaths();
 }
 
 /* ============================ colour sampling ============================ */
@@ -1720,6 +1833,77 @@ function paintStamp(ctx,st,sc){
   else { if(doFill) ctx.fill(); if(doStroke) ctx.stroke(); }
 }
 
+// the outline, drawn as real geometry rather than stamps
+function drawGhost(ctx,sc){
+  if(!Q.ghostOn || !GHOST.length) return;
+  camSetup();
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalCompositeOperation=Q.ghostBlend;
+  ctx.lineJoin="round"; ctx.lineCap="round";
+  if(Q.ghostDash>0.01) ctx.setLineDash([Q.ghostDash*sc, Q.ghostDash*sc*0.8]);
+  else ctx.setLineDash([]);
+  const reps=Math.max(1,Math.round(Q.ghostRepeat));
+  for(let r=0;r<reps;r++){
+    const grow=1 + r*Q.ghostSpread*0.01;
+    ctx.beginPath();
+    for(const g of GHOST){
+      const pts=g.pts, n=pts.length;
+      for(let i=0;i<n;i++){
+        const q=pts[i];
+        let x=q.x, y=q.y;
+        if(grow!==1){ x=CW*0.5+(x-CW*0.5)*grow; y=CH*0.5+(y-CH*0.5)*grow; }
+        if(CAM.on){ const pr=project(x,y,q.z); x=pr[0]; y=pr[1]; }
+        if(i===0) ctx.moveTo(x*sc,y*sc); else ctx.lineTo(x*sc,y*sc);
+      }
+      if(g.closed) ctx.closePath();
+    }
+    const fade = reps>1 ? 1-(r/reps)*0.85 : 1;
+    ctx.globalAlpha=Q.ghostAlpha*fade;
+    // even-odd so the counters in letterforms stay open
+    if(Q.ghostMode!=="stroke"){ ctx.fillStyle=Q.ghostFill; ctx.fill("evenodd"); }
+    if(Q.ghostMode!=="fill"){
+      ctx.strokeStyle=Q.ghostCol;
+      ctx.lineWidth=Math.max(0.2,Q.ghostWidth*sc);
+      ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+  resetStampCache();
+}
+
+function ghostSVG(){
+  if(!Q.ghostOn || !GHOST.length) return "";
+  camSetup();
+  const n=v=>Math.round(v*100)/100;
+  const reps=Math.max(1,Math.round(Q.ghostRepeat));
+  const out=[`<g id="outline">`];
+  for(let r=0;r<reps;r++){
+    const grow=1 + r*Q.ghostSpread*0.01;
+    let d="";
+    for(const g of GHOST){
+      g.pts.forEach((q,i)=>{
+        let x=q.x, y=q.y;
+        if(grow!==1){ x=CW*0.5+(x-CW*0.5)*grow; y=CH*0.5+(y-CH*0.5)*grow; }
+        if(CAM.on){ const pr=project(x,y,q.z); x=pr[0]; y=pr[1]; }
+        d += (i===0?"M":"L")+n(x)+" "+n(y);
+      });
+      if(g.closed) d+="Z";
+    }
+    const fade = reps>1 ? 1-(r/reps)*0.85 : 1;
+    const fill = Q.ghostMode!=="stroke" ? Q.ghostFill : "none";
+    const stroke = Q.ghostMode!=="fill" ? Q.ghostCol : "none";
+    out.push(`<path d="${d}" fill="${fill}" fill-rule="evenodd" stroke="${stroke}" `
+      + `stroke-width="${Q.ghostWidth}" opacity="${(Q.ghostAlpha*fade).toFixed(3)}" `
+      + `stroke-linejoin="round" stroke-linecap="round"`
+      + (Q.ghostDash>0.01 ? ` stroke-dasharray="${n(Q.ghostDash)} ${n(Q.ghostDash*0.8)}"` : "")
+      + `/>`);
+  }
+  out.push(`</g>`);
+  return out.join("\n");
+}
+
 /* ============================ svg backend ============================ */
 function xmlEsc(v){
   return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;")
@@ -1772,6 +1956,7 @@ function buildSVG(){
   parts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`);
   if(P.bgMode==="color") parts.push(`<rect width="${w}" height="${h}" fill="${P.bg}"/>`);
+  if(Q.ghostOn && Q.ghostOrder==="under") parts.push(ghostSVG());
   if(P.blend!=="source-over") parts.push(`<g style="mix-blend-mode:${P.blend}">`);
   const order=[];
   for(let pass=0;pass<Q.passes;pass++) order.push(pass);
@@ -1781,6 +1966,7 @@ function buildSVG(){
     parts.push(`</g>`);
   }
   if(P.blend!=="source-over") parts.push(`</g>`);
+  if(Q.ghostOn && Q.ghostOrder==="over") parts.push(ghostSVG());
   parts.push(`</svg>`);
   return parts.join("\n");
 }
@@ -1815,8 +2001,11 @@ function blit(){
 function renderAll(ctx,sc,T,noise){
   paintBackground(ctx,ctx.canvas.width,ctx.canvas.height);
   prepCtx(ctx);
+  if(Q.ghostOn && Q.ghostOrder==="under"){ drawGhost(ctx,sc); prepCtx(ctx); }
   const n=Math.max(1,Math.round(Q.passes));
   for(let p2=0;p2<n;p2++) emitSorted(p2, st=>paintStamp(ctx,st,sc), noise, T);
+  ctx.setTransform(1,0,0,1,0,0);
+  if(Q.ghostOn && Q.ghostOrder==="over") drawGhost(ctx,sc);
   ctx.setTransform(1,0,0,1,0,0);
 }
 
@@ -1844,6 +2033,7 @@ function startRender(){
     Q = Drive ? Drive.resolve(P) : P;
     paintBackground(wctx,w,h);
     prepCtx(wctx);
+    if(Q.ghostOn && Q.ghostOrder==="under"){ drawGhost(wctx,1); prepCtx(wctx); }
     pass=0; running=true;
     rafId=requestAnimationFrame(tick);
   }
@@ -1858,6 +2048,8 @@ function tick(){
     emitSorted(pass, st=>paintStamp(wctx,st,1), noiseInst, 0);
     pass++;
   }
+  wctx.setTransform(1,0,0,1,0,0);
+  if(pass>=Q.passes && Q.ghostOn && Q.ghostOrder==="over") drawGhost(wctx,1);
   wctx.setTransform(1,0,0,1,0,0);
   blit();
   statusText.textContent = pass>=Q.passes ? "idle" : `pass ${pass} / ${Math.round(Q.passes)}`;
@@ -1921,11 +2113,14 @@ async function exportPNG(){
   const noise=new Simplex(mulberry32(P.seed*7919+5));
   paintBackground(bx,big.width,big.height);
   prepCtx(bx);
+  if(Q.ghostOn && Q.ghostOrder==="under"){ drawGhost(bx,sc); prepCtx(bx); }
   const np=Math.max(1,Math.round(Q.passes));
   for(let p2=0;p2<np;p2++){
     emitSorted(p2, st=>paintStamp(bx,st,sc), noise, curT);
     if(p2%3===0){ ovText.textContent=`Rendering pass ${p2+1} of ${np}`; await new Promise(r=>setTimeout(r,0)); }
   }
+  bx.setTransform(1,0,0,1,0,0);
+  if(Q.ghostOn && Q.ghostOrder==="over") drawGhost(bx,sc);
   bx.setTransform(1,0,0,1,0,0);
   big.toBlob(b=>{
     download(URL.createObjectURL(b), `anchor_${P.seed}_${Date.now()}.png`);
