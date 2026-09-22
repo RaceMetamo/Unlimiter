@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Depth check — Unlimiter</title>
+<style>
+  :root{
+    --stage:#16181a;--panel:#1e2124;--panel-2:#24282b;--line:#2e3338;
+    --text:#e8e6e1;--dim:#8d9490;--accent:#7fd1c0;--hot:#e0714f;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    display:flex;overflow:hidden}
+  #left{flex:1;min-width:0;display:flex;flex-direction:column}
+  #head{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px}
+  #head h1{margin:0;font-size:15px;font-weight:600}
+  #head h1 span{color:var(--dim);font-weight:400}
+  #head .tiny{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+  .hint{color:var(--dim);font-size:12px;padding:10px 20px 12px;line-height:1.55}
+  .hint b{color:var(--text);font-weight:600}
+  .hint code{font-family:var(--mono);font-size:11.5px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:2px;padding:1px 5px;color:var(--text)}
+  #grid{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;gap:1px;background:var(--line)}
+  .cell{position:relative;background:#0e1011;overflow:hidden;display:flex;
+    align-items:center;justify-content:center}
+  .cell canvas{max-width:100%;max-height:100%;display:block;image-rendering:pixelated}
+  .cell .lbl{position:absolute;left:10px;top:8px;font-family:var(--mono);font-size:11px;
+    color:var(--dim);pointer-events:none;text-shadow:0 1px 3px #000}
+  #panel{width:352px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    overflow-y:auto;padding:14px 16px}
+  #panel::-webkit-scrollbar{width:9px}
+  #panel::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+</style>
+</head>
+<body>
+<div id="left">
+  <div id="head">
+    <h1>Depth check <span>— the presence layer, on its own</span></h1>
+    <div class="tiny" id="hud">—</div>
+  </div>
+  <div class="hint">Everything the depth layer produces, live. Prove the chain here before
+    loading a heavy tool. Start the bridge with <code>python kinect-bridge.py</code>, or
+    <code>--simulate</code> to test with no sensor attached. Served from
+    <b>localhost or https</b> — a <code>file://</code> page cannot open a webcam.</div>
+  <div id="grid">
+    <div class="cell"><canvas id="cDepth"></canvas><div class="lbl">depth</div></div>
+    <div class="cell"><canvas id="cMask"></canvas><div class="lbl">mask</div></div>
+    <div class="cell"><canvas id="cHist"></canvas><div class="lbl">depth histogram · working volume in green</div></div>
+    <div class="cell"><canvas id="cScope"></canvas><div class="lbl">modulation sources</div></div>
+  </div>
+</div>
+<div id="panel"></div>
+
+<script src="unlimiter-drive.js"></script>
+<script src="unlimiter-depth.js"></script>
+<script>
+"use strict";
+const panel=document.getElementById("panel");
+if(!window.UnlimiterDepth){
+  panel.innerHTML='<div style="color:#e0714f">unlimiter-depth.js not found — it must sit in this folder.</div>';
+} else {
+  // on window deliberately: this is a diagnostic page, poke at it from the console
+  const Drive = window.Drive = window.UnlimiterDrive ? UnlimiterDrive.create({}) : null;
+  const Depth = window.Depth = UnlimiterDepth.create({drive:Drive});
+  Depth.mountPanel(panel);
+
+  const cD=document.getElementById("cDepth"), cM=document.getElementById("cMask");
+  const cH=document.getElementById("cHist"), cS=document.getElementById("cScope");
+  const gD=cD.getContext("2d"), gM=cM.getContext("2d");
+  const gH=cH.getContext("2d"), gS=cS.getContext("2d");
+  [cH,cS].forEach(c=>{c.width=640;c.height=300;});
+
+  const ROWS=[["present","someone there"],["area","silhouette size"],["x","position across"],
+              ["y","position up"],["near","closeness"],["spread","depth spread"],
+              ["motion","movement"]];
+  const hist=ROWS.map(()=>new Float32Array(640).fill(0));
+  const bins=new Float32Array(128);
+
+  function draw(){
+    requestAnimationFrame(draw);
+    const w=Depth.width, h=Depth.height;
+    document.getElementById("hud").textContent = w
+      ? `${w}×${h} · ${Depth.state.fps} fps · ${Depth.state.frames} frames`
+      : "no source";
+
+    if(w){
+      if(cD.width!==w){ cD.width=w; cD.height=h; cM.width=w; cM.height=h; }
+      gD.drawImage(Depth.depthCanvas,0,0);
+      gM.fillStyle="#0e1011"; gM.fillRect(0,0,w,h);
+      gM.drawImage(Depth.maskCanvas,0,0);
+      // centroid marker
+      const m=Depth.metrics;
+      if(m.present>0.2){
+        gM.strokeStyle="#7fd1c0"; gM.lineWidth=Math.max(1,w/320);
+        gM.beginPath(); gM.arc(m.x*w,m.y*h,w*0.02,0,Math.PI*2); gM.stroke();
+      }
+    }
+
+    // histogram of raw millimetres, with the working volume highlighted
+    const d=Depth.depth;
+    gH.fillStyle="#0e1011"; gH.fillRect(0,0,cH.width,cH.height);
+    if(d && d.length){
+      bins.fill(0);
+      const lo=0, hi=6000;
+      for(let i=0;i<d.length;i+=7){
+        const z=d[i]; if(!z) continue;
+        const b=Math.min(127,((z-lo)/(hi-lo)*128)|0);
+        if(b>=0) bins[b]++;
+      }
+      let peak=1; for(let i=0;i<128;i++) peak=Math.max(peak,bins[i]);
+      const nearB=(Depth.state.nearMm/hi*128), farB=(Depth.state.farMm/hi*128);
+      const bw=cH.width/128;
+      for(let i=0;i<128;i++){
+        const v=bins[i]/peak;
+        gH.fillStyle = (i>=nearB&&i<=farB) ? "#7fd1c0" : "#3f484c";
+        gH.fillRect(i*bw, cH.height-v*(cH.height-24), bw-1, v*(cH.height-24));
+      }
+      gH.fillStyle="#8d9490"; gH.font="11px ui-monospace,monospace";
+      for(let m2=0;m2<=6;m2++){
+        const x=m2*1000/hi*cH.width;
+        gH.fillRect(x,cH.height-16,1,6);
+        gH.fillText(m2+"m",x+3,cH.height-4);
+      }
+    }
+
+    // rolling traces of every modulation source
+    gS.fillStyle="#0e1011"; gS.fillRect(0,0,cS.width,cS.height);
+    const rowH=cS.height/ROWS.length;
+    ROWS.forEach((r,i)=>{
+      const a=hist[i];
+      a.copyWithin(0,1);
+      let v=Depth.metrics[r[0]];
+      if(r[0]==="y") v=1-v;
+      a[cS.width-1]=v;
+      const y0=i*rowH;
+      gS.strokeStyle="#22272a"; gS.beginPath();
+      gS.moveTo(0,y0+rowH-2); gS.lineTo(cS.width,y0+rowH-2); gS.stroke();
+      gS.strokeStyle="#7fd1c0"; gS.lineWidth=1.2; gS.beginPath();
+      for(let x=0;x<cS.width;x++) gS.lineTo(x, y0+rowH-2-a[x]*(rowH-14));
+      gS.stroke();
+      gS.fillStyle="#8d9490"; gS.font="11px ui-monospace,monospace";
+      gS.fillText(r[1],8,y0+13);
+      gS.fillStyle="#e8e6e1";
+      gS.fillText(a[cS.width-1].toFixed(2), cS.width-38, y0+13);
+    });
+  }
+  draw();
+}
+</script>
+</body>
+</html>

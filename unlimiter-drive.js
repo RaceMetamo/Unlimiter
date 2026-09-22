@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.3";
+const VERSION = "1.4";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -106,6 +106,20 @@ function create(opts){
   };
 
   /* ---------------- sources ---------------- */
+  // Other modules (the depth layer, say) register their own scalars here and
+  // they appear in the matrix alongside audio, clock and LFOs.
+  const extra = [];            // {id,label,get}
+  function registerSource(id,label,get){
+    const i=extra.findIndex(e=>e.id===id);
+    const row={id,label,get};
+    if(i>=0) extra[i]=row; else extra.push(row);
+    refreshSourceSelects();
+    return row;
+  }
+  function unregisterSource(id){
+    const i=extra.findIndex(e=>e.id===id);
+    if(i>=0){ extra.splice(i,1); refreshSourceSelects(); }
+  }
   function sourceList(){
     const out=[
       ["audio.low","Audio — low"],["audio.mid","Audio — mid"],["audio.high","Audio — high"],
@@ -115,6 +129,7 @@ function create(opts){
       ["random.beat","Random per beat"]
     ];
     for(let i=0;i<4;i++) out.push(["lfo."+i,"LFO "+(i+1)]);
+    extra.forEach(e=>out.push([e.id,e.label]));
     Object.keys(S.midi.cc).sort((a,b)=>a-b).forEach(n=>out.push(["cc."+n,"MIDI CC "+n]));
     Object.keys(S.midi.notes).sort((a,b)=>a-b).forEach(n=>out.push(["note."+n,"MIDI note "+n]));
     return out;
@@ -134,6 +149,9 @@ function create(opts){
       case "clock.bar": return barPhase();
       case "clock.barPulse": return Math.pow(1-barPhase(),3);
       case "random.beat": return S.randBeat;
+    }
+    for(let i=0;i<extra.length;i++) if(extra[i].id===id){
+      const v=extra[i].get(); return typeof v==="number" && isFinite(v) ? v : 0;
     }
     if(id.startsWith("lfo.")) return S.lfos[+id.slice(4)].val;
     if(id.startsWith("cc.")) return (S.midi.cc[id.slice(3)]||0)/127;
@@ -402,6 +420,7 @@ function create(opts){
   }
   function isLive(){
     if(!S.matrix.length || S.master<=0) return false;
+    if(extra.length && S.matrix.some(r=>r.on!==false && extra.some(e=>e.id===r.source))) return true;
     return S.audio.on || S.midi.clockOk || S.midi.on || S.matrix.some(r=>r.source.startsWith("lfo.")||r.source.startsWith("clock.")||r.source==="random.beat");
   }
 
@@ -766,6 +785,7 @@ function create(opts){
       return [...set];
     },
     isModulated(k){ return this.modulatedKeys().indexOf(k)>=0; },
+    registerSource, unregisterSource,
     mountPanel, openOutput, pushFrame, outputOpen, tap,
     rebuildMatrix:buildMatrix,
     serialize(){
