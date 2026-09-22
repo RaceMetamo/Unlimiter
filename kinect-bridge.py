@@ -55,6 +55,10 @@ except ImportError:
 # pykinect2 predates numpy 1.24, which removed np.int / np.float / np.bool.
 # Put the aliases back before it is imported, or it dies on a name that has
 # not existed for years.
+# time.clock() went away in Python 3.8; pykinect2 still calls it for timing.
+if not hasattr(time, "clock"):
+    time.clock = time.perf_counter
+
 import warnings as _w
 with _w.catch_warnings():
     _w.simplefilter("ignore")
@@ -138,6 +142,8 @@ class KinectSource:
     def __init__(self):
         PyKinectV2, PyKinectRuntime = import_pykinect()
 
+        if not hasattr(time, "clock"):
+            time.clock = time.perf_counter
         flags = (PyKinectV2.FrameSourceTypes_Depth |
                  PyKinectV2.FrameSourceTypes_BodyIndex)
         self.rt = PyKinectRuntime.PyKinectRuntime(flags)
