@@ -3,242 +3,264 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TBG Facade — fold engine</title>
+<title>TBG Facade — unfolding</title>
 <style>
   :root{
-    --bg:#07080d;
-    --panel-bg:#101218;
-    --panel-bg-2:#14161e;
-    --border:#22252f;
+    --stage:#07080d;
+    --panel:#101218;
+    --panel-2:#171a22;
+    --line:#242833;
     --text:#e7e9f0;
-    --text-dim:#8d93a3;
+    --dim:#8d93a3;
     --accent:#3a6bff;
     --accent-dim:#1c2f6e;
+    --warm:#e0714f;
+    --radius:5px;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;background:var(--bg);overflow:hidden;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-  #stage{position:fixed;inset:0;display:block;touch-action:none;}
+  html,body{margin:0;padding:0;height:100%;background:var(--stage);overflow:hidden;
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  #stage{position:fixed;inset:0;display:block;touch-action:none;cursor:grab;}
+  #stage.dragging{cursor:grabbing;}
+
+  #readout{position:fixed;left:16px;bottom:14px;z-index:11;font-family:var(--mono);
+    font-size:11px;color:var(--dim);pointer-events:none;letter-spacing:.02em;}
+  #readout b{color:var(--text);font-weight:500;}
 
   #panel{
-    position:fixed;top:0;right:0;height:100%;width:320px;max-width:88vw;
-    background:var(--panel-bg);border-left:1px solid var(--border);
+    position:fixed;top:0;right:0;height:100%;width:336px;max-width:90vw;
+    background:var(--panel);border-left:1px solid var(--line);
     color:var(--text);overflow-y:auto;z-index:10;
     transition:transform .25s ease;
-    scrollbar-width:thin;scrollbar-color:#2a2d38 var(--panel-bg);
+    scrollbar-width:thin;scrollbar-color:#2f3440 var(--panel);
   }
   #panel.hidden{transform:translateX(100%);}
-  #panel::-webkit-scrollbar{width:8px;}
-  #panel::-webkit-scrollbar-thumb{background:#2a2d38;border-radius:4px;}
+  #panel::-webkit-scrollbar{width:9px;}
+  #panel::-webkit-scrollbar-thumb{background:#2f3440;border-radius:9px;}
 
-  .panel-inner{padding:18px 18px 32px;}
-  header h1{font-size:15px;margin:0 0 2px;font-weight:600;letter-spacing:.01em;}
-  header p{font-size:12px;color:var(--text-dim);margin:0 0 14px;line-height:1.4;}
+  .head{padding:16px 16px 12px;border-bottom:1px solid var(--line);}
+  .head h1{font-size:14.5px;margin:0 0 3px;font-weight:600;letter-spacing:.01em;}
+  .head p{font-size:11.5px;color:var(--dim);margin:0;line-height:1.5;}
 
-  section{border-top:1px solid var(--border);padding:14px 0;}
-  section:first-of-type{border-top:none;}
-  section h2{font-size:11px;font-weight:600;text-transform:none;color:var(--text-dim);
-    margin:0 0 10px;letter-spacing:.01em;}
+  .group{border-bottom:1px solid var(--line);}
+  .group > summary{list-style:none;cursor:pointer;padding:10px 16px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12px;user-select:none;}
+  .group > summary::-webkit-details-marker{display:none;}
+  .group > summary:hover{background:var(--panel-2);}
+  .group > summary .chev{width:7px;height:7px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto;}
+  .group[open] > summary .chev{transform:rotate(45deg);}
+  .group .body{padding:2px 16px 14px;}
 
-  .row{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:12px;}
-  .row > span{flex:0 0 128px;color:var(--text);}
-  .row input[type=range]{flex:1;min-width:0;}
-  .row output{flex:0 0 42px;text-align:right;font-variant-numeric:tabular-nums;
-    color:var(--text-dim);font-size:11px;}
-  .row select{flex:1;background:var(--panel-bg-2);color:var(--text);border:1px solid var(--border);
-    border-radius:5px;padding:5px 6px;font-size:12px;}
-  .row.check{justify-content:space-between;}
-  .row.check span{flex:1 1 auto;}
+  .row{display:flex;align-items:center;gap:9px;padding:4px 0;min-height:27px;font-size:12px;}
+  .row > label{flex:0 0 108px;color:var(--dim);font-size:11.5px;line-height:1.3;}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px;}
+  .val{font-family:var(--mono);font-size:10.5px;color:var(--text);width:46px;text-align:right;flex:none;}
   .row.hidden{display:none;}
-  section.hidden{display:none;}
 
-  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:#2a2d38;
-    border-radius:2px;outline:none;}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
-    border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #0c0d12;}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;
+    background:transparent;cursor:ew-resize;}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line);}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+    border-radius:50%;background:var(--accent);margin-top:-4.5px;border:none;}
   input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;
-    background:var(--accent);cursor:pointer;border:2px solid #0c0d12;}
+    background:var(--accent);border:none;}
+  input[type=range]:focus-visible{outline:1px solid var(--accent);outline-offset:2px;}
 
-  input[type=checkbox]{width:32px;height:18px;-webkit-appearance:none;appearance:none;
-    background:#2a2d38;border-radius:10px;position:relative;cursor:pointer;outline:none;
-    transition:background .15s;flex:0 0 auto;}
+  select,input[type=number]{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;
+    font-family:var(--sans);font-size:11.5px;}
+  input[type=number]{font-family:var(--mono);}
+  select:focus,input:focus{outline:1px solid var(--accent);}
+
+  input[type=checkbox]{appearance:none;-webkit-appearance:none;width:30px;height:17px;
+    background:#2c313c;border-radius:9px;position:relative;cursor:pointer;outline:none;
+    transition:background .15s;flex:none;}
   input[type=checkbox]:checked{background:var(--accent-dim);}
-  input[type=checkbox]::before{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;
+  input[type=checkbox]::before{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;
     border-radius:50%;background:#7a7f8f;transition:transform .15s,background .15s;}
-  input[type=checkbox]:checked::before{transform:translateX(14px);background:var(--accent);}
+  input[type=checkbox]:checked::before{transform:translateX(13px);background:var(--accent);}
 
-  input[type=color]{width:34px;height:26px;border:1px solid var(--border);border-radius:5px;
-    background:none;padding:2px;cursor:pointer;}
-  .swatches{display:flex;gap:8px;margin-bottom:10px;}
+  input[type=color]{width:100%;height:26px;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel-2);padding:2px;cursor:pointer;}
+  .swatches{display:flex;gap:6px;padding:6px 0 4px;}
 
-  button{background:var(--panel-bg-2);color:var(--text);border:1px solid var(--border);
-    border-radius:6px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;}
-  button:hover{border-color:#39404f;}
-  button.ghost{background:transparent;}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);
+    border-radius:var(--radius);padding:7px 9px;font-family:var(--sans);font-size:11.5px;
+    cursor:pointer;white-space:nowrap;flex:1;}
+  button:hover{border-color:#414856;background:#1d212a;}
+  button:active{transform:translateY(1px);}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#08101f;font-weight:600;}
+  button.primary:hover{background:#4f7bff;}
   button.on{border-color:var(--accent);color:var(--accent);}
-  button#recordBtn.active{background:#5a1220;border-color:#a02b3f;color:#ffd9de;}
-  .btnrow{display:flex;gap:8px;margin:8px 0;}
-  .segrow{display:flex;gap:6px;margin:8px 0;}
-  .segrow button{font-size:11.5px;padding:7px 4px;}
+  button.rec{background:#4d1220;border-color:#9c2b3e;color:#ffd9de;}
+  .btnrow{display:flex;gap:6px;padding:5px 0;}
+  .presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px 0;}
 
-  p.status{font-size:11px;color:var(--text-dim);margin:8px 0 0;}
-  p.hint{font-size:11px;color:var(--text-dim);margin:16px 0 0;line-height:1.5;}
-  p.note{font-size:11px;color:var(--text-dim);margin:2px 0 8px;line-height:1.5;}
+  .note{color:var(--dim);font-size:11px;padding:3px 0 5px;line-height:1.5;}
+  .status{font-family:var(--mono);font-size:10.5px;color:var(--dim);padding:4px 0 0;}
 
-  #showPanelBtn{position:fixed;top:14px;right:14px;z-index:11;width:36px;height:36px;
-    border-radius:50%;border:1px solid var(--border);background:var(--panel-bg);color:var(--text);
-    font-size:15px;cursor:pointer;display:none;align-items:center;justify-content:center;}
+  #showPanelBtn{position:fixed;top:14px;right:14px;z-index:12;width:34px;height:34px;
+    border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--text);
+    font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;}
   #showPanelBtn.visible{display:flex;}
-  #panelCount{position:fixed;left:14px;bottom:14px;z-index:11;font-size:11px;color:var(--text-dim);
-    font-variant-numeric:tabular-nums;pointer-events:none;}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
 </style>
 </head>
 <body>
 
 <canvas id="stage"></canvas>
-<div id="panelCount"></div>
+<div id="readout"></div>
 
 <div id="panel">
-  <div class="panel-inner">
-    <header>
-      <h1>TBG Facade</h1>
-      <p>A fold engine for The Bridge Gallery — hinged panels assembling, blossoming and rippling in true 3D.</p>
-    </header>
-
-    <section>
-      <h2>Pattern</h2>
-      <div class="segrow" id="patternSeg">
-        <button data-pattern="ribbon">Ribbon</button>
-        <button data-pattern="cube">Cube</button>
-        <button data-pattern="blossom">Blossom</button>
-        <button data-pattern="grid">Grid field</button>
-      </div>
-      <p class="note" id="patternNote">A single accordion strip, folding and unfurling like a fan.</p>
-    </section>
-
-    <section id="secRibbon">
-      <h2>Ribbon</h2>
-      <label class="row"><span>Panels</span><input type="range" id="ribbonCount" min="2" max="16" step="1"><output></output></label>
-      <label class="row"><span>Panel width</span><input type="range" id="ribbonW" min="30" max="240" step="2"><output></output></label>
-      <label class="row"><span>Panel height</span><input type="range" id="ribbonH" min="30" max="300" step="2"><output></output></label>
-      <label class="row"><span>Fold target angle</span><input type="range" id="ribbonAngle" min="0" max="150" step="1"><output></output></label>
-    </section>
-
-    <section id="secCube">
-      <h2>Cube</h2>
-      <label class="row"><span>Panel size</span><input type="range" id="cubeSize" min="40" max="260" step="2"><output></output></label>
-      <label class="row"><span>Fold target angle</span><input type="range" id="cubeAngle" min="0" max="180" step="1"><output></output></label>
-      <label class="row check"><span>Fold a lid closed</span><input type="checkbox" id="cubeLid"></label>
-    </section>
-
-    <section id="secBlossom">
-      <h2>Blossom</h2>
-      <label class="row"><span>Generations</span><input type="range" id="blossomGen" min="0" max="5" step="1"><output></output></label>
-      <label class="row"><span>Branches per node</span><input type="range" id="blossomChildren" min="1" max="3" step="1"><output></output></label>
-      <label class="row"><span>Root size</span><input type="range" id="blossomSize" min="40" max="220" step="2"><output></output></label>
-      <label class="row"><span>Size falloff</span><input type="range" id="blossomFalloff" min="0.4" max="0.95" step="0.01"><output></output></label>
-      <label class="row"><span>Fold target angle</span><input type="range" id="blossomAngle" min="0" max="150" step="1"><output></output></label>
-    </section>
-
-    <section id="secGrid">
-      <h2>Grid field</h2>
-      <label class="row"><span>Unit</span>
-        <select id="gridUnit"><option value="ribbon">Ribbon</option><option value="cube">Cube</option></select>
-      </label>
-      <label class="row"><span>Rows</span><input type="range" id="gridRows" min="1" max="8" step="1"><output></output></label>
-      <label class="row"><span>Columns</span><input type="range" id="gridCols" min="1" max="8" step="1"><output></output></label>
-      <label class="row"><span>Unit size</span><input type="range" id="gridUnitSize" min="20" max="160" step="2"><output></output></label>
-      <label class="row" id="gridUnitCountRow"><span>Ribbon panels</span><input type="range" id="gridUnitCount" min="2" max="8" step="1"><output></output></label>
-      <label class="row"><span>Cell spacing</span><input type="range" id="gridSpacing" min="30" max="260" step="2"><output></output></label>
-      <label class="row"><span>Fold target angle</span><input type="range" id="gridAngle" min="0" max="150" step="1"><output></output></label>
-      <label class="row"><span>Ripple across field</span><input type="range" id="gridSpatialStep" min="0" max="1.5" step="0.01"><output></output></label>
-      <label class="row"><span>Ripple jitter</span><input type="range" id="gridSpatialJitter" min="0" max="1" step="0.01"><output></output></label>
-    </section>
-
-    <section>
-      <h2>Fold motion</h2>
-      <label class="row"><span>Open speed</span><input type="range" id="openSpeed" min="0" max="1.5" step="0.01"><output></output></label>
-      <label class="row"><span>Open wave</span>
-        <select id="openShape"><option value="sine">Sine</option><option value="triangle">Triangle</option><option value="sawtooth">Sawtooth</option><option value="square">Square</option><option value="noise">Noise</option><option value="pulse">Pulse</option></select>
-      </label>
-      <label class="row"><span>Fold open amount</span><input type="range" id="foldOpen" min="0" max="1.3" step="0.01"><output></output></label>
-      <label class="row"><span>Generation delay</span><input type="range" id="genDelay" min="0" max="1.5" step="0.01"><output></output></label>
-      <label class="row"><span>Sibling delay</span><input type="range" id="sibDelay" min="0" max="1" step="0.01"><output></output></label>
-      <p class="note">Delays stagger how children lag behind their parent panel as the structure unfurls.</p>
-      <label class="row"><span>Micro wave</span>
-        <select id="microShape"><option value="sine">Sine</option><option value="triangle">Triangle</option><option value="sawtooth">Sawtooth</option><option value="square">Square</option><option value="noise">Noise</option><option value="pulse">Pulse</option></select>
-      </label>
-      <label class="row"><span>Micro speed</span><input type="range" id="microSpeed" min="0" max="3" step="0.01"><output></output></label>
-      <label class="row"><span>Micro amount</span><input type="range" id="microAmp" min="0" max="0.6" step="0.01"><output></output></label>
-      <label class="row"><span>Micro spread</span><input type="range" id="microPhaseSpread" min="0" max="1" step="0.01"><output></output></label>
-    </section>
-
-    <section>
-      <h2>Panel style</h2>
-      <label class="row"><span>Corner roundness</span><input type="range" id="cornerRadius" min="0" max="30" step="1"><output></output></label>
-      <label class="row"><span>Panel gap</span><input type="range" id="panelGap" min="0" max="20" step="1"><output></output></label>
-    </section>
-
-    <section>
-      <h2>Camera &amp; light</h2>
-      <label class="row"><span>Camera yaw</span><input type="range" id="camYaw" min="-180" max="180" step="1"><output></output></label>
-      <label class="row"><span>Camera pitch</span><input type="range" id="camPitch" min="-89" max="89" step="1"><output></output></label>
-      <label class="row"><span>Distance</span><input type="range" id="camDist" min="300" max="5000" step="10"><output></output></label>
-      <label class="row"><span>Perspective</span><input type="range" id="camPersp" min="0" max="1" step="0.01"><output></output></label>
-      <label class="row"><span>Zoom</span><input type="range" id="zoom" min="0.2" max="2.5" step="0.01"><output></output></label>
-      <label class="row check"><span>Idle orbit</span><input type="checkbox" id="idleDrift"></label>
-      <label class="row"><span>Light azimuth</span><input type="range" id="lightAz" min="-180" max="180" step="1"><output></output></label>
-      <label class="row"><span>Light elevation</span><input type="range" id="lightEl" min="-90" max="90" step="1"><output></output></label>
-    </section>
-
-    <section>
-      <h2>Colour</h2>
-      <div class="swatches">
-        <input type="color" id="stop0" title="Shadow"><input type="color" id="stop1" title="Deep"><input type="color" id="stop2" title="Mid"><input type="color" id="stop3" title="Lit">
-      </div>
-      <div class="btnrow"><button id="resetPalette" class="ghost">Use brand palette</button></div>
-      <label class="row"><span>Structure tint from</span>
-        <select id="colorBy"><option value="generation">Generation</option><option value="foldAngle">Fold angle</option><option value="hingeIndex">Hinge order</option><option value="position">Field position</option></select>
-      </label>
-      <label class="row"><span>Tint strength</span><input type="range" id="structStrength" min="0" max="1" step="0.01"><output></output></label>
-      <label class="row"><span>Background</span>
-        <select id="bgMode"><option value="dark">Dark</option><option value="light">Light</option><option value="custom">Custom</option></select>
-      </label>
-      <label class="row" id="bgColorRow"><span>Background colour</span><input type="color" id="bgColor"></label>
-    </section>
-
-    <section>
-      <h2>Audio reactivity</h2>
-      <label class="row check"><span>Enable microphone</span><input type="checkbox" id="audioEnabled"></label>
-      <label class="row"><span>Drives</span>
-        <select id="audioTarget">
-          <option value="foldOpen">Fold open amount</option>
-          <option value="openSpeed">Open speed</option>
-          <option value="microAmp">Micro amount</option>
-          <option value="all">All</option>
-        </select>
-      </label>
-      <label class="row"><span>Sensitivity</span><input type="range" id="audioSensitivity" min="0" max="3" step="0.05"><output></output></label>
-      <label class="row"><span>Smoothing</span><input type="range" id="audioSmoothing" min="0" max="0.95" step="0.01"><output></output></label>
-      <p class="status" id="audioStatus">Microphone off</p>
-    </section>
-
-    <section>
-      <h2>Output</h2>
-      <div class="btnrow">
-        <button id="randomize">Randomise</button>
-        <button id="resetAll" class="ghost">Reset</button>
-      </div>
-      <div class="btnrow">
-        <button id="snapshot">Save PNG</button>
-        <button id="recordBtn">Start recording</button>
-      </div>
-      <div class="btnrow">
-        <button id="fullscreenBtn" class="ghost">Fullscreen</button>
-      </div>
-      <p class="hint">Press H to hide this panel, F for fullscreen. Drag on the canvas to orbit. Recordings download as .webm.</p>
-    </section>
+  <div class="head">
+    <h1>TBG Facade — unfolding</h1>
+    <p>A single panel unfolds. From it, more panels unfold, and from those, more — until the drag runs out and the structure settles.</p>
   </div>
+
+  <details class="group" open>
+    <summary>Seed<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Seed</label><div class="ctl"><input type="number" id="seed" step="1"></div></div>
+      <div class="btnrow">
+        <button class="primary" id="btnNewSeed">New seed</button>
+        <button id="btnReplay">Replay</button>
+      </div>
+      <div class="presets">
+        <button data-preset="Sprawl">Sprawl</button>
+        <button data-preset="Box cluster">Box cluster</button>
+        <button data-preset="Ribbon run">Ribbon run</button>
+        <button data-preset="Bloom">Bloom</button>
+      </div>
+      <div class="btnrow"><button id="btnRandomise">Randomise everything</button></div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Unfolding<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Grow speed</label><div class="ctl"><input type="range" id="growthSpeed" min="0.05" max="4" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Drag</label><div class="ctl"><input type="range" id="drag" min="1" max="8" step="0.1"><span class="val"></span></div></div>
+      <div class="note">Drag shapes how a panel decelerates as it opens — 1 is a steady swing, 8 eases to a near-stop as it reaches its angle.</div>
+      <div class="row"><label>Slowdown per generation</label><div class="ctl"><input type="range" id="genDecay" min="0" max="0.6" step="0.001"><span class="val"></span></div></div>
+      <div class="row"><label>Branch falloff</label><div class="ctl"><input type="range" id="branchDecay" min="0" max="0.8" step="0.001"><span class="val"></span></div></div>
+      <div class="note">Branch falloff is what decides the final size: each generation is less likely to throw new panels than the last, so the growth tapers out on its own.</div>
+      <div class="row"><label>Stall threshold</label><div class="ctl"><input type="range" id="stall" min="0.005" max="0.5" step="0.005"><span class="val"></span></div></div>
+      <div class="note">Each generation unfolds slower than the last. When it drops below the stall threshold, nothing further unfolds and the structure is finished.</div>
+      <div class="row"><label>Spawn at</label><div class="ctl"><input type="range" id="spawnAt" min="0.05" max="0.95" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Max generations</label><div class="ctl"><input type="range" id="maxGen" min="1" max="60" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Max panels</label><div class="ctl"><input type="range" id="maxPanels" min="10" max="2400" step="10"><span class="val"></span></div></div>
+      <div class="row"><label>Pause</label><div class="ctl"><input type="checkbox" id="paused"></div></div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Branching<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Branches min</label><div class="ctl"><input type="range" id="minChildren" min="0" max="3" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Branches max</label><div class="ctl"><input type="range" id="maxChildren" min="1" max="3" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Straightness</label><div class="ctl"><input type="range" id="straightness" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="note">Straightness biases each branch toward carrying on in the same direction. Low values bush outward, high values run in long ribbons.</div>
+      <div class="row"><label>Root size</label><div class="ctl"><input type="range" id="rootSize" min="20" max="240" step="2"><span class="val"></span></div></div>
+      <div class="row"><label>Size ratio min</label><div class="ctl"><input type="range" id="sizeMin" min="0.3" max="1.3" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Size ratio max</label><div class="ctl"><input type="range" id="sizeMax" min="0.3" max="1.3" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Size jitter</label><div class="ctl"><input type="range" id="sizeJitter" min="0" max="0.8" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Fold angle min</label><div class="ctl"><input type="range" id="angleMin" min="0" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Fold angle max</label><div class="ctl"><input type="range" id="angleMax" min="0" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Fold back chance</label><div class="ctl"><input type="range" id="flipChance" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="note">Fold back chance decides how often a panel hinges the other way, so the structure grows into the space on both sides of the plane.</div>
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Panel style<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Corner roundness</label><div class="ctl"><input type="range" id="cornerRadius" min="0" max="30" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Panel gap</label><div class="ctl"><input type="range" id="panelGap" min="0" max="16" step="0.5"><span class="val"></span></div></div>
+      <div class="row"><label>Edge line</label><div class="ctl"><input type="range" id="edgeWidth" min="0" max="3" step="0.1"><span class="val"></span></div></div>
+      <div class="row"><label>Settled wobble</label><div class="ctl"><input type="range" id="wobbleAmt" min="0" max="0.3" step="0.005"><span class="val"></span></div></div>
+      <div class="row"><label>Wobble speed</label><div class="ctl"><input type="range" id="wobbleSpeed" min="0.01" max="1.5" step="0.01"><span class="val"></span></div></div>
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Loop<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Auto-regrow</label><div class="ctl"><input type="checkbox" id="autoRegrow"></div></div>
+      <div class="row"><label>Hold when settled</label><div class="ctl"><input type="range" id="holdTime" min="0" max="30" step="0.5"><span class="val"></span></div></div>
+      <div class="row"><label>Fade out</label><div class="ctl"><input type="range" id="fadeTime" min="0.2" max="8" step="0.1"><span class="val"></span></div></div>
+      <div class="note">With auto-regrow on, each finished structure holds, fades, and a fresh seed begins unfolding — an endless sequence of one-off sculptures.</div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Camera &amp; light<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Auto-frame</label><div class="ctl"><input type="checkbox" id="autoFrame"></div></div>
+      <div class="row"><label>Zoom</label><div class="ctl"><input type="range" id="frameZoom" min="0.2" max="2.5" step="0.01"><span class="val"></span></div></div>
+      <div class="row hidden" id="camDistRow"><label>Distance</label><div class="ctl"><input type="range" id="camDist" min="300" max="6000" step="10"><span class="val"></span></div></div>
+      <div class="row"><label>Yaw</label><div class="ctl"><input type="range" id="camYaw" min="-180" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Pitch</label><div class="ctl"><input type="range" id="camPitch" min="-89" max="89" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Perspective</label><div class="ctl"><input type="range" id="camPersp" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Idle orbit</label><div class="ctl"><input type="range" id="orbitSpeed" min="-20" max="20" step="0.5"><span class="val"></span></div></div>
+      <div class="row"><label>Light azimuth</label><div class="ctl"><input type="range" id="lightAz" min="-180" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Light elevation</label><div class="ctl"><input type="range" id="lightEl" min="-90" max="90" step="1"><span class="val"></span></div></div>
+      <div class="note">Drag the canvas to orbit, scroll to zoom.</div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Colour<span class="chev"></span></summary>
+    <div class="body">
+      <div class="swatches">
+        <input type="color" id="stop0" title="Shadow"><input type="color" id="stop1" title="Deep">
+        <input type="color" id="stop2" title="Mid"><input type="color" id="stop3" title="Lit">
+      </div>
+      <div class="btnrow"><button id="resetPalette">Brand palette</button></div>
+      <div class="row"><label>Colour drift</label><div class="ctl"><input type="range" id="colourDrift" min="0" max="0.5" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Tint strength</label><div class="ctl"><input type="range" id="tintStrength" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="note">Each new panel drifts a step along the ramp from its parent, so colour wanders through the structure as it grows.</div>
+      <div class="row"><label>Background</label><div class="ctl">
+        <select id="bgMode"><option value="dark">Dark</option><option value="light">Light</option><option value="custom">Custom</option></select>
+      </div></div>
+      <div class="row hidden" id="bgColorRow"><label>Background colour</label><div class="ctl"><input type="color" id="bgColor"></div></div>
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Audio<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Microphone</label><div class="ctl"><input type="checkbox" id="audioEnabled"></div></div>
+      <div class="row"><label>Drives</label><div class="ctl">
+        <select id="audioTarget">
+          <option value="bloom">Bloom — panels flex open</option>
+          <option value="growth">Growth speed</option>
+          <option value="both">Both</option>
+        </select>
+      </div></div>
+      <div class="row"><label>Sensitivity</label><div class="ctl"><input type="range" id="audioSensitivity" min="0" max="3" step="0.05"><span class="val"></span></div></div>
+      <div class="row"><label>Smoothing</label><div class="ctl"><input type="range" id="audioSmoothing" min="0" max="0.95" step="0.01"><span class="val"></span></div></div>
+      <div class="status" id="audioStatus">Microphone off</div>
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Output<span class="chev"></span></summary>
+    <div class="body">
+      <div class="btnrow">
+        <button class="primary" id="btnPNG">Save PNG</button>
+        <button id="btnRec">Record</button>
+      </div>
+      <div class="btnrow">
+        <button id="btnFullscreen">Fullscreen</button>
+        <button id="btnReset">Reset all</button>
+      </div>
+      <div class="note">H hides this panel, F is fullscreen, space replays the current seed. Recordings download as .webm.</div>
+    </div>
+  </details>
 </div>
 
 <button id="showPanelBtn" title="Show controls">☰</button>
@@ -249,311 +271,287 @@
 
 const canvas=document.getElementById('stage');
 const ctx=canvas.getContext('2d');
-const panelCountEl=document.getElementById('panelCount');
+const readout=document.getElementById('readout');
 
-/* ============================================================ */
-/* fold engine — vector / matrix                                */
-/* ============================================================ */
+/* ==========================================================
+   maths
+   ========================================================== */
+function clamp(v,a,b){return v<a?a:v>b?b:v;}
+function lerp(a,b,t){return a+(b-a)*t;}
 function vadd(a,b){return {x:a.x+b.x,y:a.y+b.y,z:a.z+b.z};}
 function vlen(a){return Math.hypot(a.x,a.y,a.z);}
 function vnorm(a){const l=vlen(a)||1;return {x:a.x/l,y:a.y/l,z:a.z/l};}
 const IDENT3=[[1,0,0],[0,1,0],[0,0,1]];
-function m3mul(A,B){const R=[[0,0,0],[0,0,0],[0,0,0]];
-  for(let i=0;i<3;i++)for(let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=A[i][k]*B[k][j];R[i][j]=s;}
-  return R;}
+function m3mul(A,B){
+  const R=[[0,0,0],[0,0,0],[0,0,0]];
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++){
+    R[i][j]=A[i][0]*B[0][j]+A[i][1]*B[1][j]+A[i][2]*B[2][j];
+  }
+  return R;
+}
 function m3vec(M,v){return {x:M[0][0]*v.x+M[0][1]*v.y+M[0][2]*v.z,
   y:M[1][0]*v.x+M[1][1]*v.y+M[1][2]*v.z, z:M[2][0]*v.x+M[2][1]*v.y+M[2][2]*v.z};}
 function rodrigues(axis,angle){
-  const a=vnorm(axis); const {x,y,z}=a;
+  const a=vnorm(axis); const x=a.x,y=a.y,z=a.z;
   const c=Math.cos(angle), s=Math.sin(angle), t=1-c;
-  return [[t*x*x+c,t*x*y-s*z,t*x*z+s*y],[t*x*y+s*z,t*y*y+c,t*y*z-s*x],[t*x*z-s*y,t*y*z+s*x,t*z*z+c]];
+  return [[t*x*x+c,t*x*y-s*z,t*x*z+s*y],
+          [t*x*y+s*z,t*y*y+c,t*y*z-s*x],
+          [t*x*z-s*y,t*y*z+s*x,t*z*z+c]];
+}
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
 }
 
+/* ==========================================================
+   hinges — a child is centred on its parent's edge, so panels
+   of any size hinge exactly on the shared line
+   ========================================================== */
+const EDGES=['T','R','B','L'];
+const OPP={R:'L',L:'R',T:'B',B:'T'};
 const EDGE_DEF={
-  R:{axis:{x:0,y:1,z:0}, hinge:(pw,ph)=>({x:pw,y:0,z:0}), flat:(pw,ph,cw,ch)=>({x:pw,y:0})},
-  L:{axis:{x:0,y:1,z:0}, hinge:(pw,ph)=>({x:0,y:0,z:0}),  flat:(pw,ph,cw,ch)=>({x:-cw,y:0})},
-  T:{axis:{x:1,y:0,z:0}, hinge:(pw,ph)=>({x:0,y:ph,z:0}), flat:(pw,ph,cw,ch)=>({x:0,y:ph})},
-  B:{axis:{x:1,y:0,z:0}, hinge:(pw,ph)=>({x:0,y:0,z:0}), flat:(pw,ph,cw,ch)=>({x:0,y:-ch})}
+  R:{axis:{x:0,y:1,z:0}, hinge:(pw,ph)=>({x:pw,y:0,z:0}), flat:(pw,ph,cw,ch)=>({x:pw,y:(ph-ch)/2})},
+  L:{axis:{x:0,y:1,z:0}, hinge:()=>({x:0,y:0,z:0}),       flat:(pw,ph,cw,ch)=>({x:-cw,y:(ph-ch)/2})},
+  T:{axis:{x:1,y:0,z:0}, hinge:(pw,ph)=>({x:0,y:ph,z:0}), flat:(pw,ph,cw,ch)=>({x:(pw-cw)/2,y:ph})},
+  B:{axis:{x:1,y:0,z:0}, hinge:()=>({x:0,y:0,z:0}),       flat:(pw,ph,cw,ch)=>({x:(pw-cw)/2,y:-ch})}
 };
 
-function buildWorld(nodes, rootPos, rootRot, angles){
-  const world=new Array(nodes.length);
-  for(let i=0;i<nodes.length;i++){
-    const n=nodes[i];
-    if(n.parent==null){ world[i]={pos:rootPos,rot:rootRot,w:n.w,h:n.h}; continue; }
-    const P=world[n.parent];
-    const ed=EDGE_DEF[n.edge];
-    const hingeLocal=ed.hinge(P.w,P.h);
-    const flat=ed.flat(P.w,P.h,n.w,n.h);
-    const offsetLocal={x:flat.x-hingeLocal.x, y:flat.y-hingeLocal.y, z:-hingeLocal.z};
-    const hingeAxisWorld=vnorm(m3vec(P.rot,ed.axis));
-    const hingePointWorld=vadd(P.pos, m3vec(P.rot,hingeLocal));
-    const offsetWorldFlat=m3vec(P.rot,offsetLocal);
-    const angleRad=(angles[i]||0)*Math.PI/180;
-    const foldRot=rodrigues(hingeAxisWorld, angleRad);
-    const offsetFolded=m3vec(foldRot, offsetWorldFlat);
-    const pos=vadd(hingePointWorld, offsetFolded);
-    const rot=m3mul(foldRot, P.rot);
-    world[i]={pos,rot,w:n.w,h:n.h};
-  }
-  return world;
+/* ==========================================================
+   state
+   ========================================================== */
+const DEFAULTS={
+  seed:1848,
+  rootSize:96,
+  growthSpeed:0.85, drag:3.4, genDecay:0.14, branchDecay:0.09, stall:0.02, spawnAt:0.42,
+  maxGen:40, maxPanels:1200, paused:false,
+  minChildren:1, maxChildren:3, straightness:0.3,
+  sizeMin:0.66, sizeMax:1.0, sizeJitter:0.18,
+  angleMin:22, angleMax:104, flipChance:0.42,
+  cornerRadius:7, panelGap:2.5, edgeWidth:1,
+  wobbleAmt:0.03, wobbleSpeed:0.14,
+  autoRegrow:false, holdTime:6, fadeTime:1.8,
+  autoFrame:true, frameZoom:1, camDist:2000,
+  camYaw:26, camPitch:18, camPersp:0.75, orbitSpeed:2,
+  lightAz:-42, lightEl:36,
+  colorStops:['#0a0d33','#12179c','#1b2fe0','#2f6bff'],
+  colourDrift:0.12, tintStrength:0.34,
+  bgMode:'dark', bgColor:'#07080d',
+  audioEnabled:false, audioTarget:'bloom', audioSensitivity:1.2, audioSmoothing:0.75
+};
+const state=JSON.parse(JSON.stringify(DEFAULTS));
+const audio={envelope:0};
+
+const PRESETS={
+  'Sprawl':{minChildren:1,maxChildren:3,straightness:0.28,sizeMin:0.68,sizeMax:1.0,sizeJitter:0.2,
+    angleMin:24,angleMax:106,flipChance:0.45,drag:3.4,genDecay:0.14,branchDecay:0.09,stall:0.02,
+    maxGen:40,spawnAt:0.42,colourDrift:0.12,rootSize:96,growthSpeed:0.85,maxPanels:1200},
+  'Box cluster':{minChildren:2,maxChildren:3,straightness:0.08,sizeMin:0.92,sizeMax:1.0,sizeJitter:0.05,
+    angleMin:88,angleMax:92,flipChance:0.22,drag:2.6,genDecay:0.14,branchDecay:0.14,stall:0.02,
+    maxGen:40,spawnAt:0.7,colourDrift:0.08,rootSize:74,growthSpeed:0.95,maxPanels:1200},
+  'Ribbon run':{minChildren:1,maxChildren:1,straightness:0.96,sizeMin:0.9,sizeMax:1.04,sizeJitter:0.12,
+    angleMin:16,angleMax:46,flipChance:0.5,drag:2.2,genDecay:0.03,branchDecay:0.001,stall:0.01,
+    maxGen:60,spawnAt:0.3,colourDrift:0.05,rootSize:104,growthSpeed:1.3,maxPanels:1200},
+  'Bloom':{minChildren:2,maxChildren:3,straightness:0.05,sizeMin:0.58,sizeMax:0.86,sizeJitter:0.22,
+    angleMin:52,angleMax:124,flipChance:0.3,drag:5,genDecay:0.22,branchDecay:0.115,stall:0.02,
+    maxGen:40,spawnAt:0.55,colourDrift:0.2,rootSize:108,growthSpeed:0.85,maxPanels:1200}
+};
+
+/* ==========================================================
+   growth
+   ========================================================== */
+let panels=[];
+let simT=0;                 // accumulated simulation seconds
+let mode='grow';            // grow | hold | fade
+let modeT=0;
+let fadeAlpha=1;
+
+function hashSeed(seed,idx){ return (Math.imul(seed|0,2654435761) ^ Math.imul(idx+1,40503)) | 0; }
+
+// unfold curve: reaches its angle exactly at (t - birth) * rate === 1,
+// easing out harder the higher the drag
+function progressOf(p,t){
+  const s=clamp((t-p.birth)*p.rate,0,1);
+  return 1-Math.pow(1-s,state.drag);
 }
-function panelGeom(nw, gap){
-  const g=Math.min(gap||0, nw.w*0.45, nw.h*0.45);
-  const {pos,rot,w,h}=nw;
-  const local=[{x:g,y:g,z:0},{x:w-g,y:g,z:0},{x:w-g,y:h-g,z:0},{x:g,y:h-g,z:0}];
-  const corners=local.map(l=>vadd(pos, m3vec(rot,l)));
-  const normal=m3vec(rot,{x:0,y:0,z:1});
-  const centroid={x:pos.x+w/2,y:pos.y+h/2,z:pos.z};
-  return {corners,normal};
+function spawnDelay(rate){
+  const thr=clamp(state.spawnAt,0.01,0.99);
+  const s=1-Math.pow(1-thr,1/Math.max(state.drag,0.01));
+  return s/Math.max(rate,1e-4);
+}
+function rateFor(gen){
+  return state.growthSpeed*Math.pow(1-clamp(state.genDecay,0,0.95),gen);
 }
 
-/* ============================================================ */
-/* wave library                                                 */
-/* ============================================================ */
-function triangleWave(p){ return 4*Math.abs(((p%1)+1)%1 - 0.5) - 1; }
-function waveValue(shape, phase){
-  const p=((phase%1)+1)%1;
-  switch(shape){
-    case 'sine': return Math.sin(p*Math.PI*2);
-    case 'triangle': return triangleWave(p);
-    case 'sawtooth': return 2*p-1;
-    case 'square': return p<0.5?1:-1;
-    case 'noise': return Math.sin(p*6.283*1.0)*0.55+Math.sin(p*6.283*2.13+1.7)*0.30+Math.sin(p*6.283*4.7+2.9)*0.15;
-    case 'pulse': { const s=Math.sin(p*Math.PI*2); return Math.sign(s)*Math.pow(Math.abs(s),0.28); }
-    default: return Math.sin(p*Math.PI*2);
-  }
+function resetGrowth(){
+  panels=[];
+  const rate=rateFor(0);
+  panels.push({
+    idx:0, parent:null, edge:null, usedEdge:null, childEdges:[],
+    w:state.rootSize, h:state.rootSize,
+    targetAngle:0, dirFlip:1, gen:0, colorT:0.5,
+    birth:simT, rate, spawnAt:simT+spawnDelay(rate), spawned:false
+  });
+  mode='grow'; modeT=simT; fadeAlpha=1;
+  framed=false;
 }
 
-/* ============================================================ */
-/* topology builders                                            */
-/* ============================================================ */
-function hash01(seed,i,ch){
-  const x=Math.sin(seed*12.9898+i*78.233+ch*37.719+4.1)*43758.5453;
-  return x-Math.floor(x);
-}
-function buildRibbon(cfg){
-  const nodes=[];
-  const N=Math.max(1,cfg.count|0);
-  for(let i=0;i<N;i++){
-    const hp=0.55+0.45*Math.sin(Math.PI*(i+0.5)/N)+(hash01(cfg.seed,i,2)-0.5)*0.25;
-    const h=Math.max(10,cfg.panelH*hp);
-    nodes.push({
-      parent: i===0?null:i-1, edge: i===0?null:'R',
-      w:cfg.panelW, h, restAngle:cfg.restAngle, dirFlip:(i%2===0)?1:-1,
-      gen:i, sibIndex:0, hingeIndex:i, spatialDelay:0
+function spawnFrom(pi){
+  const p=panels[pi];
+  p.spawned=true;
+  if(p.gen>=state.maxGen) return;
+  if(panels.length>=state.maxPanels) return;
+  if(p.rate<state.stall) return;
+  if(Math.min(p.w,p.h)<4) return;
+
+  const rnd=mulberry32(hashSeed(state.seed,p.idx));
+  const pool=EDGES.filter(e=>e!==p.usedEdge && p.childEdges.indexOf(e)<0);
+  if(!pool.length) return;
+
+  const fwd=p.usedEdge?OPP[p.usedEdge]:null;
+  const lo=Math.min(state.minChildren,state.maxChildren);
+  const hi=Math.max(state.minChildren,state.maxChildren);
+  let k=lo+Math.floor(rnd()*(hi-lo+1));
+  // the root always opens out properly, so a structure never dies on its first move
+  if(p.parent==null) k=Math.max(k,Math.min(2,Math.max(1,state.maxChildren)));
+  k=Math.min(k,pool.length);
+
+  // branching loses vigour as the structure gets further from the root: each
+  // candidate branch only takes with this probability. Expected branching falls
+  // below 1 after a few generations, which is what brings the growth to a stop.
+  const vigour=(p.parent==null)?1:Math.pow(1-clamp(state.branchDecay,0,0.95),p.gen);
+
+  const childGen=p.gen+1;
+  const childRate=rateFor(childGen);
+
+  for(let c=0;c<k;c++){
+    if(panels.length>=state.maxPanels) break;
+    if(rnd()>=vigour) continue;
+    // weighted pick, biased toward carrying straight on
+    let total=0;
+    const w=pool.map(e=>{const v=(e===fwd)?1+state.straightness*8:1; total+=v; return v;});
+    let r=rnd()*total, pick=pool.length-1;
+    for(let j=0;j<pool.length;j++){ r-=w[j]; if(r<=0){ pick=j; break; } }
+    const edge=pool.splice(pick,1)[0];
+    p.childEdges.push(edge);
+
+    const ratio=lerp(state.sizeMin,state.sizeMax,rnd());
+    const jw=1+(rnd()-0.5)*state.sizeJitter;
+    const jh=1+(rnd()-0.5)*state.sizeJitter;
+    const cw=clamp(p.w*ratio*jw,3,6000);
+    const ch=clamp(p.h*ratio*jh,3,6000);
+    const ang=lerp(Math.min(state.angleMin,state.angleMax),Math.max(state.angleMin,state.angleMax),rnd());
+    const flip=(rnd()<state.flipChance)?-1:1;
+
+    let ct=p.colorT+(rnd()*2-1)*state.colourDrift;
+    if(ct<0) ct=-ct;
+    if(ct>1) ct=2-ct;
+    ct=clamp(ct,0,1);
+
+    panels.push({
+      idx:panels.length, parent:pi, edge, usedEdge:OPP[edge], childEdges:[],
+      w:cw, h:ch, targetAngle:ang, dirFlip:flip, gen:childGen, colorT:ct,
+      birth:p.spawnAt, rate:childRate, spawnAt:p.spawnAt+spawnDelay(childRate), spawned:false
     });
   }
-  return nodes;
-}
-function buildCube(cfg){
-  const s=cfg.size;
-  const nodes=[
-    {parent:null,edge:null,w:s,h:s, gen:0,sibIndex:0,hingeIndex:0,spatialDelay:0},
-    {parent:0,edge:'T',w:s,h:s,restAngle:cfg.restAngle,dirFlip:1, gen:1,sibIndex:0,hingeIndex:1,spatialDelay:0},
-    {parent:0,edge:'B',w:s,h:s,restAngle:cfg.restAngle,dirFlip:1, gen:1,sibIndex:1,hingeIndex:2,spatialDelay:0},
-    {parent:0,edge:'L',w:s,h:s,restAngle:cfg.restAngle,dirFlip:1, gen:1,sibIndex:2,hingeIndex:3,spatialDelay:0},
-    {parent:0,edge:'R',w:s,h:s,restAngle:cfg.restAngle,dirFlip:1, gen:1,sibIndex:3,hingeIndex:4,spatialDelay:0},
-  ];
-  if(cfg.withLid){
-    nodes.push({parent:1,edge:'T',w:s,h:s,restAngle:cfg.restAngle,dirFlip:1, gen:2,sibIndex:0,hingeIndex:5,spatialDelay:0});
-  }
-  return nodes;
-}
-const EDGE_CYCLE=['T','R','B','L'];
-function buildBlossom(cfg){
-  const nodes=[{parent:null,edge:null,w:cfg.size,h:cfg.size, gen:0,sibIndex:0,hingeIndex:0,spatialDelay:0}];
-  let frontier=[0];
-  let hingeCounter=1;
-  for(let g=1; g<=cfg.generations; g++){
-    const next=[];
-    const sz=cfg.size*Math.pow(cfg.sizeFalloff, g);
-    if(sz<3) break;
-    for(const parentIdx of frontier){
-      const nKids=Math.min(cfg.childrenPerNode, 4);
-      for(let c=0;c<nKids;c++){
-        const edge=EDGE_CYCLE[c%4];
-        const idx=nodes.length;
-        nodes.push({
-          parent:parentIdx, edge, w:sz, h:sz,
-          restAngle:cfg.restAngle, dirFlip:1,
-          gen:g, sibIndex:c, hingeIndex:hingeCounter++, spatialDelay:0
-        });
-        next.push(idx);
-      }
-    }
-    frontier=next;
-    if(nodes.length>1000) break;
-  }
-  return nodes;
-}
-function buildGridField(cfg){
-  const units=[];
-  const rows=Math.max(1,cfg.rows|0), cols=Math.max(1,cfg.cols|0);
-  for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
-      let nodes;
-      if(cfg.unitType==='cube'){
-        nodes=buildCube({size:cfg.unitSize, restAngle:cfg.restAngle, withLid:false});
-      } else {
-        nodes=buildRibbon({count:cfg.unitCount, panelW:cfg.unitSize, panelH:cfg.unitSize*0.9, seed:cfg.seed+r*97+c*131});
-      }
-      const spatialDelay=(r+c)*cfg.spatialPhaseStep + hash01(cfg.seed,r*cols+c,5)*cfg.spatialJitter;
-      nodes.forEach(n=>n.spatialDelay=spatialDelay);
-      const rootPos={
-        x:(c-(cols-1)/2)*cfg.cellSpacing,
-        y:(r-(rows-1)/2)*cfg.cellSpacing,
-        z:0
-      };
-      units.push({nodes, rootPos});
-    }
-  }
-  return units;
 }
 
-function computeAngles(nodes, t, cfg){
-  const angles=new Array(nodes.length).fill(0);
-  for(let i=0;i<nodes.length;i++){
-    const n=nodes[i];
-    if(n.parent==null) continue;
-    const openPhase = t*cfg.openSpeed - n.gen*cfg.genDelay - n.sibIndex*cfg.sibDelay - (n.spatialDelay||0);
-    const base = 0.5+0.5*waveValue(cfg.openShape, openPhase);
-    const microPhase = t*cfg.microSpeed + n.hingeIndex*cfg.microPhaseSpread;
-    const micro = cfg.microAmp*waveValue(cfg.microShape, microPhase);
-    const k = base*cfg.foldOpen + micro;
-    angles[i] = (n.dirFlip||1) * n.restAngle * k;
+// spawn everything that has come due, always in spawn-time order so the
+// structure is identical no matter what the frame rate does
+function growStep(t){
+  let guard=0;
+  for(;;){
+    if(++guard>400) break;
+    let best=-1, bestT=Infinity;
+    for(let i=0;i<panels.length;i++){
+      const p=panels[i];
+      if(p.spawned || p.spawnAt>t) continue;
+      if(p.spawnAt<bestT){ bestT=p.spawnAt; best=i; }
+    }
+    if(best<0) break;
+    spawnFrom(best);
   }
-  return angles;
+}
+function isSettled(t){
+  for(let i=0;i<panels.length;i++){
+    const p=panels[i];
+    if(!p.spawned) return false;
+    if((t-p.birth)*p.rate<1) return false;
+  }
+  return true;
 }
 
-/* ============================================================ */
-/* colour helpers                                                */
-/* ============================================================ */
-function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
-function lerp(a,b,t){return a+(b-a)*t;}
+/* ==========================================================
+   colour
+   ========================================================== */
 function hexToRgb(hex){
   hex=hex.replace('#','');
   if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
-  const num=parseInt(hex,16);
-  return {r:(num>>16)&255,g:(num>>8)&255,b:num&255};
-}
-function lerpColor(hexA,hexB,t){
-  const a=hexToRgb(hexA), b=hexToRgb(hexB);
-  return `rgb(${Math.round(lerp(a.r,b.r,t))},${Math.round(lerp(a.g,b.g,t))},${Math.round(lerp(a.b,b.b,t))})`;
+  const n=parseInt(hex,16);
+  return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};
 }
 function rampColor(stops,t){
   const n=stops.length-1;
   t=clamp(t,0,1);
   const seg=Math.min(n-1,Math.floor(t*n));
-  const localT=t*n-seg;
-  return lerpColor(stops[seg],stops[seg+1],localT);
+  const f=t*n-seg;
+  const a=hexToRgb(stops[seg]), b=hexToRgb(stops[seg+1]);
+  return 'rgb('+Math.round(lerp(a.r,b.r,f))+','+Math.round(lerp(a.g,b.g,f))+','+Math.round(lerp(a.b,b.b,f))+')';
 }
 
-/* ============================================================ */
-/* rounded polygon path                                          */
-/* ============================================================ */
-function dist2(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
-function roundedPolygonPath(context, pts, r){
+/* ==========================================================
+   drawing
+   ========================================================== */
+function roundedPath(context,pts,r){
   const n=pts.length;
   context.beginPath();
   for(let i=0;i<n;i++){
     const prev=pts[(i-1+n)%n], cur=pts[i], next=pts[(i+1)%n];
-    const d1=Math.max(dist2(prev,cur),0.0001), d2=Math.max(dist2(cur,next),0.0001);
-    const rr=Math.max(0,Math.min(r,d1/2,d2/2));
-    const v1={x:(prev.x-cur.x)/d1,y:(prev.y-cur.y)/d1};
-    const v2={x:(next.x-cur.x)/d2,y:(next.y-cur.y)/d2};
-    const a={x:cur.x+v1.x*rr,y:cur.y+v1.y*rr};
-    const b={x:cur.x+v2.x*rr,y:cur.y+v2.y*rr};
-    if(i===0) context.moveTo(a.x,a.y); else context.lineTo(a.x,a.y);
-    context.quadraticCurveTo(cur.x,cur.y,b.x,b.y);
+    const d1=Math.max(Math.hypot(prev.x-cur.x,prev.y-cur.y),1e-4);
+    const d2=Math.max(Math.hypot(next.x-cur.x,next.y-cur.y),1e-4);
+    const rr=Math.min(r,d1/2,d2/2);
+    const ax=cur.x+(prev.x-cur.x)/d1*rr, ay=cur.y+(prev.y-cur.y)/d1*rr;
+    const bx=cur.x+(next.x-cur.x)/d2*rr, by=cur.y+(next.y-cur.y)/d2*rr;
+    if(i===0) context.moveTo(ax,ay); else context.lineTo(ax,ay);
+    context.quadraticCurveTo(cur.x,cur.y,bx,by);
   }
   context.closePath();
 }
 
-/* ============================================================ */
-/* state                                                         */
-/* ============================================================ */
-const DEFAULTS={
-  pattern:'ribbon',
-  ribbonCount:8, ribbonW:120, ribbonH:150, ribbonAngle:34,
-  cubeSize:130, cubeAngle:90, cubeLid:true,
-  blossomGen:3, blossomChildren:2, blossomSize:120, blossomFalloff:0.72, blossomAngle:78,
-  gridUnit:'ribbon', gridRows:5, gridCols:6, gridUnitSize:56, gridUnitCount:4, gridSpacing:96,
-  gridAngle:58, gridSpatialStep:0.35, gridSpatialJitter:0.15,
-  openSpeed:0.22, openShape:'triangle', foldOpen:1.0, genDelay:0.32, sibDelay:0.1,
-  microShape:'noise', microSpeed:0.5, microAmp:0.08, microPhaseSpread:0.05,
-  cornerRadius:8, panelGap:3,
-  camYaw:28, camPitch:16, camDist:1600, camPersp:0.82, zoom:1, idleDrift:true,
-  lightAz:-40, lightEl:38,
-  colorStops:['#0a0d33','#12179c','#1b2fe0','#2f6bff'],
-  colorBy:'generation', structStrength:0.3,
-  bgMode:'dark', bgColor:'#07080d',
-  audioEnabled:false, audioTarget:'foldOpen', audioSensitivity:1.1, audioSmoothing:0.75,
-  seed:42
-};
-const state=JSON.parse(JSON.stringify(DEFAULTS));
-const audio={bass:0,mid:0,treble:0,envelope:0};
+/* ==========================================================
+   camera
+   ========================================================== */
+const cam={px:0,py:0,pz:0,scale:1,dist:2000,yaw:0,pitch:0,persp:0.75,originX:0,originY:0};
+let framed=false;
+let dragYaw=0, dragPitch=0, orbitYaw=0;
 
-const CAM_PRESETS={
-  ribbon:{camYaw:30,camPitch:12,camDist:1600,camPersp:0.8,zoom:1},
-  cube:{camYaw:35,camPitch:22,camDist:900,camPersp:0.9,zoom:1.1},
-  blossom:{camYaw:25,camPitch:20,camDist:1400,camPersp:0.85,zoom:0.95},
-  grid:{camYaw:28,camPitch:30,camDist:2600,camPersp:0.7,zoom:0.55}
-};
-
-/* ============================================================ */
-/* structure cache                                                */
-/* ============================================================ */
-let structure=null;   // {type:'single', nodes} or {type:'grid', units:[{nodes,rootPos}]}
-let structSig='';
-
-function currentSig(){
-  const s=state;
-  if(s.pattern==='ribbon') return ['ribbon',s.ribbonCount,s.ribbonW,s.ribbonH,s.ribbonAngle,s.seed].join('|');
-  if(s.pattern==='cube') return ['cube',s.cubeSize,s.cubeAngle,s.cubeLid].join('|');
-  if(s.pattern==='blossom') return ['blossom',s.blossomGen,s.blossomChildren,s.blossomSize,s.blossomFalloff,s.blossomAngle,s.seed].join('|');
-  if(s.pattern==='grid') return ['grid',s.gridUnit,s.gridRows,s.gridCols,s.gridUnitSize,s.gridUnitCount,s.gridSpacing,s.gridAngle,s.gridSpatialStep,s.gridSpatialJitter,s.seed].join('|');
-  return '';
-}
-function rebuildStructure(force){
-  const sig=currentSig();
-  if(!force && sig===structSig && structure) return;
-  structSig=sig;
-  const s=state;
-  if(s.pattern==='ribbon'){
-    structure={type:'single', nodes:buildRibbon({count:s.ribbonCount,panelW:s.ribbonW,panelH:s.ribbonH,seed:s.seed, restAngle:s.ribbonAngle})};
-  } else if(s.pattern==='cube'){
-    structure={type:'single', nodes:buildCube({size:s.cubeSize, restAngle:s.cubeAngle, withLid:s.cubeLid})};
-  } else if(s.pattern==='blossom'){
-    structure={type:'single', nodes:buildBlossom({generations:s.blossomGen, childrenPerNode:s.blossomChildren, size:s.blossomSize, sizeFalloff:s.blossomFalloff, restAngle:s.blossomAngle, seed:s.seed})};
-  } else if(s.pattern==='grid'){
-    structure={type:'grid', units:buildGridField({
-      rows:s.gridRows, cols:s.gridCols, unitType:s.gridUnit, unitSize:s.gridUnitSize,
-      unitCount:s.gridUnitCount, restAngle:s.gridAngle, spatialPhaseStep:s.gridSpatialStep,
-      spatialJitter:s.gridSpatialJitter, cellSpacing:s.gridSpacing, seed:s.seed
-    })};
-  }
-}
-
-/* ============================================================ */
-/* camera / projection                                           */
-/* ============================================================ */
-function project(x,y,z,cam){
+function project(x,y,z,out){
+  const px=x-cam.px, py=y-cam.py, pz=z-cam.pz;
   const cy=Math.cos(cam.yaw), sy=Math.sin(cam.yaw);
   const cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
-  const x1=x*cy-z*sy;
-  const z1=x*sy+z*cy;
-  const y2=y*cp-z1*sp;
-  const z2=y*sp+z1*cp;
+  const x1=px*cy-pz*sy;
+  const z1=px*sy+pz*cy;
+  const y2=py*cp-z1*sp;
+  const z2=py*sp+z1*cp;
   const d=cam.dist, den=d+z2;
-  const sp2 = den>1 ? d/den : d;
-  const sc = 1+(sp2-1)*cam.persp;
-  return { x: cam.originX + x1*sc*cam.scale, y: cam.originY - y2*sc*cam.scale, depth:z2 };
+  const persp=den>1?d/den:d;
+  const sc=1+(persp-1)*cam.persp;
+  out.x=cam.originX+x1*sc*cam.scale;
+  out.y=cam.originY-y2*sc*cam.scale;
+  out.depth=z2;
+  return out;
 }
 
-/* ============================================================ */
-/* render                                                         */
-/* ============================================================ */
+/* ==========================================================
+   render loop
+   ========================================================== */
+let world=[];
+let frameCorners=[];
+let lastNow=0, fps=60, fpsAcc=0, fpsN=0;
+
 function resizeIfNeeded(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const w=Math.floor(window.innerWidth*dpr), h=Math.floor(window.innerHeight*dpr);
@@ -565,382 +563,426 @@ function resizeIfNeeded(){
   }
 }
 
-let camDragYaw=0, camDragPitch=0, camAutoYaw=0;
+function frame(now){
+  const dtRaw=lastNow?Math.min(0.06,(now-lastNow)/1000):0;
+  lastNow=now;
+  fpsAcc+=dtRaw; fpsN++;
+  if(fpsAcc>0.5){ fps=fpsN/fpsAcc; fpsAcc=0; fpsN=0; }
 
-function structTForNode(n, maxGen, totalHinges, angleAbs){
-  switch(state.colorBy){
-    case 'generation': return maxGen>0 ? n.gen/maxGen : 0;
-    case 'foldAngle': return clamp(angleAbs/180,0,1);
-    case 'hingeIndex': return totalHinges>0 ? n.hingeIndex/totalHinges : 0;
-    case 'position': return clamp(((n.spatialDelay||0)+0.001)/ (state.gridSpatialStep*(state.gridRows+state.gridCols)+0.001),0,1);
-    default: return 0.5;
-  }
-}
-
-function render(now){
-  const t=now/1000;
-  resizeIfNeeded();
   updateAudio();
-  rebuildStructure(false);
-
-  ctx.fillStyle=state.bgColor;
-  ctx.fillRect(0,0,window.innerWidth,window.innerHeight);
-
-  const yawDeg = state.camYaw + camDragYaw + camAutoYaw + (state.idleDrift ? Math.sin(t*0.04)*3 : 0);
-  const cam={
-    yaw:(yawDeg)*Math.PI/180,
-    pitch:(state.camPitch+camDragPitch)*Math.PI/180,
-    dist:Math.max(120,state.camDist),
-    persp:state.camPersp,
-    scale: state.zoom*(window.innerHeight/900),
-    originX: window.innerWidth/2,
-    originY: window.innerHeight/2
-  };
-  const lightAzRad=state.lightAz*Math.PI/180, lightElRad=state.lightEl*Math.PI/180;
-  const light={
-    x:Math.cos(lightElRad)*Math.cos(lightAzRad),
-    y:Math.sin(lightElRad),
-    z:Math.cos(lightElRad)*Math.sin(lightAzRad)
-  };
-
-  const angleCfg={
-    openSpeed:state.openSpeed, openShape:state.openShape,
-    foldOpen: state.audioEnabled && (state.audioTarget==='foldOpen'||state.audioTarget==='all')
-      ? clamp(state.foldOpen + audio.envelope*state.audioSensitivity*0.6, 0, 1.6) : state.foldOpen,
-    genDelay:state.genDelay, sibDelay:state.sibDelay,
-    microShape:state.microShape,
-    microSpeed: state.audioEnabled && (state.audioTarget==='openSpeed'||state.audioTarget==='all')
-      ? state.microSpeed*(1+audio.envelope*state.audioSensitivity) : state.microSpeed,
-    microAmp: state.audioEnabled && (state.audioTarget==='microAmp'||state.audioTarget==='all')
-      ? clamp(state.microAmp + audio.envelope*state.audioSensitivity*0.4, 0, 1) : state.microAmp,
-    microPhaseSpread:state.microPhaseSpread
-  };
-  let effOpenSpeed=state.openSpeed;
-  if(state.audioEnabled && (state.audioTarget==='openSpeed'||state.audioTarget==='all')){
-    effOpenSpeed = state.openSpeed*(1+audio.envelope*state.audioSensitivity);
+  let growthMul=1;
+  if(state.audioEnabled&&(state.audioTarget==='growth'||state.audioTarget==='both')){
+    growthMul=1+audio.envelope*state.audioSensitivity;
   }
-  angleCfg.openSpeed=effOpenSpeed;
+  const dt=state.paused?0:dtRaw*growthMul;
+  simT+=dt;
 
-  let allPanels=[];
-  let totalPanelCount=0;
+  resizeIfNeeded();
+  const vw=window.innerWidth, vh=window.innerHeight;
 
-  function collect(nodes, rootPos){
-    const angles=computeAngles(nodes, t, angleCfg);
-    const world=buildWorld(nodes, rootPos, IDENT3, angles);
-    const maxGen=nodes.reduce((m,n)=>Math.max(m,n.gen),0);
-    const totalHinges=nodes.length;
-    for(let i=0;i<world.length;i++){
-      const {corners,normal}=panelGeom(world[i], state.panelGap);
-      const screen=corners.map(c=>project(c.x,c.y,c.z,cam));
-      const depth=(screen[0].depth+screen[1].depth+screen[2].depth+screen[3].depth)/4;
-      let dot=normal.x*light.x+normal.y*light.y+normal.z*light.z;
-      let bt=(dot+1)/2;
-      const tStruct=structTForNode(nodes[i], maxGen, totalHinges, Math.abs(angles[i]));
-      const tFinal=clamp(bt + (tStruct-0.5)*2*state.structStrength, 0, 1);
-      const color=rampColor(state.colorStops, tFinal);
-      const edgeColor=rampColor(state.colorStops, clamp(tFinal-0.26,0,1));
-      allPanels.push({screen,depth,color,edgeColor});
+  // --- grow ---
+  if(mode==='grow'){
+    growStep(simT);
+    if(isSettled(simT)){ mode='hold'; modeT=simT; }
+  } else if(mode==='hold'){
+    if(state.autoRegrow && simT-modeT>state.holdTime){ mode='fade'; modeT=simT; }
+  } else if(mode==='fade'){
+    const f=(simT-modeT)/Math.max(0.2,state.fadeTime);
+    fadeAlpha=clamp(1-f,0,1);
+    if(f>=1){ state.seed=(state.seed+1)|0; syncSeedField(); resetGrowth(); }
+  }
+
+  // --- fold angles + world transforms ---
+  const bloom=(state.audioEnabled&&(state.audioTarget==='bloom'||state.audioTarget==='both'))
+    ? audio.envelope*state.audioSensitivity*0.45 : 0;
+
+  if(world.length<panels.length) world.length=panels.length;
+  for(let i=0;i<panels.length;i++){
+    const p=panels[i];
+    if(p.parent==null){
+      world[i]={pos:{x:0,y:0,z:0},rot:IDENT3,w:p.w,h:p.h};
+      continue;
     }
-    totalPanelCount+=world.length;
+    const u=progressOf(p,simT);
+    const wob=state.wobbleAmt*Math.sin(simT*state.wobbleSpeed*Math.PI*2+p.idx*0.7);
+    const bl=bloom*Math.sin(simT*1.5-p.gen*0.5);
+    const angle=p.targetAngle*u*p.dirFlip*(1+wob+bl);
+
+    const P=world[p.parent];
+    const ed=EDGE_DEF[p.edge];
+    const hingeLocal=ed.hinge(P.w,P.h);
+    const flat=ed.flat(P.w,P.h,p.w,p.h);
+    const offsetLocal={x:flat.x-hingeLocal.x,y:flat.y-hingeLocal.y,z:-hingeLocal.z};
+    const axisW=vnorm(m3vec(P.rot,ed.axis));
+    const hingeW=vadd(P.pos,m3vec(P.rot,hingeLocal));
+    const foldRot=rodrigues(axisW,angle*Math.PI/180);
+    world[i]={
+      pos:vadd(hingeW,m3vec(foldRot,m3vec(P.rot,offsetLocal))),
+      rot:m3mul(foldRot,P.rot),
+      w:p.w, h:p.h
+    };
   }
 
-  if(structure.type==='single'){
-    collect(structure.nodes, {x:0,y:0,z:0});
+  // --- corners in world space (also gives us the bounding box) ---
+  let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+  if(frameCorners.length<panels.length){
+    for(let i=frameCorners.length;i<panels.length;i++){
+      frameCorners.push({c:[{x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0}],
+        n:{x:0,y:0,z:1},
+        s:[{x:0,y:0,depth:0},{x:0,y:0,depth:0},{x:0,y:0,depth:0},{x:0,y:0,depth:0}]});
+    }
+  }
+  for(let i=0;i<panels.length;i++){
+    const nw=world[i];
+    const g=Math.min(state.panelGap,nw.w*0.42,nw.h*0.42);
+    const fc=frameCorners[i];
+    const lx=[g,nw.w-g,nw.w-g,g], ly=[g,g,nw.h-g,nw.h-g];
+    for(let k=0;k<4;k++){
+      const v=m3vec(nw.rot,{x:lx[k],y:ly[k],z:0});
+      const cx=nw.pos.x+v.x, cy=nw.pos.y+v.y, cz=nw.pos.z+v.z;
+      fc.c[k].x=cx; fc.c[k].y=cy; fc.c[k].z=cz;
+      if(cx<minX)minX=cx; if(cx>maxX)maxX=cx;
+      if(cy<minY)minY=cy; if(cy>maxY)maxY=cy;
+      if(cz<minZ)minZ=cz; if(cz>maxZ)maxZ=cz;
+    }
+    fc.n=m3vec(nw.rot,{x:0,y:0,z:1});
+  }
+
+  // --- camera ---
+  const centre={x:(minX+maxX)/2,y:(minY+maxY)/2,z:(minZ+maxZ)/2};
+  const radius=Math.max(1,0.5*Math.hypot(maxX-minX,maxY-minY,maxZ-minZ));
+  let tScale, tDist, tp;
+  if(state.autoFrame){
+    tScale=0.42*Math.min(vw,vh)*state.frameZoom/radius;
+    tDist=Math.max(400,radius*4);
+    tp=centre;
   } else {
-    for(const u of structure.units) collect(u.nodes, u.rootPos);
+    tScale=(vh/900)*state.frameZoom;
+    tDist=state.camDist;
+    tp={x:0,y:0,z:0};
   }
+  if(!framed){
+    cam.scale=tScale; cam.dist=tDist; cam.px=tp.x; cam.py=tp.y; cam.pz=tp.z;
+    framed=true;
+  } else {
+    const e=1-Math.pow(0.001,dtRaw);   // frame-rate independent smoothing
+    cam.scale=lerp(cam.scale,tScale,e);
+    cam.dist=lerp(cam.dist,tDist,e);
+    cam.px=lerp(cam.px,tp.x,e);
+    cam.py=lerp(cam.py,tp.y,e);
+    cam.pz=lerp(cam.pz,tp.z,e);
+  }
+  if(!state.paused) orbitYaw+=state.orbitSpeed*dtRaw;
+  cam.yaw=(state.camYaw+dragYaw+orbitYaw)*Math.PI/180;
+  cam.pitch=clamp(state.camPitch+dragPitch,-89,89)*Math.PI/180;
+  cam.persp=state.camPersp;
+  cam.originX=vw/2; cam.originY=vh/2;
 
-  allPanels.sort((a,b)=>b.depth-a.depth);
-  const strokeW=Math.max(1, cam.scale*0.7);
-  for(const p of allPanels){
-    roundedPolygonPath(ctx, p.screen, state.cornerRadius*cam.scale*0.5);
-    ctx.fillStyle=p.color;
+  // --- project + shade ---
+  const azr=state.lightAz*Math.PI/180, elr=state.lightEl*Math.PI/180;
+  const lx=Math.cos(elr)*Math.cos(azr), ly=Math.sin(elr), lz=Math.cos(elr)*Math.sin(azr);
+
+  const order=[];
+  for(let i=0;i<panels.length;i++){
+    const fc=frameCorners[i];
+    let dsum=0;
+    for(let k=0;k<4;k++){
+      project(fc.c[k].x,fc.c[k].y,fc.c[k].z,fc.s[k]);
+      dsum+=fc.s[k].depth;
+    }
+    const shade=(fc.n.x*lx+fc.n.y*ly+fc.n.z*lz+1)/2;
+    const t=clamp(shade+(panels[i].colorT-0.5)*2*state.tintStrength,0,1);
+    order.push({i,depth:dsum/4,t});
+  }
+  order.sort((a,b)=>b.depth-a.depth);
+
+  // --- draw ---
+  ctx.globalAlpha=1;
+  ctx.fillStyle=state.bgColor;
+  ctx.fillRect(0,0,vw,vh);
+  ctx.globalAlpha=fadeAlpha;
+  const rr=state.cornerRadius*cam.scale*0.5;
+  const stroke=state.edgeWidth>0;
+  if(stroke) ctx.lineWidth=Math.max(0.3,state.edgeWidth*Math.min(2,cam.scale));
+  for(let q=0;q<order.length;q++){
+    const o=order[q];
+    roundedPath(ctx,frameCorners[o.i].s,rr);
+    ctx.fillStyle=rampColor(state.colorStops,o.t);
     ctx.fill();
-    ctx.lineWidth=strokeW;
-    ctx.strokeStyle=p.edgeColor;
-    ctx.stroke();
+    if(stroke){
+      ctx.strokeStyle=rampColor(state.colorStops,clamp(o.t-0.26,0,1));
+      ctx.stroke();
+    }
   }
+  ctx.globalAlpha=1;
 
-  panelCountEl.textContent=totalPanelCount+' panels';
+  // --- readout ---
+  const label=mode==='grow'?'unfolding':mode==='hold'?'settled':'fading';
+  const deepest=panels.length?panels[panels.length-1].gen:0;
+  readout.innerHTML='<b>'+panels.length+'</b> panels · gen <b>'+deepest+'</b> · '+label+
+    ' · seed <b>'+state.seed+'</b> · '+fps.toFixed(0)+'fps';
 
-  requestAnimationFrame(render);
+  requestAnimationFrame(frame);
 }
 
-/* ============================================================ */
-/* audio                                                         */
-/* ============================================================ */
-let audioCtx=null, analyser=null, dataArray=null, micStream=null;
+/* ==========================================================
+   audio
+   ========================================================== */
+let audioCtx=null, analyser=null, freqData=null, micStream=null;
 async function enableAudio(){
   try{
-    micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,
+      noiseSuppression:false, autoGainControl:false}});
     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') await audioCtx.resume();
     const src=audioCtx.createMediaStreamSource(micStream);
     analyser=audioCtx.createAnalyser();
     analyser.fftSize=1024;
     analyser.smoothingTimeConstant=state.audioSmoothing;
     src.connect(analyser);
-    dataArray=new Uint8Array(analyser.frequencyBinCount);
+    freqData=new Uint8Array(analyser.frequencyBinCount);
     state.audioEnabled=true;
     document.getElementById('audioStatus').textContent='Microphone connected';
   }catch(err){
     state.audioEnabled=false;
-    document.getElementById('audioStatus').textContent='Microphone error: '+err.message;
+    document.getElementById('audioStatus').textContent=
+      (location.protocol==='file:')
+        ? 'Blocked on file:// — serve over localhost or https'
+        : 'Microphone error: '+(err&&err.message?err.message:'unavailable');
   }
 }
 function disableAudio(){
-  if(micStream) micStream.getTracks().forEach(tr=>tr.stop());
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
   if(audioCtx) audioCtx.close();
   audioCtx=null; analyser=null; micStream=null;
   state.audioEnabled=false;
   document.getElementById('audioStatus').textContent='Microphone off';
 }
 function updateAudio(){
-  if(!state.audioEnabled || !analyser){
+  if(!state.audioEnabled||!analyser){
     audio.envelope=lerp(audio.envelope,0,0.08);
     return;
   }
-  analyser.getByteFrequencyData(dataArray);
-  const n=dataArray.length;
-  const bassEnd=Math.floor(n*0.12), midEnd=Math.floor(n*0.5);
-  let bass=0,mid=0,treb=0;
-  for(let i=0;i<bassEnd;i++) bass+=dataArray[i];
-  for(let i=bassEnd;i<midEnd;i++) mid+=dataArray[i];
-  for(let i=midEnd;i<n;i++) treb+=dataArray[i];
-  bass/=(bassEnd*255||1); mid/=((midEnd-bassEnd)*255||1); treb/=((n-midEnd)*255||1);
-  audio.bass=bass; audio.mid=mid; audio.treble=treb;
-  const raw=bass*0.5+mid*0.35+treb*0.15;
+  analyser.getByteFrequencyData(freqData);
+  const n=freqData.length;
+  let sum=0;
+  for(let i=0;i<n;i++) sum+=freqData[i];
+  const raw=sum/(n*255);
   audio.envelope=lerp(audio.envelope,raw,0.35);
 }
 
-/* ============================================================ */
-/* recording / snapshot                                          */
-/* ============================================================ */
+/* ==========================================================
+   output
+   ========================================================== */
 let recorder=null, chunks=[];
 function pickMime(){
-  const options=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
-  for(const o of options){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(o)) return o; }
+  const list=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+  for(const m of list){ if(window.MediaRecorder&&MediaRecorder.isTypeSupported(m)) return m; }
   return '';
 }
-function startRecording(){
-  const stream=canvas.captureStream(30);
+function toggleRecording(){
+  const btn=document.getElementById('btnRec');
+  if(recorder&&recorder.state==='recording'){
+    recorder.stop(); btn.textContent='Record'; btn.classList.remove('rec');
+    return;
+  }
   const mime=pickMime();
-  recorder=mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
+  if(!mime&&!window.MediaRecorder){ return; }
+  const stream=canvas.captureStream(30);
+  recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
   chunks=[];
-  recorder.ondataavailable=e=>{ if(e.data && e.data.size) chunks.push(e.data); };
+  recorder.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
   recorder.onstop=()=>{
     const blob=new Blob(chunks,{type:'video/webm'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
-    a.href=url; a.download=`tbg-facade-${Date.now()}.webm`; a.click();
-    URL.revokeObjectURL(url);
+    a.href=url; a.download='tbg-unfold-'+state.seed+'-'+Date.now()+'.webm'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    recorder=null;
   };
   recorder.start();
+  btn.textContent='Stop'; btn.classList.add('rec');
 }
-function stopRecording(){ if(recorder && recorder.state!=='inactive') recorder.stop(); }
-function toggleRecording(){
-  const btn=document.getElementById('recordBtn');
-  if(recorder && recorder.state==='recording'){
-    stopRecording(); btn.textContent='Start recording'; btn.classList.remove('active');
-  } else {
-    startRecording(); btn.textContent='Stop recording'; btn.classList.add('active');
-  }
-}
-function saveSnapshot(){
+function savePNG(){
   const a=document.createElement('a');
-  a.download=`tbg-facade-${Date.now()}.png`;
+  a.download='tbg-unfold-'+state.seed+'-'+Date.now()+'.png';
   a.href=canvas.toDataURL('image/png');
   a.click();
 }
 function toggleFullscreen(){
-  if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); }
-  else { document.exitFullscreen(); }
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+  else document.exitFullscreen();
 }
 
-/* ============================================================ */
-/* UI wiring                                                     */
-/* ============================================================ */
-const SLIDER_IDS=[
-  'ribbonCount','ribbonW','ribbonH','ribbonAngle',
-  'cubeSize','cubeAngle',
-  'blossomGen','blossomChildren','blossomSize','blossomFalloff','blossomAngle',
-  'gridRows','gridCols','gridUnitSize','gridUnitCount','gridSpacing','gridAngle','gridSpatialStep','gridSpatialJitter',
-  'openSpeed','foldOpen','genDelay','sibDelay','microSpeed','microAmp','microPhaseSpread',
-  'cornerRadius','panelGap',
-  'camYaw','camPitch','camDist','camPersp','zoom','lightAz','lightEl',
-  'structStrength','audioSensitivity','audioSmoothing'
-];
-const CHECK_IDS=['cubeLid','idleDrift'];
-const SELECT_IDS=['gridUnit','openShape','microShape','colorBy','bgMode','audioTarget'];
+/* ==========================================================
+   UI
+   ========================================================== */
+const SLIDERS=['rootSize','growthSpeed','drag','genDecay','branchDecay','stall','spawnAt','maxGen','maxPanels',
+  'minChildren','maxChildren','straightness','sizeMin','sizeMax','sizeJitter','angleMin','angleMax',
+  'flipChance','cornerRadius','panelGap','edgeWidth','wobbleAmt','wobbleSpeed','holdTime','fadeTime',
+  'frameZoom','camDist','camYaw','camPitch','camPersp','orbitSpeed','lightAz','lightEl',
+  'colourDrift','tintStrength','audioSensitivity','audioSmoothing'];
+const CHECKS=['paused','autoRegrow','autoFrame'];
+const SELECTS=['bgMode','audioTarget'];
+const DECIMALS={growthSpeed:2,drag:1,genDecay:3,branchDecay:3,stall:3,spawnAt:2,straightness:2,sizeMin:2,sizeMax:2,
+  sizeJitter:2,flipChance:2,panelGap:1,edgeWidth:1,wobbleAmt:3,wobbleSpeed:2,holdTime:1,fadeTime:1,
+  frameZoom:2,camPersp:2,orbitSpeed:1,colourDrift:2,tintStrength:2,audioSensitivity:2,audioSmoothing:2};
 
-function formatVal(id,v){
-  if(id==='blossomFalloff'||id==='foldOpen'||id==='camPersp'||id==='zoom'||id==='structStrength'||id==='audioSensitivity'||id==='audioSmoothing'||id==='openSpeed'||id==='microSpeed'||id==='microAmp'||id==='microPhaseSpread'||id==='genDelay'||id==='sibDelay'||id==='gridSpatialStep'||id==='gridSpatialJitter'){
-    return v.toFixed(2);
-  }
-  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+function fmt(id,v){
+  const d=DECIMALS[id];
+  return d==null?String(Math.round(v)):v.toFixed(d);
 }
-function initSliders(){
-  SLIDER_IDS.forEach(id=>{
+function bindSliders(){
+  SLIDERS.forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
-    const out=el.nextElementSibling;
+    const val=el.parentNode.querySelector('.val');
     el.value=state[id];
-    out.textContent=formatVal(id,state[id]);
+    if(val) val.textContent=fmt(id,state[id]);
     el.addEventListener('input',()=>{
-      const v=parseFloat(el.value);
-      state[id]=v;
-      out.textContent=formatVal(id,v);
+      state[id]=parseFloat(el.value);
+      if(val) val.textContent=fmt(id,state[id]);
+      if(id==='audioSmoothing'&&analyser) analyser.smoothingTimeConstant=state.audioSmoothing;
     });
   });
 }
-function syncAllSlidersFromState(){
-  SLIDER_IDS.forEach(id=>{
+function syncSliders(){
+  SLIDERS.forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     el.value=state[id];
-    el.nextElementSibling.textContent=formatVal(id,state[id]);
+    const val=el.parentNode.querySelector('.val');
+    if(val) val.textContent=fmt(id,state[id]);
   });
 }
-
-function syncBgMode(){
+function syncSeedField(){ document.getElementById('seed').value=state.seed; }
+function syncBg(){
   if(state.bgMode==='dark') state.bgColor='#07080d';
-  else if(state.bgMode==='light') state.bgColor='#f5f6fa';
-  document.getElementById('bgColorRow').classList.toggle('hidden', state.bgMode!=='custom');
+  else if(state.bgMode==='light') state.bgColor='#eef0f6';
+  document.getElementById('bgColorRow').classList.toggle('hidden',state.bgMode!=='custom');
   document.getElementById('bgColor').value=state.bgColor;
 }
-
-const PATTERN_NOTES={
-  ribbon:'A single accordion strip, folding and unfurling like a fan.',
-  cube:'A cross-shaped net assembling into a closed box, and back open.',
-  blossom:'A branching tree of panels blossoming outward, generation by generation.',
-  grid:'A field of small folding units tiled across the facade, with a ripple passing through it.'
-};
-const PATTERN_SECTION={ribbon:'secRibbon', cube:'secCube', blossom:'secBlossom', grid:'secGrid'};
-function syncPatternVisibility(){
-  const activeId=PATTERN_SECTION[state.pattern];
-  ['secRibbon','secCube','secBlossom','secGrid'].forEach(id=>{
-    document.getElementById(id).classList.toggle('hidden', id!==activeId);
-  });
-  document.querySelectorAll('#patternSeg button').forEach(b=>{
-    b.classList.toggle('on', b.dataset.pattern===state.pattern);
-  });
-  document.getElementById('patternNote').textContent=PATTERN_NOTES[state.pattern]||'';
-  document.getElementById('gridUnitCountRow').classList.toggle('hidden', state.gridUnit!=='ribbon');
+function syncCamRows(){
+  document.getElementById('camDistRow').classList.toggle('hidden',state.autoFrame);
 }
-function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
-
-function applyCamPreset(pattern){
-  const p=CAM_PRESETS[pattern];
+function applyPreset(name){
+  const p=PRESETS[name];
   if(!p) return;
   Object.assign(state,p);
-  syncAllSlidersFromState();
+  syncSliders();
+  resetGrowth();
 }
-
-function rand(a,b){ return a+Math.random()*(b-a); }
-function randomize(){
-  state.seed=Math.floor(Math.random()*100000);
-  state.openSpeed=+rand(0.08,0.6).toFixed(2);
-  state.foldOpen=+rand(0.6,1.2).toFixed(2);
-  state.genDelay=+rand(0.05,0.9).toFixed(2);
-  state.sibDelay=+rand(0,0.6).toFixed(2);
-  state.microAmp=+rand(0,0.3).toFixed(2);
-  state.microSpeed=+rand(0.1,1.6).toFixed(2);
-  const shapes=['sine','triangle','sawtooth','square','noise','pulse'];
-  state.openShape=shapes[Math.floor(Math.random()*shapes.length)];
-  state.microShape=shapes[Math.floor(Math.random()*shapes.length)];
-  state.cornerRadius=Math.round(rand(0,20));
-  state.lightAz=Math.round(rand(-180,180));
-  state.lightEl=Math.round(rand(10,70));
-  if(state.pattern==='ribbon'){ state.ribbonAngle=Math.round(rand(15,60)); state.ribbonCount=Math.round(rand(4,12)); }
-  if(state.pattern==='cube'){ state.cubeAngle=Math.round(rand(60,120)); }
-  if(state.pattern==='blossom'){ state.blossomGen=Math.round(rand(2,4)); state.blossomChildren=Math.round(rand(1,3)); state.blossomAngle=Math.round(rand(40,110)); }
-  if(state.pattern==='grid'){ state.gridAngle=Math.round(rand(30,100)); state.gridSpatialStep=+rand(0.1,0.8).toFixed(2); }
-  syncAllSlidersFromState();
-  document.getElementById('openShape').value=state.openShape;
-  document.getElementById('microShape').value=state.microShape;
+function randomiseAll(){
+  const r=Math.random;
+  state.seed=Math.floor(r()*100000);
+  state.minChildren=Math.floor(r()*2);
+  state.maxChildren=1+Math.floor(r()*3);
+  state.straightness=+(r()*r()).toFixed(2);
+  state.sizeMin=+(0.5+r()*0.35).toFixed(2);
+  state.sizeMax=+(state.sizeMin+r()*0.4).toFixed(2);
+  state.sizeJitter=+(r()*0.4).toFixed(2);
+  state.angleMin=Math.round(r()*60);
+  state.angleMax=Math.round(state.angleMin+20+r()*90);
+  state.flipChance=+(r()*0.6).toFixed(2);
+  state.drag=+(1.6+r()*4.5).toFixed(1);
+  state.genDecay=+(r()*0.32).toFixed(3);
+  state.branchDecay=+(0.08+r()*0.35).toFixed(3);
+  state.spawnAt=+(0.2+r()*0.55).toFixed(2);
+  state.colourDrift=+(r()*0.3).toFixed(2);
+  state.lightAz=Math.round(r()*360-180);
+  state.lightEl=Math.round(10+r()*60);
+  syncSliders(); syncSeedField();
+  resetGrowth();
 }
-
 function resetAll(){
-  Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)));
-  syncAllSlidersFromState();
-  CHECK_IDS.forEach(id=>{ document.getElementById(id).checked=state[id]; });
-  SELECT_IDS.forEach(id=>{ document.getElementById(id).value=state[id]; });
+  Object.assign(state,JSON.parse(JSON.stringify(DEFAULTS)));
+  syncSliders(); syncSeedField(); syncBg(); syncCamRows();
+  CHECKS.forEach(id=>{ document.getElementById(id).checked=state[id]; });
+  SELECTS.forEach(id=>{ document.getElementById(id).value=state[id]; });
   [0,1,2,3].forEach(i=>{ document.getElementById('stop'+i).value=state.colorStops[i]; });
-  syncBgMode();
-  syncPatternVisibility();
+  resetGrowth();
 }
 
 let panelHidden=false;
-function setPanelHidden(hidden){
-  panelHidden=hidden;
-  document.getElementById('panel').classList.toggle('hidden',hidden);
-  document.getElementById('showPanelBtn').classList.toggle('visible',hidden);
+function setPanelHidden(h){
+  panelHidden=h;
+  document.getElementById('panel').classList.toggle('hidden',h);
+  document.getElementById('showPanelBtn').classList.toggle('visible',h);
 }
 
-/* ---- canvas orbit drag ---- */
-let dragging=false, dragX=0, dragY=0;
+/* orbit drag */
+let dragging=false, lastX=0, lastY=0;
 canvas.addEventListener('pointerdown',e=>{
-  dragging=true; dragX=e.clientX; dragY=e.clientY;
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+  canvas.classList.add('dragging');
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove',e=>{
   if(!dragging) return;
-  camDragYaw += (e.clientX-dragX)*0.3;
-  camDragPitch += (e.clientY-dragY)*0.3;
-  dragX=e.clientX; dragY=e.clientY;
+  dragYaw+=(e.clientX-lastX)*0.3;
+  dragPitch+=(e.clientY-lastY)*0.3;
+  lastX=e.clientX; lastY=e.clientY;
 });
 function endDrag(){
   if(!dragging) return;
   dragging=false;
-  state.camYaw = state.camYaw + camDragYaw;
-  state.camPitch = clamp(state.camPitch + camDragPitch, -89, 89);
-  camDragYaw=0; camDragPitch=0;
-  document.getElementById('camYaw').value=((state.camYaw%360)+540)%360-180;
-  state.camYaw = parseFloat(document.getElementById('camYaw').value);
-  document.getElementById('camYaw').nextElementSibling.textContent=formatVal('camYaw',state.camYaw);
-  document.getElementById('camPitch').value=state.camPitch;
-  document.getElementById('camPitch').nextElementSibling.textContent=formatVal('camPitch',state.camPitch);
+  canvas.classList.remove('dragging');
+  let y=state.camYaw+dragYaw;
+  y=((y+180)%360+360)%360-180;
+  state.camYaw=y;
+  state.camPitch=clamp(state.camPitch+dragPitch,-89,89);
+  dragYaw=0; dragPitch=0;
+  syncSliders();
 }
 canvas.addEventListener('pointerup',endDrag);
 canvas.addEventListener('pointercancel',endDrag);
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
-  state.camDist=clamp(state.camDist*(1+Math.sign(e.deltaY)*0.08),200,6000);
-  document.getElementById('camDist').value=state.camDist;
-  document.getElementById('camDist').nextElementSibling.textContent=formatVal('camDist',state.camDist);
+  state.frameZoom=clamp(state.frameZoom*(1-Math.sign(e.deltaY)*0.08),0.2,2.5);
+  syncSliders();
 },{passive:false});
 
 function init(){
-  initSliders();
+  bindSliders();
 
-  CHECK_IDS.forEach(id=>{
+  CHECKS.forEach(id=>{
     const el=document.getElementById(id);
     el.checked=state[id];
-    el.addEventListener('change',()=>{ state[id]=el.checked; });
+    el.addEventListener('change',()=>{
+      state[id]=el.checked;
+      if(id==='autoFrame'){ syncCamRows(); framed=false; }
+    });
   });
-  SELECT_IDS.forEach(id=>{
+  SELECTS.forEach(id=>{
     const el=document.getElementById(id);
     el.value=state[id];
     el.addEventListener('change',()=>{
       state[id]=el.value;
-      if(id==='bgMode') syncBgMode();
-      if(id==='gridUnit') syncPatternVisibility();
+      if(id==='bgMode') syncBg();
     });
   });
 
-  document.querySelectorAll('#patternSeg button').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      state.pattern=btn.dataset.pattern;
-      applyCamPreset(state.pattern);
-      syncPatternVisibility();
-    });
+  const seedEl=document.getElementById('seed');
+  seedEl.value=state.seed;
+  seedEl.addEventListener('change',()=>{
+    const v=parseInt(seedEl.value,10);
+    state.seed=isFinite(v)?v:0;
+    resetGrowth();
   });
 
-  document.getElementById('audioEnabled').addEventListener('change', async (e)=>{
+  document.getElementById('btnNewSeed').addEventListener('click',()=>{
+    state.seed=Math.floor(Math.random()*100000);
+    syncSeedField(); resetGrowth();
+  });
+  document.getElementById('btnReplay').addEventListener('click',resetGrowth);
+  document.getElementById('btnRandomise').addEventListener('click',randomiseAll);
+  document.querySelectorAll('[data-preset]').forEach(b=>{
+    b.addEventListener('click',()=>applyPreset(b.dataset.preset));
+  });
+
+  document.getElementById('audioEnabled').addEventListener('change',async e=>{
     if(e.target.checked){ await enableAudio(); e.target.checked=state.audioEnabled; }
-    else { disableAudio(); }
-  });
-  document.getElementById('audioSmoothing').addEventListener('input',()=>{
-    if(analyser) analyser.smoothingTimeConstant=state.audioSmoothing;
+    else disableAudio();
   });
 
   [0,1,2,3].forEach(i=>{
@@ -949,31 +991,29 @@ function init(){
     el.addEventListener('input',()=>{ state.colorStops[i]=el.value; });
   });
   document.getElementById('resetPalette').addEventListener('click',()=>{
-    state.colorStops=[...DEFAULTS.colorStops];
+    state.colorStops=DEFAULTS.colorStops.slice();
     [0,1,2,3].forEach(i=>{ document.getElementById('stop'+i).value=state.colorStops[i]; });
   });
+  const bgEl=document.getElementById('bgColor');
+  bgEl.addEventListener('input',()=>{ state.bgColor=bgEl.value; });
 
-  const bgColorEl=document.getElementById('bgColor');
-  bgColorEl.addEventListener('input',()=>{ state.bgColor=bgColorEl.value; });
-
-  document.getElementById('randomize').addEventListener('click',randomize);
-  document.getElementById('resetAll').addEventListener('click',resetAll);
-  document.getElementById('snapshot').addEventListener('click',saveSnapshot);
-  document.getElementById('recordBtn').addEventListener('click',toggleRecording);
-  document.getElementById('fullscreenBtn').addEventListener('click',toggleFullscreen);
+  document.getElementById('btnPNG').addEventListener('click',savePNG);
+  document.getElementById('btnRec').addEventListener('click',toggleRecording);
+  document.getElementById('btnFullscreen').addEventListener('click',toggleFullscreen);
+  document.getElementById('btnReset').addEventListener('click',resetAll);
   document.getElementById('showPanelBtn').addEventListener('click',()=>setPanelHidden(false));
 
-  window.addEventListener('keydown',(e)=>{
-    const tag=e.target.tagName;
-    if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA') return;
+  window.addEventListener('keydown',e=>{
+    if(e.target.matches('input,select,textarea')) return;
     if(e.key==='h'||e.key==='H') setPanelHidden(!panelHidden);
     if(e.key==='f'||e.key==='F') toggleFullscreen();
+    if(e.code==='Space'){ e.preventDefault(); resetGrowth(); }
   });
 
-  syncBgMode();
-  syncPatternVisibility();
-  rebuildStructure(true);
-  requestAnimationFrame(render);
+  syncBg();
+  syncCamRows();
+  resetGrowth();
+  requestAnimationFrame(frame);
 }
 
 init();
