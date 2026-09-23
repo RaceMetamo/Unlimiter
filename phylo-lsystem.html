@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phylo — L-system grower</title>
+<style>
+  :root{
+    --stage:#06070b;
+    --panel:#0f1117;
+    --panel-2:#161922;
+    --line:#242833;
+    --text:#e7e9f0;
+    --dim:#8d93a3;
+    --accent:#3a6bff;
+    --accent-dim:#1c2f6e;
+    --err:#e0714f;
+    --radius:5px;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--stage);overflow:hidden;
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  #stage{position:fixed;inset:0;display:block;touch-action:none;cursor:grab;}
+  #stage.dragging{cursor:grabbing;}
+
+  #readout{position:fixed;left:16px;bottom:14px;z-index:11;font-family:var(--mono);
+    font-size:11px;color:var(--dim);pointer-events:none;letter-spacing:.02em;}
+  #readout b{color:var(--text);font-weight:500;}
+
+  #panel{position:fixed;top:0;right:0;height:100%;width:372px;max-width:94vw;
+    background:var(--panel);border-left:1px solid var(--line);color:var(--text);
+    overflow-y:auto;z-index:10;transition:transform .25s ease;
+    scrollbar-width:thin;scrollbar-color:#2f3440 var(--panel);}
+  #panel.hidden{transform:translateX(100%);}
+  #panel::-webkit-scrollbar{width:9px;}
+  #panel::-webkit-scrollbar-thumb{background:#2f3440;border-radius:9px;}
+
+  .head{padding:15px 15px 11px;border-bottom:1px solid var(--line);}
+  .head h1{font-size:14.5px;margin:0 0 3px;font-weight:600;letter-spacing:.01em;}
+  .head p{font-size:11.5px;color:var(--dim);margin:0;line-height:1.5;}
+
+  .group{border-bottom:1px solid var(--line);}
+  .group > summary{list-style:none;cursor:pointer;padding:10px 15px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12px;user-select:none;}
+  .group > summary::-webkit-details-marker{display:none;}
+  .group > summary:hover{background:var(--panel-2);}
+  .group > summary .chev{width:7px;height:7px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto;}
+  .group[open] > summary .chev{transform:rotate(45deg);}
+  .group .body{padding:2px 15px 13px;}
+
+  .row{display:flex;align-items:center;gap:9px;padding:4px 0;min-height:27px;font-size:12px;}
+  .row > label{flex:0 0 104px;color:var(--dim);font-size:11.5px;line-height:1.3;}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px;}
+  .val{font-family:var(--mono);font-size:10.5px;color:var(--text);width:44px;text-align:right;flex:none;}
+  .row.hidden{display:none;}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;
+    background:transparent;cursor:ew-resize;}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line);}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+    border-radius:50%;background:var(--accent);margin-top:-4.5px;border:none;}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;
+    background:var(--accent);border:none;}
+  input[type=range]:focus-visible{outline:1px solid var(--accent);outline-offset:2px;}
+
+  select,input[type=number]{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;
+    font-family:var(--sans);font-size:11.5px;}
+  input[type=number]{font-family:var(--mono);}
+  select:focus,input:focus,textarea:focus{outline:1px solid var(--accent);}
+
+  textarea{width:100%;background:#0b0d12;color:#d7dbe6;border:1px solid var(--line);
+    border-radius:var(--radius);padding:9px 10px;font-family:var(--mono);font-size:11px;
+    line-height:1.55;resize:vertical;min-height:190px;white-space:pre;overflow-wrap:normal;
+    overflow-x:auto;tab-size:2;}
+
+  input[type=checkbox]{appearance:none;-webkit-appearance:none;width:30px;height:17px;
+    background:#2c313c;border-radius:9px;position:relative;cursor:pointer;outline:none;
+    transition:background .15s;flex:none;}
+  input[type=checkbox]:checked{background:var(--accent-dim);}
+  input[type=checkbox]::before{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;
+    border-radius:50%;background:#7a7f8f;transition:transform .15s,background .15s;}
+  input[type=checkbox]:checked::before{transform:translateX(13px);background:var(--accent);}
+
+  input[type=color]{width:100%;height:26px;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel-2);padding:2px;cursor:pointer;}
+  .swatches{display:flex;gap:6px;padding:6px 0 4px;}
+
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);
+    border-radius:var(--radius);padding:7px 9px;font-family:var(--sans);font-size:11.5px;
+    cursor:pointer;white-space:nowrap;flex:1;}
+  button:hover{border-color:#414856;background:#1d212a;}
+  button:active{transform:translateY(1px);}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#08101f;font-weight:600;}
+  button.primary:hover{background:#4f7bff;}
+  button.rec{background:#4d1220;border-color:#9c2b3e;color:#ffd9de;}
+  .btnrow{display:flex;gap:6px;padding:5px 0;}
+
+  .note{color:var(--dim);font-size:11px;padding:3px 0 5px;line-height:1.5;}
+  .status{font-family:var(--mono);font-size:10.5px;color:var(--dim);padding:5px 0 0;line-height:1.5;}
+  .status.bad{color:var(--err);white-space:pre-wrap;}
+  .ref{font-family:var(--mono);font-size:10.5px;color:var(--dim);line-height:1.7;padding:4px 0 2px;}
+  .ref b{color:#aeb4c2;font-weight:500;}
+
+  #showPanelBtn{position:fixed;top:14px;right:14px;z-index:12;width:34px;height:34px;
+    border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--text);
+    font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;}
+  #showPanelBtn.visible{display:flex;}
+  #glError{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    padding:40px;text-align:center;color:var(--text);font-size:14px;line-height:1.6;z-index:20;}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+<div id="readout"></div>
+<div id="glError"></div>
+
+<div id="panel">
+  <div class="head">
+    <h1>Phylo — L-system grower</h1>
+    <p>A turtle walks a rewritten grammar and draws what it finds: stems, panels, leaves. Edit the rules, plant a seed, watch it grow.</p>
+  </div>
+
+  <details class="group" open>
+    <summary>Grammar<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Preset</label><div class="ctl"><select id="preset"></select></div></div>
+      <textarea id="grammar" spellcheck="false"></textarea>
+      <div class="btnrow">
+        <button class="primary" id="btnGrow">Plant</button>
+        <button id="btnNewSeed">New seed</button>
+      </div>
+      <div class="row"><label>Seed</label><div class="ctl"><input type="number" id="seed" step="1"></div></div>
+      <div class="row"><label>Derivation steps</label><div class="ctl"><input type="range" id="steps" min="1" max="80" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Module ceiling</label><div class="ctl"><input type="range" id="maxModules" min="2000" max="60000" step="1000"><span class="val"></span></div></div>
+      <div class="note">A high ceiling only costs frame rate while the structure is still growing or the wind is blowing — once it has settled the geometry is cached.</div>
+      <div class="status" id="grammarStatus">—</div>
+      <div class="ref">
+<b>F</b>(len,w0,w1) stem &nbsp; <b>f</b>(len) skip &nbsp; <b>P</b>(w,h) panel &nbsp; <b>L</b>(len,ratio) leaf
+<b>+</b> <b>-</b> yaw &nbsp; <b>&amp;</b> <b>^</b> pitch &nbsp; <b>/</b> <b>\</b> roll &nbsp; <b>|</b> turn back
+<b>[</b> <b>]</b> branch &nbsp; <b>!</b>(w) width &nbsp; <b>'</b>(c) colour 0–1
+<b>#define</b> N v &nbsp; <b>#axiom</b> … &nbsp; rule <b>:</b> condition &nbsp; <b>p=</b> weight
+rand(a,b) sin cos abs sqrt min max floor pow
+      </div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Growth<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Grow duration</label><div class="ctl"><input type="range" id="growDuration" min="2" max="90" step="1"><span class="val"></span></div></div>
+      <div class="note">How long the whole structure takes to finish appearing, whatever its derivation depth.</div>
+      <div class="row"><label>Drag</label><div class="ctl"><input type="range" id="drag" min="1" max="8" step="0.1"><span class="val"></span></div></div>
+      <div class="row"><label>Slower each step</label><div class="ctl"><input type="range" id="genSlow" min="0" max="0.5" step="0.005"><span class="val"></span></div></div>
+      <div class="btnrow">
+        <button id="btnReplay">Replay</button>
+        <button id="btnFinish">Jump to full</button>
+      </div>
+      <div class="row"><label>Pause</label><div class="ctl"><input type="checkbox" id="paused"></div></div>
+      <div class="row"><label>Loop</label><div class="ctl"><input type="checkbox" id="autoRegrow"></div></div>
+      <div class="row"><label>Hold when grown</label><div class="ctl"><input type="range" id="holdTime" min="0" max="40" step="0.5"><span class="val"></span></div></div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Tropism &amp; wind<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Pull strength</label><div class="ctl"><input type="range" id="tropismStrength" min="-3" max="3" step="0.02"><span class="val"></span></div></div>
+      <div class="row"><label>Pull direction</label><div class="ctl"><input type="range" id="tropismEl" min="-90" max="90" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Pull bearing</label><div class="ctl"><input type="range" id="tropismAz" min="-180" max="180" step="1"><span class="val"></span></div></div>
+      <div class="note">Bends every stem toward that direction as it grows — straight down reads as gravity, up as reaching for light. Negative strength pushes away.</div>
+      <div class="row"><label>Wind</label><div class="ctl"><input type="range" id="wind" min="0" max="4" step="0.02"><span class="val"></span></div></div>
+      <div class="row"><label>Wind speed</label><div class="ctl"><input type="range" id="windSpeed" min="0.02" max="2" step="0.01"><span class="val"></span></div></div>
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Form<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Stem thickness</label><div class="ctl"><input type="range" id="thickness" min="0.1" max="4" step="0.02"><span class="val"></span></div></div>
+      <div class="row"><label>Stem sides</label><div class="ctl"><input type="range" id="tubeSides" min="3" max="16" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Leaf scale</label><div class="ctl"><input type="range" id="leafScale" min="0" max="3" step="0.02"><span class="val"></span></div></div>
+      <div class="row"><label>Panel scale</label><div class="ctl"><input type="range" id="panelScale" min="0" max="3" step="0.02"><span class="val"></span></div></div>
+      <div class="row"><label>Panel rounding</label><div class="ctl"><input type="range" id="panelRound" min="0" max="0.5" step="0.01"><span class="val"></span></div></div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Colour<span class="chev"></span></summary>
+    <div class="body">
+      <div class="swatches">
+        <input type="color" id="stop0"><input type="color" id="stop1">
+        <input type="color" id="stop2"><input type="color" id="stop3">
+      </div>
+      <div class="btnrow">
+        <button id="palBrand">Bridge blue</button>
+        <button id="palBotanic">Botanic</button>
+        <button id="palRust">Rust</button>
+      </div>
+      <div class="row"><label>Grammar vs depth</label><div class="ctl"><input type="range" id="symbolMix" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="note">At 0 colour runs along the structure by depth; at 1 it comes only from the <span style="font-family:var(--mono)">'</span> values in your rules.</div>
+      <div class="row"><label>Leaf tint</label><div class="ctl"><input type="range" id="leafTint" min="-1" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Panel tint</label><div class="ctl"><input type="range" id="panelTint" min="-1" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Background</label><div class="ctl"><input type="color" id="bgColor"></div></div>
+      <div class="row"><label>Ambient</label><div class="ctl"><input type="range" id="ambient" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Depth haze</label><div class="ctl"><input type="range" id="fog" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Camera &amp; light<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Auto-frame</label><div class="ctl"><input type="checkbox" id="autoFrame"></div></div>
+      <div class="row"><label>Zoom</label><div class="ctl"><input type="range" id="zoom" min="0.2" max="3" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Yaw</label><div class="ctl"><input type="range" id="camYaw" min="-180" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Pitch</label><div class="ctl"><input type="range" id="camPitch" min="-89" max="89" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Lens</label><div class="ctl"><input type="range" id="fov" min="14" max="80" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Orbit</label><div class="ctl"><input type="range" id="orbitSpeed" min="-25" max="25" step="0.5"><span class="val"></span></div></div>
+      <div class="row"><label>Light bearing</label><div class="ctl"><input type="range" id="lightAz" min="-180" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Light height</label><div class="ctl"><input type="range" id="lightEl" min="-90" max="90" step="1"><span class="val"></span></div></div>
+      <div class="note">Drag to orbit, scroll to zoom.</div>
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Audio<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Microphone</label><div class="ctl"><input type="checkbox" id="audioEnabled"></div></div>
+      <div class="row"><label>Drives</label><div class="ctl">
+        <select id="audioTarget">
+          <option value="wind">Wind</option>
+          <option value="growth">Growth speed</option>
+          <option value="both">Both</option>
+        </select>
+      </div></div>
+      <div class="row"><label>Sensitivity</label><div class="ctl"><input type="range" id="audioSensitivity" min="0" max="3" step="0.05"><span class="val"></span></div></div>
+      <div class="status" id="audioStatus">Microphone off</div>
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Output<span class="chev"></span></summary>
+    <div class="body">
+      <div class="btnrow">
+        <button class="primary" id="btnPNG">Save PNG</button>
+        <button id="btnRec">Record</button>
+      </div>
+      <div class="btnrow">
+        <button id="btnFullscreen">Fullscreen</button>
+        <button id="btnReset">Reset all</button>
+      </div>
+      <div class="note">H hides this panel, F is fullscreen, space replays. Recordings download as .webm.</div>
+    </div>
+  </details>
+</div>
+
+<button id="showPanelBtn" title="Show controls">☰</button>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================================
+   L-SYSTEM CORE — tokenizer, expression parser, rule parser, derivation, turtle
+   Pure JS, no DOM. Spliced into the tool at the __LSYS_CORE__ marker.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- PRNG --- */
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+function hashInts(a,b){ return (Math.imul(a|0,2654435761) ^ Math.imul((b|0)+1,40503)) | 0; }
+
+/* ------------------------------------------------------- expression AST --- */
+// Tokenizer for expressions and conditions.
+const EXPR_PUNCT=['<=','>=','==','!=','&&','||','<','>','+','-','*','/','^','(',')',','];
+function tokenizeExpr(src,pos0){
+  // reads until the matching close paren / end; returns {tokens,end}
+  const toks=[];
+  let i=pos0;
+  while(i<src.length){
+    const c=src[i];
+    if(c===' '||c==='\t'){ i++; continue; }
+    if(/[0-9.]/.test(c)){
+      let j=i;
+      while(j<src.length && /[0-9.]/.test(src[j])) j++;
+      const num=parseFloat(src.slice(i,j));
+      if(!isFinite(num)) throw new Error('bad number at '+i);
+      toks.push({t:'num',v:num});
+      i=j; continue;
+    }
+    if(/[A-Za-z_]/.test(c)){
+      let j=i;
+      while(j<src.length && /[A-Za-z_0-9]/.test(src[j])) j++;
+      toks.push({t:'id',v:src.slice(i,j)});
+      i=j; continue;
+    }
+    let matched=null;
+    for(const p of EXPR_PUNCT){ if(src.startsWith(p,i)){ matched=p; break; } }
+    if(matched){ toks.push({t:'op',v:matched}); i+=matched.length; continue; }
+    break; // anything else ends the expression region
+  }
+  return {tokens:toks,end:i};
+}
+
+// Recursive-descent parser over a token array -> AST
+function parseExprTokens(toks){
+  let p=0;
+  const peek=()=>toks[p];
+  const eat=v=>{
+    const t=toks[p];
+    if(!t||t.t!=='op'||t.v!==v) throw new Error('expected "'+v+'"');
+    p++; return t;
+  };
+  function parseOr(){
+    let n=parseAnd();
+    while(peek()&&peek().t==='op'&&peek().v==='||'){ p++; n={k:'bin',op:'||',a:n,b:parseAnd()}; }
+    return n;
+  }
+  function parseAnd(){
+    let n=parseCmp();
+    while(peek()&&peek().t==='op'&&peek().v==='&&'){ p++; n={k:'bin',op:'&&',a:n,b:parseCmp()}; }
+    return n;
+  }
+  function parseCmp(){
+    let n=parseAdd();
+    while(peek()&&peek().t==='op'&&['<','>','<=','>=','==','!='].indexOf(peek().v)>=0){
+      const op=peek().v; p++; n={k:'bin',op,a:n,b:parseAdd()};
+    }
+    return n;
+  }
+  function parseAdd(){
+    let n=parseMul();
+    while(peek()&&peek().t==='op'&&(peek().v==='+'||peek().v==='-')){
+      const op=peek().v; p++; n={k:'bin',op,a:n,b:parseMul()};
+    }
+    return n;
+  }
+  function parseMul(){
+    let n=parsePow();
+    while(peek()&&peek().t==='op'&&(peek().v==='*'||peek().v==='/')){
+      const op=peek().v; p++; n={k:'bin',op,a:n,b:parsePow()};
+    }
+    return n;
+  }
+  function parsePow(){
+    const n=parseUnary();
+    if(peek()&&peek().t==='op'&&peek().v==='^'){ p++; return {k:'bin',op:'^',a:n,b:parsePow()}; }
+    return n;
+  }
+  function parseUnary(){
+    if(peek()&&peek().t==='op'&&peek().v==='-'){ p++; return {k:'neg',a:parseUnary()}; }
+    if(peek()&&peek().t==='op'&&peek().v==='+'){ p++; return parseUnary(); }
+    return parseAtom();
+  }
+  function parseAtom(){
+    const t=peek();
+    if(!t) throw new Error('unexpected end of expression');
+    if(t.t==='num'){ p++; return {k:'num',v:t.v}; }
+    if(t.t==='id'){
+      p++;
+      if(peek()&&peek().t==='op'&&peek().v==='('){
+        p++;
+        const args=[];
+        if(!(peek()&&peek().t==='op'&&peek().v===')')){
+          args.push(parseOr());
+          while(peek()&&peek().t==='op'&&peek().v===','){ p++; args.push(parseOr()); }
+        }
+        eat(')');
+        return {k:'call',name:t.v,args};
+      }
+      return {k:'var',name:t.v};
+    }
+    if(t.t==='op'&&t.v==='('){ p++; const n=parseOr(); eat(')'); return n; }
+    throw new Error('unexpected "'+(t.v)+'" in expression');
+  }
+  const ast=parseOr();
+  if(p<toks.length) throw new Error('unexpected "'+toks[p].v+'" in expression');
+  return ast;
+}
+function parseExprString(s){
+  const {tokens,end}=tokenizeExpr(s,0);
+  if(end<s.length && s.slice(end).trim().length) throw new Error('unexpected "'+s.slice(end).trim()+'"');
+  if(!tokens.length) throw new Error('empty expression');
+  return parseExprTokens(tokens);
+}
+
+const FUNCS={
+  sin:(a)=>Math.sin(a*Math.PI/180), cos:(a)=>Math.cos(a*Math.PI/180),
+  tan:(a)=>Math.tan(a*Math.PI/180),
+  abs:Math.abs, sqrt:(a)=>Math.sqrt(Math.max(0,a)), floor:Math.floor, ceil:Math.ceil,
+  round:Math.round, sign:Math.sign, exp:Math.exp,
+  log:(a)=>Math.log(Math.max(1e-12,a)),
+  min:(...a)=>Math.min(...a), max:(...a)=>Math.max(...a),
+  pow:(a,b)=>Math.pow(a,b)
+};
+function evalExpr(node,env,rng){
+  switch(node.k){
+    case 'num': return node.v;
+    case 'var': {
+      if(Object.prototype.hasOwnProperty.call(env,node.name)) return env[node.name];
+      throw new Error('unknown name "'+node.name+'"');
+    }
+    case 'neg': return -evalExpr(node.a,env,rng);
+    case 'call': {
+      if(node.name==='rand'){
+        const r=rng();
+        if(node.args.length===0) return r;
+        if(node.args.length===2){
+          const lo=evalExpr(node.args[0],env,rng), hi=evalExpr(node.args[1],env,rng);
+          return lo+r*(hi-lo);
+        }
+        if(node.args.length===1) return r*evalExpr(node.args[0],env,rng);
+        throw new Error('rand() takes 0, 1 or 2 arguments');
+      }
+      const f=FUNCS[node.name];
+      if(!f) throw new Error('unknown function "'+node.name+'"');
+      return f(...node.args.map(a=>evalExpr(a,env,rng)));
+    }
+    case 'bin': {
+      const op=node.op;
+      if(op==='&&') return (evalExpr(node.a,env,rng)&&evalExpr(node.b,env,rng))?1:0;
+      if(op==='||') return (evalExpr(node.a,env,rng)||evalExpr(node.b,env,rng))?1:0;
+      const a=evalExpr(node.a,env,rng), b=evalExpr(node.b,env,rng);
+      switch(op){
+        case '+': return a+b;
+        case '-': return a-b;
+        case '*': return a*b;
+        case '/': return b===0?0:a/b;
+        case '^': return Math.pow(a,b);
+        case '<': return a<b?1:0;
+        case '>': return a>b?1:0;
+        case '<=': return a<=b?1:0;
+        case '>=': return a>=b?1:0;
+        case '==': return a===b?1:0;
+        case '!=': return a!==b?1:0;
+      }
+      throw new Error('bad operator '+op);
+    }
+  }
+  throw new Error('bad node');
+}
+
+/* ------------------------------------------------------- module strings --- */
+// Terminals the turtle understands. Everything else is a non-terminal symbol.
+const TURTLE_SYMS={
+  'F':1, 'f':1,            // draw / move forward
+  '+':1, '-':1,            // yaw
+  '&':1, '^':1,            // pitch
+  '/':1, '\\':1,           // roll
+  '|':0,                   // about-face
+  '[':0, ']':0,            // branch push / pop
+  'P':1, 'L':1,            // panel, leaf
+  '!':1, "'":1             // width, colour
+};
+function isTurtleSym(s){ return Object.prototype.hasOwnProperty.call(TURTLE_SYMS,s); }
+
+// Parse a successor / axiom string into modules: [{sym, args:[AST]}]
+function parseModuleString(src){
+  const out=[];
+  let i=0;
+  while(i<src.length){
+    const c=src[i];
+    if(c===' '||c==='\t'||c==='\n'||c==='\r'){ i++; continue; }
+    let sym;
+    if(/[A-Za-z]/.test(c)){
+      // a run of letters is a single symbol only if it is a known multi-char name;
+      // otherwise each letter is its own module (classic L-system convention)
+      sym=c; i++;
+    } else if('+-&^/\\|[]!\''.indexOf(c)>=0){
+      sym=c; i++;
+    } else {
+      throw new Error('unexpected character "'+c+'"');
+    }
+    const args=[];
+    if(src[i]==='('){
+      let depth=0, j=i;
+      // find matching close paren
+      for(;j<src.length;j++){
+        if(src[j]==='(') depth++;
+        else if(src[j]===')'){ depth--; if(depth===0) break; }
+      }
+      if(depth!==0) throw new Error('unclosed "(" after "'+sym+'"');
+      const inner=src.slice(i+1,j);
+      i=j+1;
+      // split on top-level commas
+      const parts=[]; let d=0, start=0;
+      for(let k=0;k<inner.length;k++){
+        const ch=inner[k];
+        if(ch==='(') d++;
+        else if(ch===')') d--;
+        else if(ch===',' && d===0){ parts.push(inner.slice(start,k)); start=k+1; }
+      }
+      parts.push(inner.slice(start));
+      for(const part of parts){
+        if(!part.trim().length){
+          if(parts.length===1) break;      // "X()" -> no args
+          throw new Error('empty argument in "'+sym+'(...)"');
+        }
+        args.push(parseExprString(part));
+      }
+    }
+    out.push({sym,args});
+  }
+  return out;
+}
+
+
+/* collect identifiers / function names so typos are caught at parse time */
+function collectNames(node,vars,funcs){
+  if(!node) return;
+  if(node.k==='var'){ vars.add(node.name); return; }
+  if(node.k==='neg'){ collectNames(node.a,vars,funcs); return; }
+  if(node.k==='bin'){ collectNames(node.a,vars,funcs); collectNames(node.b,vars,funcs); return; }
+  if(node.k==='call'){ funcs.add(node.name); node.args.forEach(a=>collectNames(a,vars,funcs)); return; }
+}
+function checkNames(nodes,allowed,label){
+  const vars=new Set(), funcs=new Set();
+  for(const n of nodes) collectNames(n,vars,funcs);
+  const problems=[];
+  for(const v of vars) if(allowed.indexOf(v)<0) problems.push('unknown name "'+v+'" in '+label);
+  for(const f of funcs) if(f!=='rand' && !Object.prototype.hasOwnProperty.call(FUNCS,f))
+    problems.push('unknown function "'+f+'" in '+label);
+  return problems;
+}
+
+/* ------------------------------------------------------------ grammar ---- */
+/*
+   Syntax:
+     // line comment
+     #define NAME <expr>
+     #axiom <module string>
+     PRED(p1,p2) : <condition> p=<number> -> <successor module string>
+   condition and p= are both optional.
+*/
+function parseGrammar(text){
+  const defines={};
+  const rules=[];
+  let axiom=null;
+  const errors=[];
+  const lines=text.split('\n');
+
+  for(let ln=0; ln<lines.length; ln++){
+    let line=lines[ln];
+    const cut=line.indexOf('//');
+    if(cut>=0) line=line.slice(0,cut);
+    line=line.trim();
+    if(!line) continue;
+
+    try{
+      if(line.startsWith('#define')){
+        const m=line.match(/^#define\s+([A-Za-z_][A-Za-z_0-9]*)\s+(.+)$/);
+        if(!m) throw new Error('#define needs a name and a value');
+        const dv=evalExpr(parseExprString(m[2]),Object.assign({},defines),Math.random);
+        if(!isFinite(dv)) throw new Error('#define '+m[1]+' is not a finite number');
+        defines[m[1]]=dv;
+        continue;
+      }
+      if(line.startsWith('#axiom')){
+        const rest=line.slice(6).trim();
+        if(!rest) throw new Error('#axiom needs a module string');
+        axiom=parseModuleString(rest);
+        {
+          const nodes=[];
+          for(const m of axiom) for(const a of m.args) nodes.push(a);
+          const probs=checkNames(nodes,Object.keys(defines),'the axiom');
+          if(probs.length) throw new Error(probs[0]);
+        }
+        continue;
+      }
+      const arrow=line.indexOf('->');
+      if(arrow<0) throw new Error('not a rule (expected "->") or a #define / #axiom');
+
+      let head=line.slice(0,arrow).trim();
+      const successorSrc=line.slice(arrow+2).trim();
+
+      // probability
+      let prob=1;
+      const pm=head.match(/\bp\s*=\s*([0-9.]+)\s*$/);
+      if(pm){ prob=parseFloat(pm[1]); head=head.slice(0,pm.index).trim(); }
+      if(!(prob>0)) throw new Error('p= must be a positive number');
+
+      // condition
+      let condSrc=null;
+      const ci=head.indexOf(':');
+      if(ci>=0){ condSrc=head.slice(ci+1).trim(); head=head.slice(0,ci).trim(); }
+
+      // predecessor
+      const hm=head.match(/^(.)\s*(?:\(([^)]*)\))?$/);
+      if(!hm) throw new Error('bad rule head "'+head+'"');
+      const sym=hm[1];
+      const params=hm[2]!=null && hm[2].trim().length
+        ? hm[2].split(',').map(s=>s.trim())
+        : [];
+      for(const pn of params){
+        if(!/^[A-Za-z_][A-Za-z_0-9]*$/.test(pn)) throw new Error('bad parameter name "'+pn+'"');
+      }
+
+      const cond = condSrc ? parseExprString(condSrc) : null;
+      const successor = parseModuleString(successorSrc);
+      {
+        const allowed=params.concat(Object.keys(defines));
+        const nodes=[];
+        for(const m of successor) for(const a of m.args) nodes.push(a);
+        let probs=checkNames(nodes,allowed,'the successor of "'+sym+'"');
+        if(cond) probs=probs.concat(checkNames([cond],allowed,'the condition of "'+sym+'"'));
+        if(probs.length) throw new Error(probs[0]);
+      }
+      rules.push({sym, params, cond, prob, successor, line: ln+1});
+    }catch(err){
+      errors.push('line '+(ln+1)+': '+err.message);
+    }
+  }
+  if(!axiom) errors.push('no #axiom defined');
+  return {axiom:axiom||[], rules, defines, errors};
+}
+
+/* --------------------------------------------------------- derivation ---- */
+/*
+   Derives the axiom for `steps` generations. Each produced module records the
+   step that created it, which is what drives the staggered growth animation.
+   Deterministic: every module gets its own RNG stream keyed by (seed, serial).
+*/
+function derive(grammar, steps, seed, maxModules){
+  const defines=grammar.defines;
+  let serial=0;
+  const finiteOr0=(v)=>isFinite(v)?v:0;
+  let str=grammar.axiom.map(m=>{
+    const rng=mulberry32(hashInts(seed,serial++));
+    let args;
+    try{
+      args=m.args.map(a=>finiteOr0(evalExpr(a,Object.assign({},defines),rng)));
+    }catch(e){
+      args=m.args.map(()=>0);
+    }
+    return {sym:m.sym, args, birth:0};
+  });
+
+  // index rules by symbol
+  const bySym={};
+  for(const r of grammar.rules){ (bySym[r.sym]=bySym[r.sym]||[]).push(r); }
+
+  let truncated=false;
+  for(let step=1; step<=steps; step++){
+    const next=[];
+    let changed=false;
+    for(let i=0;i<str.length;i++){
+      const mod=str[i];
+      const cands=bySym[mod.sym];
+      if(!cands || !cands.length){ next.push(mod); continue; }
+
+      const rng=mulberry32(hashInts(seed^0x9e3779b9, serial++));
+
+      // bind parameters, filter by condition
+      const usable=[];
+      for(const r of cands){
+        const env=Object.assign({},defines);
+        for(let k=0;k<r.params.length;k++) env[r.params[k]]=mod.args[k]!==undefined?mod.args[k]:0;
+        if(r.cond){
+          let ok=false;
+          try{ ok=!!evalExpr(r.cond,env,rng); }catch(e){ ok=false; }
+          if(!ok) continue;
+        }
+        usable.push({r,env});
+      }
+      if(!usable.length){ next.push(mod); continue; }
+
+      // stochastic pick by weight
+      let pick=usable[0];
+      if(usable.length>1){
+        let total=0;
+        for(const u of usable) total+=u.r.prob;
+        let x=rng()*total;
+        for(const u of usable){ x-=u.r.prob; if(x<=0){ pick=u; break; } }
+      }
+
+      changed=true;
+      for(const sm of pick.r.successor){
+        if(next.length>=maxModules){ truncated=true; break; }
+        let args;
+        try{
+          args=sm.args.map(a=>finiteOr0(evalExpr(a,pick.env,rng)));
+        }catch(e){
+          args=sm.args.map(()=>0);
+        }
+        next.push({sym:sm.sym, args, birth:step});
+      }
+      if(truncated) break;
+    }
+    str=next;
+    if(truncated || !changed) break;
+  }
+  return {modules:str, truncated};
+}
+
+/* -------------------------------------------------------------- turtle --- */
+/* Orientation is a 3x3 matrix whose columns are the turtle frame:
+     col0 = L (left), col1 = H (heading, the growth direction), col2 = U (up)
+   Rotations post-multiply by a rotation in the turtle's own frame:
+     +/-  yaw   about local z (U)
+     &/^  pitch about local x (L)
+     / \  roll  about local y (H)                                            */
+function m3identity(){ return [1,0,0, 0,1,0, 0,0,1]; }   // column-major: [c0, c1, c2]
+function m3mulLocal(M,R){
+  // M * R, both column-major 3x3
+  const out=new Array(9);
+  for(let c=0;c<3;c++){
+    for(let r=0;r<3;r++){
+      out[c*3+r]=M[0*3+r]*R[c*3+0]+M[1*3+r]*R[c*3+1]+M[2*3+r]*R[c*3+2];
+    }
+  }
+  return out;
+}
+function rotX(a){ const c=Math.cos(a),s=Math.sin(a); return [1,0,0, 0,c,s, 0,-s,c]; }
+function rotY(a){ const c=Math.cos(a),s=Math.sin(a); return [c,0,-s, 0,1,0, s,0,c]; }
+function rotZ(a){ const c=Math.cos(a),s=Math.sin(a); return [c,s,0, -s,c,0, 0,0,1]; }
+function m3col(M,i){ return [M[i*3],M[i*3+1],M[i*3+2]]; }
+function m3apply(M,v){
+  return [M[0]*v[0]+M[3]*v[1]+M[6]*v[2],
+          M[1]*v[0]+M[4]*v[1]+M[7]*v[2],
+          M[2]*v[0]+M[5]*v[1]+M[8]*v[2]];
+}
+function rotAxisWorld(axis,angle){
+  const len=Math.hypot(axis[0],axis[1],axis[2]);
+  if(len<1e-9||!isFinite(len)) return m3identity();
+  const x=axis[0]/len,y=axis[1]/len,z=axis[2]/len;
+  const c=Math.cos(angle),s=Math.sin(angle),t=1-c;
+  // column-major
+  return [t*x*x+c,   t*x*y+s*z, t*x*z-s*y,
+          t*x*y-s*z, t*y*y+c,   t*y*z+s*x,
+          t*x*z+s*y, t*y*z-s*x, t*z*z+c];
+}
+function m3mulWorld(R,M){
+  // R * M, column-major
+  const out=new Array(9);
+  for(let c=0;c<3;c++){
+    for(let r=0;r<3;r++){
+      out[c*3+r]=R[0*3+r]*M[c*3+0]+R[1*3+r]*M[c*3+1]+R[2*3+r]*M[c*3+2];
+    }
+  }
+  return out;
+}
+function orthonormalize(M){
+  // Gram-Schmidt on the columns, keeping heading (col1) authoritative
+  let h=m3col(M,1);
+  let hl=Math.hypot(h[0],h[1],h[2]);
+  if(!(hl>1e-9)) return m3identity();
+  h=[h[0]/hl,h[1]/hl,h[2]/hl];
+  let l=m3col(M,0);
+  const d=l[0]*h[0]+l[1]*h[1]+l[2]*h[2];
+  l=[l[0]-h[0]*d, l[1]-h[1]*d, l[2]-h[2]*d];
+  let ll=Math.hypot(l[0],l[1],l[2]);
+  if(!(ll>1e-9)){
+    // pick any perpendicular
+    const t=Math.abs(h[0])<0.9?[1,0,0]:[0,1,0];
+    l=[t[1]*h[2]-t[2]*h[1], t[2]*h[0]-t[0]*h[2], t[0]*h[1]-t[1]*h[0]];
+    ll=Math.hypot(l[0],l[1],l[2]);
+    if(!(ll>1e-9)) return m3identity();
+  }
+  l=[l[0]/ll,l[1]/ll,l[2]/ll];
+  const u=[h[1]*l[2]-h[2]*l[1], h[2]*l[0]-h[0]*l[2], h[0]*l[1]-h[1]*l[0]];
+  return [l[0],l[1],l[2], h[0],h[1],h[2], u[0],u[1],u[2]];
+}
+
+const DEG=Math.PI/180;
+
+/*
+  Walk the module string and emit drawable instances.
+  opts:
+    t            current sim time (seconds)
+    stepTime     seconds per derivation step (growth pacing)
+    drag         ease exponent (>=1) for each module opening
+    genSlow      each step unfolds this much slower than the last (0..0.95)
+    tropism      [x,y,z] direction, tropismStrength scalar
+    wind, windSpeed, windTime
+    growAll      if true, ignore birth times and draw fully grown
+  Returns {segments, panels, leaves, bounds, drawn}
+*/
+function runTurtle(modules, opts){
+  const segments=[], panels=[], leaves=[];
+  const t=opts.t, stepTime=Math.max(1e-4,opts.stepTime);
+  const drag=Math.max(1,opts.drag||1);
+  const genSlow=Math.min(0.95,Math.max(0,opts.genSlow||0));
+  const trop=opts.tropism||[0,0,0];
+  const tropStr=opts.tropismStrength||0;
+  const wind=opts.wind||0, windSpeed=opts.windSpeed||0.4;
+  const growAll=!!opts.growAll;
+
+  const progressOf=(birth)=>{
+    if(growAll) return 1;
+    const rate=Math.pow(1-genSlow,birth)/stepTime;
+    const s=Math.min(1,Math.max(0,(t-birth*stepTime)*rate));
+    return 1-Math.pow(1-s,drag);
+  };
+
+  let pos=[0,0,0];
+  let M=m3identity();
+  let width=1, colour=0, depth=0;
+  const stack=[];
+  let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+  const touch=(p)=>{
+    if(p[0]<minX)minX=p[0]; if(p[0]>maxX)maxX=p[0];
+    if(p[1]<minY)minY=p[1]; if(p[1]>maxY)maxY=p[1];
+    if(p[2]<minZ)minZ=p[2]; if(p[2]>maxZ)maxZ=p[2];
+  };
+  touch(pos);
+  let drawn=0;
+
+  for(let i=0;i<modules.length;i++){
+    const mod=modules[i];
+    const a=mod.args;
+    const sym=mod.sym;
+    const u=progressOf(mod.birth);
+    if(u<=0 && sym!=='[' && sym!==']') continue;
+
+    switch(sym){
+      case '[':
+        stack.push({pos:pos.slice(),M:M.slice(),width,colour,depth});
+        break;
+      case ']': {
+        const s=stack.pop();
+        if(s){ pos=s.pos; M=s.M; width=s.width; colour=s.colour; depth=s.depth; }
+        break;
+      }
+      case '+': M=m3mulLocal(M,rotZ( (a[0]!==undefined?a[0]:45)*DEG*u)); break;
+      case '-': M=m3mulLocal(M,rotZ(-(a[0]!==undefined?a[0]:45)*DEG*u)); break;
+      case '&': M=m3mulLocal(M,rotX( (a[0]!==undefined?a[0]:45)*DEG*u)); break;
+      case '^': M=m3mulLocal(M,rotX(-(a[0]!==undefined?a[0]:45)*DEG*u)); break;
+      case '/': M=m3mulLocal(M,rotY( (a[0]!==undefined?a[0]:45)*DEG*u)); break;
+      case '\\':M=m3mulLocal(M,rotY(-(a[0]!==undefined?a[0]:45)*DEG*u)); break;
+      case '|': M=m3mulLocal(M,rotZ(Math.PI)); break;
+      case '!': width=Math.max(0.001,a[0]!==undefined?a[0]:width); break;
+      case "'": colour=a[0]!==undefined?a[0]:colour+1; break;
+      case 'f': {
+        const len=(a[0]!==undefined?a[0]:1)*u;
+        const h=m3col(M,1);
+        pos=[pos[0]+h[0]*len, pos[1]+h[1]*len, pos[2]+h[2]*len];
+        touch(pos);
+        break;
+      }
+      case 'F': {
+        const baseLen=(a[0]!==undefined?a[0]:1);
+        const len=baseLen*u;
+        const w0=(a[1]!==undefined?a[1]:width);
+        const w1=(a[2]!==undefined?a[2]:w0);
+        // wind: tips sway more than the base
+        if(wind>0){
+          const sway=wind*0.02*Math.sin(opts.windTime*windSpeed*2.6+depth*0.55+pos[1]*0.01)*(depth+1);
+          M=m3mulLocal(M,rotZ(sway*DEG));
+        }
+        const h=m3col(M,1);
+        const end=[pos[0]+h[0]*len, pos[1]+h[1]*len, pos[2]+h[2]*len];
+        segments.push({
+          pos:pos.slice(), M:M.slice(), len, r0:w0*0.5, r1:w1*0.5,
+          colour, depth, birth:mod.birth
+        });
+        drawn++;
+        pos=end; touch(pos);
+        depth++;
+        // tropism bends the heading toward the global vector after each segment
+        if(tropStr!==0){
+          const hh=m3col(M,1);
+          const cx=hh[1]*trop[2]-hh[2]*trop[1];
+          const cy=hh[2]*trop[0]-hh[0]*trop[2];
+          const cz=hh[0]*trop[1]-hh[1]*trop[0];
+          const mag=Math.hypot(cx,cy,cz);
+          if(mag>1e-7){
+            M=m3mulWorld(rotAxisWorld([cx,cy,cz], tropStr*mag*0.12), M);
+            M=orthonormalize(M);
+          }
+        }
+        break;
+      }
+      case 'P': {
+        const pw=(a[0]!==undefined?a[0]:10)*u;
+        const ph=(a[1]!==undefined?a[1]:pw/Math.max(1e-6,u||1))*u;
+        panels.push({pos:pos.slice(), M:M.slice(), w:pw, h:ph, colour, depth, birth:mod.birth});
+        drawn++;
+        // a panel advances the turtle across its own height, like a segment
+        const h=m3col(M,1);
+        pos=[pos[0]+h[0]*ph, pos[1]+h[1]*ph, pos[2]+h[2]*ph];
+        touch(pos);
+        depth++;
+        break;
+      }
+      case 'L': {
+        const s=(a[0]!==undefined?a[0]:6)*u;
+        const ratio=(a[1]!==undefined?a[1]:0.55);
+        leaves.push({pos:pos.slice(), M:M.slice(), len:s, wid:s*ratio, colour, depth, birth:mod.birth});
+        drawn++;
+        touch([pos[0], pos[1]+s, pos[2]]);
+        break;
+      }
+      default: break;   // unexpanded non-terminal: draws nothing
+    }
+  }
+
+  if(!isFinite(minX)){ minX=minY=minZ=-1; maxX=maxY=maxZ=1; }
+  return {
+    segments, panels, leaves, drawn,
+    bounds:{minX,minY,minZ,maxX,maxY,maxZ}
+  };
+}
+
+/* settled when every module has finished opening */
+function settleTime(modules, stepTime, genSlow){
+  let last=0;
+  for(let i=0;i<modules.length;i++){
+    const b=modules[i].birth;
+    const rate=Math.pow(1-Math.min(0.95,Math.max(0,genSlow)),b)/Math.max(1e-4,stepTime);
+    const done=b*stepTime+1/rate;
+    if(done>last) last=done;
+  }
+  return last;
+}
+
+/* ------------------------------------------------------------ presets ---- */
+const PRESET_GRAMMARS={
+
+'Folded facade':{steps:16,src:`// The Bridge Gallery panel, carried into the turtle
+#define FOLD 74
+#define TWIST 9
+
+#axiom A(26, 13)
+
+// P(w,h) draws a panel and walks the turtle across it.
+// & pitches about the panel's top edge, so it reads as a fold.
+A(s,n) : n > 0 -> P(s,s) &(FOLD) /(TWIST) A(s*0.96, n-1)
+A(s,n) : n > 0  p=0.35 -> P(s,s*1.3) ^(FOLD*0.8) /(-TWIST*2) A(s*0.93, n-1)
+A(s,n) : n > 0  p=0.22 -> P(s,s) [ /(90) &(FOLD*0.7) A(s*0.7, n-2) ] &(FOLD) A(s*0.95, n-1)`},
+
+'Tree':{steps:11,src:`#define ANG 32
+#define GOLD 137.5
+
+#axiom !(1.4) F(16, 1.4, 1.25) A(13, 1.25)
+
+A(l,w) : l > 1.6 -> F(l, w, w*0.74) [ /(GOLD) &(ANG) A(l*0.78, w*0.74) ] [ /(GOLD+150) &(ANG*0.85) A(l*0.72, w*0.72) ]
+A(l,w) : l > 1.6  p=0.4 -> F(l, w, w*0.78) /(GOLD) [ &(ANG*1.2) A(l*0.74, w*0.7) ] A(l*0.8, w*0.76)
+A(l,w) : l <= 1.6 -> '(0.85) L(l*3.4, 0.52)`},
+
+'Fern':{steps:13,src:`#define UP 4
+#define OUT 58
+
+#axiom A(17, 0.9)
+
+// a frond: paired pinnae peeling off a slowly tapering rachis
+A(l,w) : l > 1.2 -> F(l*0.26, w, w*0.94) [ &(OUT) '(0.8) B(l*0.5) ] [ ^(OUT) '(0.8) B(l*0.5) ] &(-UP) A(l*0.93, w*0.94)
+A(l,w) : l <= 1.2 -> '(0.9) L(l*2.6, 0.4)
+
+B(l) : l > 0.7 -> F(l*0.3, 0.22, 0.2) [ &(34) L(l*0.9, 0.42) ] [ ^(34) L(l*0.9, 0.42) ] B(l*0.78)
+B(l) : l <= 0.7 -> L(l*1.6, 0.45)`},
+
+'Creeper':{steps:70,src:`// long runners; turn up the tropism to make them hang or climb
+#define GOLD 137.5
+
+#axiom !(0.8) A(9)
+
+A(l) : l > 0.9 -> F(l, 0.8, 0.76) /(GOLD) [ &(72) '(0.8) L(l*1.5, 0.75) ] A(l*0.985)
+A(l) : l > 0.9  p=0.16 -> F(l, 0.8, 0.76) /(GOLD) [ &(58) C(l*0.5) ] A(l*0.96)
+A(l) : l <= 0.9 -> L(l*2.4, 0.8)
+
+C(l) : l > 0.6 -> F(l, 0.5, 0.45) /(GOLD) [ &(70) '(0.75) L(l*1.4, 0.75) ] C(l*0.94)
+C(l) : l <= 0.6 -> L(l*2, 0.8)`},
+
+'Coral':{steps:9,src:`#define SPREAD 27
+
+#axiom !(2.2) A(9, 2.2)
+
+A(l,w) : w > 0.22 -> F(l, w, w*0.66) [ /(70)  &(SPREAD) A(l*0.86, w*0.6) ] [ /(200) &(SPREAD) A(l*0.84, w*0.58) ] [ /(320) &(SPREAD*1.4) A(l*0.8, w*0.56) ]
+A(l,w) : w > 0.22  p=0.7 -> F(l, w, w*0.7) [ /(rand(0,360)) &(SPREAD*1.3) A(l*0.86, w*0.64) ] [ /(rand(0,360)) &(SPREAD) A(l*0.84, w*0.62) ]
+A(l,w) : w <= 0.22 -> '(1) F(l*0.6, w, w*0.25)`},
+
+'Panel vine':{steps:13,src:`// panels budding off a branching stem — the facade gone feral
+#define GOLD 137.5
+#define ANG 38
+
+#axiom !(1.1) A(11, 1.1)
+
+A(l,w) : l > 2 -> F(l, w, w*0.8) /(GOLD) [ &(76) '(0.55) P(l*0.7, l*0.7) ] [ &(ANG) A(l*0.8, w*0.78) ] A(l*0.86, w*0.82)
+A(l,w) : l > 2  p=0.45 -> F(l, w, w*0.84) /(GOLD) [ &(70) '(0.75) P(l*0.55, l*0.8) ] A(l*0.84, w*0.8)
+A(l,w) : l <= 2 -> '(0.5) P(l*1.2, l*1.2)`}
+
+};
+
+if(typeof module!=='undefined' && module.exports){
+  module.exports={PRESET_GRAMMARS,mulberry32,hashInts,parseExprString,evalExpr,parseModuleString,
+    parseGrammar,derive,runTurtle,settleTime,m3identity,m3mulLocal,m3col,m3apply,
+    rotX,rotY,rotZ,rotAxisWorld,m3mulWorld,orthonormalize,isTurtleSym,TURTLE_SYMS};
+}
+
+
+/* ==========================================================================
+   state
+   ========================================================================== */
+const DEFAULTS={
+  preset:'Tree',
+  seed:4271,
+  steps:11,
+  maxModules:24000,
+  growDuration:18, drag:3.2, genSlow:0.06,
+  paused:false, autoRegrow:false, holdTime:8,
+  tropismStrength:0.46, tropismEl:-90, tropismAz:0,
+  wind:0.36, windSpeed:0.35,
+  thickness:1, tubeSides:7, leafScale:1, panelScale:1, panelRound:0.16,
+  colorStops:['#10331a','#2f6b2a','#7fb648','#d8e07a'],
+  symbolMix:0.5, leafTint:0.25, panelTint:0, bgColor:'#06070b',
+  ambient:0.34, fog:0.35,
+  autoFrame:true, zoom:1, camYaw:24, camPitch:8, fov:38, orbitSpeed:3,
+  lightAz:-40, lightEl:42,
+  audioEnabled:false, audioTarget:'wind', audioSensitivity:1.2
+};
+const PALETTES={
+  'Bridge blue':['#0a0d33','#12179c','#1b2fe0','#2f6bff'],
+  'Botanic':['#10331a','#2f6b2a','#7fb648','#d8e07a'],
+  'Rust':['#2a120c','#7a2f16','#c76a26','#f0c46a']
+};
+const state=JSON.parse(JSON.stringify(DEFAULTS));
+const audio={envelope:0};
+
+/* ==========================================================================
+   derivation + growth bookkeeping
+   ========================================================================== */
+let grammarText=PRESET_GRAMMARS[DEFAULTS.preset].src;
+let modules=[];
+let derivedInfo={truncated:false};
+let simT=0, birthT0=0, geomSerial=0;
+let settleAt=0;
+let mode='grow';          // grow | hold
+let modeT=0;
+let forceFull=false;
+
+function stepTime(){ return Math.max(0.02, state.growDuration/Math.max(1,state.steps)); }
+
+function applyGrammar(resetTime){
+  const g=parseGrammar(grammarText);
+  const statusEl=document.getElementById('grammarStatus');
+  if(g.errors.length){
+    statusEl.className='status bad';
+    statusEl.textContent=g.errors.slice(0,6).join('\n');
+    if(!g.axiom.length){ modules=[]; return; }
+  } else {
+    statusEl.className='status';
+  }
+  const t0=performance.now();
+  const d=derive(g,state.steps,state.seed|0,state.maxModules);
+  const ms=performance.now()-t0;
+  modules=d.modules;
+  derivedInfo=d;
+  settleAt=settleTime(modules,stepTime(),state.genSlow);
+  geomSerial++;
+  if(resetTime!==false){ simT=0; forceFull=false; mode='grow'; modeT=0; framed=false; }
+  if(!g.errors.length){
+    statusEl.textContent=modules.length+' modules · '+g.rules.length+' rules · derived in '+ms.toFixed(0)+'ms'
+      +(d.truncated?' · TRUNCATED at the module ceiling':'');
+  }
+}
+
+/* ==========================================================================
+   WebGL
+   ========================================================================== */
+const canvas=document.getElementById('stage');
+let gl=null;
+try{
+  gl=canvas.getContext('webgl2',{antialias:true,alpha:false,preserveDrawingBuffer:false});
+}catch(e){ gl=null; }
+if(!gl){
+  const e=document.getElementById('glError');
+  e.style.display='flex';
+  e.textContent='This tool needs WebGL2, which this browser or GPU is not providing.';
+  document.getElementById('panel').style.display='none';
+  return;
+}
+
+const VERT=`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in vec3 iPos;
+layout(location=3) in vec3 iRotL;
+layout(location=4) in vec3 iRotH;
+layout(location=5) in vec3 iRotU;
+layout(location=6) in vec3 iSize;
+layout(location=7) in vec3 iColor;
+uniform mat4 uViewProj;
+uniform int uMode;
+out vec3 vNormal;
+out vec3 vColor;
+out float vViewDepth;
+void main(){
+  mat3 R=mat3(iRotL,iRotH,iRotU);
+  vec3 local;
+  vec3 nLocal;
+  if(uMode==0){
+    float r=mix(iSize.x,iSize.z,aPos.y);
+    local=vec3(aPos.x*r, aPos.y*iSize.y, aPos.z*r);
+    if(abs(aNormal.y)>0.5){
+      nLocal=aNormal;
+    }else{
+      float slope=(iSize.z-iSize.x)/max(iSize.y,1e-4);
+      nLocal=normalize(vec3(aNormal.x,-slope,aNormal.z));
+    }
+  }else{
+    local=vec3(aPos.x*iSize.x, aPos.y*iSize.y, aPos.z*iSize.z);
+    nLocal=aNormal;
+  }
+  vec3 world=iPos+R*local;
+  vNormal=R*nLocal;
+  vColor=iColor;
+  vec4 clip=uViewProj*vec4(world,1.0);
+  vViewDepth=clip.w;
+  gl_Position=clip;
+}`;
+
+const FRAG=`#version 300 es
+precision highp float;
+in vec3 vNormal;
+in vec3 vColor;
+in float vViewDepth;
+uniform vec3 uLightDir;
+uniform vec3 uBg;
+uniform float uAmbient;
+uniform float uFog;
+uniform float uFogStart;
+uniform float uFogScale;
+out vec4 fragColor;
+void main(){
+  vec3 n=normalize(vNormal);
+  if(!gl_FrontFacing) n=-n;
+  float ndl=max(dot(n,uLightDir),0.0);
+  float hemi=0.5+0.5*n.y;
+  vec3 col=vColor*(uAmbient*(0.55+0.45*hemi)+ndl*(1.0-uAmbient));
+  float f=clamp((vViewDepth-uFogStart)*uFogScale,0.0,1.0)*uFog;
+  col=mix(col,uBg,f);
+  fragColor=vec4(col,1.0);
+}`;
+
+function compile(type,src){
+  const sh=gl.createShader(type);
+  gl.shaderSource(sh,src);
+  gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){
+    throw new Error('shader: '+gl.getShaderInfoLog(sh));
+  }
+  return sh;
+}
+let prog;
+try{
+  prog=gl.createProgram();
+  gl.attachShader(prog,compile(gl.VERTEX_SHADER,VERT));
+  gl.attachShader(prog,compile(gl.FRAGMENT_SHADER,FRAG));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw new Error('link: '+gl.getProgramInfoLog(prog));
+}catch(err){
+  const e=document.getElementById('glError');
+  e.style.display='flex';
+  e.textContent='Could not build the shaders: '+err.message;
+  return;
+}
+gl.useProgram(prog);
+const U={
+  viewProj:gl.getUniformLocation(prog,'uViewProj'),
+  mode:gl.getUniformLocation(prog,'uMode'),
+  lightDir:gl.getUniformLocation(prog,'uLightDir'),
+  bg:gl.getUniformLocation(prog,'uBg'),
+  ambient:gl.getUniformLocation(prog,'uAmbient'),
+  fog:gl.getUniformLocation(prog,'uFog'),
+  fogStart:gl.getUniformLocation(prog,'uFogStart'),
+  fogScale:gl.getUniformLocation(prog,'uFogScale')
+};
+
+/* ---- meshes ---- */
+function makeTube(sides){
+  const pos=[],nrm=[];
+  const push=(p,n)=>{ pos.push(p[0],p[1],p[2]); nrm.push(n[0],n[1],n[2]); };
+  for(let i=0;i<sides;i++){
+    const a0=i/sides*Math.PI*2, a1=(i+1)/sides*Math.PI*2;
+    const c0=Math.cos(a0),s0=Math.sin(a0),c1=Math.cos(a1),s1=Math.sin(a1);
+    const n0=[c0,0,s0], n1=[c1,0,s1];
+    push([c0,0,s0],n0); push([c1,0,s1],n1); push([c1,1,s1],n1);
+    push([c0,0,s0],n0); push([c1,1,s1],n1); push([c0,1,s0],n0);
+  }
+  // caps keep joints from reading as holes when radii differ
+  for(let i=0;i<sides;i++){
+    const a0=i/sides*Math.PI*2, a1=(i+1)/sides*Math.PI*2;
+    push([0,0,0],[0,-1,0]); push([Math.cos(a1),0,Math.sin(a1)],[0,-1,0]); push([Math.cos(a0),0,Math.sin(a0)],[0,-1,0]);
+    push([0,1,0],[0,1,0]);  push([Math.cos(a0),1,Math.sin(a0)],[0,1,0]);  push([Math.cos(a1),1,Math.sin(a1)],[0,1,0]);
+  }
+  return {pos:new Float32Array(pos),nrm:new Float32Array(nrm),count:pos.length/3};
+}
+function makePanel(round){
+  // rounded rect: x in [-0.5,0.5], y in [0,1], normal +Z, fanned from the centre
+  const r=Math.min(0.49,Math.max(0,round));
+  const seg=5;
+  const outline=[];
+  const corner=(cx,cy,a0)=>{
+    for(let i=0;i<=seg;i++){
+      const a=a0+(i/seg)*(Math.PI/2);
+      outline.push([cx+Math.cos(a)*r, cy+Math.sin(a)*r]);
+    }
+  };
+  corner( 0.5-r, 1-r, 0);
+  corner(-0.5+r, 1-r, Math.PI/2);
+  corner(-0.5+r, r,   Math.PI);
+  corner( 0.5-r, r,   Math.PI*1.5);
+  const pos=[],nrm=[];
+  const c=[0,0.5];
+  for(let i=0;i<outline.length;i++){
+    const a=outline[i], b=outline[(i+1)%outline.length];
+    pos.push(c[0],c[1],0, a[0],a[1],0, b[0],b[1],0);
+    for(let k=0;k<3;k++) nrm.push(0,0,1);
+  }
+  return {pos:new Float32Array(pos),nrm:new Float32Array(nrm),count:pos.length/3};
+}
+function makeLeaf(){
+  // lanceolate blade: x in [-0.5,0.5]*width, y in [0,1]*length, pointed at the tip
+  const N=13;
+  const w=(v)=>0.5*Math.sin(Math.PI*Math.pow(v,0.65))*(1-v*0.12);
+  const pos=[],nrm=[];
+  for(let i=0;i<N;i++){
+    const v0=i/N, v1=(i+1)/N;
+    const a=w(v0), b=w(v1);
+    pos.push(-a,v0,0,  a,v0,0,  b,v1,0);
+    pos.push(-a,v0,0,  b,v1,0, -b,v1,0);
+    for(let k=0;k<6;k++) nrm.push(0,0,1);
+  }
+  return {pos:new Float32Array(pos),nrm:new Float32Array(nrm),count:pos.length/3};
+}
+
+function makeVAO(mesh){
+  const vao=gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const pb=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,pb);
+  gl.bufferData(gl.ARRAY_BUFFER,mesh.pos,gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+  const nb=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,nb);
+  gl.bufferData(gl.ARRAY_BUFFER,mesh.nrm,gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1,3,gl.FLOAT,false,0,0);
+
+  const ib=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,ib);
+  const stride=18*4;
+  const offs=[0,3,6,9,12,15];
+  for(let k=0;k<6;k++){
+    const loc=2+k;
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc,3,gl.FLOAT,false,stride,offs[k]*4);
+    gl.vertexAttribDivisor(loc,1);
+  }
+  gl.bindVertexArray(null);
+  return {vao,instBuf:ib,count:mesh.count,capacity:0};
+}
+let tubeGL=makeVAO(makeTube(state.tubeSides));
+let panelGL=makeVAO(makePanel(state.panelRound));
+let leafGL=makeVAO(makeLeaf());
+let builtSides=state.tubeSides, builtRound=state.panelRound;
+
+function uploadInstances(obj,data,n){
+  gl.bindBuffer(gl.ARRAY_BUFFER,obj.instBuf);
+  if(n>obj.capacity){
+    obj.capacity=Math.max(64,Math.ceil(n*1.5));
+    gl.bufferData(gl.ARRAY_BUFFER,obj.capacity*18*4,gl.DYNAMIC_DRAW);
+  }
+  gl.bufferSubData(gl.ARRAY_BUFFER,0,data,0,n*18);
+}
+
+/* ---- instance scratch buffers ---- */
+let segData=new Float32Array(0), panData=new Float32Array(0), lefData=new Float32Array(0);
+function ensure(arr,n){ return arr.length>=n*18 ? arr : new Float32Array(Math.ceil(n*1.5)*18); }
+
+/* ---- matrices ---- */
+function perspective(out,fovy,aspect,near,far){
+  const f=1/Math.tan(fovy/2), nf=1/(near-far);
+  out[0]=f/aspect; out[1]=0; out[2]=0; out[3]=0;
+  out[4]=0; out[5]=f; out[6]=0; out[7]=0;
+  out[8]=0; out[9]=0; out[10]=(far+near)*nf; out[11]=-1;
+  out[12]=0; out[13]=0; out[14]=2*far*near*nf; out[15]=0;
+  return out;
+}
+function lookAt(out,eye,centre,up){
+  let zx=eye[0]-centre[0], zy=eye[1]-centre[1], zz=eye[2]-centre[2];
+  let zl=Math.hypot(zx,zy,zz)||1; zx/=zl; zy/=zl; zz/=zl;
+  let xx=up[1]*zz-up[2]*zy, xy=up[2]*zx-up[0]*zz, xz=up[0]*zy-up[1]*zx;
+  let xl=Math.hypot(xx,xy,xz);
+  if(xl<1e-6){ xx=1; xy=0; xz=0; } else { xx/=xl; xy/=xl; xz/=xl; }
+  const yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
+  out[0]=xx; out[1]=yx; out[2]=zx; out[3]=0;
+  out[4]=xy; out[5]=yy; out[6]=zy; out[7]=0;
+  out[8]=xz; out[9]=yz; out[10]=zz; out[11]=0;
+  out[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);
+  out[13]=-(yx*eye[0]+yy*eye[1]+yz*eye[2]);
+  out[14]=-(zx*eye[0]+zy*eye[1]+zz*eye[2]);
+  out[15]=1;
+  return out;
+}
+function mat4mul(out,a,b){
+  for(let c=0;c<4;c++){
+    for(let r=0;r<4;r++){
+      out[c*4+r]=a[0*4+r]*b[c*4+0]+a[1*4+r]*b[c*4+1]+a[2*4+r]*b[c*4+2]+a[3*4+r]*b[c*4+3];
+    }
+  }
+  return out;
+}
+const projM=new Float32Array(16), viewM=new Float32Array(16), vpM=new Float32Array(16);
+
+/* ---- colour ---- */
+function hexToRgb(hex){
+  hex=hex.replace('#','');
+  if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
+  const n=parseInt(hex,16);
+  return [((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255];
+}
+function clamp01(v){ return v>0?(v>1?1:v):0; }   // NaN lands on 0
+let rampCache=null, rampKey='';
+function rampRGB(t){
+  const key=state.colorStops.join(',');
+  if(rampKey!==key){ rampKey=key; rampCache=state.colorStops.map(hexToRgb); }
+  t=clamp01(t);
+  const n=rampCache.length-1;
+  const seg=Math.min(n-1,Math.floor(t*n));
+  const f=t*n-seg;
+  const a=rampCache[seg], b=rampCache[seg+1];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+
+/* ==========================================================================
+   camera
+   ========================================================================== */
+const cam={cx:0,cy:0,cz:0,dist:100,yaw:0,pitch:0};
+let framed=false, dragYaw=0, dragPitch=0, orbitYaw=0;
+
+/* ==========================================================================
+   render loop
+   ========================================================================== */
+let lastNow=0, fps=60, fpsAcc=0, fpsN=0;
+let pendingPNG=false;
+let lastCounts={seg:0,pan:0,lef:0};
+let lastGeomSig='', cachedBounds=null;
+
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=Math.floor(window.innerWidth*dpr), h=Math.floor(window.innerHeight*dpr);
+  if(canvas.width!==w||canvas.height!==h){
+    canvas.width=w; canvas.height=h;
+    canvas.style.width=window.innerWidth+'px';
+    canvas.style.height=window.innerHeight+'px';
+  }
+}
+
+function frame(now){
+  const dtRaw=lastNow?Math.min(0.06,(now-lastNow)/1000):0;
+  lastNow=now;
+  fpsAcc+=dtRaw; fpsN++;
+  if(fpsAcc>0.5){ fps=fpsN/fpsAcc; fpsAcc=0; fpsN=0; }
+
+  updateAudio();
+  let growMul=1, windMul=1;
+  if(state.audioEnabled){
+    if(state.audioTarget==='growth'||state.audioTarget==='both') growMul=1+audio.envelope*state.audioSensitivity;
+    if(state.audioTarget==='wind'||state.audioTarget==='both') windMul=1+audio.envelope*state.audioSensitivity*2.2;
+  }
+  if(!state.paused) simT+=dtRaw*growMul;
+
+  // loop
+  if(mode==='grow'){
+    if(simT>=settleAt){ mode='hold'; modeT=simT; }
+  } else if(mode==='hold'){
+    if(state.autoRegrow && simT-modeT>state.holdTime){
+      state.seed=(state.seed+1)|0;
+      document.getElementById('seed').value=state.seed;
+      applyGrammar(true);
+    }
+  }
+
+  resize();
+  const vw=canvas.width, vh=canvas.height;
+
+  // rebuild meshes if their topology controls changed
+  if(state.tubeSides!==builtSides){ builtSides=state.tubeSides; tubeGL=makeVAO(makeTube(builtSides)); lastGeomSig=''; }
+  if(state.panelRound!==builtRound){ builtRound=state.panelRound; panelGL=makeVAO(makePanel(builtRound)); lastGeomSig=''; }
+
+  // --- turtle walk ---
+  // Once everything has finished opening and the wind is off, the geometry stops
+  // changing — so the walk and the instance packing can be skipped entirely and
+  // the buffers already on the GPU reused. That keeps big structures cheap to sit on.
+  const tel=state.tropismEl*Math.PI/180, taz=state.tropismAz*Math.PI/180;
+  const trop=[Math.cos(tel)*Math.cos(taz), Math.sin(tel), Math.cos(tel)*Math.sin(taz)];
+  const windNow=state.wind*windMul;
+  const isStatic=(forceFull||simT>=settleAt)&&windNow<=0;
+  const sig=[geomSerial,forceFull?1:0,state.drag,state.genSlow,state.growDuration,state.steps,
+    state.tropismStrength,state.tropismEl,state.tropismAz,windNow,state.windSpeed,
+    state.symbolMix,state.leafTint,state.panelTint,state.thickness,state.leafScale,
+    state.panelScale,state.colorStops.join('')].join('|');
+  const reuse=isStatic&&sig===lastGeomSig&&cachedBounds;
+
+  let res=null;
+  if(!reuse){
+    res=runTurtle(modules,{
+      t:simT, stepTime:stepTime(), drag:state.drag, genSlow:state.genSlow,
+      tropism:trop, tropismStrength:state.tropismStrength,
+      wind:windNow, windSpeed:state.windSpeed, windTime:simT,
+      growAll:forceFull
+    });
+    lastCounts={seg:res.segments.length,pan:res.panels.length,lef:res.leaves.length};
+    cachedBounds=res.bounds;
+    lastGeomSig=isStatic?sig:'';
+  }
+
+  let maxDepth=1;
+  if(res){
+    for(const s of res.segments) if(s.depth>maxDepth) maxDepth=s.depth;
+    for(const p of res.panels)   if(p.depth>maxDepth) maxDepth=p.depth;
+    for(const l of res.leaves)   if(l.depth>maxDepth) maxDepth=l.depth;
+  }
+
+  const mix=state.symbolMix;
+  function fill(arr,list,kind){
+    let o=0;
+    for(let i=0;i<list.length;i++){
+      const it=list[i];
+      const dN=it.depth/maxDepth;
+      let t=dN*(1-mix)+clamp01(it.colour)*mix;
+      if(kind===2) t+=state.leafTint;
+      if(kind===1) t+=state.panelTint;
+      const c=rampRGB(t);
+      const M=it.M;
+      arr[o++]=it.pos[0]; arr[o++]=it.pos[1]; arr[o++]=it.pos[2];
+      arr[o++]=M[0]; arr[o++]=M[1]; arr[o++]=M[2];
+      arr[o++]=M[3]; arr[o++]=M[4]; arr[o++]=M[5];
+      arr[o++]=M[6]; arr[o++]=M[7]; arr[o++]=M[8];
+      if(kind===0){ arr[o++]=it.r0*state.thickness; arr[o++]=it.len; arr[o++]=it.r1*state.thickness; }
+      else if(kind===1){ arr[o++]=it.w*state.panelScale; arr[o++]=it.h*state.panelScale; arr[o++]=1; }
+      else { arr[o++]=it.wid*state.leafScale; arr[o++]=it.len*state.leafScale; arr[o++]=1; }
+      arr[o++]=c[0]; arr[o++]=c[1]; arr[o++]=c[2];
+    }
+  }
+  if(res){
+    segData=ensure(segData,res.segments.length); fill(segData,res.segments,0);
+    panData=ensure(panData,res.panels.length);   fill(panData,res.panels,1);
+    lefData=ensure(lefData,res.leaves.length);   fill(lefData,res.leaves,2);
+  }
+
+  // --- camera ---
+  const b=cachedBounds;
+  const centre=[(b.minX+b.maxX)/2,(b.minY+b.maxY)/2,(b.minZ+b.maxZ)/2];
+  const radius=Math.max(0.5,0.5*Math.hypot(b.maxX-b.minX,b.maxY-b.minY,b.maxZ-b.minZ));
+  const fovRad=state.fov*Math.PI/180;
+  const tDist=(radius/Math.max(0.05,Math.sin(fovRad/2)))/Math.max(0.05,state.zoom);
+  if(!framed){
+    cam.cx=centre[0]; cam.cy=centre[1]; cam.cz=centre[2]; cam.dist=tDist; framed=true;
+  } else if(state.autoFrame){
+    const e=1-Math.pow(0.0015,dtRaw);
+    cam.cx+=(centre[0]-cam.cx)*e; cam.cy+=(centre[1]-cam.cy)*e; cam.cz+=(centre[2]-cam.cz)*e;
+    cam.dist+=(tDist-cam.dist)*e;
+  } else {
+    cam.dist=tDist;
+  }
+  if(!state.paused) orbitYaw+=state.orbitSpeed*dtRaw;
+  const yaw=(state.camYaw+dragYaw+orbitYaw)*Math.PI/180;
+  const pitch=Math.max(-89,Math.min(89,state.camPitch+dragPitch))*Math.PI/180;
+  const eye=[
+    cam.cx+cam.dist*Math.cos(pitch)*Math.sin(yaw),
+    cam.cy+cam.dist*Math.sin(pitch),
+    cam.cz+cam.dist*Math.cos(pitch)*Math.cos(yaw)
+  ];
+  const near=Math.max(0.05,cam.dist*0.02), far=cam.dist*6+radius*4;
+  perspective(projM,fovRad,vw/Math.max(1,vh),near,far);
+  lookAt(viewM,eye,[cam.cx,cam.cy,cam.cz],[0,1,0]);
+  mat4mul(vpM,projM,viewM);
+
+  // --- draw ---
+  const bg=hexToRgb(state.bgColor);
+  gl.viewport(0,0,vw,vh);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.disable(gl.CULL_FACE);
+  gl.clearColor(bg[0],bg[1],bg[2],1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.useProgram(prog);
+  gl.uniformMatrix4fv(U.viewProj,false,vpM);
+  const laz=state.lightAz*Math.PI/180, lel=state.lightEl*Math.PI/180;
+  gl.uniform3f(U.lightDir,Math.cos(lel)*Math.cos(laz),Math.sin(lel),Math.cos(lel)*Math.sin(laz));
+  gl.uniform3f(U.bg,bg[0],bg[1],bg[2]);
+  gl.uniform1f(U.ambient,state.ambient);
+  gl.uniform1f(U.fog,state.fog);
+  gl.uniform1f(U.fogStart,Math.max(0.1,cam.dist-radius));
+  gl.uniform1f(U.fogScale,1/Math.max(1,radius*2.2));
+
+  function drawSet(obj,data,n,modeFlag,upload){
+    if(!n) return;
+    gl.uniform1i(U.mode,modeFlag);
+    gl.bindVertexArray(obj.vao);
+    if(upload) uploadInstances(obj,data,n);
+    gl.drawArraysInstanced(gl.TRIANGLES,0,obj.count,n);
+  }
+  drawSet(tubeGL,segData,lastCounts.seg,0,!!res);
+  drawSet(panelGL,panData,lastCounts.pan,1,!!res);
+  drawSet(leafGL,lefData,lastCounts.lef,1,!!res);
+  gl.bindVertexArray(null);
+
+  if(pendingPNG){
+    pendingPNG=false;
+    try{
+      const a=document.createElement('a');
+      a.download='phylo-'+state.seed+'-'+Date.now()+'.png';
+      a.href=canvas.toDataURL('image/png');
+      a.click();
+    }catch(e){}
+  }
+
+  const label=state.paused?'paused':(forceFull?'full':(mode==='grow'?'growing':'grown'));
+  readoutEl.innerHTML='<b>'+modules.length+'</b> modules · <b>'+lastCounts.seg+'</b> stems · '
+    +lastCounts.pan+' panels · '+lastCounts.lef+' leaves · '+label
+    +' · seed <b>'+state.seed+'</b> · '+fps.toFixed(0)+'fps';
+
+  requestAnimationFrame(frame);
+}
+const readoutEl=document.getElementById('readout');
+
+/* ==========================================================================
+   audio
+   ========================================================================== */
+let audioCtx=null, analyser=null, freqData=null, micStream=null;
+async function enableAudio(){
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,
+      noiseSuppression:false,autoGainControl:false}});
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') await audioCtx.resume();
+    const src=audioCtx.createMediaStreamSource(micStream);
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=1024;
+    analyser.smoothingTimeConstant=0.75;
+    src.connect(analyser);
+    freqData=new Uint8Array(analyser.frequencyBinCount);
+    state.audioEnabled=true;
+    document.getElementById('audioStatus').textContent='Microphone connected';
+  }catch(err){
+    state.audioEnabled=false;
+    document.getElementById('audioStatus').textContent=
+      (location.protocol==='file:')?'Blocked on file:// — serve over localhost or https'
+      :'Microphone error: '+(err&&err.message?err.message:'unavailable');
+  }
+}
+function disableAudio(){
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  if(audioCtx) audioCtx.close();
+  audioCtx=null; analyser=null; micStream=null;
+  state.audioEnabled=false;
+  document.getElementById('audioStatus').textContent='Microphone off';
+}
+function updateAudio(){
+  if(!state.audioEnabled||!analyser){ audio.envelope+=(0-audio.envelope)*0.08; return; }
+  analyser.getByteFrequencyData(freqData);
+  let sum=0;
+  for(let i=0;i<freqData.length;i++) sum+=freqData[i];
+  const raw=sum/(freqData.length*255);
+  audio.envelope+=(raw-audio.envelope)*0.35;
+}
+
+/* ==========================================================================
+   output
+   ========================================================================== */
+let recorder=null, chunks=[];
+function toggleRecording(){
+  const btn=document.getElementById('btnRec');
+  if(recorder&&recorder.state==='recording'){
+    recorder.stop(); btn.textContent='Record'; btn.classList.remove('rec'); return;
+  }
+  if(!window.MediaRecorder) return;
+  const list=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+  let mime='';
+  for(const m of list){ if(MediaRecorder.isTypeSupported(m)){ mime=m; break; } }
+  const stream=canvas.captureStream(30);
+  recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+  chunks=[];
+  recorder.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+  recorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='phylo-'+state.seed+'-'+Date.now()+'.webm'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    recorder=null;
+  };
+  recorder.start();
+  btn.textContent='Stop'; btn.classList.add('rec');
+}
+function toggleFullscreen(){
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+  else document.exitFullscreen();
+}
+
+/* ==========================================================================
+   UI
+   ========================================================================== */
+const SLIDERS=['steps','maxModules','growDuration','drag','genSlow','holdTime',
+  'tropismStrength','tropismEl','tropismAz','wind','windSpeed',
+  'thickness','tubeSides','leafScale','panelScale','panelRound',
+  'symbolMix','leafTint','panelTint','ambient','fog',
+  'zoom','camYaw','camPitch','fov','orbitSpeed','lightAz','lightEl','audioSensitivity'];
+const CHECKS=['paused','autoRegrow','autoFrame'];
+const SELECTS=['audioTarget'];
+const DEC={growDuration:0,drag:1,genSlow:3,holdTime:1,tropismStrength:2,wind:2,windSpeed:2,
+  thickness:2,leafScale:2,panelScale:2,panelRound:2,symbolMix:2,leafTint:2,panelTint:2,
+  ambient:2,fog:2,zoom:2,orbitSpeed:1,audioSensitivity:2};
+function fmt(id,v){ const d=DEC[id]; return d==null?String(Math.round(v)):v.toFixed(d); }
+function bindSliders(){
+  SLIDERS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const val=el.parentNode.querySelector('.val');
+    el.value=state[id];
+    if(val) val.textContent=fmt(id,state[id]);
+    el.addEventListener('input',()=>{
+      state[id]=parseFloat(el.value);
+      if(val) val.textContent=fmt(id,state[id]);
+      if(id==='steps'||id==='maxModules') applyGrammar(true);
+      if(id==='growDuration'||id==='genSlow') settleAt=settleTime(modules,stepTime(),state.genSlow);
+    });
+  });
+}
+function syncSliders(){
+  SLIDERS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.value=state[id];
+    const val=el.parentNode.querySelector('.val');
+    if(val) val.textContent=fmt(id,state[id]);
+  });
+}
+function syncPalette(){
+  [0,1,2,3].forEach(i=>{ document.getElementById('stop'+i).value=state.colorStops[i]; });
+}
+function loadPreset(name){
+  const p=PRESET_GRAMMARS[name];
+  if(!p) return;
+  state.preset=name;
+  grammarText=p.src;
+  document.getElementById('grammar').value=grammarText;
+  state.steps=p.steps;
+  syncSliders();
+  applyGrammar(true);
+}
+
+let panelHidden=false;
+function setPanelHidden(h){
+  panelHidden=h;
+  document.getElementById('panel').classList.toggle('hidden',h);
+  document.getElementById('showPanelBtn').classList.toggle('visible',h);
+}
+
+let dragging=false,lastX=0,lastY=0;
+canvas.addEventListener('pointerdown',e=>{
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  dragYaw+=(e.clientX-lastX)*0.3;
+  dragPitch+=(e.clientY-lastY)*0.3;
+  lastX=e.clientX; lastY=e.clientY;
+});
+function endDrag(){
+  if(!dragging) return;
+  dragging=false; canvas.classList.remove('dragging');
+  let y=state.camYaw+dragYaw;
+  y=((y+180)%360+360)%360-180;
+  state.camYaw=y;
+  state.camPitch=Math.max(-89,Math.min(89,state.camPitch+dragPitch));
+  dragYaw=0; dragPitch=0;
+  syncSliders();
+}
+canvas.addEventListener('pointerup',endDrag);
+canvas.addEventListener('pointercancel',endDrag);
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  state.zoom=Math.max(0.2,Math.min(3,state.zoom*(1-Math.sign(e.deltaY)*0.09)));
+  syncSliders();
+},{passive:false});
+
+function init(){
+  const presetSel=document.getElementById('preset');
+  Object.keys(PRESET_GRAMMARS).forEach(k=>{
+    const o=document.createElement('option'); o.value=k; o.textContent=k; presetSel.appendChild(o);
+  });
+  presetSel.value=state.preset;
+  presetSel.addEventListener('change',()=>loadPreset(presetSel.value));
+
+  const ta=document.getElementById('grammar');
+  ta.value=grammarText;
+  ta.addEventListener('input',()=>{ grammarText=ta.value; });
+  ta.addEventListener('keydown',e=>{
+    if(e.key==='Tab'){
+      e.preventDefault();
+      const s=ta.selectionStart, en=ta.selectionEnd;
+      ta.value=ta.value.slice(0,s)+'  '+ta.value.slice(en);
+      ta.selectionStart=ta.selectionEnd=s+2;
+      grammarText=ta.value;
+    }
+    if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); applyGrammar(true); }
+  });
+
+  bindSliders();
+  CHECKS.forEach(id=>{
+    const el=document.getElementById(id);
+    el.checked=state[id];
+    el.addEventListener('change',()=>{ state[id]=el.checked; if(id==='autoFrame') framed=false; });
+  });
+  SELECTS.forEach(id=>{
+    const el=document.getElementById(id);
+    el.value=state[id];
+    el.addEventListener('change',()=>{ state[id]=el.value; });
+  });
+
+  const seedEl=document.getElementById('seed');
+  seedEl.value=state.seed;
+  seedEl.addEventListener('change',()=>{
+    const v=parseInt(seedEl.value,10);
+    state.seed=isFinite(v)?v:0;
+    applyGrammar(true);
+  });
+
+  document.getElementById('btnGrow').addEventListener('click',()=>applyGrammar(true));
+  document.getElementById('btnNewSeed').addEventListener('click',()=>{
+    state.seed=Math.floor(Math.random()*100000);
+    seedEl.value=state.seed;
+    applyGrammar(true);
+  });
+  document.getElementById('btnReplay').addEventListener('click',()=>{
+    simT=0; forceFull=false; mode='grow'; modeT=0;
+  });
+  document.getElementById('btnFinish').addEventListener('click',()=>{
+    forceFull=true; mode='hold'; modeT=simT;
+  });
+
+  [0,1,2,3].forEach(i=>{
+    const el=document.getElementById('stop'+i);
+    el.value=state.colorStops[i];
+    el.addEventListener('input',()=>{ state.colorStops[i]=el.value; });
+  });
+  const palBtns={palBrand:'Bridge blue',palBotanic:'Botanic',palRust:'Rust'};
+  Object.keys(palBtns).forEach(id=>{
+    document.getElementById(id).addEventListener('click',()=>{
+      state.colorStops=PALETTES[palBtns[id]].slice();
+      syncPalette();
+    });
+  });
+  const bgEl=document.getElementById('bgColor');
+  bgEl.value=state.bgColor;
+  bgEl.addEventListener('input',()=>{ state.bgColor=bgEl.value; });
+
+  document.getElementById('audioEnabled').addEventListener('change',async e=>{
+    if(e.target.checked){ await enableAudio(); e.target.checked=state.audioEnabled; }
+    else disableAudio();
+  });
+
+  document.getElementById('btnPNG').addEventListener('click',()=>{ pendingPNG=true; });
+  document.getElementById('btnRec').addEventListener('click',toggleRecording);
+  document.getElementById('btnFullscreen').addEventListener('click',toggleFullscreen);
+  document.getElementById('btnReset').addEventListener('click',()=>{
+    Object.assign(state,JSON.parse(JSON.stringify(DEFAULTS)));
+    syncSliders(); syncPalette();
+    CHECKS.forEach(id=>{ document.getElementById(id).checked=state[id]; });
+    SELECTS.forEach(id=>{ document.getElementById(id).value=state[id]; });
+    bgEl.value=state.bgColor;
+    seedEl.value=state.seed;
+    presetSel.value=state.preset;
+    loadPreset(state.preset);
+  });
+  document.getElementById('showPanelBtn').addEventListener('click',()=>setPanelHidden(false));
+
+  window.addEventListener('keydown',e=>{
+    if(e.target.matches('input,select,textarea')) return;
+    if(e.key==='h'||e.key==='H') setPanelHidden(!panelHidden);
+    if(e.key==='f'||e.key==='F') toggleFullscreen();
+    if(e.code==='Space'){ e.preventDefault(); simT=0; forceFull=false; mode='grow'; }
+  });
+
+  applyGrammar(true);
+  requestAnimationFrame(frame);
+}
+init();
+})();
+</script>
+</body>
+</html>

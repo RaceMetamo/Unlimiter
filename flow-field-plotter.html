@@ -53,7 +53,7 @@
   details.sec .chk input{accent-color:var(--a,var(--accent))}
   .sec-source{--a:#c9c2b4} .sec-density{--a:#5fa8d3} .sec-seed{--a:#c2a86a}
   .sec-agents{--a:#b8e05f} .sec-cycle{--a:#c2a86a} .sec-shape{--a:#d9895a} .sec-fluid{--a:#4fb0c6} .sec-depth{--a:#8d7bb0} .sec-flock{--a:#a98bd0} .sec-ink{--a:#d4708f} .sec-stroke{--a:#d9895a}
-  .sec-colour{--a:#e2a13c} .sec-out{--a:#94a3ad}
+  .sec-colour{--a:#e2a13c} .sec-out{--a:#94a3ad} .sec-mod{--a:#a98bd0}
   label{display:block;margin:0 0 9px}
   .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;
     color:var(--dim);margin-bottom:3px}
@@ -71,6 +71,7 @@
   .file{display:block;text-align:center;margin-bottom:8px}
   .file input{display:none}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
   .chk{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);
     margin-bottom:9px;cursor:pointer}
   .note{font-size:10px;color:var(--dim);line-height:1.5;margin:-2px 0 10px}
@@ -202,6 +203,8 @@
       <input type="range" id="rSpeed" min="0.1" max="8" step="0.05" value="2.2"></label>
     <label><span class="lab">Wander (curl) <b id="vWander"></b></span>
       <input type="range" id="rWander" min="0" max="1" step="0.01" value="0.22"></label>
+    <label><span class="lab">Field rotation <b id="vFieldRot"></b></span>
+      <input type="range" id="rFieldRot" min="-180" max="180" step="1" value="0"></label>
     <label><span class="lab">Noise scale <b id="vNScale"></b></span>
       <input type="range" id="rNScale" min="0.001" max="0.05" step="0.0005" value="0.006"></label>
     <label><span class="lab">Start spread <b id="vSpread"></b></span>
@@ -320,13 +323,29 @@
     <label><span class="lab">Opacity <b id="vAlpha"></b></span>
       <input type="range" id="rAlpha" min="0.05" max="1" step="0.01" value="0.85"></label>
     <label><span class="lab">Colour source</span>
-      <select id="sInk">
-        <option value="0">Fixed ink</option>
-        <option value="1">Sampled from image, darkened</option>
-      </select></label>
+      <select id="sInk"></select></label>
     <div class="row"><input type="color" id="cInk" value="#191a1f">
       <input type="color" id="cPaper" value="#efe9dd"></div>
-    <div class="note">Ink and paper. Moebius contours are often coloured rather than black — try a warm brown or deep blue.</div>
+    <div class="note">Fixed ink and paper. Moebius contours are often coloured rather than black — try a warm brown or deep blue.</div>
+    <div id="palBox">
+      <div class="note" style="margin-top:8px">Palette — three stops the chosen source maps onto</div>
+      <div class="row3">
+        <input type="color" id="cPalA" value="#10233a">
+        <input type="color" id="cPalB" value="#e2603c">
+        <input type="color" id="cPalC" value="#f2e4c8"></div>
+      <div style="height:8px"></div>
+      <label><span class="lab">Palette offset <b id="vPalOffset"></b></span>
+        <input type="range" id="rPalOffset" min="0" max="1" step="0.005" value="0"></label>
+      <label><span class="lab">Palette repeat <b id="vPalRepeat"></b></span>
+        <input type="range" id="rPalRepeat" min="0.25" max="12" step="0.25" value="1"></label>
+      <label><span class="lab">Per-agent spread <b id="vColChaos"></b></span>
+        <input type="range" id="rColChaos" min="0" max="1" step="0.005" value="0"></label>
+      <label><span class="lab">Colour noise scale <b id="vColScale"></b></span>
+        <input type="range" id="rColScale" min="0.0002" max="0.05" step="0.0002" value="0.004"></label>
+      <label><span class="lab">Colour noise drift <b id="vColDrift"></b></span>
+        <input type="range" id="rColDrift" min="0" max="2" step="0.01" value="0"></label>
+      <div class="note"><em>Flow field</em> colours a stroke by the very noise that steers it, so hue follows form. <em>Repeat</em> above 1 cycles the palette across the range, which bands the result into contours. <em>Per-agent spread</em> gives each agent its own offset, so a population varies rather than marching through the ramp together. <em>Density map</em> and <em>Image structure</em> need a source image; without one they are flat.</div>
+    </div>
     <label><span class="lab">Opacity from brightness <b id="vLumA"></b></span>
       <input type="range" id="rLumA" min="0" max="1" step="0.01" value="0"></label>
     <label class="chk"><input type="checkbox" id="cLumInv"> Invert (dark areas solid)</label>
@@ -404,6 +423,17 @@
     <div class="note">Bloom is applied after the Kuwahara so the glow smears along the structure directions. Wash fades it toward the paper colour.</div>
   </details>
 
+  <details class="sec sec-mod">
+    <summary>Audio &amp; modulation</summary>
+    <div id="audioMount"></div>
+    <div id="lfos"></div>
+    <div class="note" style="margin-top:8px">On the beat</div>
+    <label><span class="lab">Action</span><select id="sBeat"></select></label>
+    <label><span class="lab">Amount <b id="vBeatStep"></b></span>
+      <input type="range" id="rBeatStep" min="0.01" max="1" step="0.005" value="0.12"></label>
+    <div class="note">A band tells you how loud something is; a beat tells you the moment it arrived. Onsets are detected against the band's own recent average, so the threshold holds across tracks. <em>Respawn all agents</em> is the flow reset — every agent relaunches on the hit, restarting the gesture without losing what is already on the canvas.</div>
+  </details>
+
   <details class="sec sec-out">
     <summary>Output</summary>
     <label><span class="lab">Export scale <b id="vScale"></b></span>
@@ -416,6 +446,592 @@
   </details>
 </div>
 
+<script>
+/* ===== BEGIN modulation.js v1.1 (shared across the suite) ===== */
+/* =============================================================================
+   modulation.js — shared modulation layer for browser-based AV tools
+   v1.1 · classic script (no modules, no build step, works from file://)
+
+   Gives any tool: LFO slots, audio-reactive bands (mic or file), a rail UI,
+   and preset serialization. The host tool owns its parameters; this module
+   only reads them and returns a modulated copy.
+
+   ---------------------------------------------------------------- USAGE ----
+   <script src="modulation.js"><\/script>
+
+   const mod = new Modulation({
+     targets: {
+       power: { label: 'Power', span: 1.5, min: 0, max: 12 },
+       hue:   { label: 'Hue',   span: 60,  min: 0, max: 360 }
+     },
+     slots: 4,
+     mountLfo:   document.getElementById('lfos'),
+     mountAudio: document.getElementById('audio'),
+     onChange: () => draw(),                  // called when any control moves
+     onStatus: (msg, isErr) => say(msg, isErr)
+   });
+
+   function frame(dt){
+     mod.tick(dt);                            // advance clock, read audio
+     const E = mod.apply(PARAMS);             // modulated copy of your params
+     render(E);
+   }
+
+   mod.serialize()            -> plain object for your preset JSON
+   mod.load(obj)              -> restore
+   mod.isModulated('power')   -> true if a slot is driving it
+   mod.source('bass')         -> current band value, 0..1
+   mod.active                 -> true while audio is running
+   mod.beat()                 -> true only on the frame an onset fired
+   mod.beatCount()            -> beats detected since load
+
+   ------------------------------------------------------------- TARGETS ----
+   span   the +/- swing at depth 1. Set it to a musically useful amount for
+          THAT parameter, not to the slider range — small spans are usually
+          right, since most visual parameters break well before their maximum.
+   min/max optional clamp. Omit for no clamp. Pass a function via `range`
+          in the config if your limits change at runtime.
+
+   ---------------------------------------------------------------- STYLE ----
+   Inherits these CSS variables if the host defines them, else uses fallbacks:
+     --mod-accent  --mod-ink  --mod-dim  --mod-line  --mod-field
+   ========================================================================= */
+
+(function (global) {
+'use strict';
+
+const WAVES = ['Sine', 'Triangle', 'Sawtooth', 'Square', 'Noise'];
+const BANDS = [
+  { key: 'level', label: 'Level', lo: 20,   hi: 16000, gain: 1.6 },
+  { key: 'bass',  label: 'Bass',  lo: 20,   hi: 250,   gain: 1.0 },
+  { key: 'mid',   label: 'Mid',   lo: 250,  hi: 2000,  gain: 1.0 },
+  { key: 'high',  label: 'High',  lo: 2000, hi: 8000,  gain: 1.0 }
+];
+const AUDIO_BASE = 10;               // wave ids >= this select an audio band
+
+const CSS = `
+.mod-wrap{--a:var(--mod-accent,#e2a13c);--ink:var(--mod-ink,#e6e4df);
+  --dim:var(--mod-dim,#8a8a92);--line:var(--mod-line,#2a2a2f);--field:var(--mod-field,#0c0c0e)}
+.mod-wrap label{display:block;margin:0 0 9px}
+.mod-lab{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:11px;color:var(--dim);margin-bottom:3px}
+.mod-lab b{color:var(--ink);font-weight:400;font-variant-numeric:tabular-nums;cursor:text}
+.mod-lab b:hover{box-shadow:inset 0 -1px 0 var(--dim)}
+.mod-wrap input[type=range]{width:100%;height:16px;-webkit-appearance:none;appearance:none;
+  background:none;margin:0}
+.mod-wrap input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--line)}
+.mod-wrap input[type=range]::-moz-range-track{height:1px;background:var(--line)}
+.mod-wrap input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;
+  background:var(--a);margin-top:-4px;border-radius:0;cursor:ew-resize}
+.mod-wrap input[type=range]::-moz-range-thumb{width:9px;height:9px;background:var(--a);
+  border:none;border-radius:0;cursor:ew-resize}
+.mod-wrap select,.mod-wrap button,.mod-wrap .mod-file{width:100%;background:var(--field);
+  color:var(--ink);border:1px solid var(--line);padding:6px 8px;font:inherit;font-size:12px;
+  border-radius:0;cursor:pointer}
+.mod-wrap select:hover,.mod-wrap button:hover,.mod-wrap .mod-file:hover{border-color:var(--a)}
+.mod-file{display:block;text-align:center;margin-bottom:8px}
+.mod-file input{display:none}
+.mod-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.mod-note{font-size:10px;color:var(--dim);line-height:1.5;margin:-2px 0 10px}
+.mod-chk{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);
+  margin-bottom:9px;cursor:pointer}
+.mod-chk input{accent-color:var(--a)}
+.mod-meter{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.mod-meter span{font-size:10px;color:var(--dim);width:34px;letter-spacing:.06em}
+.mod-meter i{flex:1;height:5px;background:#0a0a0c;border:1px solid var(--line);display:block}
+.mod-meter u{display:block;height:100%;width:0;background:var(--a);text-decoration:none;
+  transition:width .04s linear}
+.mod-meter:first-child u{opacity:.65}
+.mod-meters{margin:2px 0 10px}
+details.mod-slot{border:1px solid var(--line);padding:0 8px;margin-bottom:7px}
+details.mod-slot.on{border-color:var(--a)}
+details.mod-slot>summary{list-style:none;cursor:pointer;user-select:none;padding:7px 0;
+  font-size:10px;letter-spacing:.1em;color:var(--dim);display:flex;align-items:center;gap:7px}
+details.mod-slot>summary::-webkit-details-marker{display:none}
+details.mod-slot>summary::before{content:'\\25B8';font-size:9px;opacity:.65;
+  transition:transform .12s ease;display:inline-block}
+details.mod-slot[open]>summary::before{transform:rotate(90deg)}
+details.mod-slot[open]{padding-bottom:6px}
+details.mod-slot.on>summary{color:var(--a)}
+.mod-wrap select{margin-bottom:6px}
+.mod-edit{width:74px;background:#000;color:var(--a);border:1px solid var(--a);
+  font:inherit;font-size:11px;padding:0 3px;text-align:right;border-radius:0}
+.mod-edit:focus{outline:none}
+`;
+
+let cssInjected = false;
+function injectCSS() {
+  if (cssInjected) return;
+  cssInjected = true;
+  const st = document.createElement('style');
+  st.textContent = CSS;
+  document.head.appendChild(st);
+}
+
+/* Click a readout to type an exact value. Typing outside the slider's range
+   widens the range rather than refusing — ranges are conveniences, not limits. */
+function makeEditable(b, r, commit) {
+  b.addEventListener('click', () => {
+    if (b._editing) return;
+    b._editing = true;
+    const prev = b.textContent;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'mod-edit'; inp.value = r.value;
+    b.textContent = ''; b.appendChild(inp);
+    inp.focus(); inp.select();
+    const done = ok => {
+      if (!b._editing) return;
+      b._editing = false;
+      b.textContent = prev;
+      if (!ok) return;
+      const v = parseFloat(String(inp.value).replace(/[^0-9eE+\-.]/g, ''));
+      if (!isFinite(v)) return;
+      if (v > parseFloat(r.max)) r.max = String(v);
+      if (v < parseFloat(r.min)) r.min = String(v);
+      commit(v);
+    };
+    inp.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); done(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); done(false); }
+    });
+    inp.addEventListener('blur', () => done(true));
+  });
+}
+
+function hash1(n) {
+  const s = Math.sin(n * 127.1) * 43758.5453;
+  return (s - Math.floor(s)) * 2 - 1;
+}
+
+/* ph is in cycles; returns -1..1 */
+function waveAt(kind, ph) {
+  const t = ph - Math.floor(ph);
+  switch (kind) {
+    case 0: return Math.sin(t * 2 * Math.PI);
+    case 1: return 4 * Math.abs(t - 0.5) - 1;
+    case 2: return t * 2 - 1;
+    case 3: return t < 0.5 ? 1 : -1;
+    default: {                                    // value noise, cubic-smoothed
+      const i = Math.floor(ph), f = ph - i, u = f * f * (3 - 2 * f);
+      return hash1(i) * (1 - u) + hash1(i + 1) * u;
+    }
+  }
+}
+
+function Modulation(cfg) {
+  if (!(this instanceof Modulation)) return new Modulation(cfg);
+  injectCSS();
+
+  const self = this;
+  const targets = cfg.targets || {};
+  const keys = Object.keys(targets);
+  if (!keys.length) throw new Error('Modulation: config.targets is empty.');
+
+  const slotCount = cfg.slots || 4;
+  const rawOnChange = cfg.onChange || function () {};
+  const onChange = function () { if (!booting) rawOnChange(); };
+  const onStatus  = cfg.onStatus || function () {};
+  const rangeOf   = cfg.range || function (k) {
+    const t = targets[k];
+    return [t && t.min != null ? t.min : -Infinity,
+            t && t.max != null ? t.max :  Infinity];
+  };
+
+  /* ---- state ---- */
+  let booting = true;            // no host callbacks until construction finishes
+  const slots = [];
+  for (let i = 0; i < slotCount; i++) {
+    const d = (cfg.defaults && cfg.defaults[i]) || {};
+    slots.push({
+      on:     d.on     || false,
+      target: d.target || keys[Math.min(i, keys.length - 1)],
+      wave:   d.wave   != null ? d.wave   : 0,
+      rate:   d.rate   != null ? d.rate   : 0.0167,   // one cycle per minute
+      depth:  d.depth  != null ? d.depth  : 0.25,
+      phase:  d.phase  != null ? d.phase  : i * 90
+    });
+  }
+
+  const bands = { level: 0, bass: 0, mid: 0, high: 0 };
+  let clock = 0;
+  let gain = cfg.audioGain != null ? cfg.audioGain : 1.6;
+  let beatBand = cfg.beatBand || 'bass';
+  let beatSens = cfg.beatSens != null ? cfg.beatSens : 1.35;
+  let beatGap  = cfg.beatGap  != null ? cfg.beatGap  : 0.18;   // refractory, seconds
+  let beatFloor = cfg.beatFloor != null ? cfg.beatFloor : 0.06;
+  let release = cfg.audioRelease != null ? cfg.audioRelease : 0.12;
+
+  let AC = null, analyser = null, freq = null, micStream = null, mediaNode = null;
+  this.active = false;
+
+  /* ---- audio ---- */
+  function ensureAnalyser() {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (!analyser) {
+      analyser = AC.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.55;
+      freq = new Uint8Array(analyser.frequencyBinCount);
+    }
+    return AC;
+  }
+  function bandAvg(lo, hi) {
+    const nyq = AC.sampleRate / 2, n = freq.length;
+    const a = Math.max(0, Math.floor(lo / nyq * n));
+    const b = Math.min(n - 1, Math.ceil(hi / nyq * n));
+    if (b < a) return 0;
+    let sum = 0;
+    for (let i = a; i <= b; i++) sum += freq[i];
+    return sum / (b - a + 1) / 255;
+  }
+
+  this.startMic = async function () {
+    try {
+      ensureAnalyser(); await AC.resume();
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      AC.createMediaStreamSource(micStream).connect(analyser);   // not to output
+      self.active = true;
+      onStatus('', false);
+      if (cfg.onAudioStart) cfg.onAudioStart();
+    } catch (e) {
+      onStatus('Microphone unavailable: ' + e.message +
+        '\nBrowsers only grant mic access over https:// or localhost. Opening this ' +
+        'file directly from disk may be blocked — serve the folder locally if so.', true);
+    }
+  };
+
+  this.playFile = async function (file) {
+    try {
+      ensureAnalyser(); await AC.resume();
+      const a = ui.audioEl;
+      a.src = URL.createObjectURL(file);
+      a.style.display = 'block';
+      if (!mediaNode) mediaNode = AC.createMediaElementSource(a);   // once per element
+      mediaNode.connect(analyser);
+      analyser.connect(AC.destination);                            // so you can hear it
+      await a.play();
+      self.active = true;
+      onStatus('', false);
+      if (cfg.onAudioStart) cfg.onAudioStart();
+    } catch (e) {
+      onStatus('Could not play that audio file: ' + e.message, true);
+    }
+  };
+
+  this.stopAudio = function () {
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (mediaNode) { try { mediaNode.disconnect(analyser); } catch (e) {} }
+    if (ui.audioEl) ui.audioEl.pause();
+    self.active = false;
+    for (const k in bands) bands[k] = 0;
+    if (ui.meters) for (const k in ui.meters) ui.meters[k].style.width = '0%';
+    onStatus('', false);
+  };
+
+  /* Returns the analyser node so a host can mux audio into a recording. */
+  this.analyserNode = function () { return analyser; };
+  this.audioContext = function () { return AC; };
+
+  /* ---- per-frame ---- */
+  /* Onset detection. A level says how loud the bass is; a beat says the moment it
+     arrived. Compare the band against its own recent average — an absolute
+     threshold would need retuning for every track — and hold off for a refractory
+     period so one transient cannot fire twice. */
+  const beatHist = [];
+  let beatLast = -1e9, beatCount = 0;
+  this.beatFired = false;
+
+  this.tick = function (dt) {
+    clock += dt;
+    this.beatFired = false;
+    if (!analyser || !self.active) return;
+    analyser.getByteFrequencyData(freq);
+    const rel = Math.min(1, dt / Math.max(0.01, release));  // fall rate; rise is instant
+    for (const B of BANDS) {
+      const v = Math.min(1, bandAvg(B.lo, B.hi) * B.gain * gain);
+      bands[B.key] = v > bands[B.key] ? v : bands[B.key] + (v - bands[B.key]) * rel;
+      if (ui.meters && ui.meters[B.key])
+        ui.meters[B.key].style.width = (bands[B.key] * 100).toFixed(1) + '%';
+    }
+
+    const e = bands[beatBand] || 0;
+    beatHist.push(e);
+    if (beatHist.length > 48) beatHist.shift();
+    let sum = 0;
+    for (let i = 0; i < beatHist.length; i++) sum += beatHist[i];
+    const avg = beatHist.length ? sum / beatHist.length : 0;
+    if (beatHist.length > 8 && e > avg * beatSens && e > beatFloor &&
+        (clock - beatLast) > beatGap) {
+      beatLast = clock; beatCount++; this.beatFired = true;
+      if (ui.beatLamp) {
+        ui.beatLamp.style.opacity = '1';
+        setTimeout(function () { if (ui.beatLamp) ui.beatLamp.style.opacity = '0.15'; }, 90);
+      }
+      if (ui.beatCount) ui.beatCount.textContent = beatCount + ' beats';
+    }
+  };
+
+  /* true only on the frame a beat fired */
+  this.beat = function () { return self.beatFired; };
+  this.beatCount = function () { return beatCount; };
+
+  this.source = function (k) { return bands[k] || 0; };
+  this.clock  = function () { return clock; };
+  this.resetClock = function () { clock = 0; };
+
+  /* Returns a modulated copy of params. Never mutates the original. */
+  this.apply = function (params) {
+    const E = Object.assign({}, params);
+    for (const L of slots) {
+      if (!L.on) continue;
+      const T = targets[L.target];
+      if (!T || !(L.target in E)) continue;
+      const s = L.wave >= AUDIO_BASE
+        ? bands[BANDS[L.wave - AUDIO_BASE].key]                 // audio: unipolar 0..1
+        : waveAt(L.wave, clock * L.rate + L.phase / 360);       // LFO: bipolar -1..1
+      const r = rangeOf(L.target);
+      const v = E[L.target] + T.span * L.depth * s;
+      E[L.target] = Math.min(r[1], Math.max(r[0], v));
+    }
+    return E;
+  };
+
+  this.isModulated = function (key) {
+    for (const L of slots) if (L.on && L.target === key) return true;
+    return false;
+  };
+  this.modulatedKeys = function () {
+    const out = [];
+    for (const L of slots) if (L.on && out.indexOf(L.target) < 0) out.push(L.target);
+    return out;
+  };
+
+  /* ---- presets ---- */
+  this.serialize = function () {
+    return {
+      gain: gain, release: release,
+      beatBand: beatBand, beatSens: beatSens, beatGap: beatGap, beatFloor: beatFloor,
+      slots: slots.map(L => ({ on: L.on, target: L.target, wave: L.wave,
+                               rate: L.rate, depth: L.depth, phase: L.phase }))
+    };
+  };
+  this.load = function (o) {
+    if (!o) return;
+    if (typeof o.gain === 'number') gain = o.gain;
+    if (typeof o.release === 'number') release = o.release;
+    if (typeof o.beatBand === 'string') beatBand = o.beatBand;
+    if (typeof o.beatSens === 'number') beatSens = o.beatSens;
+    if (typeof o.beatGap === 'number') beatGap = o.beatGap;
+    if (typeof o.beatFloor === 'number') beatFloor = o.beatFloor;
+    const list = Array.isArray(o.slots) ? o.slots : (Array.isArray(o) ? o : []);
+    list.forEach((s, i) => { if (slots[i]) Object.assign(slots[i], s); });
+    syncAll();
+  };
+
+  /* ---- UI ---- */
+  const ui = { meters: null, audioEl: null, syncs: [] };
+
+  function slider(id, label, min, max, step, val, fmt, set) {
+    const wrap = document.createElement('label');
+    wrap.innerHTML = '<span class="mod-lab">' + label + ' <b></b></span>' +
+      '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '">';
+    const b = wrap.querySelector('b'), r = wrap.querySelector('input');
+    r.value = val;
+    const show = () => { b.textContent = fmt(parseFloat(r.value)); };
+    r.addEventListener('input', () => { set(parseFloat(r.value)); show(); onChange(); });
+    makeEditable(b, r, v => { r.value = v; set(v); show(); onChange(); });
+    wrap._sync = v => { r.value = v; show(); };
+    show();
+    return wrap;
+  }
+
+  function buildAudio(host) {
+    if (!host) return;
+    host.classList.add('mod-wrap');
+    const row = document.createElement('div');
+    row.className = 'mod-row';
+    const bMic = document.createElement('button'); bMic.textContent = 'Microphone';
+    const bStop = document.createElement('button'); bStop.textContent = 'Stop';
+    row.append(bMic, bStop);
+    host.appendChild(row);
+
+    const fileLab = document.createElement('label');
+    fileLab.className = 'mod-file'; fileLab.tabIndex = 0;
+    fileLab.textContent = 'Audio file';
+    const fin = document.createElement('input');
+    fin.type = 'file'; fin.accept = 'audio/*';
+    fileLab.appendChild(fin);
+    host.appendChild(fileLab);
+
+    const aud = document.createElement('audio');
+    aud.controls = true;
+    aud.style.cssText = 'width:100%;height:32px;display:none';
+    host.appendChild(aud);
+    ui.audioEl = aud;
+
+    const mBox = document.createElement('div');
+    mBox.className = 'mod-meters';
+    ui.meters = {};
+    for (const B of BANDS) {
+      const m = document.createElement('div');
+      m.className = 'mod-meter';
+      m.innerHTML = '<span>' + B.label + '</span><i><u></u></i>';
+      mBox.appendChild(m);
+      ui.meters[B.key] = m.querySelector('u');
+    }
+    host.appendChild(mBox);
+
+    const gs = slider('g', 'Gain', 0.2, 6, 0.01, gain, v => v.toFixed(2), v => { gain = v; });
+    const rs = slider('r', 'Release', 0.01, 0.6, 0.005, release,
+                      v => v.toFixed(3) + 's', v => { release = v; });
+    host.append(gs, rs);
+    ui.syncs.push(() => { gs._sync(gain); rs._sync(release); });
+
+    const bl = document.createElement('div');
+    bl.className = 'mod-meter';
+    bl.innerHTML = '<span>Beat</span><i style="flex:0 0 12px;height:12px;border-radius:50%;' +
+      'background:var(--a);opacity:.15;transition:opacity .08s"></i>' +
+      '<span style="width:auto;flex:1;text-align:right">\u2014</span>';
+    host.appendChild(bl);
+    ui.beatLamp = bl.querySelector('i');
+    ui.beatCount = bl.querySelectorAll('span')[1];
+
+    const bandSel = document.createElement('label');
+    bandSel.innerHTML = '<span class="mod-lab">Beat band</span>';
+    const bs = document.createElement('select');
+    bs.innerHTML = BANDS.map(function (b) {
+      return '<option value="' + b.key + '">' + b.label + '</option>'; }).join('');
+    bs.value = beatBand;
+    bs.addEventListener('change', function (e) { beatBand = e.target.value; beatHist.length = 0; });
+    bandSel.appendChild(bs);
+    host.appendChild(bandSel);
+
+    const sens = slider('bs', 'Beat sensitivity', 1.05, 3, 0.01, beatSens,
+                        function (v) { return v.toFixed(2) + '\u00d7 avg'; },
+                        function (v) { beatSens = v; });
+    const gap = slider('bg', 'Min interval', 0.05, 1.2, 0.005, beatGap,
+                       function (v) { return v.toFixed(3) + 's'; },
+                       function (v) { beatGap = v; });
+    const flr = slider('bf', 'Beat floor', 0, 0.5, 0.005, beatFloor,
+                       function (v) { return v.toFixed(3); },
+                       function (v) { beatFloor = v; });
+    host.append(sens, gap, flr);
+    ui.syncs.push(function () { sens._sync(beatSens); gap._sync(beatGap); flr._sync(beatFloor); });
+
+    const note = document.createElement('div');
+    note.className = 'mod-note';
+    note.textContent = 'Bands rise instantly and fall at the Release rate. ' +
+      'Pick them as sources in a slot below; audio is unipolar, so it only ever ' +
+      'adds to a parameter\'s base value.';
+    host.appendChild(note);
+
+    bMic.addEventListener('click', () => self.startMic());
+    bStop.addEventListener('click', () => self.stopAudio());
+    fin.addEventListener('change', e => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (f) self.playFile(f);
+    });
+    fileLab.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fin.click(); }
+    });
+  }
+
+  function buildSlots(host) {
+    if (!host) return;
+    host.classList.add('mod-wrap');
+    slots.forEach((L, i) => {
+      const d = document.createElement('details');
+      d.className = 'mod-slot';
+
+      const sum = document.createElement('summary');
+      const ttl = document.createElement('span');
+      sum.appendChild(ttl);
+      d.appendChild(sum);
+
+      const body = document.createElement('div');
+
+      const chk = document.createElement('label');
+      chk.className = 'mod-chk';
+      chk.innerHTML = '<input type="checkbox"> Enabled';
+      const on = chk.querySelector('input');
+      body.appendChild(chk);
+
+      const tg = document.createElement('select');
+      tg.innerHTML = keys.map(k =>
+        '<option value="' + k + '">' + (targets[k].label || k) + '</option>').join('');
+      body.appendChild(tg);
+
+      const wv = document.createElement('select');
+      wv.innerHTML =
+        '<optgroup label="LFO">' + WAVES.map((w, j) =>
+          '<option value="' + j + '">' + w + '</option>').join('') + '</optgroup>' +
+        '<optgroup label="Audio">' + BANDS.map((b, j) =>
+          '<option value="' + (AUDIO_BASE + j) + '">' + b.label + '</option>').join('') +
+        '</optgroup>';
+      body.appendChild(wv);
+
+      const rateS = slider('rate', 'Rate', 0.002, 0.4, 0.001, L.rate,
+        v => v < 0.017 ? (1 / v).toFixed(0) + 's cycle' : v.toFixed(3) + ' Hz',
+        v => { L.rate = v; });
+      const depthS = slider('depth', 'Depth', 0, 1, 0.01, L.depth,
+        v => (v * 100).toFixed(0) + '%', v => { L.depth = v; });
+      const phaseS = slider('phase', 'Phase', 0, 360, 1, L.phase,
+        v => v.toFixed(0) + '\u00b0', v => { L.phase = v; });
+      body.append(rateS, depthS, phaseS);
+
+      d.appendChild(body);
+      host.appendChild(d);
+
+      // Never touches open/closed state — only a summary click can collapse a slot.
+      const refresh = () => {
+        d.classList.toggle('on', L.on);
+        const src = L.wave >= AUDIO_BASE
+          ? BANDS[L.wave - AUDIO_BASE].label : WAVES[L.wave];
+        const tl = targets[L.target] ? (targets[L.target].label || L.target) : L.target;
+        ttl.textContent = 'LFO ' + (i + 1) + (L.on ? ' \u00b7 ' + tl + ' \u2190 ' + src
+                                                   : ' \u00b7 off');
+        const isAudio = L.wave >= AUDIO_BASE;
+        rateS.style.opacity  = isAudio ? 0.35 : 1;   // rate and phase are meaningless
+        phaseS.style.opacity = isAudio ? 0.35 : 1;   // when an audio band drives the slot
+        onChange();
+      };
+      on.addEventListener('change', e => { L.on = e.target.checked; refresh(); });
+      tg.addEventListener('change', e => { L.target = e.target.value; refresh(); });
+      wv.addEventListener('change', e => { L.wave = +e.target.value; refresh(); });
+      [rateS, depthS, phaseS].forEach(s =>
+        s.querySelector('input').addEventListener('input', refresh));
+
+      ui.syncs.push(() => {
+        on.checked = L.on; tg.value = L.target; wv.value = L.wave;
+        rateS._sync(L.rate); depthS._sync(L.depth); phaseS._sync(L.phase);
+        refresh();
+      });
+      refresh();
+    });
+  }
+
+  function syncAll() { ui.syncs.forEach(f => f()); }
+  this.sync = syncAll;
+
+  buildAudio(cfg.mountAudio);
+  buildSlots(cfg.mountLfo);
+  syncAll();
+  booting = false;               // host may now be called back safely
+}
+
+Modulation.WAVES = WAVES;
+Modulation.BANDS = BANDS;
+Modulation.version = '1.1';
+
+global.Modulation = Modulation;
+
+})(typeof window !== 'undefined' ? window : this);
+
+/* ===== END modulation.js ===== */
+</script>
 <script>
 /* ============================================================================
    Flow Field Plotter v0.1
@@ -439,6 +1055,8 @@ const P = {
   drag:0.12, force:1.3, speed:2.2, wander:0.22, nScale:0.006, rest:0.18, life:140,
   sep:1.1, ali:0.35, coh:0.15, nbr:16,
   width:3.5, alpha:0.85, inkMode:0,
+  palA:'#10233a', palB:'#e2603c', palC:'#f2e4c8',
+  palOffset:0, palRepeat:1, colChaos:0, colScale:0.004, colDrift:0,
   tIn:0.12, tOut:0.35, tCurve:1, wMin:0.05, wVel:0, wNib:0,
   aIn:0.05, aOut:0.25, aCurve:1, aMin:0.05, aVel:0, aNib:0, nibAng:35,
   steer:1, bleed:0, bleedR:14, spread:1.2,
@@ -449,7 +1067,7 @@ const P = {
   fluidOn:false, fInjFlow:1.2, fInjStruct:0.4, fInjNoise:0,
   fVisc:0.06, fDissip:0.02, fVort:0.25, fIter:24, fCouple:1.4, ink:'#191a1f', paper:'#efe9dd', paperOn:true,
   colOn:true, kr:5, gi:0.9, bloom:7, sat:1.25, post:1, wash:0.35,
-  view:0, scale:2,
+  view:0, scale:2, fieldRot:0, beatAction:0, beatStep:0.12,
   cycleOn:false, frames:400, seed:2659,
   speedA:2.2, easeSpeed:0, scatter:0, scatterA:0, easeScatter:0,
   widthA:3.5, easeWidth:0, alphaA:0.85, easeAlpha:0,
@@ -559,7 +1177,7 @@ function box(buf, r){
 function buildDensity(){
   let mx = 1e-6;
   for(let i = 0; i < N; i++){
-    const v = P.wGrad*mag[i] + P.wAni*ani[i] + P.wDark*(1-lum[i]) + P.wMot*motion[i];
+    const v = E.wGrad*mag[i] + E.wAni*ani[i] + E.wDark*(1-lum[i]) + E.wMot*motion[i];
     dens[i] = v; if(v > mx) mx = v;
   }
   for(let i = 0; i < N; i++) dens[i] = Math.min(1, dens[i]/mx + P.floor);
@@ -588,8 +1206,10 @@ function vnoise(x, y){
   const a = h2(xi,yi), b = h2(xi+1,yi), c = h2(xi,yi+1), d = h2(xi+1,yi+1);
   return (a*(1-u)+b*u)*(1-v) + (c*(1-u)+d*u)*v;
 }
+let fieldJumpX = 0, fieldJumpY = 0;
 function curlAngle(x, y, s){
   const e = 1.0;
+  x += fieldJumpX; y += fieldJumpY;
   const dx = vnoise((x+e)*s, y*s) - vnoise((x-e)*s, y*s);
   const dy = vnoise(x*s, (y+e)*s) - vnoise(x*s, (y-e)*s);
   return Math.atan2(-dx, dy);          // perpendicular to the gradient = divergence-free
@@ -732,22 +1352,22 @@ function fluidStep(){
       }
     }
   }
-  if(P.fInjNoise > 0){
+  if(E.fInjNoise > 0){
     for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
-      const a = curlAngle(i*8, j*8, P.nScale*2);
+      const a = curlAngle(i*8, j*8, E.nScale*2);
       const k = FIX(i,j);
-      fu[k] += Math.cos(a) * P.fInjNoise * 0.05;
-      fv[k] += Math.sin(a) * P.fInjNoise * 0.05;
+      fu[k] += Math.cos(a) * E.fInjNoise * 0.05;
+      fv[k] += Math.sin(a) * E.fInjNoise * 0.05;
     }
   }
-  vorticity(P.fVort);
+  vorticity(E.fVort);
   diffuse(P.fVisc);
   walls();
   project(P.fIter);
   advect();
   walls();
   project(P.fIter);
-  const d = 1 - P.fDissip;
+  const d = 1 - E.fDissip;
   for(let k = 0; k < FN; k++){ fu[k] *= d; fv[k] *= d; }
   dyeStep();
 }
@@ -800,7 +1420,7 @@ function ease(k, t){
     default: return t;
   }
 }
-let frameIdx = 0, cycleDone = false;
+let frameIdx = 0, cycleDone = false, colClock = 0;
 function cycleT(){ return P.cycleOn ? Math.min(1, frameIdx / Math.max(1, P.frames)) : 0; }
 function ramp(a, b, eKind){
   if(!P.cycleOn) return b;
@@ -853,7 +1473,7 @@ function poissonPoint(tries){
     const x = rnd()*W, y = rnd()*H;
     const d = densAt(x, y);
     if(rnd() > d) continue;
-    const r = P.rMin + (1-d) * (P.rMax - P.rMin);
+    const r = E.rMin + (1-d) * (E.rMax - E.rMin);
     let ok = true;
     for(const o of neighbours({x,y}, r)){
       const dx = o.x-x, dy = o.y-y;
@@ -877,7 +1497,7 @@ function contourPoint(){
 }
 
 function makeAgent(force){
-  const isContour = hasAnalysis && rnd() < P.contour;
+  const isContour = hasAnalysis && rnd() < E.contour;
   const p = (force === 'c' || isContour) ? contourPoint() : poissonPoint();
   const rs = rnd();
   return {
@@ -887,9 +1507,9 @@ function makeAgent(force){
     // in slice mode a stroke keeps the depth of the moment it was born, so the
     // drawing stacks time into layers instead of everything sharing one plane
     z: P.zMode === 2 ? sliceZ : 0,
-    wait: rnd() * P.spread * 60,
+    wait: rnd() * E.spread * 60,
     kind: isContour ? 1 : 0,
-    life: P.life * (isContour ? 1 : 0.45) * (0.6 + rnd()*0.8),
+    life: E.life * (isContour ? 1 : 0.45) * (0.6 + rnd()*0.8),
     path: [[p.x, p.y, 0, 0, P.zMode === 2 ? sliceZ : 0]]
   };
 }
@@ -899,30 +1519,31 @@ function seedAll(){
   for(let i = 0; i < P.count; i++){ agents.push(makeAgent()); rebuildGrid(); }
 }
 function clearArt(){
-  paths = []; sliceZ = 0; frameIdx = 0; cycleDone = false;
+  paths = []; sliceZ = 0; spdDirty = true; frameIdx = 0; cycleDone = false;
   ictx.clearRect(0, 0, inkc.width, inkc.height);
   seedAll();
   el('vPaths').textContent = '0 strokes';
 }
 
 function fieldAngle(a){
-  let ang, w = P.wander;
+  let ang, w = E.wander;
   if(hasAnalysis){
     const an = aniAt(a.x, a.y);
     ang = oriAt(a.x, a.y);
     // where structure is weak the field has no opinion, so lean on noise
-    w = P.wander + (1 - an) * (1 - P.wander) * 0.85;
+    w = E.wander + (1 - an) * (1 - E.wander) * 0.85;
   } else {
-    ang = curlAngle(a.x, a.y, P.nScale);
+    ang = curlAngle(a.x, a.y, E.nScale);
     w = 0;
   }
   if(w > 0){
-    const c = curlAngle(a.x, a.y, P.nScale);
+    const c = curlAngle(a.x, a.y, E.nScale);
     // blend directions as vectors so they interpolate the short way round
     const sx = Math.cos(ang)*(1-w) + Math.cos(c)*w;
     const sy = Math.sin(ang)*(1-w) + Math.sin(c)*w;
     ang = Math.atan2(sy, sx);
   }
+  if(E.fieldRot) ang += E.fieldRot * Math.PI/180;   // a global twist on the whole field
   if(P.mFlow > 0 && hasAnalysis){
     const i = ay(a.y)*AW + ax(a.x);
     const fm = Math.hypot(flowX[i], flowY[i]);
@@ -938,9 +1559,9 @@ function fieldAngle(a){
 
 function step(){
   rebuildGrid();
-  const spdNow  = ramp(P.speedA, P.speed, P.easeSpeed);
+  const spdNow  = ramp(P.speedA, E.speed, P.easeSpeed);
   const scatNow = ramp(P.scatterA, P.scatter, P.easeScatter);
-  const turnover = P.turn / 60;
+  const turnover = E.turn / 60;
   for(let idx = 0; idx < agents.length; idx++){
     const a = agents[idx];
     if(a.wait > 0){ a.wait--; continue; }
@@ -952,7 +1573,7 @@ function step(){
     }
     const mv = hasAnalysis ? motAt(a.x, a.y) : 0;
     const ang = fieldAngle(a);
-    const fF = P.force * (1 + mv * P.mForce);      // movement energises the field
+    const fF = E.force * (1 + mv * P.mForce);      // movement energises the field
     let axx = Math.cos(ang) * fF, ayy = Math.sin(ang) * fF;
 
     // optical flow as a real force: magnitude matters, not just direction
@@ -962,35 +1583,35 @@ function step(){
       ayy += flowY[i] * P.mPush;
     }
     // the fluid carries agents along with it
-    if(P.fluidOn && P.fCouple > 0){
-      axx += fluidAt(a.x, a.y, fu) * P.fCouple;
-      ayy += fluidAt(a.x, a.y, fv) * P.fCouple;
+    if(P.fluidOn && E.fCouple > 0){
+      axx += fluidAt(a.x, a.y, fu) * E.fCouple;
+      ayy += fluidAt(a.x, a.y, fv) * E.fCouple;
     }
 
     // the field is an orientation, not a direction — keep going the way we were
     if(a.vx*axx + a.vy*ayy < 0){ axx = -axx; ayy = -ayy; }
 
-    if(P.sep > 0 || P.ali > 0 || P.coh > 0){
-      const nb = neighbours(a, P.nbr);
+    if(E.sep > 0 || E.ali > 0 || E.coh > 0){
+      const nb = neighbours(a, E.nbr);
       let sx=0, sy=0, alx=0, aly=0, cx=0, cy=0, n=0;
       for(const o of nb){
         const dx = a.x-o.x, dy = a.y-o.y;
         const d2 = dx*dx + dy*dy;
-        if(d2 > P.nbr*P.nbr || d2 < 1e-6) continue;
+        if(d2 > E.nbr*E.nbr || d2 < 1e-6) continue;
         const d = Math.sqrt(d2);
         sx += dx/d2; sy += dy/d2;
         alx += o.vx; aly += o.vy;
         cx += o.x; cy += o.y; n++;
       }
       if(n){
-        axx += sx * P.sep * 6; ayy += sy * P.sep * 6;
-        axx += (alx/n) * P.ali; ayy += (aly/n) * P.ali;
-        axx += (cx/n - a.x) * P.coh * 0.02; ayy += (cy/n - a.y) * P.coh * 0.02;
+        axx += sx * E.sep * 6; ayy += sy * E.sep * 6;
+        axx += (alx/n) * E.ali; ayy += (aly/n) * E.ali;
+        axx += (cx/n - a.x) * E.coh * 0.02; ayy += (cy/n - a.y) * E.coh * 0.02;
       }
     }
 
-    a.vx = a.vx * (1 - P.drag) + axx;
-    a.vy = a.vy * (1 - P.drag) + ayy;
+    a.vx = a.vx * (1 - E.drag) + axx;
+    a.vy = a.vy * (1 - E.drag) + ayy;
     if(scatNow > 0){                       // chaos layered on the smooth field
       axx += (rnd()*2-1) * scatNow;
       ayy += (rnd()*2-1) * scatNow;
@@ -1009,7 +1630,7 @@ function step(){
     }
     a.path.push([a.x, a.y, sp, Math.atan2(a.vy, a.vx), a.z]);
     if(P.view === 0) drawLive(a);
-    if(sp < P.rest || a.age > a.life) retire(a, idx);
+    if(sp < E.rest || a.age > a.life) retire(a, idx);
   }
 }
 const MAX_PATHS = 24000;     // keeps memory and SVG size bounded on long live runs
@@ -1021,11 +1642,112 @@ function retire(a, idx){
       paths.splice(0, paths.length - MAX_PATHS);
     }
   }
-  if(P.turn > 0 || paths.length < P.count) agents[idx] = makeAgent();
+  if(E.turn > 0 || paths.length < P.count) agents[idx] = makeAgent();
   else a.resting = true;
 }
 
 /* ---------- ink rendering ---------- */
+
+/* ---------- colour sources ----------
+   With no source image the colour has to come from the system itself. Every
+   mode below maps some quantity the simulation is already computing — the very
+   noise field that steers the agents, their heading, their speed — onto a
+   three-stop palette. So the palette is emergent from the motion rather than
+   painted on afterwards. */
+const INKMODES = ['Fixed ink','Sampled from image','Flow field — the noise steering motion',
+                  'Colour noise — its own field','Heading','Speed','Density map',
+                  'Across frame','Radial from centre','Along the stroke','Image structure','Curvature'];
+let PAL = null;
+/* Agents spend most of their life at terminal velocity, and that terminal speed
+   depends on drag and force rather than on the speed cap — so any fixed divisor
+   saturates. Range speed against what the strokes actually did instead. */
+let spdLo = 0, spdHi = 1, spdDirty = true;
+function refreshSpeedRange(){
+  spdDirty = false;
+  const n = paths.length;
+  if(!n){ spdLo = 0; spdHi = Math.max(0.001, ramp(P.speedA, E.speed, P.easeSpeed)); return; }
+  const smp = [], stride = Math.max(1, Math.floor(n/400));
+  for(let i = 0; i < n; i += stride){
+    const pts = paths[i].pts;
+    for(let k = 1; k < pts.length; k += 5) smp.push(pts[k][2] || 0);
+  }
+  if(smp.length < 8){ spdLo = 0; spdHi = 1; return; }
+  smp.sort((x,y) => x-y);
+  spdLo = smp[Math.floor(smp.length*0.05)];
+  spdHi = smp[Math.floor(smp.length*0.95)];
+  if(spdHi - spdLo < 1e-4) spdHi = spdLo + 1e-4;
+}
+function hexRGB(h){
+  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+}
+function buildPalette(){
+  const A = hexRGB(P.palA), B = hexRGB(P.palB), C = hexRGB(P.palC);
+  PAL = new Array(256);
+  for(let i = 0; i < 256; i++){
+    const t = i/255;
+    const u = t < 0.5 ? t*2 : (t-0.5)*2;
+    const p = t < 0.5 ? A : B, q = t < 0.5 ? B : C;
+    PAL[i] = 'rgb(' + Math.round(p[0]+(q[0]-p[0])*u) + ',' +
+                      Math.round(p[1]+(q[1]-p[1])*u) + ',' +
+                      Math.round(p[2]+(q[2]-p[2])*u) + ')';
+  }
+}
+/* the scalar each mode contributes, in 0..1 before palette shaping */
+function inkValue(p, k){
+  const n = p.pts.length;
+  const idx = Math.min(Math.max(0, k), n-1);
+  const pt = p.pts[idx];
+  switch(P.inkMode){
+    case 2:                                    // literally the field driving the flow
+      return vnoise(pt[0]*E.nScale, pt[1]*E.nScale);
+    case 3: {                                  // an independent field, its own scale
+      const d = E.colDrift * colClock;
+      return vnoise(pt[0]*E.colScale + d, pt[1]*E.colScale - d);
+    }
+    case 4: return (((pt[3] || 0) + Math.PI) / (Math.PI*2)) % 1;
+    case 5:
+      if(spdDirty) refreshSpeedRange();
+      return Math.min(1, Math.max(0, ((pt[2] || 0) - spdLo) / (spdHi - spdLo)));
+    case 11: {                                 // how hard the stroke is turning
+      const q = p.pts[Math.max(0, idx-1)];
+      let d = (pt[3] || 0) - (q[3] || 0);
+      while(d >  Math.PI) d -= Math.PI*2;
+      while(d < -Math.PI) d += Math.PI*2;
+      return Math.min(1, Math.abs(d) / 0.6);
+    }
+    case 6: return hasAnalysis ? densAt(pt[0], pt[1]) : 0.5;
+    case 7: return Math.min(1, Math.max(0, pt[0] / W));
+    case 8: {
+      const dx = pt[0]/W - 0.5, dy = pt[1]/H - 0.5;
+      return Math.min(1, Math.hypot(dx, dy) * 2);
+    }
+    case 9: return n > 1 ? idx/(n-1) : 0;
+    case 10: return hasAnalysis
+      ? ((oriAt(pt[0], pt[1]) % Math.PI) + Math.PI) % Math.PI / Math.PI : 0.5;
+    default: return 0.5;
+  }
+}
+function inkColourAt(p, k){
+  if(P.inkMode === 0) return P.ink;
+  if(P.inkMode === 1){
+    const off = P.colOff;
+    const sx = p.pts[0][0] + (off ? ((p.rseed||0)*2-1) * off * W : 0);
+    const sy = p.pts[0][1] + (off ? (((p.rseed||0)*7919%1)*2-1) * off * H : 0);
+    const i = ay(sy)*AW + ax(sx);
+    const r = Math.round(rgb[i*3]*255*0.45), g = Math.round(rgb[i*3+1]*255*0.45),
+          b = Math.round(rgb[i*3+2]*255*0.45);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+  let v = inkValue(p, k);
+  if(E.colChaos > 0) v += ((p.rseed||0)*2-1) * E.colChaos;   // per-agent spread
+  v = v * E.palRepeat + E.palOffset;                          // bands, then rotate
+  v = v - Math.floor(v);
+  if(!PAL) buildPalette();
+  return PAL[Math.min(255, Math.max(0, (v*255)|0))];
+}
+/* true when the colour varies along a stroke and must be resolved per point */
+function perPointInk(){ return P.inkMode >= 2; }
+
 
 /* ---------- shape stamps ----------
    Instead of a connected polyline, an agent can drop a shape at intervals.
@@ -1035,7 +1757,7 @@ const SHAPES = ['Line (continuous)','Circle','Square','Rectangle','Triangle',
 const ROTMODES = ['None','Fixed angle','45° steps','90° steps','Random','Along heading'];
 function stampAngle(a, k){
   switch(P.rotMode){
-    case 1: return P.rotAngle * Math.PI/180;
+    case 1: return E.rotAngle * Math.PI/180;
     case 2: return Math.floor(a.rseed*8) * Math.PI/4;
     case 3: return Math.floor(a.rseed*4) * Math.PI/2;
     case 4: return a.rseed * Math.PI * 2;
@@ -1052,7 +1774,7 @@ function drawStamp(ctx, a, k, sc, size, col, alpha){
   ctx.globalAlpha = Math.min(1, alpha);
   const fill = P.fillMode !== 2, stroke = P.fillMode !== 1;
   ctx.fillStyle = col; ctx.strokeStyle = col;
-  ctx.lineWidth = Math.max(0.2, ramp(P.widthA, P.width, P.easeWidth) * sc * 0.5);
+  ctx.lineWidth = Math.max(0.2, ramp(P.widthA, E.width, P.easeWidth) * sc * 0.5);
   const t = P.shape;
   ctx.beginPath();
   if(t === 1) ctx.arc(0, 0, r, 0, 6.2832);
@@ -1089,7 +1811,7 @@ function drawStamp(ctx, a, k, sc, size, col, alpha){
 function project(pt, sc){
   const x = pt[0], y = pt[1], z = pt[4] || 0;
   if(!P.zMode || z === 0) return [x*sc, y*sc, 1];
-  const s = 1 / (1 + z * P.zPersp);
+  const s = 1 / (1 + z * E.zPersp);
   const vx = P.zVX * W, vy = P.zVY * H;
   return [(vx + (x - vx) * s) * sc, (vy + (y - vy) * s) * sc, s];
 }
@@ -1103,7 +1825,7 @@ function lumAlphaAt(pt){
 }
 function fogAt(pt){
   const z = pt[4] || 0;
-  return (!P.zMode || z === 0) ? 1 : 1 / (1 + z * P.zFog);
+  return (!P.zMode || z === 0) ? 1 : 1 / (1 + z * E.zFog);
 }
 /* Symmetry transforms, applied to already-projected points. */
 function symOps(){
@@ -1135,55 +1857,49 @@ function shapeAt(p, k, isW, totalOverride){
   const n = totalOverride || p.pts.length;
   const t = n > 1 ? Math.min(1, k/(n-1)) : 0;
   let f = 1;
-  const tin = isW ? P.tIn : P.aIn, tout = isW ? P.tOut : P.aOut;
+  const tin = isW ? E.tIn : P.aIn, tout = isW ? E.tOut : P.aOut;
   if(tin  > 0.001) f *= Math.min(1, t / tin);
   if(tout > 0.001) f *= Math.min(1, (1-t) / tout);
   f = Math.pow(f, isW ? P.tCurve : P.aCurve);
 
   const sp = p.pts[k][2] || 0;
-  const vn = Math.min(1, sp / Math.max(0.001, P.speed));
-  const vAmt = isW ? P.wVel : P.aVel;
+  const vn = Math.min(1, sp / Math.max(0.001, E.speed));
+  const vAmt = isW ? E.wVel : P.aVel;
   if(vAmt !== 0) f *= (1 + vAmt * (vn - 0.5) * 2);
 
-  const nibAmt = isW ? P.wNib : P.aNib;
+  const nibAmt = isW ? E.wNib : P.aNib;
   if(nibAmt !== 0){
-    const d = Math.abs(Math.sin(p.pts[k][3] - P.nibAng * Math.PI/180));
+    const d = Math.abs(Math.sin(p.pts[k][3] - E.nibAng * Math.PI/180));
     f *= (1 - nibAmt) + nibAmt * d;
   }
   return Math.max(isW ? P.wMin : P.aMin, f);
 }
 
-function inkColour(a){
-  if(P.inkMode === 0) return P.ink;
-  const off = P.colOff;
-  const sx = a.pts[0][0] + (off ? ((a.rseed||0)*2-1) * off * W : 0);
-  const sy = a.pts[0][1] + (off ? (((a.rseed||0)*7919%1)*2-1) * off * H : 0);
-  const i = ay(sy)*AW + ax(sx);
-  const r = Math.round(rgb[i*3]*255*0.45), g = Math.round(rgb[i*3+1]*255*0.45),
-        b = Math.round(rgb[i*3+2]*255*0.45);
-  return 'rgb(' + r + ',' + g + ',' + b + ')';
-}
+function inkColour(a){ return inkColourAt(a, 0); }
+
 function shapingOn(){
-  return P.tIn || P.tOut || P.wVel || P.wNib ||
+  return E.tIn || E.tOut || E.wVel || E.wNib ||
          P.aIn || P.aOut || P.aVel || P.aNib;
 }
 function drawInk(ctx, sc, from){
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   const shaped = shapingOn();
   const ops = symOps();
+  if(P.inkMode === 5) spdDirty = true;
   if(P.shape > 0){
     for(let i = from || 0; i < paths.length; i++){
       const p = paths[i];
       const col = inkColour(p), total = p.pts.length;
       const a = {rseed: p.rseed || 0, sizeMul: p.sizeMul || 1};
-      for(let k = Math.max(1, P.stampEvery); k < total; k += Math.max(1, P.stampEvery)){
-        const sz = ramp(P.sizeA, P.sizeB, P.easeSize) * a.sizeMul * shapeAt(p,k,true);
-        const al = ramp(P.alphaA, P.alpha, P.easeAlpha) * shapeAt(p,k,false) *
+      for(let k = Math.max(1, E.stampEvery); k < total; k += Math.max(1, E.stampEvery)){
+        const sz = ramp(E.sizeA, E.sizeB, P.easeSize) * a.sizeMul * shapeAt(p,k,true);
+        const al = ramp(P.alphaA, E.alpha, P.easeAlpha) * shapeAt(p,k,false) *
                    fogAt(p.pts[k]) * lumAlphaAt(p.pts[k]);
         if(al > 0.004 && sz > 0.05){
           const q = project(p.pts[k], sc);
+          const cK = perPointInk() ? inkColourAt(p, k) : col;
           for(const op of ops){ const t = op(q);
-            drawStamp(ctx, a, [t[0]/sc, t[1]/sc, 0, p.pts[k][3]], sc, sz*(t[2]||1), col, al); }
+            drawStamp(ctx, a, [t[0]/sc, t[1]/sc, 0, p.pts[k][3]], sc, sz*(t[2]||1), cK, al); }
         }
       }
     }
@@ -1192,9 +1908,9 @@ function drawInk(ctx, sc, from){
   }
   for(let i = from || 0; i < paths.length; i++){
     const p = paths[i];
-    const col = inkColour(p), base = ramp(P.widthA, P.width, P.easeWidth) * sc * (p.kind ? 1 : 0.75);
-    if(!shaped && !P.zMode && !P.lumA){
-      ctx.globalAlpha = ramp(P.alphaA, P.alpha, P.easeAlpha);
+    const col = inkColour(p), base = ramp(P.widthA, E.width, P.easeWidth) * sc * (p.kind ? 1 : 0.75);
+    if(!shaped && !P.zMode && !P.lumA && !perPointInk()){
+      ctx.globalAlpha = ramp(P.alphaA, E.alpha, P.easeAlpha);
       ctx.strokeStyle = col; ctx.lineWidth = base;
       for(const op of ops){
         ctx.beginPath();
@@ -1205,14 +1921,16 @@ function drawInk(ctx, sc, from){
       }
       continue;
     }
-    // one segment at a time — width and opacity vary along the stroke
+    // one segment at a time — width, opacity and colour vary along the stroke
     ctx.strokeStyle = col;
+    const varyCol = perPointInk();
     for(let k = 1; k < p.pts.length; k++){
+      if(varyCol) ctx.strokeStyle = inkColourAt(p, k);
       const A = project(p.pts[k-1], sc), B = project(p.pts[k], sc);
       const fg = (fogAt(p.pts[k-1]) + fogAt(p.pts[k])) * 0.5 *
                  (lumAlphaAt(p.pts[k-1]) + lumAlphaAt(p.pts[k])) * 0.5;
       const w = base * (shapeAt(p,k,true) + shapeAt(p,k-1,true)) * 0.5 * B[2];
-      const al = ramp(P.alphaA, P.alpha, P.easeAlpha) * (shapeAt(p,k,false) + shapeAt(p,k-1,false)) * 0.5 * fg;
+      const al = ramp(P.alphaA, E.alpha, P.easeAlpha) * (shapeAt(p,k,false) + shapeAt(p,k-1,false)) * 0.5 * fg;
       if(al < 0.004 || w < 0.02) continue;
       ctx.globalAlpha = Math.min(1, al);
       ctx.lineWidth = w;
@@ -1230,31 +1948,31 @@ function drawInk(ctx, sc, from){
 function drawLive(a){
   const n = a.path.length;
   if(P.shape > 0){
-    if(n < 1 || (n % Math.max(1, P.stampEvery)) !== 0) return;
+    if(n < 1 || (n % Math.max(1, E.stampEvery)) !== 0) return;
     const k = a.path[n-1];
     const p = {pts:a.path, kind:a.kind};
     const total = Math.max(4, Math.round(a.life));
-    const sz = ramp(P.sizeA, P.sizeB, P.easeSize) * a.sizeMul *
+    const sz = ramp(E.sizeA, E.sizeB, P.easeSize) * a.sizeMul *
                shapeAt(p, n-1, true, total);
-    const al = ramp(P.alphaA, P.alpha, P.easeAlpha) *
+    const al = ramp(P.alphaA, E.alpha, P.easeAlpha) *
                shapeAt(p, n-1, false, total) * fogAt(k) * lumAlphaAt(k);
-    if(al > 0.004 && sz > 0.05) drawStamp(ictx, a, k, 1, sz, inkColour(p), al);
+    if(al > 0.004 && sz > 0.05) drawStamp(ictx, a, k, 1, sz, inkColourAt(p, n-1), al);
     return;
   }
   if(n < 2) return;
   const p = {pts:a.path, kind:a.kind};
   const total = Math.max(4, Math.round(a.life));
-  const base = ramp(P.widthA, P.width, P.easeWidth) * (a.kind ? 1 : 0.75);
+  const base = ramp(P.widthA, E.width, P.easeWidth) * (a.kind ? 1 : 0.75);
   const k = n - 1;
   const w  = base * (shapeAt(p,k,true,total) + shapeAt(p,k-1,true,total)) * 0.5;
-  const al = ramp(P.alphaA, P.alpha, P.easeAlpha) * (shapeAt(p,k,false,total) + shapeAt(p,k-1,false,total)) * 0.5;
+  const al = ramp(P.alphaA, E.alpha, P.easeAlpha) * (shapeAt(p,k,false,total) + shapeAt(p,k-1,false,total)) * 0.5;
   const A = project(a.path[k-1], 1), B = project(a.path[k], 1);
   const fg = (fogAt(a.path[k-1]) + fogAt(a.path[k])) * 0.5 *
              (lumAlphaAt(a.path[k-1]) + lumAlphaAt(a.path[k])) * 0.5;
   const ww = w * B[2], aa = al * fg;
   if(aa < 0.004 || ww < 0.02) return;
   ictx.globalAlpha = Math.min(1, aa);
-  ictx.strokeStyle = inkColour(p);
+  ictx.strokeStyle = perPointInk() ? inkColourAt(p, k) : inkColour(p);
   ictx.lineWidth = ww;
   ictx.lineCap = 'round'; ictx.lineJoin = 'round';
   for(const op of symOps()){
@@ -1277,6 +1995,7 @@ function repaintAll(){
   repaintQueued = true;
   requestAnimationFrame(() => {
     repaintQueued = false;
+    refreshE();
     ictx.clearRect(0, 0, inkc.width, inkc.height);
     drawnUpTo = 0; paintIncremental();
   });
@@ -1523,7 +2242,7 @@ async function startCam(){
     el('empty').classList.add('hide');
     setSize(1280, 720);
     // a live feed wants motion and turnover; a still wants tone and convergence
-    P.wMot = 2.0; P.wDark = 0.2; P.turn = 0.6; P.life = 60;
+    E.wMot = 2.0; E.wDark = 0.2; E.turn = 0.6; E.life = 60;
     ['rWMot','rWDark','rTurn','rLife'].forEach(i => el(i)._sync());
     clearSay(); running = true; el('bRun').textContent = 'Pause';
   } catch(e){
@@ -1544,17 +2263,23 @@ function useNoSource(){
 /* ---------- loop ---------- */
 let frame = 0;
 function tick(){
+  const nowT = performance.now();
+  refreshE(Math.min(0.1, (nowT - lastModT)/1000));
+  if(mod && mod.beat() && P.beatAction) onBeat();
+  lastModT = nowT;
   if(running){
     if(srcKind === 'cam' && vidEl.readyState >= 2 && (frame % 2 === 0)) analyse(vidEl);
-    if(P.zMode === 2) sliceZ += P.zRate / 60;
+    if(P.zMode === 2) sliceZ += E.zRate / 60;
     // fading the whole layer is how older slices recede: already-drawn ink
     // cannot be moved, but it can be let go of
-    if(P.fade > 0){
+    if(E.fade > 0){
       ictx.globalCompositeOperation = 'destination-out';
-      ictx.fillStyle = 'rgba(0,0,0,' + P.fade + ')';
+      ictx.fillStyle = 'rgba(0,0,0,' + E.fade + ')';
       ictx.fillRect(0, 0, inkc.width, inkc.height);
       ictx.globalCompositeOperation = 'source-over';
     }
+    colClock += 1/60;
+    if((frame % 30) === 0) spdDirty = true;
     fluidStep();
     step();
     if(P.cycleOn && !cycleDone){
@@ -1601,29 +2326,33 @@ el('bSVG').addEventListener('click', () => {
     const k = col + '|' + band;
     (groups[k] = groups[k] || {col, band, runs:[]}).runs.push(pts);
   };
+  const varyCol = perPointInk();
   for(const p of paths){
     const col = inkColour(p);
-    if(!shaped){ put(col, BANDS-1, p.pts); continue; }
-    // split each stroke into runs of equal width band, so tapers survive as
-    // separate polylines rather than one <line> per segment
-    let run = [p.pts[0]], cur = -1;
+    if(!shaped && !varyCol){ put(col, BANDS-1, p.pts); continue; }
+    // split each stroke into runs of equal width band — and, when the colour
+    // varies along the stroke, at each change of palette entry too, so a run is
+    // always one pen at one width
+    let run = [p.pts[0]], cur = -1, runStart = 0;
+    let runCol = varyCol ? inkColourAt(p, 0) : col;
     for(let k = 1; k < p.pts.length; k++){
-      const f = shapeAt(p, k, true);
+      const f = shaped ? shapeAt(p, k, true) : 1;
       const band = Math.max(0, Math.min(BANDS-1, Math.round(f * (BANDS-1))));
-      if(band !== cur){
-        if(run.length > 1 && cur >= 0) put(col, cur, run);
-        run = [p.pts[k-1]]; cur = band;
+      const kc = varyCol ? inkColourAt(p, k) : col;
+      if(band !== cur || kc !== runCol){
+        if(run.length > 1 && cur >= 0) put(runCol, cur, run);
+        run = [p.pts[k-1]]; cur = band; runStart = k-1; runCol = kc;
       }
       run.push(p.pts[k]);
     }
-    if(run.length > 1) put(col, Math.max(0,cur), run);
+    if(run.length > 1) put(runCol, Math.max(0,cur), run);
   }
   // one <g> per colour and width band — each group is a pen on a plotter
   for(const k in groups){
     const G = groups[k];
-    const w = (P.width * (G.band/(BANDS-1) || 1/(BANDS-1))).toFixed(2);
+    const w = (E.width * (G.band/(BANDS-1) || 1/(BANDS-1))).toFixed(2);
     parts.push('<g fill="none" stroke="' + G.col + '" stroke-width="' + w +
-      '" stroke-opacity="' + P.alpha + '" stroke-linecap="round" stroke-linejoin="round">');
+      '" stroke-opacity="' + E.alpha + '" stroke-linecap="round" stroke-linejoin="round">');
     for(const pts of G.runs)
       for(const op of svgOps)
         parts.push('<polyline points="' +
@@ -1634,6 +2363,106 @@ el('bSVG').addEventListener('click', () => {
   parts.push('</svg>');
   download(new Blob([parts.join('\n')], {type:'image/svg+xml'}), 'plotter.svg');
 });
+
+
+/* ---------- modulation ----------
+   The shared suite module: four slots, each driving a parameter from an LFO or
+   an audio band, plus onset detection so events can fire on the beat rather
+   than merely follow the level. */
+const MOD_TARGETS = {
+  fieldRot:{label:'Field rotation', span:45},
+  drag:{label:'Drag', span:0.08},
+  force:{label:'Field force', span:0.8},
+  speed:{label:'Speed', span:1.2},
+  wander:{label:'Wander', span:0.25},
+  nScale:{label:'Noise scale', span:0.004},
+  rest:{label:'Rest threshold', span:0.15},
+  life:{label:'Stroke length', span:60},
+  sep:{label:'Separation', span:0.6},
+  ali:{label:'Alignment', span:0.3},
+  coh:{label:'Cohesion', span:0.3},
+  nbr:{label:'Neighbourhood', span:8},
+  contour:{label:'Contour share', span:0.25},
+  rMin:{label:'Min spacing', span:3},
+  rMax:{label:'Max spacing', span:12},
+  turn:{label:'Turnover', span:0.25},
+  spread:{label:'Start spread', span:2},
+  wGrad:{label:'Density: edges', span:0.5},
+  wAni:{label:'Density: anisotropy', span:0.4},
+  wDark:{label:'Density: darkness', span:0.4},
+  wMot:{label:'Density: motion', span:1},
+  width:{label:'Ink width', span:2},
+  alpha:{label:'Ink opacity', span:0.25},
+  palOffset:{label:'Palette offset', span:0.3},
+  palRepeat:{label:'Palette repeat', span:2},
+  colChaos:{label:'Per-agent spread', span:0.25},
+  colScale:{label:'Colour noise scale', span:0.004},
+  colDrift:{label:'Colour noise drift', span:0.4},
+  sizeA:{label:'Mark size start', span:3},
+  sizeB:{label:'Mark size end', span:3},
+  stampEvery:{label:'Stamp interval', span:6},
+  rotAngle:{label:'Mark angle', span:60},
+  tIn:{label:'Taper in', span:0.1},
+  tOut:{label:'Taper out', span:0.2},
+  wVel:{label:'Width by velocity', span:0.5},
+  wNib:{label:'Width by nib', span:0.5},
+  nibAng:{label:'Nib angle', span:45},
+  zRate:{label:'Slice rate', span:0.4},
+  zPersp:{label:'Perspective', span:0.4},
+  zFog:{label:'Depth fade', span:0.4},
+  fade:{label:'Trail fade', span:0.01},
+  fCouple:{label:'Fluid coupling', span:1.2},
+  fVort:{label:'Vorticity', span:0.6},
+  fInjNoise:{label:'Fluid curl inject', span:0.6},
+  fDissip:{label:'Fluid dissipation', span:0.02}
+};
+const MOD_RID = { fieldRot:'rFieldRot', drag:'rDrag', force:'rForce', speed:'rSpeed', wander:'rWander', nScale:'rNScale', rest:'rRest', life:'rLife', sep:'rSep', ali:'rAli', coh:'rCoh', nbr:'rNbr', contour:'rContour', rMin:'rRMin', rMax:'rRMax', turn:'rTurn', spread:'rSpread', wGrad:'rWGrad', wAni:'rWAni', wDark:'rWDark', wMot:'rWMot', width:'rWidth', alpha:'rAlpha', palOffset:'rPalOffset', palRepeat:'rPalRepeat', colChaos:'rColChaos', colScale:'rColScale', colDrift:'rColDrift', sizeA:'rSizeA', sizeB:'rSizeB', stampEvery:'rStampEvery', rotAngle:'rRotAngle', tIn:'rTIn', tOut:'rTOut', wVel:'rWVel', wNib:'rWNib', nibAng:'rNibAng', zRate:'rZRate', zPersp:'rZPersp', zFog:'rZFog', fade:'rFade', fCouple:'rFCouple', fVort:'rFVort', fInjNoise:'rFInjN', fDissip:'rFDissip' };
+const BEAT_ACTIONS = ['None','Respawn all agents','Jump the flow field','New seed',
+                      'Clear the ink','Shift the palette','Fluid burst','Reverse field rotation'];
+let mod = null, E = P, lastModT = performance.now();
+/* Resolve base values plus modulation. Called from the frame loop and again at
+   the head of any repaint, so a redraw triggered while paused still reflects
+   the slider that triggered it. */
+function refreshE(dt){
+  if(!mod){ E = P; return; }
+  if(dt !== undefined) mod.tick(dt);
+  E = mod.apply(P);
+}
+
+function onBeat(){
+  switch(P.beatAction){
+    case 1:                                    // the flow resets: every agent relaunched
+      for(let i = 0; i < agents.length; i++) agents[i] = makeAgent();
+      break;
+    case 2:                                    // same field, sampled somewhere else in it
+      fieldJumpX += (rnd()*2-1) * 900;
+      fieldJumpY += (rnd()*2-1) * 900;
+      break;
+    case 3:
+      P.seed = 1 + Math.floor(rnd()*9998); seedRNG(P.seed);
+      if(el('rSeed')){ el('rSeed').value = P.seed; el('vSeed').textContent = P.seed; }
+      break;
+    case 4: clearArt(); break;
+    case 5:
+      P.palOffset = (P.palOffset + P.beatStep) - Math.floor(P.palOffset + P.beatStep);
+      if(el('rPalOffset')){ el('rPalOffset').value = P.palOffset;
+        el('vPalOffset').textContent = P.palOffset.toFixed(2); }
+      break;
+    case 6: {                                  // a radial shove into the velocity field
+      if(!P.fluidOn) break;
+      const cx = rnd()*FW, cy = rnd()*FH, rad = FW*0.18, r2 = rad*rad;
+      for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
+        const dx = i-cx, dy = j-cy, d2 = dx*dx + dy*dy;
+        if(d2 > r2 || d2 < 1e-4) continue;
+        const d = Math.sqrt(d2), w = (1 - d2/r2) * P.beatStep * 24;
+        const k = FIX(i,j);
+        fu[k] += dx/d*w; fv[k] += dy/d*w;
+      }
+      break;
+    }
+    case 7: P.fieldRot = -P.fieldRot; break;
+  }
+}
 
 /* ---------- control binding ---------- */
 function editable(b, r, commit){
@@ -1684,6 +2513,8 @@ bind('rDrag','vDrag','drag',f3);
 bind('rForce','vForce','force',f2);
 bind('rSpeed','vSpeed','speed',f2);
 bind('rWander','vWander','wander',f2);
+bind('rFieldRot','vFieldRot','fieldRot',n=>n.toFixed(0)+'\u00b0');
+bind('rBeatStep','vBeatStep','beatStep',n=>n.toFixed(2));
 bind('rNScale','vNScale','nScale',n=>n.toFixed(4));
 bind('rRest','vRest','rest',f2);
 bind('rLife','vLife','life',f0);
@@ -1705,6 +2536,11 @@ bind('rSizeMin','vSizeMin','sizeMin',f2);
 bind('rSizeMax','vSizeMax','sizeMax',f2);
 bind('rRotAngle','vRotAngle','rotAngle',n=>f0(n)+'°',repaintAll);
 bind('rColOff','vColOff','colOff',f3,repaintAll);
+bind('rPalOffset','vPalOffset','palOffset',f2,repaintAll);
+bind('rPalRepeat','vPalRepeat','palRepeat',f2,repaintAll);
+bind('rColChaos','vColChaos','colChaos',f2,repaintAll);
+bind('rColScale','vColScale','colScale',n=>n.toFixed(4),repaintAll);
+bind('rColDrift','vColDrift','colDrift',f2);
 bind('rWidth','vWidth','width',f2,repaintAll);
 bind('rAlpha','vAlpha','alpha',f2,repaintAll);
 bind('rTIn','vTIn','tIn',f2,repaintAll);
@@ -1759,6 +2595,25 @@ bind('rPost','vPost','post',n => n<1.5 ? 'off' : f0(n));
 bind('rWash','vWash','wash',f2);
 bind('rScale','vScale','scale',n => n + '×');
 
+el('sBeat').innerHTML = BEAT_ACTIONS.map((t,i)=>'<option value="'+i+'">'+t+'</option>').join('');
+el('sBeat').addEventListener('change', e => P.beatAction = +e.target.value);
+if(typeof Modulation !== 'undefined'){
+  mod = new Modulation({
+    targets: MOD_TARGETS,
+    slots: 4,
+    defaults: [
+      {target:'force',     wave:11, depth:0.5},   // bass
+      {target:'wander',    wave:12, depth:0.4},   // mid
+      {target:'palOffset', wave:13, depth:0.5},   // high
+      {target:'fieldRot',  wave:0,  depth:0.3}
+    ],
+    mountLfo: el('lfos'), mountAudio: el('audioMount'),
+    range: k => { const r = el(MOD_RID[k]); return [parseFloat(r.min), parseFloat(r.max)]; },
+    onStatus: (m,e) => { if(m) say(m,e); else clearSay(); },
+    onAudioStart: () => { running = true; el('bRun').textContent = 'Pause'; }
+  });
+}
+
 el('sView').addEventListener('change', e => {
   P.view = +e.target.value;
   if(P.view === 0) repaintAll();
@@ -1790,7 +2645,12 @@ el('bReseed').addEventListener('click', () => {
 seedRNG(P.seed);
 cycleStatus();
 
-el('sInk').addEventListener('change', e => { P.inkMode = +e.target.value; repaintAll(); });
+el('sInk').innerHTML = INKMODES.map((t,i)=>'<option value="'+i+'">'+t+'</option>').join('');
+function palVis(){ el('palBox').style.opacity = P.inkMode >= 2 ? 1 : 0.35; }
+el('sInk').addEventListener('change', e => { P.inkMode = +e.target.value; spdDirty = true; palVis(); repaintAll(); });
+for(const [id,key] of [['cPalA','palA'],['cPalB','palB'],['cPalC','palC']])
+  el(id).addEventListener('input', e => { P[key] = e.target.value; buildPalette(); repaintAll(); });
+buildPalette(); palVis();
 el('cInk').addEventListener('input', e => { P.ink = e.target.value; repaintAll(); });
 el('cPaper').addEventListener('input', e => { P.paper = e.target.value; });
 el('cPaperOn').addEventListener('change', e => { P.paperOn = e.target.checked; });
