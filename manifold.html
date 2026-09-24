@@ -144,7 +144,13 @@
 <script>
 "use strict";
 
-const U = window.UnlimiterPoints;
+/* Read it both ways on purpose: the module publishes itself onto window,
+   but a top-level `const` in a classic script is only a lexical binding,
+   so a module loaded that way is reachable by bare name and invisible on
+   window. Accepting either means neither pattern can break the page. */
+const U = (typeof UnlimiterPoints !== "undefined" && UnlimiterPoints)
+       || (typeof window !== "undefined" && window.UnlimiterPoints)
+       || null;
 const cv = document.getElementById("gl");
 const statusEl = document.getElementById("status");
 

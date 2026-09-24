@@ -46,6 +46,25 @@ Modifiers: `noise`, `twist`, `swirl`, `ripple`, `inflate`, `axis`.
 
 ---
 
+## Loading it
+
+```html
+<script src="unlimiter-points.js"></script>
+<script src="unlimiter-drive.js"></script>
+```
+
+Order does not matter — they do not know about each other.
+
+The module publishes itself with `window.UnlimiterPoints = ...`, the same way
+`unlimiter-drive.js` ends with `global.UnlimiterDrive = ...`. That explicit
+line is load-bearing, not decoration: a top-level `const` in a classic
+`<script>` lives in the global **lexical** environment and never becomes a
+property of `window`, so without it a consumer reading `window.UnlimiterPoints`
+finds nothing while the file has in fact loaded and run perfectly. (This is the
+same realm quirk RACK.md relies on when it reaches into tool frames with `eval`
+rather than through `window`.) `unlimiter-bus.js` has no such line yet — read
+it by its bare name, `UnlimiterBus`, not off `window`.
+
 ## Generating a frame
 
 ```js
