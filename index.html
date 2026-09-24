@@ -135,6 +135,10 @@
       modulation module: audio band analysis, onset detection, MIDI clock and CC, clock-locked LFOs,
       and a mod matrix that routes any of it to any parameter. Tools carrying the
       <span class="tag drive" style="display:inline-block">drive</span> tag have it wired in.</p>
+    <p><b style="color:var(--text)">On the geometry layer.</b> <code>unlimiter-points.js</code> is the shared
+      procedural point generator: surfaces, placements, a non-destructive modifier stack, noise carving and
+      point-for-point morphing, with no DOM or WebGL in it. Manifold is its instrument panel; anything else in
+      the suite can read the same buffers. See <code>POINTS.md</code>.</p>
     <p><b style="color:var(--text)">Microphone and MIDI need a secure context.</b> Served from GitHub
       Pages over https they work. Opened as a <code>file://</code> URL from your disk they are blocked
       by the browser. Run <code>drive-check.html</code> first if anything seems dead.</p>
@@ -149,6 +153,9 @@
    Tool registry. Add a tool by adding a line here.
    --------------------------------------------------------------- */
 const TOOLS = [
+  { file:"manifold.html", name:"Manifold", motif:"manifold",
+    desc:"Procedural geometry as a point generator. Pick a form — sphere, torus, supershape, Möbius band — choose how points land on it, stack non-destructive modifiers, and carve it with a noise field. Morphs point by point between two forms, and exports a real point cloud.",
+    tags:["3d","procedural","point clouds","geometry","drive"] },
   { file:"relief.html", name:"Relief", motif:"relief",
     desc:"Turns a depth camera into geometry \u2014 points, scanlines or a connected surface you can orbit. A single sensor sees one side of the world, so what you get is a relief rather than a full cloud.",
     tags:["depth","kinect","webcam","3d","drive"] },
@@ -211,6 +218,31 @@ const TAU=Math.PI*2;
    Motifs — each draws one still frame at time t
    --------------------------------------------------------------- */
 const MOTIF = {
+  manifold(g,w,h,t){
+    // nested supershape shells, carved by a noise band — the tool's
+    // own four axes (form, placement, carve, shells) in one still
+    const cx=w/2, cy=h/2, R=Math.min(w,h)*0.36;
+    const sup=(a,m,n1,n2,n3)=>{
+      const q=m*a/4;
+      const s=Math.pow(Math.abs(Math.cos(q)),n2)+Math.pow(Math.abs(Math.sin(q)),n3);
+      return s>1e-6?Math.min(Math.pow(s,-1/n1),3):0;
+    };
+    for(let shell=0; shell<4; shell++){
+      const sf=shell/3;
+      const rad=R*(1-sf*0.34);
+      for(let i=0;i<190;i++){
+        const u=i/190;
+        const a=u*TAU + t*0.18 + shell*0.5;
+        const r=rad*sup(a,7,0.42,1.7,1.7);
+        const x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r*0.74;
+        const n=vnoise(Math.cos(a)*2.4+t*0.4, Math.sin(a)*2.4+sf*3);
+        if(n<0.42||n>0.60) continue;                 // the carve band
+        const lum=52-shell*7;
+        g.fillStyle=`hsla(${168+sf*92},${54+sf*18}%,${lum}%,${0.92-sf*0.16})`;
+        g.beginPath(); g.arc(x,y,1.5-sf*0.35,0,TAU); g.fill();
+      }
+    }
+  },
   anchor(g,w,h,t){
     // stamps walking a closed contour, offset outward in passes
     const cx=w/2, cy=h/2;
