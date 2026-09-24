@@ -714,7 +714,8 @@ const Tools = (() => {
   function buildPanel(m){
     const wrap = document.createElement("div");
     wrap.className = "tool";
-    wrap.innerHTML = `<h3>${m.label}</h3><canvas id="cv-${m.toolId}" width="300" height="150"></canvas>` +
+    wrap.innerHTML = `<h3>${m.label}${m.remote ? ' <small style="color:var(--dim)">· remote</small>' : ''}</h3>` +
+      (m.remote ? "" : `<canvas id="cv-${m.toolId}" width="300" height="150"></canvas>`) +
       `<div class="params">` +
       m.params.map(p => `<div>${p.label} <span id="pv-${m.toolId}-${p.id}">—</span>` +
         ` <button data-tool="${m.toolId}" data-param="${p.id}" class="addTarget" title="Add ${m.toolId}.${p.id} to the patch">patch</button></div>`).join("") +
@@ -995,6 +996,7 @@ function defaultPatch(){
     last = now;
     AudioEngine.tick(now, dt);
     Graph.evaluate(dt);
+    if(typeof UnlimiterBridge !== "undefined") UnlimiterBridge.flush();
     GraphView.pulseCables();
     UI.updateMeters();
     window.__timeCubeStep(dt);
@@ -1005,6 +1007,50 @@ function defaultPatch(){
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+})();
+</script>
+<script>
+"use strict";
+/* ============================================================
+   UnlimiterBridge — Control Surface side of the cross-tab bridge.
+   BroadcastChannel is same-origin, so this connects tools when the
+   suite runs from one origin (the GitHub Pages repo / local dev).
+   Tools announce {type:"manifest"}; the surface registers them as
+   remote targets and streams {type:"params"} frames back.
+   ============================================================ */
+const UnlimiterBridge = (() => {
+  let ch = null;
+  const pending = new Map(); // toolId -> {param: value}
+  try{ ch = new BroadcastChannel("unlimiter-bridge"); }catch(e){ /* not available here */ }
+  function queue(toolId, param, value){
+    if(!ch) return;
+    let t = pending.get(toolId);
+    if(!t){ t = {}; pending.set(toolId, t); }
+    t[param] = value;
+  }
+  function flush(){
+    if(!ch || !pending.size) return;
+    pending.forEach((values, toolId) => ch.postMessage({ type:"params", toolId, values }));
+    pending.clear();
+  }
+  if(ch){
+    ch.onmessage = ev => {
+      const m = ev.data || {};
+      if(m.type === "manifest" && m.toolId && Array.isArray(m.params)){
+        if(Tools.get(m.toolId)) return;
+        Tools.registerTool({
+          toolId: m.toolId,
+          label: m.label || m.toolId,
+          params: m.params.filter(p => p && p.id && Array.isArray(p.range)),
+          remote: true,
+          setParam: (param, value) => queue(m.toolId, param, value),
+        });
+        UI.status("remote tool connected: " + (m.label || m.toolId));
+      }
+    };
+    ch.postMessage({ type: "discover" });
+  }
+  return { queue, flush, get active(){ return !!ch; } };
 })();
 </script>
 </body>
