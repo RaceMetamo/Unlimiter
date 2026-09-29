@@ -169,6 +169,21 @@ const SCHEMA=[
  {g:'Body shape', id:'lobeSize',l:'Second lobe size',min:0.3,max:1.2,step:0.002,v:0.8},
  {g:'Body shape', id:'neck',l:'Neck softness',min:0.02,max:0.6,step:0.002,v:0.22},
 
+ {g:'Material', id:'rough',l:'Roughness',min:0.02,max:1,step:0.005,v:0.82},
+ {g:'Material', id:'metal',l:'Metalness',min:0,max:1,step:0.005,v:0},
+ {g:'Material', id:'ior',l:'Index of refraction',min:1.05,max:2.8,step:0.005,v:1.45},
+ {g:'Material', id:'transp',l:'Transparency',min:0,max:1,step:0.005,v:0},
+ {g:'Material', id:'disp',l:'Dispersion (fire)',min:0,max:1,step:0.005,v:0},
+ {g:'Material', id:'coat',l:'Clear coat',min:0,max:1,step:0.005,v:0},
+ {g:'Material', id:'sparkle',l:'Sparkle',min:0,max:1,step:0.005,v:0},
+ {g:'Material', id:'sparkScale',l:'Sparkle grain',min:8,max:220,step:1,v:70,int:true},
+ {g:'Material', id:'irid',l:'Iridescence',min:0,max:1,step:0.005,v:0},
+ {g:'Material', id:'iridScale',l:'Film thickness',min:0.05,max:3,step:0.005,v:0.6},
+ {g:'Material', id:'sss',l:'Light through it',min:0,max:1.5,step:0.005,v:0},
+ {g:'Material', id:'emis',l:'Glow from within',min:0,max:1.5,step:0.005,v:0},
+ {g:'Material', id:'emisThresh',l:'Glow depth',min:-0.5,max:0.6,step:0.005,v:0},
+ {g:'Material', id:'envAmt',l:'Reflects the sky',min:0,max:2.5,step:0.005,v:0.5},
+
  {g:'Tectonics', id:'plateN',l:'Plates',min:0,max:24,step:1,v:9,int:true},
  {g:'Tectonics', id:'plateAmp',l:'Plate elevation',min:0,max:0.8,step:0.002,v:0.34},
  {g:'Tectonics', id:'plateRidge',l:'Collision mountains',min:0,max:1,step:0.002,v:0.42},
@@ -520,6 +535,9 @@ in vec3 vWorld,vN,vObj; in float vH;
 uniform vec3 uCam,cDeep,cShallow,cLow,cMid,cHigh,cAtmo;
 uniform vec3 uLightDir[4],uSunCol[4];
 uniform int uNumLights;
+uniform float uRough,uMetal,uTransp,uIor,uDisp,uSparkle,uSparkScale,
+              uIrid,uIridScale,uSSS,uEmis,uEmisThresh,uCoat,uEnvAmt;
+uniform vec3 uEnvA,uEnvB,uMetalTint;
 uniform float uSea,uRim,uPaint,uCel,uFacet,uSpec,uSnow;
 uniform float uRingOn,uRingIn,uRingOut,uRingOpacity,uRingBands,uRingGap,uRingSeed;
 uniform vec3 uRingAxis,uCenter;
@@ -537,6 +555,54 @@ layout(location=1) out vec4 oNorm;
 vec2 sphUV(vec3 d){ return vec2(atan(d.z,d.x)*0.15915494+0.5, acos(clamp(d.y,-1.0,1.0))*0.31830989); }
 ${RINGFN}
 ${FACEFN}
+const float PI=3.14159265;
+float D_GGX(float NoH,float a){
+  float a2=a*a; float d=NoH*NoH*(a2-1.0)+1.0;
+  return a2/max(PI*d*d,1e-7);
+}
+float V_Smith(float NoV,float NoL,float a){
+  float a2=a*a;
+  float gv=NoL*sqrt(NoV*NoV*(1.0-a2)+a2);
+  float gl=NoV*sqrt(NoL*NoL*(1.0-a2)+a2);
+  return 0.5/max(gv+gl,1e-6);
+}
+vec3 F_Schlick(vec3 f0,float u){ return f0+(1.0-f0)*pow(clamp(1.0-u,0.0,1.0),5.0); }
+vec3 hash33(vec3 p){
+  p=vec3(dot(p,vec3(127.1,311.7,74.7)),dot(p,vec3(269.5,183.3,246.1)),dot(p,vec3(113.5,271.9,124.6)));
+  return fract(sin(p)*43758.5453);
+}
+// thin-film interference: the path through the film shifts each channel's phase
+vec3 thinFilm(float cosT,float thick){
+  float d=thick*12.0/max(cosT,0.06);
+  return 0.5+0.5*cos(vec3(d,d+2.0944,d+4.1888));
+}
+// There is no cubemap here, so the sky a polished planet mirrors is generated on the fly:
+// cheap value noise for the nebula structure plus cell-hashed specks for stars.
+float vnoise(vec3 p){
+  vec3 i=floor(p), f=fract(p);
+  f=f*f*(3.0-2.0*f);
+  float n000=hash33(i).x,                n100=hash33(i+vec3(1,0,0)).x;
+  float n010=hash33(i+vec3(0,1,0)).x,    n110=hash33(i+vec3(1,1,0)).x;
+  float n001=hash33(i+vec3(0,0,1)).x,    n101=hash33(i+vec3(1,0,1)).x;
+  float n011=hash33(i+vec3(0,1,1)).x,    n111=hash33(i+vec3(1,1,1)).x;
+  return mix(mix(mix(n000,n100,f.x),mix(n010,n110,f.x),f.y),
+             mix(mix(n001,n101,f.x),mix(n011,n111,f.x),f.y),f.z);
+}
+vec3 envAt(vec3 r){
+  float hh=r.y*0.5+0.5;
+  vec3 c=mix(uEnvA,uEnvB,hh*hh);
+  c+=uEnvB*pow(1.0-abs(r.y),6.0)*0.35;
+  // nebula structure, so a mirror finish has something to show
+  float f=vnoise(r*2.3)*0.6+vnoise(r*5.7)*0.3+vnoise(r*12.0)*0.1;
+  c+=uEnvB*smoothstep(0.45,0.95,f)*1.5;
+  c+=uEnvA*smoothstep(0.3,0.8,1.0-f)*0.5;
+  // reflected starlight specks
+  vec3 g=r*34.0; vec3 cell=floor(g);
+  vec3 sp=hash33(cell);
+  float d=length(fract(g)-sp);
+  c+=vec3(0.8,0.86,1.0)*smoothstep(0.1,0.0,d)*pow(hash33(cell+3.1).y,7.0)*11.0;
+  return c;
+}
 float shadeLam(vec3 n,vec3 L,float nl){
   float lam=pow(clamp(nl*0.5+0.5,0.0,1.0),1.7);
   if(uCel>1.5) lam=clamp(floor(lam*uCel)/max(uCel-1.0,1.0),0.0,1.0);
@@ -570,7 +636,21 @@ void main(){
   vec4 fc=faceLayer(vObj,uTime);
   col=mix(col,fc.rgb,fc.a);
   vec3 V=normalize(uCam-vWorld);
-  vec3 lit=vec3(0.0), spc=vec3(0.0);
+  float NoV=max(dot(n,V),1e-4);
+  float face=fc.a;
+  // the face decal stays matte paint whatever the planet is made of
+  float rough=clamp(mix(uRough,0.85,face),0.02,1.0);
+  float metal=uMetal*(1.0-face);
+  // water is its own smooth surface sitting on top of the body material
+  float wetness=water*clamp(uSpec,0.0,1.0)*(1.0-face);
+  rough=mix(rough,min(rough,0.09),wetness);
+  float a=max(rough*rough,0.0015);
+
+  float f0s=pow((uIor-1.0)/(uIor+1.0),2.0);
+  vec3 f0=mix(vec3(f0s),col*uMetalTint,metal);
+  vec3 diffCol=col*(1.0-metal)*(1.0-uTransp*0.85);
+
+  vec3 lit=vec3(0.0), spc=vec3(0.0), sss=vec3(0.0);
   float lamA=0.0, nlA=-1.0;
   for(int i=0;i<4;i++){
     if(i>=uNumLights) break;
@@ -580,17 +660,73 @@ void main(){
     lit+=uSunCol[i]*lam;
     lamA+=lam;
     nlA=max(nlA,nl);
-    spc+=uSunCol[i]*pow(max(dot(n,normalize(V+L)),0.0),72.0)*step(0.0,nl);
+    if(nl>0.0){
+      vec3 H=normalize(V+L);
+      float NoH=max(dot(n,H),0.0), NoL=nl, VoH=max(dot(V,H),0.0);
+      vec3 F=F_Schlick(f0,VoH);
+      vec3 lobe=F*(D_GGX(NoH,a)*V_Smith(NoV,NoL,a)*NoL);
+      // dispersion splits the highlight into its colours, the way a gem does
+      if(uDisp>0.0){
+        float r2=max(a*(1.0-uDisp*0.75),0.0004);
+        float g2=max(a*(1.0+uDisp*0.5),0.0004);
+        vec3 wide=vec3(D_GGX(NoH,r2),D_GGX(NoH,a),D_GGX(NoH,g2))*(V_Smith(NoV,NoL,a)*NoL);
+        lobe=mix(lobe,F*wide,uDisp);
+      }
+      if(uCoat>0.0){
+        float ca=max(0.0016+rough*0.02,0.0016);
+        lobe+=vec3(0.06+0.94*pow(1.0-VoH,5.0))*(D_GGX(NoH,ca)*V_Smith(NoV,NoL,ca)*NoL)*uCoat;
+      }
+      if(uSparkle>0.0){
+        // random micro-facets that catch the light only from certain angles
+        vec3 cell=floor(vObj*uSparkScale);
+        vec3 rnd=hash33(cell)*2.0-1.0;
+        vec3 fn=normalize(n+rnd*0.55);
+        float glint=pow(max(dot(fn,H),0.0),260.0)*step(0.55,hash33(cell+7.3).x);
+        lobe+=vec3(glint)*uSparkle*7.0;
+      }
+      spc+=uSunCol[i]*lobe;
+      if(uSSS>0.0){
+        // light bleeding through from the far side
+        float wrap=pow(clamp(dot(-n,L)*0.5+0.5,0.0,1.0),2.2);
+        float thru=pow(clamp(dot(V,-L)*0.5+0.5,0.0,1.0),2.0);
+        sss+=uSunCol[i]*(wrap*0.55+thru*0.8);
+      }
+    }
   }
   lamA=clamp(lamA,0.0,1.0);
-  spc*=water*uSpec*(1.0-fc.a);
-  vec3 outc=col*(vec3(0.09)+0.98*lit)+spc;
-  if(uPaint>0.0){ vec3 pc=texture(uAccum,sphUV(vObj)).rgb; outc+=pc*uPaint*(0.25+0.75*lamA)*(1.0-fc.a); }
+
+  vec3 R=reflect(-V,n);
+  vec3 env=envAt(R)*uEnvAmt;
+  vec3 Fv=F_Schlick(f0,NoV);
+  vec3 envSpec=env*Fv*mix(1.0,0.25,rough);   // rougher surfaces gather less of a mirror image
+  envSpec+=f0*0.05*uEnvAmt;                  // a floor, so metal never reads as a black hole
+
+  vec3 outc=diffCol*(vec3(0.09)+0.98*lit)+spc+envSpec;
+  outc+=diffCol*env*0.3;
+  if(uSSS>0.0) outc+=col*sss*uSSS*(1.0-metal);
+
+  if(uIrid>0.0){
+    vec3 tf=thinFilm(NoV,uIridScale);
+    outc+=tf*uIrid*(0.35+0.65*pow(1.0-NoV,2.0))*(0.25+0.9*lamA);
+  }
+  if(uEmis>0.0){
+    float e=smoothstep(uEmisThresh,uEmisThresh-0.28,h);   // heat pooling in the low ground
+    outc+=cDeep*e*uEmis*3.2;
+  }
+  if(uPaint>0.0){ vec3 pc=texture(uAccum,sphUV(vObj)).rgb; outc+=pc*uPaint*(0.25+0.75*lamA)*(1.0-face); }
   outc+=fc.rgb*fc.a*uFaceGlow*0.9;
-  float fres=pow(1.0-clamp(dot(n,V),0.0,1.0),3.0);
+  float fres=pow(1.0-NoV,3.0);
   outc+=cAtmo*fres*uRim*clamp(nlA*0.55+0.5,0.0,1.0);
+
+  // transparent bodies let the sky through face-on and turn opaque at the rim
+  float cover=1.0;
+  if(uTransp>0.0){
+    float rim=clamp(fres*1.6+dot(Fv,vec3(0.333))*2.2,0.0,1.0);
+    cover=mix(1.0,clamp(rim+dot(spc,vec3(0.3)),0.05,1.0),uTransp);
+    cover=max(cover,face);
+  }
   oColor=vec4(outc,1.0);
-  oNorm=vec4(n*0.5+0.5,1.0);
+  oNorm=vec4(n*0.5+0.5,cover);
 }`;
 
 const STAR_VS=`#version 300 es
@@ -1290,6 +1426,10 @@ function randomMoon(parentIdx){
   P.oblate=r()*0.22; P.elong=r()<0.4?r()*0.5:0;
   P.lobe=r()<0.22?0.25+r()*0.45:0; P.lobeSize=0.5+r()*0.5;
   P.amp=0.05+r()*0.12; P.plateN=Math.floor(r()*5); P.ringOn=0;
+  if(r()<0.3){
+    const exotic=['Glacier ice','Obsidian','Polished steel','Amethyst','Verdigris bronze','Glass'];
+    applyMaterial(exotic[Math.floor(r()*exotic.length)]);
+  } else applyMaterial('Rock');
   const hp=host.world.p;
   if(num(hp.faceOn,0)>0.5){
     ['faceSize','faceLat','faceLon','eyes','eyeLayout','eyeFit','eyeJitter','blinkStagger',
@@ -1502,6 +1642,21 @@ function setTerrain(p,w,seed){
   gl.uniform1f(U(p,'uTerraceN'),w.terraceN); gl.uniform1f(U(p,'uCraterDepth'),w.craterDepth);
 }
 function num(v,d){ return (typeof v==='number'&&isFinite(v))?v:d; }
+const envTint={a:[0.02,0.03,0.05],b:[0.1,0.12,0.18]};
+function updateEnvTint(){
+  const base=hex(sky.space||'#04060a');
+  const neb=num(sky.neb,0);
+  const n1=hex(sky.c1||'#3b1f6e'), n2=hex(sky.c3||'#c2417a');
+  let lit=[0,0,0];
+  if(mode==='system'&&stars.length){
+    stars.forEach(st=>{ const c=hex(st.color); const k=st.intensity*0.16;
+      lit[0]+=c[0]*k; lit[1]+=c[1]*k; lit[2]+=c[2]*k; });
+  } else { lit=[0.16,0.16,0.16]; }
+  for(let i=0;i<3;i++){
+    envTint.a[i]=base[i]+n1[i]*neb*0.25+lit[i]*0.35;
+    envTint.b[i]=base[i]+n2[i]*neb*0.5+lit[i];
+  }
+}
 function colOf(c,k,d){ return (c&&c[k])?c[k]:d; }
 function modelScale(m){ return Math.hypot(m[0],m[1],m[2])||1; }
 function vcross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
@@ -1591,6 +1746,16 @@ function drawPlanet(w,seed,colors,facet,model,accTex,eye,time,geo){
   gl.uniform1f(U(pPlanet,'uAmp'),w.amp); gl.uniform1f(U(pPlanet,'uSea'),w.sea);
   gl.uniform1f(U(pPlanet,'uCarve'),w.carve); gl.uniform1f(U(pPlanet,'uPaint'),w.paint);
   gl.uniform1f(U(pPlanet,'uRim'),w.rim); gl.uniform1f(U(pPlanet,'uSpec'),w.spec);
+  gl.uniform1f(U(pPlanet,'uRough'),num(w.rough,0.82)); gl.uniform1f(U(pPlanet,'uMetal'),num(w.metal,0));
+  gl.uniform1f(U(pPlanet,'uIor'),num(w.ior,1.45)); gl.uniform1f(U(pPlanet,'uTransp'),num(w.transp,0));
+  gl.uniform1f(U(pPlanet,'uDisp'),num(w.disp,0)); gl.uniform1f(U(pPlanet,'uCoat'),num(w.coat,0));
+  gl.uniform1f(U(pPlanet,'uSparkle'),num(w.sparkle,0)); gl.uniform1f(U(pPlanet,'uSparkScale'),num(w.sparkScale,70));
+  gl.uniform1f(U(pPlanet,'uIrid'),num(w.irid,0)); gl.uniform1f(U(pPlanet,'uIridScale'),num(w.iridScale,0.6));
+  gl.uniform1f(U(pPlanet,'uSSS'),num(w.sss,0)); gl.uniform1f(U(pPlanet,'uEmis'),num(w.emis,0));
+  gl.uniform1f(U(pPlanet,'uEmisThresh'),num(w.emisThresh,0)); gl.uniform1f(U(pPlanet,'uEnvAmt'),num(w.envAmt,0.5));
+  gl.uniform3fv(U(pPlanet,'uMetalTint'),new Float32Array([1,1,1]));
+  gl.uniform3fv(U(pPlanet,'uEnvA'),new Float32Array(envTint.a));
+  gl.uniform3fv(U(pPlanet,'uEnvB'),new Float32Array(envTint.b));
   gl.uniform1f(U(pPlanet,'uSnow'),w.snow); gl.uniform1f(U(pPlanet,'uCel'),Math.round(w.cel));
   gl.uniform1f(U(pPlanet,'uFacet'),facet?1:0);
   gl.uniform3fv(U(pPlanet,'uCam'),new Float32Array(eye));
@@ -1772,7 +1937,7 @@ function render(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   const time=(now-t0)/1000;
   postTime=time;
-  readAudio(); applyMods(time);
+  readAudio(); applyMods(time); updateEnvTint();
   if(meterEl){
     const i=Math.max(0,Math.min(3,Math.round(P.singSrc||0)));
     meterEl.style.width=((audio?audio.fast[i]:0)*100).toFixed(1)+'%';
@@ -2152,6 +2317,38 @@ const BUILTIN={
    terrace:0.35,terraceN:7,craterN:0,curlMix:0.1,pSpeed:0.045,paint:1.1},
    colors:{deep:'#1b0f2e',shallow:'#4b2f7a',low:'#5c4a6b',mid:'#a07fa8',high:'#e0d3e8',atmo:'#b07dff',flowA:'#ffd6f2',flowB:'#8a4fff'}}
 };
+// each preset sets the whole material block plus the palette it reads best in
+const MATERIALS={
+ 'Rock':{p:{rough:0.82,metal:0,ior:1.45,transp:0,disp:0,coat:0,sparkle:0,irid:0,sss:0,emis:0,envAmt:0.5,spec:0.6}},
+ 'Polished steel':{p:{rough:0.18,metal:1,ior:2.2,transp:0,coat:0,sparkle:0,irid:0,sss:0,emis:0,envAmt:1.5,spec:0},
+   colors:{deep:'#3a4048',shallow:'#5a626c',low:'#7e878f',mid:'#a6aeb5',high:'#d5dade',atmo:'#8fa6b8'}},
+ 'Brushed copper':{p:{rough:0.42,metal:1,ior:1.9,transp:0,coat:0.2,sparkle:0.08,sparkScale:140,irid:0.08,iridScale:0.35,sss:0,emis:0,envAmt:1.1,spec:0},
+   colors:{deep:'#4a2416',shallow:'#7d3d1f',low:'#b06a33',mid:'#d9924c',high:'#f2c089',atmo:'#ff9a5c'}},
+ 'Hammered gold':{p:{rough:0.3,metal:1,ior:2.4,transp:0,coat:0.15,sparkle:0.12,sparkScale:60,irid:0,sss:0,emis:0,envAmt:1.3,spec:0},
+   colors:{deep:'#4a3505',shallow:'#8a6410',low:'#c19420',mid:'#e8c04a',high:'#ffe9a8',atmo:'#ffd36a'}},
+ 'Glass':{p:{rough:0.05,metal:0,ior:1.52,transp:0.88,disp:0.1,coat:0.3,sparkle:0,irid:0,sss:0.35,emis:0,envAmt:1.6,spec:0,rim:1.3},
+   colors:{deep:'#9fd8e8',shallow:'#c2ecf4',low:'#d8f2f6',mid:'#eafafd',high:'#ffffff',atmo:'#aee8ff'}},
+ 'Diamond':{p:{rough:0.03,metal:0,ior:2.42,transp:0.7,disp:0.85,coat:0.5,sparkle:0.75,sparkScale:120,irid:0,sss:0.2,emis:0,envAmt:1.8,spec:0,rim:1.0},
+   colors:{deep:'#cfe6f2',shallow:'#e4f2f8',low:'#f0f7fa',mid:'#f8fcfe',high:'#ffffff',atmo:'#cfe9ff'}},
+ 'Amethyst':{p:{rough:0.12,metal:0,ior:1.75,transp:0.58,disp:0.45,coat:0.35,sparkle:0.45,sparkScale:90,irid:0,sss:0.6,emis:0,envAmt:1.2,spec:0,rim:1.1},
+   colors:{deep:'#2d0f52',shallow:'#5b2496',low:'#8148c4',mid:'#b183e0',high:'#e2cdf5',atmo:'#b479ff'}},
+ 'Glacier ice':{p:{rough:0.16,metal:0,ior:1.31,transp:0.42,disp:0.06,coat:0.4,sparkle:0.3,sparkScale:150,irid:0,sss:1.0,emis:0,envAmt:1.0,spec:0.4,rim:1.2},
+   colors:{deep:'#1f5f80',shallow:'#57a8c6',low:'#a9dcea',mid:'#d8f0f6',high:'#ffffff',atmo:'#9fe4ff'}},
+ 'Obsidian':{p:{rough:0.09,metal:0.15,ior:1.5,transp:0,disp:0,coat:0.8,sparkle:0.18,sparkScale:100,irid:0.12,iridScale:0.25,sss:0,emis:0,envAmt:1.2,spec:0},
+   colors:{deep:'#050507',shallow:'#101016',low:'#1b1b24',mid:'#2b2b37',high:'#45455a',atmo:'#6a5a8a'}},
+ 'Oil slick':{p:{rough:0.12,metal:0.55,ior:1.7,transp:0,disp:0,coat:0.9,sparkle:0,irid:0.95,iridScale:0.85,sss:0,emis:0,envAmt:1.0,spec:0},
+   colors:{deep:'#08080e',shallow:'#141426',low:'#22203a',mid:'#302c4e',high:'#474066',atmo:'#7a5fd0'}},
+ 'Porcelain':{p:{rough:0.22,metal:0,ior:1.6,transp:0,disp:0,coat:0.85,sparkle:0,irid:0,sss:0.45,emis:0,envAmt:0.8,spec:0.2},
+   colors:{deep:'#b9c9d8',shallow:'#d5e2ec',low:'#eef2f6',mid:'#f8fafc',high:'#ffffff',atmo:'#cfe0ee'}},
+ 'Candle wax':{p:{rough:0.55,metal:0,ior:1.45,transp:0.12,disp:0,coat:0.1,sparkle:0,irid:0,sss:1.3,emis:0,envAmt:0.4,spec:0},
+   colors:{deep:'#a8703c',shallow:'#d09a5c',low:'#eec488',mid:'#f8dfb2',high:'#fff2d8',atmo:'#ffbd7a'}},
+ 'Molten':{p:{rough:0.6,metal:0.1,ior:1.6,transp:0,disp:0,coat:0.2,sparkle:0,irid:0,sss:0.2,emis:0.85,emisThresh:-0.04,envAmt:0.4,spec:0},
+   colors:{deep:'#ff5a10',shallow:'#c22a06',low:'#3a2018',mid:'#22140f',high:'#100a08',atmo:'#ff6a2a'}},
+ 'Mercury':{p:{rough:0.04,metal:1,ior:2.6,transp:0,disp:0,coat:0,sparkle:0,irid:0,sss:0,emis:0,envAmt:2.2,spec:0,amp:0.05},
+   colors:{deep:'#5a6068',shallow:'#848b93',low:'#b3b9bf',mid:'#d8dcdf',high:'#f4f6f7',atmo:'#aab8c4'}},
+ 'Verdigris bronze':{p:{rough:0.55,metal:0.75,ior:1.85,transp:0,disp:0,coat:0.1,sparkle:0.05,irid:0.15,iridScale:0.4,sss:0,emis:0,envAmt:0.8,spec:0},
+   colors:{deep:'#1c3a33',shallow:'#2f6b58',low:'#4e9c7c',mid:'#86bda0',high:'#c2ddc8',atmo:'#6fd8b0'}}
+};
 const MOODS={
  'Delighted':{mouthCurve:0.85,mouthOpen:0.45,mouthW:0.46,mouthH:0.36,brow:0.3,brt:0.16,eyeTall:1.2,eyeSize:0.2,pupil:0.45},
  'Shocked':{mouthCurve:-0.1,mouthOpen:0.95,mouthW:0.24,mouthH:0.42,brow:0.55,brt:0.26,eyeTall:1.7,eyeSize:0.24,pupil:0.3},
@@ -2164,6 +2361,18 @@ const MOODS={
    eyeTall:1.1,pupil:0.75,mouthCurve:0.1,mouthOpen:0.2,mouthW:0.26,mouthH:0.3,browOn:0,blink:5.0},
  'Goofy':{mouthCurve:0.9,mouthOpen:0.8,mouthW:0.55,mouthH:0.4,brow:0.45,brt:0.2,eyeTall:1.5,eyeSize:0.23,pupil:0.9,eyeSpace:0.5}
 };
+// fields outside the Material group that some presets also set
+const MAT_SHARED=['spec','rim','amp'];
+function applyMaterial(name,target,cols){
+  const m=MATERIALS[name];
+  if(!m) return false;
+  const P2=target||P, C2=cols||S.colors;
+  // clear every field a material may touch, so presets never inherit each other's leftovers
+  SCHEMA.filter(x=>x.g==='Material'||MAT_SHARED.indexOf(x.id)>=0).forEach(x=>{ P2[x.id]=x.v; });
+  for(const k in m.p) P2[k]=m.p[k];
+  if(m.colors) Object.assign(C2,m.colors);
+  return true;
+}
 function applyPreset(src,keepSeed){
   for(const k in src.p) if(k in P) P[k]=src.p[k];
   if(src.colors) Object.assign(S.colors,src.colors);
@@ -2245,6 +2454,8 @@ function buildPlanetUI(){
     ['freq','ridge','sea','warpAmp','warpFreq','amp','snow','plateAmp','plateRidge','plateTrench','shelf','rivers'].forEach(id=>{
       const d=DEF(id); P[id]=d.min+Math.random()*(d.max-d.min)*(id==='amp'?0.6:1); });
     P.plateN=Math.floor(Math.random()*20); P.warpIter=Math.floor(Math.random()*3);
+    if(Math.random()<0.5){ const ks=Object.keys(MATERIALS);
+      applyMaterial(ks[Math.floor(Math.random()*ks.length)]); }
     P.oblate=Math.random()<0.45?Math.random()*0.35:0;
     P.elong=Math.random()<0.35?Math.random()*0.6:0;
     P.lump=Math.random()<0.3?Math.random()*0.35:0;
@@ -2299,6 +2510,24 @@ function buildPlanetUI(){
     if(g==='Tectonics') body.appendChild(el('p','note','Plates are spherical cells with their own elevation. Where two continental plates meet you get mountains; where oceanic ones meet, a trench.'));
     if(g==='Flow') body.appendChild(el('p','note','Particles seed on high-contrast terrain and run along its contour lines. Blend toward curl for weather.'));
     if(g==='Erosion') body.appendChild(el('p','note','Channels cut along the ridge lines of a second noise field; terracing quantises height into plateaus.'));
+    if(g==='Material'){
+      body.appendChild(el('p','note','A full microfacet surface sits under these sliders, so the presets are starting points \u2014 push roughness, metalness and transparency wherever you like.'));
+      const mr=el('div','sel','<label for="matsel">Made of</label>');
+      const ms=document.createElement('select'); ms.id='matsel';
+      ms.innerHTML='<option value="">Choose\u2026</option>'+Object.keys(MATERIALS).map(k=>`<option>${k}</option>`).join('');
+      ms.onchange=()=>{ if(applyMaterial(ms.value)) buildUI(); };
+      mr.appendChild(ms); body.appendChild(mr);
+      const mb=el('div','btns');
+      const mk=el('button',null,'Keep my colours');
+      mk.title='Re-apply the last material without touching the palette';
+      mk.onclick=()=>{ const keep={...S.colors};
+        if(applyMaterial(ms.value)){ Object.assign(S.colors,keep); buildUI(); } };
+      const mrand=el('button',null,'Surprise me');
+      mrand.onclick=()=>{ const ks=Object.keys(MATERIALS);
+        const pick=ks[Math.floor(Math.random()*ks.length)];
+        applyMaterial(pick); buildUI(); hud('Made of '+pick.toLowerCase()+'.'); };
+      mb.append(mk,mrand); body.appendChild(mb);
+    }
     if(g==='Body shape'){
       body.appendChild(el('p','note','Not everything is a ball. Flatten the poles for a fast-spinning gas giant, stretch the equator for something like Haumea, add lumps for an asteroid, or push out a second lobe for a contact binary like Arrokoth.'));
     }
@@ -2566,6 +2795,14 @@ function buildSystemUI(){
       const bsd=el('button',null,'Reroll surface');
       bsd.onclick=()=>{ b.world.seed=Math.floor(Math.random()*9999); saveSystem(); hud(b.name+' reshaped.'); };
       sd.appendChild(bsd); box.appendChild(sd);
+
+      box.appendChild(el('p','subhead','Material'));
+      const mr2=el('div','sel','<label>Made of</label>');
+      const ms2=document.createElement('select');
+      ms2.innerHTML='<option value="">Choose\u2026</option>'+Object.keys(MATERIALS).map(k=>`<option>${k}</option>`).join('');
+      ms2.onchange=()=>{ if(applyMaterial(ms2.value,b.world.p,b.world.colors)){ saveSystem(); buildUI(); } };
+      mr2.appendChild(ms2); box.appendChild(mr2);
+      wp('rough'); wp('metal'); wp('transp'); wp('envAmt'); wp('sparkle'); wp('irid'); wp('emis');
 
       box.appendChild(el('p','subhead','Face'));
       wchk('faceOn','Give it a face');
