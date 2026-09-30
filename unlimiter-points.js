@@ -626,6 +626,9 @@ const COLOURS = {
    ============================================================ */
 function makeFrame(count){
   return {
+    // typed so it can travel on an unlimiter-ports cable as-is; "world" means
+    // un-normalised units — a host normalises to "3d" before publishing it
+    type: "points", space: "world", version: 0,
     count: count,
     capacity: count,
     positions: new Float32Array(count * 3),
@@ -723,6 +726,7 @@ function generate(spec, t, frame, state){
     pre[i] = presence;
   }
   frame.count = n;
+  frame.version = ((frame.version | 0) + 1) >>> 0;   // consumers skip work when this hasn't moved
   return frame;
 }
 
@@ -750,6 +754,7 @@ function morph(specA, specB, mix, t, frame, stateA, stateB, scratchA, scratchB){
     frame.presence[i]       = lerp(a.presence[i],       b.presence[i],       k);
   }
   frame.count = n;
+  frame.version = ((frame.version | 0) + 1) >>> 0;
   return { frame, a, b };
 }
 
@@ -911,4 +916,9 @@ return {
 };
 })();
 
+/* Publish it the way unlimiter-drive.js does. A top-level `const` in a
+   classic <script> lives in the global *lexical* environment and never
+   appears on `window`, so a consumer reading `window.UnlimiterPoints`
+   would find nothing even though this file loaded perfectly. */
+if(typeof window !== "undefined") window.UnlimiterPoints = UnlimiterPoints;
 if(typeof module !== "undefined" && module.exports) module.exports = UnlimiterPoints;

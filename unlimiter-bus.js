@@ -1,10 +1,16 @@
 /* ============================================================
    unlimiter-bus.js — The Unlimiter signal bus (schemaVersion 1)
-   Load this before unlimiter-drive.js and before any tool script.
-   drive.js publishes channels here; tools and the Control Surface
-   read them with get()/subscribe() and discover them with list().
-   Identical to the bus embedded in control-surface.html — keep in
-   sync until the surface imports this file directly.
+   A typed scalar channel registry: register({id,type,range}),
+   publish, get/subscribe, list.
+
+   Status, as of the September 2026 architecture audit: no page loads
+   this file. control-surface.html and volume-renderer.html each carry
+   an inline copy, and unlimiter-drive.js does NOT publish here — the
+   drive keeps its own source registry (registerSource). See
+   ARCHITECTURE.md for where scalars are heading.
+
+   It is a top-level const, so it is NOT a window property: read it
+   by its bare name, UnlimiterBus, never window.UnlimiterBus.
    ============================================================ */
 const UnlimiterBus = (() => {
   const SCHEMA_VERSION = 1;

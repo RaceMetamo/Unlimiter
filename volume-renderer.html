@@ -1574,6 +1574,25 @@ function updateMixSource(src, data){
   src.lastSortFwd = [0, 0, 0]; // depth changed — force a resort next frame
 }
 
+/* ============================================================
+   Live source — real 3D points from the rack (unlimiter-ports.js).
+   Allocated once at a power-of-two capacity and reused. The GPU sort
+   bakes its point count in at creation, so the count never changes:
+   slots past the live count are written invisible (alpha 0), and the
+   source is only rebuilt when a frame outgrows its capacity.
+   ============================================================ */
+function genLivePoints(capacity){
+  const src = makeSource("pointcloud", "Rack points (live)", capacity);
+  src.isLive = true;
+  src.pointSize = 2.2;
+  finalizeSource(src);
+  // points arrive in unit space; fixed bounds, so a moving cloud doesn't refit the camera
+  src.bbox = [-1.2, -1.2, -1.2, 1.2, 1.2, 1.2];
+  src.centroid = [0, 0, 0];
+  src.radius = Math.hypot(1.2, 1.2, 1.2);
+  return src;
+}
+
 /* ---- procedural: GI test scene (meshes lit by the volumes) ---- */
 function genGITestScene(){
   const V = [], I = [];
@@ -2009,6 +2028,7 @@ function loadPlyFile(file){
       ready: false, reason: "webgpu-unavailable",
       pushMixFrame(){ return false; }, setMix(){}, setParam(){},
       params(){ return []; }, addScene(){}, clearScene(){}, hasMix(){ return false; },
+      pushPoints(){ return false; }, hasPoints(){ return false; },
     };
     return;
   }
@@ -2056,6 +2076,7 @@ function loadPlyFile(file){
 
   /* ---- public API: how the rack (or any host page) drives this renderer ---- */
   let mixSrc = null, mixScratch = null, mixCtx = null;
+  let ptsSrc = null, ptsLive = 0;
   window.UnlimiterVolumeAPI = {
     /** Push a 2D canvas (the rack mix) in as a live volumetric source. */
     pushMixFrame(srcCanvas){
@@ -2094,8 +2115,39 @@ function loadPlyFile(file){
       else if(which === "shell") Scene.add(genShell());
       else if(which === "gi") Scene.add(genGITestScene());
     },
-    clearScene(){ [...Scene.sources].forEach(s => Scene.remove(s.id)); mixSrc = null; },
+    clearScene(){ [...Scene.sources].forEach(s => Scene.remove(s.id)); mixSrc = null; ptsSrc = null; ptsLive = 0; },
     hasMix(){ return !!mixSrc; },
+    /** Push a live point cloud: `packed` in this renderer's 16-float layout
+     *  (xyz 0-2, rgb 4-6, alpha 7), points in unit space, `n` of them.
+     *  unlimiter-ports.js's packVolume() produces exactly this.
+     *  pushPoints(null, 0) removes the source. opts: { size } point size. */
+    pushPoints(packed, n, opts){
+      opts = opts || {};
+      // the source can be removed from under us (clearScene, the × in the list)
+      if(ptsSrc && !Scene.sources.includes(ptsSrc)){ ptsSrc = null; ptsLive = 0; }
+      if(!packed || !(n > 0)){
+        if(ptsSrc){ Scene.remove(ptsSrc.id); ptsSrc = null; ptsLive = 0; }
+        return true;
+      }
+      n = Math.min(n, Math.floor(packed.length / 16));
+      if(!ptsSrc || ptsSrc.count < n){
+        if(ptsSrc) Scene.remove(ptsSrc.id);
+        ptsSrc = genLivePoints(nextPow2(Math.max(1024, n)));
+        ptsLive = 0;
+        Scene.add(ptsSrc);
+      }
+      const K = ptsSrc.packed, POS = ptsSrc.positions;
+      K.set(packed.subarray(0, n * 16));
+      for(let i = 0; i < n; i++){ const o = i * 16, i3 = i * 3; POS[i3] = K[o]; POS[i3 + 1] = K[o + 1]; POS[i3 + 2] = K[o + 2]; }
+      // retire whatever the last frame had beyond this one's count
+      if(ptsLive > n){ K.fill(0, n * 16, ptsLive * 16); POS.fill(0, n * 3, ptsLive * 3); }
+      ptsLive = n;
+      if(isFinite(+opts.size)) ptsSrc.pointSize = +opts.size;
+      if(ptsSrc.gpu) Renderer.updateSourceGPU(ptsSrc.gpu, K);
+      ptsSrc.lastSortFwd = [0, 0, 0];          // positions moved — resort next frame
+      return true;
+    },
+    hasPoints(){ return !!ptsSrc && Scene.sources.includes(ptsSrc); },
     ready: true,
   };
 

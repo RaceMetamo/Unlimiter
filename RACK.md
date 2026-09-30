@@ -1,9 +1,9 @@
 # The Rack — node-graph control surface
 
-`rack.html` is the suite as one instrument. Five real tools run in hidden
-same-origin iframes; a node graph says what feeds what; the **OUTPUT** node is
-the mix OBS captures, and it also feeds the volume renderer. One
-`unlimiter-drive.js` instance modulates all of it.
+`rack.html` is the suite as one instrument. Tools run in hidden same-origin
+iframes; generator nodes run inside the rack itself; a typed graph says what
+feeds what. The **OUTPUT** node is the mix OBS captures, and the volume
+renderer takes both pictures and real 3D points.
 
 **It must be served over http.** `file://` pages are cross-origin, so the rack
 can't reach into the tool frames. `python -m http.server` in the repo folder, or
@@ -12,34 +12,74 @@ GitHub Pages. The rack says so on screen if you forget.
 ## The graph
 
 ```
-Flow Weave ─┐
-Melted World ┤
-Sediment    ─┼──▶ OUTPUT ──▶ Volume
-Anchor      ─┤       │
-Ouroboros ──┘       │
-    ▲                │
-    └────────────────┘   (feedback: the mix feeds the recursive engine)
+                 ┌──────────── 2D points ─────────────┐
+Points (gen) ────┤                                    ▼
+                 └── 3D points ──┐           Flow Weave ─┐
+Melted World ─┐                  │           Sediment   ─┼──▶ OUTPUT ──▶ Volume (image)
+Anchor       ─┼──────────────────┼──────────────────────┘       │
+Ouroboros   ─┘                  └─────────────────────────────┼──▶ Volume (points)
+     ▲                                                          │
+     └──────────────────────────────────────────────────────────┘  (feedback)
 ```
 
-- **Drag** a node's right port to another's left port to patch.
-- **OUTPUT** takes as many feeds as you like; each cable is a layer with its own
-  opacity and blend mode. Tool inputs and the Volume node take exactly one feed
-  (patching a second replaces the first).
+Every cable has a **type**, and only ports of the same type connect:
+
+| Type | Cable | Carries |
+|---|---|---|
+| image | solid, the source node's colour | a picture — what the rack has always passed |
+| points | dotted teal | a points frame, by reference (see PORTS.md) |
+| field, mask | dotted amber / violet | reserved; the types exist, no producer yet |
+
+- **Drag** from an output port (right) to an input port (left) to patch. A port
+  on a node with more than one port on that side is labelled.
+- Every input takes one cable — a new one replaces the old — except OUTPUT's,
+  which stacks as many layers as you like. Each OUTPUT cable is a layer with its
+  own opacity and blend mode.
 - **Click a cable** to set that layer's opacity/blend, mute it, or delete it.
-  Select + `Delete` also removes it.
-- Cycles are allowed on purpose — OUTPUT → Ouroboros is the default, and it is
-  the signature move: the composite feeds the engine that draws into it.
-- Node positions, cables, layer settings and mix gain persist to localStorage.
-  **Reset layout** puts it back.
+  Select + `Delete` also removes it. Data cables have no opacity or blend: mute
+  one and the receiving tool is told once, and falls back to its own content.
+- Cycles are allowed on image cables on purpose — OUTPUT → Ouroboros is the
+  default, and it reads the previous frame's mix, so the loop is one frame late
+  by construction.
+- Node positions, cables, generator settings, layer settings and mix gain
+  persist to localStorage (`unlimiter.rack.graph.v2`). A layout saved by the
+  older rack (`…v1`) is migrated once on first load — every old cable becomes a
+  typed image cable — and the v1 entry is left untouched. **Reset layout** puts
+  it back to the default graph.
+
+## Generator nodes
+
+**+ Points generator** adds a node that is `unlimiter-points.js` running inside
+the rack's own realm — no iframe. Maths needs no GL context and no UI of its
+own, so it steps on the rack's clock and hands its frames out by reference.
+
+It has three outputs:
+
+| Port | Type | What it is |
+|---|---|---|
+| **3D** | points | the form centred in unit space — the volume renderer takes these |
+| **2D** | points | the same points through the node's own 2D view (yaw, pitch, spin, zoom, perspective) — Flow Weave's emitters take these |
+| **image** | image | the 2D points drawn as light, far side dimmer, for the mix |
+
+Its inspector is built from the module's own parameter metadata — the same
+lists `manifold.html` builds its sliders from: form, placement, three modifier
+slots, which points, colour and size, and the view. Every continuous slider has
+a **◎**; spin and zoom are routable from the start. Rows, columns and shells
+reallocate buffers, so they are never modulated. `Delete` removes a generator
+(tools, OUTPUT and Volume are fixed).
+
+The default graph, and the first load of a migrated v1 layout, include one
+generator wired **2D → Flow Weave's emitters** and **3D → Volume's points**.
 
 ## Clicking a node gives you its controls
 
 | Node | Inspector |
 |---|---|
-| a tool | Edit in stage · Open tab · Wake · Solo; its layer's opacity/blend; what feeds its input; **all of its own parameters** |
+| a tool | Edit in stage · Open tab · Wake · Solo; its layer's opacity/blend; what feeds its input; the **data ports** it publishes and what they're patched to; **all of its own parameters** |
+| a generator | form, placement, modifiers, look, 2D view — from `unlimiter-points.js` metadata |
 | OUTPUT | the layer stack in draw order with ↑↓ reordering, mix gain, background (black, or *keep* for trails) |
-| Volume | mix relief/gain/point size, the renderer's own params, and scene buttons |
-| a cable | opacity, blend, mute, delete |
+| Volume | what's on its image and points ports, mix relief/gain/point size, the renderer's own params, scene buttons |
+| a cable | its type; for image cables into OUTPUT, opacity and blend; mute, delete |
 
 The Drive panel (audio, MIDI, LFOs, matrix) sits under every view — it is one
 live DOM tree that gets moved between views rather than rebuilt, so its state
@@ -50,45 +90,50 @@ never resets.
 **Edit in stage** puts that tool's own real UI in the middle pane. It is the
 actual tool, with all its own controls — not a reimplementation — and the mix
 keeps running the whole time, because the frame is never moved in the DOM or
-reloaded, only repositioned. **Open tab ↗** gives it a full window instead.
+reloaded, only repositioned. **Open tab ↗** gives it a full window instead
+(a separate instance, not connected to the rack).
 
 ### Parameters, with no list to maintain
 
 The rack hardcodes no parameters. Every tool already told its own drive what is
 modulatable, with real bounds and labels, so the rack reads `Drive.targets` back
-out of each frame: 25–47 parameters per tool, with the tool's own names
-("Displacement — Amplitude", "Size — Start"). Filter them with the search box.
+out of each frame (25–47 per tool). Filter them with the search box.
 
-Each row has a **◎** button. Off, the slider writes straight into the tool's `P`.
-On, that parameter is registered with the rack's drive — it appears in the
-modulation matrix and can be routed from audio, LFOs, clock or MIDI. Four per
-tool are pre-registered; toggling is reversible.
+Each row has a **◎** button. Off, the slider writes straight into the tool's
+`P` — it is a user edit, the same as moving the tool's own slider. On, the
+parameter is also registered with the rack's drive and routable from audio,
+LFOs, clock or MIDI.
 
-The rack keeps the same `P`/`Q` contract as the tools: `RP` holds your values,
-`RQ = Drive.resolve(RP)` resolves once per frame, and applying `RQ` writes into
-each tool's own `P`. The rack is a remote hand on their sliders, and each tool's
-own drive modulation still layers on top.
+**The rack never writes modulated values into a tool's `P`.** It resolves
+`RQ = Drive.resolve(RP)` once per frame and hands each result to the tool as an
+override (`Drive.setOverride`, drive 1.5), which the tool applies inside its own
+`Q`. So the tool's `P` keeps what the user set, its presets save that, its
+sliders stay honest, and turning the ◎ off hands the parameter back exactly
+where it was. It works both ways: move a registered parameter in the tool's own
+UI during *Edit in stage* and the rack adopts that as its new base instead of
+overwriting it next frame. A tool that loads a preset replaces its `P` object;
+the rack notices within a quarter second and adopts the new values.
 
-## How capture works without editing the tools
+## How capture works
 
-Two paths, because the tools differ:
-
-- **pull** — the canvas reads back (2D, or WebGL with `preserveDrawingBuffer`),
-  so the rack `drawImage`s it each frame. Flow Weave, Sediment, Anchor (from its
-  offscreen `work` canvas).
+- **ports** — a tool that publishes an `out` image port through
+  `unlimiter-ports.js` is captured from whatever that port returns. Flow Weave.
+- **pull** — otherwise the canvas reads back (2D, or WebGL with
+  `preserveDrawingBuffer`), so the rack `drawImage`s its `sel` canvas each
+  frame. Sediment (its finished `#view`), and Anchor from its offscreen `work`
+  canvas — only tools that declare `from:"work"` are captured that way.
 - **push** — WebGL with `preserveDrawingBuffer:false` reads back blank outside
   its own draw call. Those tools already call `Drive.pushFrame(canvas)` at the
   end of their render for the output window, so the rack wraps that method on
-  the tool's own drive instance and copies the frame as it passes, then calls the
-  original. Melted World, Ouroboros. Nothing in the tools changed.
+  the tool's own drive instance and copies the frame as it passes. Melted World,
+  Ouroboros.
 
-Reach-in uses each frame's own `eval`, not window properties: the tools declare
-`Drive`, `P`, `work`, `upload`, `setSource` as top-level `const`/`let`, which live
-in the realm's global *lexical* environment and never appear on `window`.
+Every layer is captured to a 640×360 canvas, so sources are stretched to 16:9.
 
-Input feeds run at sensible rates: per-frame for Ouroboros, ~8/s for Melted
+Image input feeds run at sensible rates: per-frame for Ouroboros, ~8/s for Melted
 World's texture, and once per 6s for Sediment (its `setSource()` restarts the
-accumulation).
+accumulation). Data cables deliver every rack frame; receivers skip work when
+the value's `version` hasn't moved.
 
 ## Volume renderer
 
@@ -96,38 +141,69 @@ accumulation).
 publishes `window.UnlimiterVolumeAPI`:
 
 ```js
-pushMixFrame(canvas)   // sample the mix into a live volumetric source
+pushMixFrame(canvas)      // an image as a live relief: luminance → depth
+pushPoints(packed, n, o)  // real 3D points (16-float layout) as a live source; (null, 0) removes it
 setMix({relief, gain, size, opacity})
-setParam(id, value)    // any renderer param, by manifest id
-params(), addScene('galaxy'|'nebula'|'gi'), clearScene(), hasMix()
+setParam(id, value)       // any renderer param, by manifest id
+params(), addScene('galaxy'|'nebula'|'shell'|'gi'), clearScene(), hasMix(), hasPoints()
 ```
 
-The mix arrives as a 160×90 point grid: luminance becomes depth and opacity,
-pixel colour becomes point colour. It uses the existing `pointcloud` kind, so no
-shader path changed — only `Renderer.updateSourceGPU()` was added. Without
-WebGPU the API still publishes with `ready:false` so the rack reports it rather
-than waiting.
+The **image** port takes whichever image node is patched into it — the mix by
+default, but a single tool or a generator's image works too. Patching something
+else no longer silently stops the feed. The mix arrives as a 160×90 point grid:
+luminance becomes depth and opacity, pixel colour becomes point colour.
+
+The **points** port takes real 3D positions. The live point source is allocated
+once at a power-of-two capacity and reused: the renderer's GPU sort bakes its
+point count in at creation, so the count never changes frame to frame — unused
+slots are written invisible (alpha 0), and the source is only rebuilt when a
+frame outgrows its capacity. Point size is per source, not per point.
+
+Without WebGPU the API still publishes with `ready:false` so the rack reports it
+rather than waiting.
 
 ## Verified by running it
 
-Served locally and driven with headless Chromium:
+Served locally and driven with headless Chromium (software GL and WebGPU):
 
-- all five tools load and attach (`Drive` + `P` reached in every frame)
-- every node's inspector renders with content; parameter lists are 25–47 rows
-- a slider moved Anchor's own `P.scatter` 0 → 79.2
-- the ◎ toggle registers and unregisters drive targets
-- **Edit in stage** shows the tool without reloading its frame (`performance.timeOrigin` unchanged)
-- patching a new cable rewires the input feed
-- the mix animates; OUTPUT → Ouroboros feedback reports `hasIn:true`
+- all five tools load and attach; Sediment is captured from `#view`, Anchor from `work`
+- a rack target modulated to 90% of its range reaches the tool's `Q` while its
+  `P` stays at the user's value; moving the tool's own slider becomes the rack's
+  new base; unregistering returns the tool to its `P` — for Flow Weave (drive via
+  adapter) and Ouroboros (native P/Q)
+- the default graph has a generator producing 1,320 finite points in unit space
+  and drawing them; points→image and image→points cables are refused; patching a
+  generator's image into Volume replaces the old feed and is what gets pushed
+- a v1 layout migrates with positions, muted cables, blends, mix settings and the
+  feedback loop intact, gains exactly one wired generator, and doesn't re-migrate
+- **Flow Weave holds the very object the generator produced** — nothing is copied
+  between realms. With nothing emitting its fluid reads zero velocity and zero
+  dye; with the generator patched, 137,549 dye pixels in the generator's colour
+  and a mean velocity of 1.11. Muting the cable releases it; unmuting reconnects
+- the volume renderer's live point source: added at capacity 2048, a smaller frame
+  reuses it with the extras retired, a bigger one reallocates once (4096), removal
+  works — with zero WebGPU validation errors
+- all 17 pages boot with no errors after the drive change, same as before
 
-Two things that environment can't judge: the volume renderer (no WebGPU in
-headless) and Flow Weave's image (it renders near-black under software GL,
-standalone too). Both want your 4090.
+What that environment can't judge:
+
+- **Volume pixels.** WebGPU runs, but neither screenshots nor buffer readback
+  work there (the renderer's own galaxy is invisible to it too). The points reach
+  the GPU through the same source path the mix feed uses; seeing them is for your
+  own GPU.
+- **The three WebGL tools inside the full rack.** Under software GL the browser
+  drops their contexts once all five tools are loaded — the original rack does
+  the same. That is why Flow Weave "renders near-black" there. With Melted World
+  and Ouroboros left out, Flow Weave's context survives and the end-to-end check
+  above passes with pixels.
 
 ## Next
 
-- Per-layer transform (scale/rotate/offset) before compositing.
-- A mask input alongside the source input.
-- More node kinds: a plain colour/gradient source, a feedback-delay node, a
-  "send to Resolume" node.
-- Saveable graph presets beyond the single autosaved layout.
+- More tools publishing ports: Anchor (oriented paths out), Flow Field Plotter
+  (seeds in, field out), Sediment (seeds and field in), Time Cube (image in).
+- Phylo and TBG Facade: lift their IIFEs so their branches and panels can leave.
+- One engine per page — the rack's clock and audio shared by every hosted tool.
+- Per-layer transform (scale/rotate/offset) before compositing, and masks —
+  likely with a WebGL compositor.
+- Saveable graph presets beyond the single autosaved layout; persist the rack's
+  own drive matrix and ◎ registrations.

@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.4";
+const VERSION = "1.5";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -398,9 +398,17 @@ function create(opts){
     });
     buildMatrix();
   }
+  /* Overrides: a host (the rack) driving this tool from outside. They replace
+     the base value *inside Q only* — P stays the user's, so the tool's own
+     sliders stay honest, its presets save what the user set, and clearing an
+     override returns the tool exactly to where it was. Routes still stack on
+     top, so the tool's own modulation layers over the host's. */
+  const overrides=new Map();
   function resolve(base){
-    if(!S.matrix.length) return base;
+    if(!S.matrix.length && !overrides.size) return base;
     const out=Object.assign({},base);
+    overrides.forEach((v,k)=>{ out[k]=v; });
+    if(!S.matrix.length) return out;
     for(const r of S.matrix){
       if(r.on===false) continue;
       const t=targets[r.target];
@@ -419,6 +427,9 @@ function create(opts){
     return out;
   }
   function isLive(){
+    // an externally driven tool must keep redrawing, or tools that only render
+    // while modulated (Melted World) would freeze on the first override
+    if(overrides.size) return true;
     if(!S.matrix.length || S.master<=0) return false;
     if(extra.length && S.matrix.some(r=>r.on!==false && extra.some(e=>e.id===r.source))) return true;
     return S.audio.on || S.midi.clockOk || S.midi.on || S.matrix.some(r=>r.source.startsWith("lfo.")||r.source.startsWith("clock.")||r.source==="random.beat");
@@ -780,10 +791,15 @@ function create(opts){
     audioContext(){ return S.audio.ac || null; },
     analyserNode(){ return S.audio.analyser || null; },
     modulatedKeys(){
-      const set=new Set();
+      const set=new Set(overrides.keys());   // externally driven counts as modulated
       S.matrix.forEach(r=>{ if(r.on!==false && r.target) set.add(r.target); });
       return [...set];
     },
+    /** A host drives `key` from outside. Applied in resolve(), never written to P. */
+    setOverride(key,value){ overrides.set(key,value); return this; },
+    clearOverride(key){ overrides.delete(key); return this; },
+    clearOverrides(){ overrides.clear(); return this; },
+    hasOverride(key){ return overrides.has(key); },
     isModulated(k){ return this.modulatedKeys().indexOf(k)>=0; },
     registerSource, unregisterSource,
     mountPanel, openOutput, pushFrame, outputOpen, tap,

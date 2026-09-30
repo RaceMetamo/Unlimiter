@@ -790,6 +790,12 @@ function uploadInput(src){
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
   try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,src); }catch(e){}
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  // texIn was born through makeTex(), which asks for mipmaps. Redefining level 0
+  // at a new size leaves the old mip chain behind, the texture goes
+  // mipmap-incomplete, and WebGL samples it as opaque black — every input
+  // (camera, file, the rack's feedback) silently arrived as black. The FEED
+  // shader reads uIn with plain texture(), so it never needed mips at all.
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
 }

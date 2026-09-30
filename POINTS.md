@@ -16,11 +16,16 @@ renderer ingests them, Anchor can seed from them, the rack can patch them.
 | Consumer | Points | Notes |
 |---|---|---|
 | manifold | yes | reference implementation — every surface, placement and modifier |
-| volume-renderer | via `.ply` | Manifold exports the pointcloud layout its loader already reads |
+| rack | yes | **generator nodes**: this module running inside the rack, no iframe, 3D / 2D / image outputs |
+| flow-weave | yes | through the rack: points as emitters — force, dye and wet paint |
+| volume-renderer | yes | live, through `pushPoints()`; or offline through Manifold's `.ply` export |
 | anchor | — | candidate: seeded point clouds instead of only type contours |
-| flow-weave | — | candidate: points as emitters rather than as the drawn thing |
 | flow-field-plotter | — | candidate: points as stroke seeds |
-| rack | — | candidate: generators as source nodes, without Manifold's panel |
+
+Frames are typed values that travel on an `unlimiter-ports.js` cable as-is:
+`generate()` and `morph()` tag them `type:"points"`, `space:"world"` and bump
+their `version` every call. A host normalises them to `"3d"` before publishing —
+see PORTS.md.
 
 ---
 
@@ -125,15 +130,15 @@ the same `rows`/`cols`; if they differ, the result clamps to the smaller.
 
 ## Handing points to the volume renderer
 
-Two routes, and the second one works today.
+Two routes, both working.
 
 **Packed, in memory.** `toVolumePacked(frame, {scale})` returns the renderer's
 own source layout — 16 floats a point, xyz at 0–2, rgb at 4–6, alpha at 7,
 centred and scaled into its roughly unit-sized world. Points below the presence
-cutoff are dropped rather than sent as invisible rows. This is ready for a
-`pushPoints(packed, n)` on `UnlimiterVolumeAPI` whenever that gets added; the
-API currently only accepts a 2D canvas via `pushMixFrame`, which costs the
-third dimension on the way through.
+cutoff are dropped rather than sent as invisible rows. `UnlimiterVolumeAPI`
+takes that directly with `pushPoints(packed, n)`; the rack does this for any
+points cable patched into the Volume node's points port, using
+`UnlimiterPorts.packVolume()` so the buffer is reused frame to frame.
 
 **As a file.** Manifold's **Export .ply** writes the live points as a binary
 little-endian point cloud with `x y z` floats and `red green blue` uchars —

@@ -271,6 +271,23 @@
     <div class="note">Particles follow the velocity field and take their colour from the dye beneath them, leaving additive trails — filaments rather than washes. Short lifetimes and long trails give the wispy look; long lifetimes give continuous streamlines.</div>
   </details>
 
+  <details class="sec sec-emit" open>
+    <summary>Emitters — points from the rack</summary>
+    <div class="note" id="emitNote">No points patched. In the rack, patch a points generator's <b>2D</b> output into this tool's <b>emitters</b> port and every point becomes a brush.</div>
+    <label class="chk"><input type="checkbox" id="cEmOn" checked> Emit from patched points</label>
+    <label><span class="lab">Force from motion <b id="vEmForce"></b></span>
+      <input type="range" id="rEmForce" min="0" max="120" step="0.5" value="28"></label>
+    <label><span class="lab">Dye <b id="vEmDye"></b></span>
+      <input type="range" id="rEmDye" min="0" max="1" step="0.01" value="0.25"></label>
+    <label><span class="lab">Wet paint <b id="vEmPaint"></b></span>
+      <input type="range" id="rEmPaint" min="0" max="3" step="0.01" value="0.8"></label>
+    <label><span class="lab">Splat size <b id="vEmR"></b></span>
+      <input type="range" id="rEmR" min="0.002" max="0.06" step="0.001" value="0.012"></label>
+    <label><span class="lab">Far side <b id="vEmBack"></b></span>
+      <input type="range" id="rEmBack" min="0" max="1" step="0.01" value="0.15"></label>
+    <div class="note">Each point pushes the fluid the way it is moving, leaves its own colour in the dye, and lays down wet paint that runs like the spray does. <em>Far side</em> weights the points on the back of a 3D form, which move against the front ones — keep it low for clean streaks.</div>
+  </details>
+
   <details class="sec sec-surface">
     <summary>Surface</summary>
     <label><span class="lab">Relief <b id="vRelief"></b></span>
@@ -314,6 +331,7 @@
 </div>
 
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-ports.js"></script>
 <script>
 const el = id => document.getElementById(id);
 const cv = el('c'), statusEl = el('status');
@@ -338,6 +356,7 @@ const P = {
   obs:0, obsT:0.5, obsS:0.06, obsInv:false, obsCol:'#0d0f13',
   pOn:true, pw:256, pLife:110, pSpeed:1, pSize:1.6, pFade:0.045, pInt:0.5, pMix:1,
   relief:1.4, lightA:135, spec:0.6, con:1.1, sat:1.15, post:1,
+  emOn:true, emForce:28, emDye:0.25, emPaint:0.8, emR:0.012, emBack:0.15,
   view:0
 };
 
@@ -952,6 +971,122 @@ function setSize(w,h){
 }
 if(ok) setSize(1280,720);
 
+/* ---------------- emitters: points from the rack ----------------
+   Each point is a brush. It pushes the fluid the way it is moving (in the same
+   units the mouse brush uses), leaves its colour in the dye, and lays wet paint
+   in exactly the format the filament deposit uses, so it runs and drips like
+   everything else. Frames arrive by reference through unlimiter-ports.js and
+   are never mutated here. */
+const EM = { src:null, ver:-1, n:0, cap:0, buf:null, prev:null, prevN:0, fresh:false,
+             prog:null, u:null, vao:null, vbo:null, scratch:null, fit:[0,0] };
+const EM_VS = `#version 300 es
+layout(location=0) in vec2 aPos; layout(location=1) in vec2 aVel;
+layout(location=2) in vec3 aCol; layout(location=3) in float aW;
+uniform float size;
+out vec2 vVel; out vec3 vCol; out float vW;
+void main(){
+  vVel = aVel; vCol = aCol; vW = aW;
+  gl_Position = aW > 0.001 ? vec4(aPos*2.0-1.0, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
+  gl_PointSize = size;
+}`;
+const EM_FS = `#version 300 es
+precision highp float;
+in vec2 vVel; in vec3 vCol; in float vW; out vec4 o;
+uniform float mode, amt;
+void main(){
+  vec2 d = gl_PointCoord - 0.5;
+  float g = exp(-dot(d, d) * 18.0) * vW;                        // gaussian, ~0 at the sprite edge
+  if(mode < 0.5)      o = vec4(vVel * g * amt, 0.0, 0.0);        // force: additive into velocity
+  else if(mode < 1.5) o = vec4(vCol, clamp(g * amt, 0.0, 1.0));  // dye: alpha-blended toward the point's colour
+  else { float a = g * amt; o = vec4(vCol * a, a); }             // wet paint: premultiplied, additive
+}`;
+function initEmitters(){
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, EM_VS));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, EM_FS));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS)){ say('Emitter link: ' + gl.getProgramInfoLog(p), true); return; }
+  EM.prog = p;
+  EM.u = { size:gl.getUniformLocation(p, 'size'), mode:gl.getUniformLocation(p, 'mode'), amt:gl.getUniformLocation(p, 'amt') };
+  // its own vertex array — and put back whichever one this tool had bound,
+  // because every fullscreen pass here relies on that one staying bound
+  const prev = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+  EM.vao = gl.createVertexArray(); gl.bindVertexArray(EM.vao);
+  EM.vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, EM.vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, 32, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 32, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 8);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 32, 16);
+  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 32, 28);
+  gl.bindVertexArray(prev);
+}
+/* the port's set(): a points value, or null when the cable goes away */
+function setEmitters(frame){
+  EM.src = frame || null;
+  if(!frame){ EM.n = 0; EM.prevN = 0; EM.ver = -1; }
+  const note = el('emitNote');
+  if(note) note.innerHTML = frame
+    ? 'Receiving <b>' + frame.count.toLocaleString() + '</b> points from the rack.'
+    : 'No points patched. In the rack, patch a points generator\'s <b>2D</b> output into this tool\'s <b>emitters</b> port and every point becomes a brush.';
+}
+/* Repack only when the producer's version moved. Velocity is the change since
+   the last version seen, so it is an impulse per real displacement whatever the
+   two frame rates are. */
+function packEmitters(){
+  EM.fresh = false;
+  const f = EM.src;
+  if(!f || !f.count || !EM.prog){ EM.n = 0; return; }
+  if(f.version === EM.ver) return;
+  EM.ver = f.version; EM.fresh = true;
+  const aspect = cv.width / cv.height;
+  let src = f;
+  if(src.space === '3d' && window.UnlimiterPorts) src = EM.scratch = UnlimiterPorts.project(f, { zoom:0.9, aspect }, EM.scratch);
+  const n = src.count;
+  if(EM.cap < n){ let c = 1; while(c < n) c <<= 1; EM.cap = c; EM.buf = new Float32Array(c * 8); EM.prev = new Float32Array(c * 2); EM.prevN = 0; }
+  const A = src.aspect || aspect, P3 = src.positions, C = src.colors, W = src.presence, back = E.emBack;
+  for(let i = 0; i < n; i++){
+    const i3 = i * 3, o = i * 8;
+    let u = P3[i3], v = P3[i3 + 1];
+    if(Math.abs(A - aspect) > 1e-3 && window.UnlimiterPorts){ const r = UnlimiterPorts.fitUV(u, v, A, aspect, EM.fit); u = r[0]; v = r[1]; }
+    const x = u, y = 1 - v;                          // ports' uv runs down; this sim's runs up
+    const px = i < EM.prevN ? EM.prev[i * 2] : x, py = i < EM.prevN ? EM.prev[i * 2 + 1] : y;
+    let vx = x - px, vy = y - py;
+    if(Math.abs(vx) > 0.2 || Math.abs(vy) > 0.2){ vx = 0; vy = 0; }   // a wrap or a jump is not motion
+    const t = Math.min(1, Math.max(0, (P3[i3 + 2] + 0.25) / 0.5));  // z: +1 nearest the viewer
+    EM.buf[o] = x; EM.buf[o + 1] = y; EM.buf[o + 2] = vx; EM.buf[o + 3] = vy;
+    EM.buf[o + 4] = C ? C[i3] : 1; EM.buf[o + 5] = C ? C[i3 + 1] : 1; EM.buf[o + 6] = C ? C[i3 + 2] : 1;
+    EM.buf[o + 7] = (W ? W[i] : 1) * (back + (1 - back) * t * t * (3 - 2 * t));
+    EM.prev[i * 2] = x; EM.prev[i * 2 + 1] = y;
+  }
+  EM.prevN = n; EM.n = n;
+  gl.bindBuffer(gl.ARRAY_BUFFER, EM.vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, EM.buf.subarray(0, n * 8), gl.DYNAMIC_DRAW);
+}
+function emitPass(mode, target, amt, sf, df){
+  if(!E.emOn || !EM.n || !(amt > 0)) return;
+  const prev = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+  gl.useProgram(EM.prog);
+  gl.bindVertexArray(EM.vao);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target.f); gl.viewport(0, 0, target.w, target.h);
+  gl.uniform1f(EM.u.mode, mode); gl.uniform1f(EM.u.amt, amt);
+  gl.uniform1f(EM.u.size, Math.max(1.5, E.emR * 2 * target.h));
+  gl.enable(gl.BLEND); gl.blendFunc(sf, df);
+  gl.drawArrays(gl.POINTS, 0, EM.n);
+  gl.disable(gl.BLEND);
+  gl.bindVertexArray(prev);
+}
+if(ok) initEmitters();
+
+/* What this tool gives and takes, for the rack (unlimiter-ports.js). */
+if(window.UnlimiterPorts){
+  UnlimiterPorts.publish({
+    tool: 'flow-weave', label: 'Flow Weave',
+    outputs: { out:      { type:'image',  label:'image',    get: () => cv } },
+    inputs:  { emitters: { type:'points', label:'emitters', set: setEmitters } }
+  });
+}
+
+
 /* ---------------- input ---------------- */
 let brush=[0,0,0,0], last=null, dragging=false;
 function pt(e){ const r=cv.getBoundingClientRect();
@@ -1008,6 +1143,7 @@ function frame(){
     if(mod){ mod.tick(Math.min(0.1, (now - lastT)/1000)); E = mod.apply(P); }
     lastT = now;
     const st=[1/SW,1/SH], dt=E.dt;
+    packEmitters();
 
     if(hasCam && vid.readyState>=2){
       camSwap=1-camSwap;
@@ -1069,6 +1205,8 @@ function frame(){
     gl.uniform1f(pForce.u.ambient,E.ambient);
     draw(vel.b); vel.swap();
     brush[2]=brush[3]=0;
+    // emitters push the fluid only when the points actually moved (a new frame)
+    if(EM.fresh) emitPass(0, vel.a, E.emForce * 8 * dt, gl.ONE, gl.ONE);
 
     // 2. vorticity confinement
     if(E.vort>0){
@@ -1151,6 +1289,7 @@ function frame(){
     gl.uniform3f(pDye.u.colB,B[0],B[1],B[2]);
     gl.uniform3f(pDye.u.colC,C[0],C[1],C[2]);
     draw(dye.b); dye.swap();
+    emitPass(1, dye.a, E.emDye, gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     // 8. particles: advect, then stamp onto a decaying trail buffer
     if(E.pOn){
@@ -1211,6 +1350,7 @@ function frame(){
       const SC=hex(P.sprayCol);
       gl.uniform3f(pPaint.u.sprayCol,SC[0],SC[1],SC[2]);
       draw(paint.b); paint.swap();
+      emitPass(2, paint.a, E.emPaint * 0.02, gl.ONE, gl.ONE);   // points lay wet paint that runs
 
       // particles can lay paint down too — fluid-driven spatter
       if(P.pOn && E.pDep > 0){
@@ -1339,6 +1479,9 @@ bind('rPSize','vPSize','pSize',f2);
 bind('rPInt','vPInt','pInt',f2);
 bind('rPMix','vPMix','pMix',f2);
 el('cPOn').addEventListener('change',e=>P.pOn=e.target.checked);
+el('cEmOn').addEventListener('change',e=>P.emOn=e.target.checked);
+bind('rEmForce','vEmForce','emForce',f2); bind('rEmDye','vEmDye','emDye',f2);
+bind('rEmPaint','vEmPaint','emPaint',f2); bind('rEmR','vEmR','emR',f3); bind('rEmBack','vEmBack','emBack',f2);
 el('sPW').addEventListener('change',e=>{ P.pw=+e.target.value; if(ok) allocate(); });
 bind('rRelief','vRelief','relief',f2); bind('rLightA','vLightA','lightA',n=>f0(n)+'°');
 bind('rSpec','vSpec','spec',f2); bind('rCon','vCon','con',f2); bind('rSat','vSat','sat',f2);
@@ -1376,7 +1519,10 @@ const MOD_TARGETS = {
   pDep:{label:'Filament deposit', span:1},
   relief:{label:'Relief', span:1},          lightA:{label:'Light angle', span:60},
   spec:{label:'Specular', span:0.5},        con:{label:'Contrast', span:0.3},
-  sat:{label:'Saturation', span:0.4},       post:{label:'Posterize', span:5}
+  sat:{label:'Saturation', span:0.4},       post:{label:'Posterize', span:5},
+  emForce:{label:'Emitter force', span:40},  emDye:{label:'Emitter dye', span:0.5},
+  emPaint:{label:'Emitter paint', span:1},   emR:{label:'Emitter size', span:0.02},
+  emBack:{label:'Emitter far side', span:0.5}
 };
 const MOD_RID = {
   cam:'rCam', brush:'rBrush', curl:'rCurl', curlS:'rCurlS', vort:'rVort', dt:'rDt',
@@ -1385,7 +1531,8 @@ const MOD_RID = {
   pFade:'rPFade', pSpeed:'rPSpeed', pInt:'rPInt', pSize:'rPSize',
   sprayF:'rSprayF', sprayR:'rSprayR', splat:'rSplat', dripRate:'rDripRate',
   bead:'rBead', hold:'rHold', wetDrag:'rWetDrag', pDep:'rPDep',
-  relief:'rRelief', lightA:'rLightA', spec:'rSpec', con:'rCon', sat:'rSat', post:'rPost'
+  relief:'rRelief', lightA:'rLightA', spec:'rSpec', con:'rCon', sat:'rSat', post:'rPost',
+  emForce:'rEmForce', emDye:'rEmDye', emPaint:'rEmPaint', emR:'rEmR', emBack:'rEmBack'
 };
 let E = P, lastT = performance.now();
 

@@ -6,6 +6,8 @@
 <title>The Unlimiter — Rack</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-points.js"></script>
+<script src="unlimiter-ports.js"></script>
 <style>
 :root{
   --bg:#14161d; --panel:#1c1f29; --panel-2:#171a22; --line:#2a2e3c; --line-soft:#232735;
@@ -81,7 +83,7 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
 .node.out{ width:176px; }
 .node.out canvas.nt{ height:78px; }
 .node.vol{ width:150px; }
-.node.vol .vbody{ padding:9px 8px; font-size:.68rem; color:var(--dim); line-height:1.4; }
+.node.vol .vbody{ padding:9px 8px 9px 52px; font-size:.64rem; color:var(--dim); line-height:1.45; text-align:right; } /* clear of the port labels */
 .port{
   position:absolute; width:13px; height:13px; border-radius:50%; background:var(--panel);
   border:2px solid var(--dim); cursor:crosshair; z-index:3;
@@ -90,6 +92,14 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
 .port.in{ left:-7px; top:50%; transform:translateY(-50%); }
 .port.out{ right:-7px; top:50%; transform:translateY(-50%); }
 .port.act{ border-color:var(--accent); }
+/* typed ports: data ports wear their type's colour; labels appear when a side has more than one */
+.port.data{ width:12px; height:12px; }
+.plabel{ position:absolute; z-index:3; transform:translateY(-50%); font-size:.56rem; line-height:1;
+  padding:2px 4px; border-radius:3px; background:rgba(11,13,19,.84); pointer-events:none; white-space:nowrap; }
+.plabel.in{ left:9px; } .plabel.out{ right:9px; }
+.node.gen .nh .sw{ border-radius:50%; }
+.node.gen canvas.nt{ background:#07090d; }
+.tbadge{ display:inline-block; font-size:.62rem; padding:1px 6px; border-radius:9px; border:1px solid currentColor; margin-left:4px; }
 
 /* ---------- stage ---------- */
 .col.stage{ background:var(--bg); }
@@ -143,6 +153,7 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
     <button id="bStartAll">Wake all</button>
     <button id="bOutput">Output window</button>
     <button id="bReset">Reset layout</button>
+    <button id="bAddGen" title="A procedural point source — unlimiter-points.js running inside the rack">+ Points generator</button>
     <div class="spacer"></div>
     <div id="beat"></div>
     <div id="fps">—</div>
@@ -212,13 +223,18 @@ const TOOLS = [
     prefer:["power","drift","slice","sat"],           boot:["bTest"],      accepts:"texture",  init:"typeof setPlaying === 'function' && setPlaying(true);" },
   { id:"se", file:"sediment.html",     label:"Sediment",     sel:"#view", capture:"pull", color:"#f0459c",
     prefer:["xSpeedS","drift","brightness","sizeS"],  boot:["btnPattern"], accepts:"image",    init:"" },
-  { id:"an", file:"anchor.html",       label:"Anchor",       sel:"#view", capture:"pull", color:"#9d7bff",
+  { id:"an", file:"anchor.html",       label:"Anchor",       sel:"#view", capture:"pull", from:"work", color:"#9d7bff",
     prefer:["waveAmp","noiseAmp","scatter","sizeS"],  boot:[],             accepts:null,       init:"P.anim = true; typeof startRender === 'function' && startRender();" },
   { id:"ou", file:"ouroboros.html",    label:"Ouroboros",    sel:"#gl",   capture:"push", color:"#6fce62",
     prefer:["zoom","twist","noiseAmp","decay"],       boot:["bSeed"],      accepts:"frame",    init:"" },
 ];
 const BLENDS = ["source-over","screen","lighter","multiply","overlay","difference","soft-light","hard-light"];
-const LS_KEY = "unlimiter.rack.graph.v1";
+const LS_KEY_V1 = "unlimiter.rack.graph.v1";   // untyped cables — read once, then migrated
+const LS_KEY    = "unlimiter.rack.graph.v2";   // typed {node, port} cables + generator nodes
+const PT = window.UnlimiterPorts || null;      // typed data between nodes
+const UP = window.UnlimiterPoints || null;     // the geometry behind generator nodes
+/* cable colours by type; image cables keep their source node's colour */
+const TYPE_COL = { image:"#8b90a0", points:"#7fd1c0", field:"#ffb02e", mask:"#9d7bff" };
 
 /* ---- rack parameter store: the same P/Q contract the tools use ---- */
 const RP = {};
@@ -248,6 +264,8 @@ function registerTarget(key, label, min, max, apply){
 function unregisterTarget(key){
   const i = RACK_TARGETS.findIndex(t => t.key === key);
   if(i < 0) return;
+  const gone = RACK_TARGETS[i];
+  if(gone && gone.release){ try{ gone.release(); }catch(e){} }   // hand it back to the tool
   RACK_TARGETS.splice(i, 1); targetByKey.delete(key);
   if(Drive){                       // no removeTarget in the drive — re-declare the set
     Drive.clearTargets();
@@ -263,6 +281,12 @@ const G = { nodes: [], conns: [] };
 let nextId = 1;
 const uid = p => p + (nextId++);
 
+function imgConn(from, to, opacity, blend, order){
+  return { id:uid("c"), from, fromPort:"out", to, toPort:"in", type:"image", opacity, blend, order, muted:false };
+}
+function dataConn(from, fromPort, to, toPort, type){
+  return { id:uid("c"), from, fromPort, to, toPort, type, opacity:1, blend:"source-over", order:0, muted:false };
+}
 function defaultGraph(){
   G.nodes = []; G.conns = [];
   TOOLS.forEach((t, i) => G.nodes.push({ id:"n_"+t.id, kind:"tool", toolId:t.id, x:16, y:14 + i * 120 }));
@@ -271,43 +295,88 @@ function defaultGraph(){
   const defs = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"] };
   TOOLS.forEach((t, i) => {
     const [op, blend] = defs[t.id];
-    G.conns.push({ id:uid("c"), from:"n_"+t.id, to:"n_out", opacity:op, blend, order:i, muted:false });
+    G.conns.push(imgConn("n_"+t.id, "n_out", op, blend, i));
   });
-  G.conns.push({ id:uid("c"), from:"n_out", to:"n_vol", opacity:1, blend:"source-over", order:0, muted:false });
+  G.conns.push(imgConn("n_out", "n_vol", 1, "source-over", 0));
   // the signature move: the composite feeds the recursive engine that draws into it
-  G.conns.push({ id:uid("c"), from:"n_out", to:"n_ou", opacity:1, blend:"source-over", order:0, muted:false });
+  G.conns.push(imgConn("n_out", "n_ou", 1, "source-over", 0));
+  addDefaultGenerator();
+}
+/* The first typed link: a points generator painting into Flow Weave's fluid,
+   and the same points arriving in the volume renderer as real 3D. */
+function addDefaultGenerator(){
+  if(!UP || !PT || G.nodes.some(n => n.kind === "gen")) return null;
+  const n = makeGenNode(236, 14, "Orbit flower");
+  G.nodes.push(n);
+  G.conns.push(dataConn(n.id, "uv", "n_fw", "emitters", "points"));
+  G.conns.push(dataConn(n.id, "points3d", "n_vol", "points", "points"));
+  return n;
 }
 const nodeById = id => G.nodes.find(n => n.id === id);
 const nodeSize = n => n.kind === "output" ? {w:176,h:124} : n.kind === "volume" ? {w:150,h:86} : {w:152,h:108};
-function outConns(){ return G.conns.filter(c => c.to === "n_out").sort((a,b) => a.order - b.order); }
-function inputConnFor(nodeId){ return G.conns.find(c => c.to === nodeId && nodeId !== "n_out"); }
-function volumeLinked(){ return G.conns.some(c => c.from === "n_out" && c.to === "n_vol" && !c.muted); }
-function canAccept(n){
-  if(n.kind === "output" || n.kind === "volume") return true;
-  const t = TOOLS.find(t => t.id === n.toolId);
-  return !!(t && t.accepts);
-}
-function hasOut(n){ return n.kind !== "volume"; }
 
+/* What a node can take and give. Tools add ports from the contract they
+   publish through unlimiter-ports.js; tools that don't publish keep the one
+   image in (if they accept a feed) and one image out they always had. */
+function portsOf(n){
+  if(!n) return { ins:[], outs:[] };
+  if(n.kind === "output") return { ins:[{ id:"in", type:"image", label:"layers", multi:true }], outs:[{ id:"out", type:"image" }] };
+  if(n.kind === "volume") return { ins:[{ id:"in", type:"image", label:"image" }, { id:"points", type:"points", label:"points" }], outs:[] };
+  if(n.kind === "gen")    return { ins:[], outs:[{ id:"out", type:"image", label:"image" }, { id:"points3d", type:"points", label:"3D" }, { id:"uv", type:"points", label:"2D" }] };
+  const t = TOOLS.find(t => t.id === n.toolId), L = layers.get(n.toolId);
+  const ins = [], outs = [{ id:"out", type:"image" }];
+  if(t && t.accepts) ins.push({ id:"in", type:"image" });
+  const io = L && L.io;
+  if(io){
+    for(const id in io.inputs){ if(id === "in" && io.inputs[id].type === "image") continue; ins.push({ id, type:io.inputs[id].type, label:io.inputs[id].label }); }
+    for(const id in io.outputs){ if(id === "out") continue; outs.push({ id, type:io.outputs[id].type, label:io.outputs[id].label }); }
+  }
+  return { ins, outs };
+}
+function portOf(n, dir, id){ const P = portsOf(n); return (dir === "out" ? P.outs : P.ins).find(p => p.id === id) || null; }
+
+function outConns(){ return G.conns.filter(c => c.to === "n_out" && c.type === "image").sort((a,b) => a.order - b.order); }
+function inputConnFor(nodeId){ return G.conns.find(c => c.to === nodeId && nodeId !== "n_out" && c.toPort === "in" && c.type === "image"); }
+/* whatever image is patched into the volume node — no longer only OUTPUT */
+function volumeFeed(){ return G.conns.find(c => c.to === "n_vol" && c.toPort === "in" && c.type === "image" && !c.muted) || null; }
+function volumeLinked(){ return !!volumeFeed(); }
+function canAccept(n){ return portsOf(n).ins.length > 0; }
+function hasOut(n){ return portsOf(n).outs.length > 0; }
+
+/* v1 cables had no ports and no type: every one of them was an image */
+function normConn(c){
+  return Object.assign({ fromPort:"out", toPort:"in", type:"image", opacity:1, blend:"source-over", order:0, muted:false }, c);
+}
 function saveGraph(){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify({
-      nodes: G.nodes.map(n => ({ id:n.id, kind:n.kind, toolId:n.toolId, x:Math.round(n.x), y:Math.round(n.y) })),
-      conns: G.conns.map(c => ({ id:c.id, from:c.from, to:c.to, opacity:c.opacity, blend:c.blend, order:c.order, muted:!!c.muted })),
+      version: 2,
+      nodes: G.nodes.map(n => {
+        const o = { id:n.id, kind:n.kind, toolId:n.toolId, x:Math.round(n.x), y:Math.round(n.y) };
+        if(n.kind === "gen"){ o.label = n.label; o.preset = n.preset; o.P = n.P; }
+        return o;
+      }),
+      conns: G.conns.map(c => ({ id:c.id, from:c.from, fromPort:c.fromPort, to:c.to, toPort:c.toPort, type:c.type,
+                                 opacity:c.opacity, blend:c.blend, order:c.order, muted:!!c.muted })),
       mix: { gain: mixGain, bg: mixBg },
     }));
   }catch(e){}
 }
 function loadGraph(){
   try{
-    const raw = localStorage.getItem(LS_KEY);
+    let raw = localStorage.getItem(LS_KEY), migrated = false;
+    if(!raw){ raw = localStorage.getItem(LS_KEY_V1); migrated = !!raw; }   // v1 is left untouched
     if(!raw) return false;
     const s = JSON.parse(raw);
     if(!s.nodes || !s.nodes.length) return false;
-    G.nodes = s.nodes; G.conns = s.conns || [];
-    let mx = 0; [...G.nodes, ...G.conns].forEach(o => { const m = /(\d+)$/.exec(o.id); if(m) mx = Math.max(mx, +m[1]); });
+    // generator nodes need the geometry modules; without them they are dropped, not broken
+    G.nodes = s.nodes.filter(n => n.kind !== "gen" || (UP && PT));
+    G.nodes.forEach(n => { if(n.kind === "gen") n.P = Object.assign(genPresetP(n.preset), n.P || {}); });
+    let mx = 0; [...G.nodes, ...(s.conns || [])].forEach(o => { const m = /(\d+)$/.exec(o.id); if(m) mx = Math.max(mx, +m[1]); });
     nextId = mx + 1;
+    G.conns = (s.conns || []).map(normConn).filter(c => nodeById(c.from) && nodeById(c.to));
     if(s.mix){ if(isFinite(+s.mix.gain)) mixGain = +s.mix.gain; if(s.mix.bg) mixBg = s.mix.bg; }
+    if(migrated){ addDefaultGenerator(); saveGraph(); }   // first run of the typed rack: show the new link, once
     return true;
   }catch(e){ return false; }
 }
@@ -364,12 +433,25 @@ function attach(L){
         return orig(src);
       };
     }
-    const work = peek(win, "work");          // anchor renders full-size offscreen
-    if(work && work.width) L.toolCanvas = work;
+    // Only tools that declare `from:"work"` are captured from that offscreen canvas.
+    // Peeking it for everyone grabbed Sediment's raw accumulation (it has a
+    // `work` too) and skipped its post-processing and poster frame.
+    if(L.tool.from === "work"){
+      const work = peek(win, "work");        // anchor renders full-size offscreen
+      if(work && work.width) L.toolCanvas = work;
+    }
+
+    // A tool that publishes ports through unlimiter-ports.js says what it gives
+    // and takes, instead of the rack guessing its variable names.
+    L.io = PT ? PT.read(win) : null;
+    if(L.io && L.io.outputs.out && L.io.outputs.out.type === "image"){
+      try{ const c = L.io.outputs.out.get(); if(c && c.width) L.toolCanvas = c; }catch(e){}
+    }
 
     wake(L);
     registerToolTargets(L);
     L.ready = true;
+    if(L.io) GraphView.build();               // its data ports appear on the node
     GraphView.markState(L.tool.id, "live");
     if(selected && selected.kind === "node" && nodeById(selected.id) && nodeById(selected.id).toolId === L.tool.id) Inspector.render();
   }catch(err){
@@ -404,9 +486,26 @@ function addToolTarget(L, k){
   const key = toolTargetKey(L, k);
   const base = Number(L.P[k]);
   if(RP[key] == null) RP[key] = isFinite(base) ? base : (spec.min + spec.max) / 2;
-  return registerTarget(key, L.tool.label + " — " + (spec.label || k), spec.min, spec.max, v => {
-    try{ L.P[k] = v; }catch(e){}
+  L.seen = L.seen || {};
+  L.seen[k] = Number(L.P[k]);
+  const canOverride = !!(L.drive && typeof L.drive.setOverride === "function");
+  const t = registerTarget(key, L.tool.label + " — " + (spec.label || k), spec.min, spec.max, v => {
+    // Resolved (modulated) values go in as an override the tool applies inside
+    // its own Q. Writing them into the tool's P instead put modulated numbers in
+    // its presets, left its sliders stale, and fought "Edit in stage".
+    if(canOverride){ try{ L.drive.setOverride(k, v); }catch(e){} }
+    else { try{ L.P[k] = v; }catch(e){} }      // drive older than 1.5: the only way in
   });
+  if(canOverride){
+    // The tool's P is the shared base. If its own slider moved (Edit in stage),
+    // adopt that as the rack's base instead of overwriting it next frame.
+    t.sync = () => {
+      const p = Number(L.P && L.P[k]);
+      if(isFinite(p) && p !== L.seen[k]){ RP[key] = p; L.seen[k] = p; }
+    };
+    t.release = () => { try{ L.drive.clearOverride(k); }catch(e){} };
+  }
+  return t;
 }
 
 /* ============================================================
@@ -415,6 +514,7 @@ function addToolTarget(L, k){
 function canvasForNode(id){
   if(id === "n_out") return mixCanvas;
   const n = nodeById(id);
+  if(n && n.kind === "gen"){ const rt = gens.get(n.id); return rt ? rt.canvas : null; }
   if(!n || n.kind !== "tool") return null;
   const L = layers.get(n.toolId);
   return L && L.ready ? L.canvas : null;
@@ -453,6 +553,229 @@ function feedSources(now){
       }
     }catch(e){ /* a tool that refuses a feed keeps its own content */ }
   });
+}
+
+/* ============================================================
+   Generator nodes — unlimiter-points.js running in the rack itself.
+   No iframe: maths needs no GL context and no UI of its own, so it
+   runs on the rack's clock and hands its frames out by reference.
+   ============================================================ */
+const gens = new Map();          // nodeId -> runtime
+/* the view that turns 3D points into the flat points 2D consumers take */
+const GEN_VIEW = [
+  { key:"v_yaw",   label:"yaw",         min:-180, max:180, step:1,    def:0 },
+  { key:"v_pitch", label:"pitch",       min:-89,  max:89,  step:1,    def:18 },
+  { key:"v_spin",  label:"spin (°/s)",  min:-90,  max:90,  step:0.5,  def:12 },
+  { key:"v_zoom",  label:"zoom",        min:0.2,  max:2.5, step:0.01, def:0.9 },
+  { key:"v_persp", label:"perspective", min:0,    max:1,   step:0.01, def:0.35 },
+];
+const GEN_CORE = [
+  { key:"speed",   label:"time speed", min:0,   max:3,  step:0.01, def:1 },
+  { key:"sizeMin", label:"size start", min:0.5, max:20, step:0.1,  def:3 },
+  { key:"sizeMax", label:"size end",   min:0.5, max:20, step:0.1,  def:8 },
+];
+/* counts and identities reallocate buffers — never modulated */
+const GEN_STRUCT = [
+  { key:"rows",   label:"rows",           min:4, max:160, step:1, mod:false },
+  { key:"cols",   label:"columns",        min:4, max:160, step:1, mod:false },
+  { key:"shells", label:"nested shells",  min:1, max:12,  step:1, mod:false },
+];
+function makeGenNode(x, y, preset){
+  return { id:uid("g"), kind:"gen", x, y, label:"Points", preset, P:genPresetP(preset) };
+}
+/* a flat P from one of unlimiter-points.js's presets, namespaced by role like
+   manifold.html: s_ surface, d_ placement, m0_… modifiers, pr_ presence, c_ colour */
+function genPresetP(name){
+  const spec = UP.PRESETS[name] || UP.PRESETS[Object.keys(UP.PRESETS)[0]];
+  const P = { surface:spec.surface, dist:spec.distribution, presence:spec.presence || "all", colour:spec.colour || "spectrum",
+              rows:spec.rows, cols:spec.cols, shells:spec.shells || 1, mods:["none","none","none"] };
+  const load = (prefix, kind, id, given) => { const m = UP.withDefaults(kind, id, given); for(const k in m) P[prefix + k] = m[k]; };
+  load("s_", "surface", spec.surface, spec.surfaceParams);
+  load("d_", "distribution", spec.distribution, spec.distParams);
+  load("pr_", "presence", P.presence, spec.presenceParams);
+  load("c_", "colour", P.colour, spec.colourParams);
+  (spec.modifiers || []).slice(0, 3).forEach((m, i) => { P.mods[i] = m.type; load("m" + i + "_", "modifier", m.type, m.params); });
+  GEN_CORE.forEach(p => { P[p.key] = p.def; });
+  GEN_VIEW.forEach(p => { P[p.key] = p.def; });
+  if(spec.sizeMin != null) P.sizeMin = spec.sizeMin;
+  if(spec.sizeMax != null) P.sizeMax = spec.sizeMax;
+  return P;
+}
+function genRuntime(n){
+  let rt = gens.get(n.id);
+  if(!rt){
+    const cv = document.createElement("canvas"); cv.width = LAYER_W; cv.height = LAYER_H;
+    rt = { canvas:cv, ctx:cv.getContext("2d"), frame:null, unit:null, uv:null,
+           flock:null, flockKey:"", t:0, radius:0, ov:{}, error:null };
+    gens.set(n.id, rt);
+  }
+  return rt;
+}
+function pickP(Q, prefix){ const o = {}; for(const k in Q) if(k.indexOf(prefix) === 0) o[k.slice(prefix.length)] = Q[k]; return o; }
+function genSpec(Q){
+  return {
+    surface:Q.surface, surfaceParams:pickP(Q, "s_"), shells:Math.max(1, Math.round(Q.shells)),
+    distribution:Q.dist, distParams:pickP(Q, "d_"),
+    rows:Math.max(1, Math.round(Q.rows)), cols:Math.max(1, Math.round(Q.cols)),
+    modifiers:(Q.mods || []).map((type, i) => type && type !== "none" ? { type, params:pickP(Q, "m" + i + "_") } : null).filter(Boolean),
+    presence:Q.presence, presenceParams:pickP(Q, "pr_"),
+    colour:Q.colour, colourParams:pickP(Q, "c_"),
+    sizeMin:Q.sizeMin, sizeMax:Q.sizeMax
+  };
+}
+function stepGen(n, dtSec){
+  const rt = genRuntime(n);
+  try{
+    const Q = Object.assign({}, n.P, rt.ov);            // P is the user's; ov is the drive's
+    rt.t += dtSec * (Number(Q.speed) || 0);
+    const spec = genSpec(Q), count = spec.rows * spec.cols;
+    if(spec.distribution === "flock"){
+      const key = count + ":" + spec.shells;
+      if(!rt.flock || rt.flockKey !== key){ rt.flock = UP.createFlock(count, spec.shells); rt.flockKey = key; }
+      UP.stepFlock(rt.flock, Math.min(dtSec, 0.05), rt.t, UP.withDefaults("distribution", "flock", spec.distParams), null, null);
+    } else rt.flock = null;
+    rt.frame = UP.generate(spec, rt.t, rt.frame, rt.flock);
+    // a stable scale into unit space: follow the form's size slowly, so moving
+    // points don't make the whole thing breathe
+    const r = UP.bounds(rt.frame).radius;
+    rt.radius = rt.radius > 0 ? rt.radius + (r - rt.radius) * 0.05 : r;
+    rt.unit = PT.normalize3d(rt.frame, null, 1 / Math.max(1e-6, rt.radius), rt.unit);
+    rt.uv = PT.project(rt.unit, { yaw:Q.v_yaw + rt.t * Q.v_spin, pitch:Q.v_pitch, roll:0,
+                                  zoom:Q.v_zoom, persp:Q.v_persp, aspect:LAYER_W / LAYER_H }, rt.uv);
+    drawGen(rt);
+    rt.error = null;
+  }catch(e){ rt.error = e.message || String(e); }
+}
+/* the image output: the 2D points drawn as light, far side dimmer */
+function drawGen(rt){
+  const g = rt.ctx, f = rt.uv; if(!f) return;
+  g.globalCompositeOperation = "source-over"; g.globalAlpha = 1;
+  g.fillStyle = "#000"; g.fillRect(0, 0, LAYER_W, LAYER_H);
+  g.globalCompositeOperation = "lighter";
+  const P = f.positions, C = f.colors, S = f.sizes, A = f.presence;
+  for(let i = 0; i < f.count; i++){
+    const a = A[i]; if(a < 0.02) continue;
+    const i3 = i * 3, z = P[i3 + 2];
+    const sz = Math.max(1, S[i] * 0.42 * (0.7 + 0.3 * z));
+    g.globalAlpha = Math.min(1, a * (0.55 + 0.45 * z));
+    g.fillStyle = "rgb(" + (C[i3] * 255 | 0) + "," + (C[i3 + 1] * 255 | 0) + "," + (C[i3 + 2] * 255 | 0) + ")";
+    g.fillRect(P[i3] * LAYER_W - sz / 2, P[i3 + 1] * LAYER_H - sz / 2, sz, sz);
+  }
+  g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+}
+function stepGens(dtSec){ G.nodes.forEach(n => { if(n.kind === "gen") stepGen(n, dtSec); }); }
+
+/* every number a generator exposes, in inspector order, from the module's own metadata */
+function genParamGroups(n){
+  const P = n.P, meta = (table, id) => (table[id] && table[id].params) || [];
+  const pref = (prefix, list) => list.map(p => ({ key:prefix + p.key, label:p.label, min:p.min, max:p.max, step:p.step }));
+  const groups = [
+    { title:"Form",      select:{ field:"surface",  table:UP.SURFACES,      prefix:"s_",  kind:"surface" },
+      rows: GEN_STRUCT.concat(pref("s_", meta(UP.SURFACES, P.surface))) },
+    { title:"Placement", select:{ field:"dist",     table:UP.DISTRIBUTIONS, prefix:"d_",  kind:"distribution" },
+      rows: pref("d_", meta(UP.DISTRIBUTIONS, P.dist)) },
+  ];
+  (P.mods || []).forEach((type, i) => groups.push({ title:"Modifier " + (i + 1), mod:i,
+      rows: type && type !== "none" ? pref("m" + i + "_", meta(UP.MODIFIERS, type)) : [] }));
+  groups.push({ title:"Which points", select:{ field:"presence", table:UP.PRESENCE, prefix:"pr_", kind:"presence" },
+                rows: pref("pr_", meta(UP.PRESENCE, P.presence)) });
+  groups.push({ title:"Colour & size", select:{ field:"colour", table:UP.COLOURS, prefix:"c_", kind:"colour" },
+                rows: pref("c_", meta(UP.COLOURS, P.colour)).concat(GEN_CORE) });
+  groups.push({ title:"2D view — what the 2D output sees", rows: GEN_VIEW });
+  return groups;
+}
+function genTargetKey(n, k){ return n.id + "." + k; }
+function addGenTarget(n, spec){
+  const key = genTargetKey(n, spec.key), rt = genRuntime(n);
+  if(RP[key] == null) RP[key] = Number(n.P[spec.key]);
+  const t = registerTarget(key, (n.label || "Points") + " — " + spec.label, spec.min, spec.max, v => { rt.ov[spec.key] = v; });
+  t.release = () => { delete rt.ov[spec.key]; };
+  return t;
+}
+/* drop drive targets for keys a structural change removed (a new surface has new params) */
+function pruneGenTargets(n){
+  const live = new Set(); genParamGroups(n).forEach(g => g.rows.forEach(r => live.add(genTargetKey(n, r.key))));
+  RACK_TARGETS.filter(t => t.key.indexOf(n.id + ".") === 0 && !live.has(t.key)).map(t => t.key).forEach(unregisterTarget);
+}
+function removeGen(id){
+  const n = nodeById(id); if(!n || n.kind !== "gen") return;
+  RACK_TARGETS.filter(t => t.key.indexOf(id + ".") === 0).map(t => t.key).forEach(unregisterTarget);
+  G.conns = G.conns.filter(c => c.from !== id && c.to !== id);
+  G.nodes = G.nodes.filter(x => x.id !== id);
+  gens.delete(id);
+  select(null); GraphView.build(); saveGraph();
+}
+function addGen(){
+  if(!UP || !PT) return;
+  const others = G.nodes.filter(n => n.kind === "gen").length;
+  const n = makeGenNode(236 + others * 22, 14 + others * 22, "Orbit flower");
+  G.nodes.push(n);
+  preRegisterGen(n);
+  if(Drive) Drive.rebuildMatrix();
+  GraphView.build(); select({ kind:"node", id:n.id }); saveGraph();
+}
+/* like a tool's `prefer` list: a couple of targets routable from the start */
+function preRegisterGen(n){
+  ["v_spin", "v_zoom"].forEach(k => { const spec = GEN_VIEW.find(p => p.key === k); if(spec) addGenTarget(n, spec); });
+}
+
+/* ============================================================
+   Data cables — points (and later fields, masks) by reference
+   ============================================================ */
+function outputValue(n, port){
+  if(!n) return null;
+  if(n.kind === "gen"){
+    const rt = gens.get(n.id); if(!rt) return null;
+    return port === "points3d" ? rt.unit : port === "uv" ? rt.uv : port === "out" ? rt.canvas : null;
+  }
+  if(n.kind === "tool"){
+    const L = layers.get(n.toolId), o = L && L.ready && L.io && L.io.outputs[port];
+    if(!o) return null;
+    try{ return o.get(); }catch(e){ return null; }
+  }
+  return null;
+}
+/* Hand each consumer the producer's current value. Inside the rack every tool
+   shares one JS heap, so nothing is copied. An input whose cable goes away —
+   deleted, muted, producer gone — is told once with set(null), so the tool
+   falls back to its own content instead of holding a stale frame. */
+const liveInputs = new Set();
+let volPts = null, volPtsVer = -1, volPtsOn = false;
+function deliverData(){
+  const now = new Set();
+  G.conns.forEach(c => {
+    if(c.type === "image" || c.muted) return;
+    const v = outputValue(nodeById(c.from), c.fromPort);
+    if(!v || (PT && !PT.isType(c.type, v))) return;
+    const to = nodeById(c.to); if(!to) return;
+    if(to.kind === "tool"){
+      const L = layers.get(to.toolId), inp = L && L.ready && L.io && L.io.inputs[c.toPort];
+      if(!inp) return;
+      try{ inp.set(v); now.add(c.to + ":" + c.toPort); }catch(e){}
+    } else if(to.kind === "volume" && c.toPort === "points" && volReady && volAPI && typeof volAPI.pushPoints === "function"){
+      now.add("n_vol:points");
+      if(v.version !== volPtsVer){
+        volPtsVer = v.version;
+        volPts = PT.packVolume(v, 0.02, volPts);
+        try{ volAPI.pushPoints(volPts.packed, volPts.count, { positions:volPts.positions }); volPtsOn = true; }catch(e){}
+      }
+    }
+  });
+  liveInputs.forEach(key => {
+    if(now.has(key)) return;
+    const i = key.lastIndexOf(":"), nodeId = key.slice(0, i), port = key.slice(i + 1);
+    const n = nodeById(nodeId);
+    if(n && n.kind === "tool"){
+      const L = layers.get(n.toolId), inp = L && L.io && L.io.inputs[port];
+      if(inp) try{ inp.set(null); }catch(e){}
+    }
+    if(nodeId === "n_vol" && volPtsOn && volAPI && volAPI.pushPoints){
+      try{ volAPI.pushPoints(null, 0); }catch(e){}
+      volPtsOn = false; volPtsVer = -1;
+    }
+    liveInputs.delete(key);
+  });
+  now.forEach(k => liveInputs.add(k));
 }
 
 /* ============================================================
@@ -497,32 +820,53 @@ const GraphView = (() => {
   let drag = null, wire = null;
 
   function colorOf(n){
+    if(!n) return "#8b90a0";
     if(n.kind === "output") return "#e8e9ee";
     if(n.kind === "volume") return "#8b90a0";
+    if(n.kind === "gen") return TYPE_COL.points;
     const t = TOOLS.find(t => t.id === n.toolId);
     return t ? t.color : "#8b90a0";
+  }
+  function titleOf(n){
+    if(!n) return "?";
+    if(n.kind === "output") return "OUTPUT";
+    if(n.kind === "volume") return "Volume";
+    if(n.kind === "gen") return n.label || "Points";
+    return (TOOLS.find(t => t.id === n.toolId) || {}).label || n.toolId;
   }
   function build(){
     nodesEl.innerHTML = ""; els.clear();
     G.nodes.forEach(n => {
       const d = document.createElement("div");
       const col = colorOf(n);
-      d.className = "node" + (n.kind === "output" ? " out" : n.kind === "volume" ? " vol" : "");
+      d.className = "node" + (n.kind === "output" ? " out" : n.kind === "volume" ? " vol" : n.kind === "gen" ? " gen" : "");
       d.dataset.id = n.id;
-      const title = n.kind === "output" ? "OUTPUT" : n.kind === "volume" ? "Volume" :
-                    (TOOLS.find(t => t.id === n.toolId) || {}).label;
-      const sub = n.kind === "output" ? "mix → OBS" : n.kind === "volume" ? "" : n.toolId;
+      const sub = n.kind === "output" ? "mix → OBS" : n.kind === "volume" ? "" : n.kind === "gen" ? (n.preset || "") : n.toolId;
       d.innerHTML =
-        `<div class="nh"><span class="sw" style="background:${col}"></span><b>${title}</b>` +
+        `<div class="nh"><span class="sw" style="background:${col}"></span><b>${titleOf(n)}</b>` +
         (n.kind === "tool" ? `<span class="st"></span>` : "") + `</div>` +
         (n.kind === "volume"
-          ? `<div class="vbody" data-vb>3D relief of the mix</div>`
+          ? `<div class="vbody" data-vb>relief<br>3D points</div>`
           : `<canvas class="nt" width="180" height="72"></canvas><div class="nf"><span>${sub}</span><span data-info></span></div>`);
-      if(canAccept(n)) d.insertAdjacentHTML("beforeend", `<div class="port in" data-port="in" data-node="${n.id}"></div>`);
-      if(hasOut(n))   d.insertAdjacentHTML("beforeend", `<div class="port out" data-port="out" data-node="${n.id}"></div>`);
+      const P = portsOf(n), s = nodeSize(n);
+      [["in", P.ins], ["out", P.outs]].forEach(([dir, list]) => {
+        list.forEach((pt, i) => {
+          const y = s.h * (i + 1) / (list.length + 1);
+          const data = pt.type !== "image";
+          const border = data ? `border-color:${TYPE_COL[pt.type]};` : "";
+          d.insertAdjacentHTML("beforeend",
+            `<div class="port ${dir}${data ? " data" : ""}" data-port="${pt.id}" data-dir="${dir}" data-type="${pt.type}" data-node="${n.id}"
+                  style="top:${y}px;${border}" title="${pt.label || pt.id} · ${pt.type}"></div>`);
+          if(list.length > 1 || data)
+            d.insertAdjacentHTML("beforeend",
+              `<span class="plabel ${dir}" style="top:${y}px;color:${TYPE_COL[pt.type]}">${pt.label || pt.id}</span>`);
+        });
+      });
       nodesEl.appendChild(d);
       const thumb = d.querySelector("canvas.nt");
       els.set(n.id, { el:d, thumb, ctx: thumb ? thumb.getContext("2d") : null, st: d.querySelector(".st"), info: d.querySelector("[data-info]") });
+      // a rebuild must not forget which tools are live
+      if(n.kind === "tool"){ const L = layers.get(n.toolId); if(L && (L.ready || L.error)) markState(n.toolId, L.ready ? "live" : "err", L.error); }
 
       d.addEventListener("pointerdown", e => {
         if(e.target.classList.contains("port")) return;
@@ -536,17 +880,19 @@ const GraphView = (() => {
         p.addEventListener("pointerdown", e => {
           e.stopPropagation();
           const r = wrap.getBoundingClientRect();
-          wire = { node:n.id, dir:p.dataset.port, x:e.clientX - r.left, y:e.clientY - r.top };
+          wire = { node:n.id, dir:p.dataset.dir, port:p.dataset.port, type:p.dataset.type, x:e.clientX - r.left, y:e.clientY - r.top };
+          pending.setAttribute("stroke", TYPE_COL[wire.type] || "#8b90a0");
           wrap.setPointerCapture(e.pointerId);
         });
       });
     });
     layout(); drawCables();
   }
-  function portPos(nodeId, dir){
+  function portPos(nodeId, dir, portId){
     const n = nodeById(nodeId); if(!n) return {x:0,y:0};
-    const s = nodeSize(n);
-    return { x: n.x + (dir === "out" ? s.w : 0), y: n.y + s.h / 2 };
+    const s = nodeSize(n), P = portsOf(n), list = dir === "out" ? P.outs : P.ins;
+    let i = list.findIndex(p => p.id === portId); if(i < 0) i = 0;
+    return { x: n.x + (dir === "out" ? s.w : 0), y: n.y + s.h * (i + 1) / (Math.max(1, list.length) + 1) };
   }
   function layout(){
     G.nodes.forEach(n => { const e = els.get(n.id); if(e) e.el.style.transform = `translate(${n.x}px, ${n.y}px)`; });
@@ -558,9 +904,9 @@ const GraphView = (() => {
   function drawCables(){
     cableG.innerHTML = "";
     G.conns.forEach(c => {
-      const a = portPos(c.from, "out"), b = portPos(c.to, "in");
-      const n = nodeById(c.from);
-      const col = n ? colorOf(n) : "#8b90a0";
+      const a = portPos(c.from, "out", c.fromPort), b = portPos(c.to, "in", c.toPort);
+      const data = c.type !== "image";
+      const col = data ? TYPE_COL[c.type] : colorOf(nodeById(c.from));
       const d = path(a, b);
       const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
       hit.setAttribute("d", d); hit.setAttribute("class", "hit");
@@ -569,8 +915,15 @@ const GraphView = (() => {
       p.setAttribute("d", d);
       p.setAttribute("class", "cable" + (selected && selected.kind === "conn" && selected.id === c.id ? " sel" : ""));
       p.setAttribute("stroke", col);
-      p.setAttribute("stroke-width", String(1.4 + 3.2 * (c.muted ? 0 : c.opacity)));
-      p.setAttribute("stroke-opacity", String(c.muted ? 0.18 : 0.3 + 0.6 * c.opacity));
+      if(data){
+        // data cables are dotted, so a cable carrying points never reads as a picture
+        p.setAttribute("stroke-width", "2.6");
+        p.setAttribute("stroke-dasharray", "1 6");
+        p.setAttribute("stroke-opacity", c.muted ? "0.2" : "0.95");
+      } else {
+        p.setAttribute("stroke-width", String(1.4 + 3.2 * (c.muted ? 0 : c.opacity)));
+        p.setAttribute("stroke-opacity", String(c.muted ? 0.18 : 0.3 + 0.6 * c.opacity));
+      }
       cableG.appendChild(hit); cableG.appendChild(p);
     });
   }
@@ -581,7 +934,7 @@ const GraphView = (() => {
       if(n){ n.x = Math.max(0, e.clientX - r.left - drag.dx); n.y = Math.max(0, e.clientY - r.top - drag.dy); layout(); drawCables(); }
     } else if(wire){
       const p = { x:e.clientX - r.left, y:e.clientY - r.top };
-      const a = portPos(wire.node, wire.dir);
+      const a = portPos(wire.node, wire.dir, wire.port);
       pending.setAttribute("d", wire.dir === "out" ? path(a, p) : path(p, a));
     }
   });
@@ -589,20 +942,23 @@ const GraphView = (() => {
     if(drag){ const el = els.get(drag.id); if(el) el.el.classList.remove("dragging"); drag = null; saveGraph(); }
     if(wire){
       const tgt = document.elementFromPoint(e.clientX, e.clientY);
-      if(tgt && tgt.classList && tgt.classList.contains("port") && tgt.dataset.port !== wire.dir){
-        const from = wire.dir === "out" ? wire.node : tgt.dataset.node;
-        const to   = wire.dir === "out" ? tgt.dataset.node : wire.node;
-        connect(from, to);
+      if(tgt && tgt.classList && tgt.classList.contains("port") && tgt.dataset.dir !== wire.dir){
+        const out = wire.dir === "out" ? wire : { node:tgt.dataset.node, port:tgt.dataset.port, type:tgt.dataset.type };
+        const inp = wire.dir === "out" ? { node:tgt.dataset.node, port:tgt.dataset.port, type:tgt.dataset.type } : wire;
+        connect(out.node, out.port, inp.node, inp.port);
       }
       wire = null; pending.setAttribute("d", "");
     }
   });
   wrap.addEventListener("pointerdown", e => { if(e.target === wrap || e.target.id === "cables") select(null); });
   window.addEventListener("keydown", e => {
-    if((e.key === "Delete" || e.key === "Backspace") && selected && selected.kind === "conn"
-       && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)){
+    if(!(e.key === "Delete" || e.key === "Backspace") || !selected) return;
+    if(/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+    if(selected.kind === "conn"){
       G.conns = G.conns.filter(c => c.id !== selected.id);
       select(null); drawCables(); saveGraph();
+    } else if(selected.kind === "node" && (nodeById(selected.id) || {}).kind === "gen"){
+      removeGen(selected.id);        // generators are yours to delete; tools, OUTPUT and Volume are fixed
     }
   });
   function refreshThumbs(){
@@ -610,6 +966,10 @@ const GraphView = (() => {
       const e = els.get(n.id); if(!e || !e.ctx) return;
       const src = n.kind === "output" ? mixCanvas : canvasForNode(n.id);
       if(src) { try{ e.ctx.drawImage(src, 0, 0, e.thumb.width, e.thumb.height); }catch(err){} }
+      if(n.kind === "gen" && e.info){
+        const rt = gens.get(n.id), f = rt && rt.uv;
+        e.info.textContent = rt && rt.error ? "error" : f ? f.count.toLocaleString() + " pts" : "";
+      }
     });
   }
   function markState(toolId, state, title){
@@ -621,19 +981,25 @@ const GraphView = (() => {
     els.forEach((e, id) => e.el.classList.toggle("sel", !!selected && selected.kind === "node" && selected.id === id));
     drawCables();
   }
-  return { build, layout, drawCables, refreshThumbs, markState, refreshSel, colorOf };
+  return { build, layout, drawCables, refreshThumbs, markState, refreshSel, colorOf, titleOf };
 })();
 
-function connect(from, to){
-  if(from === to) return;
-  const target = nodeById(to);
-  if(!target || !canAccept(target)) return;
-  if(G.conns.some(c => c.from === from && c.to === to)) return;
-  // tool inputs and the volume node take exactly one feed
-  if(to !== "n_out") G.conns = G.conns.filter(c => c.to !== to);
+/* Patch an output port to an input port. Only same-type ports connect. Every
+   input takes one cable (a new one replaces the old) except OUTPUT's, which
+   stacks layers. */
+function connect(from, fromPort, to, toPort){
+  if(from === to) return false;
+  const a = nodeById(from), b = nodeById(to);
+  const po = portOf(a, "out", fromPort), pi = portOf(b, "in", toPort);
+  if(!po || !pi) return false;
+  if(!(PT ? PT.compatible(po.type, pi.type) : po.type === pi.type)) return false;
+  if(G.conns.some(c => c.from === from && c.fromPort === fromPort && c.to === to && c.toPort === toPort)) return false;
+  if(!pi.multi) G.conns = G.conns.filter(c => !(c.to === to && c.toPort === toPort));
   const order = to === "n_out" ? (outConns().length ? Math.max(...outConns().map(c => c.order)) + 1 : 0) : 0;
-  G.conns.push({ id:uid("c"), from, to, opacity:1, blend:"screen", order, muted:false });
+  G.conns.push({ id:uid("c"), from, fromPort, to, toPort, type:po.type,
+                 opacity:1, blend: to === "n_out" ? "screen" : "source-over", order, muted:false });
   GraphView.drawCables(); saveGraph(); Inspector.render();
+  return true;
 }
 function select(sel){
   selected = sel;
@@ -686,6 +1052,7 @@ const Inspector = (() => {
     if(!n){ renderNone(); return; }
     if(n.kind === "output") renderOutput(modded);
     else if(n.kind === "volume") renderVolume(modded);
+    else if(n.kind === "gen") renderGen(n);
     else renderTool(n, modded);
   }
   function renderNone(){
@@ -693,19 +1060,27 @@ const Inspector = (() => {
       `<div class="empty">Nothing selected.<br><br>
         Click a <b style="color:var(--text)">node</b> to get its controls here, or a
         <b style="color:var(--text)">cable</b> to set how that layer blends into the output.<br><br>
-        Drag from a node's right port to another's left port to patch. Tool inputs take one
-        feed; OUTPUT takes as many as you like.</div>` + driveSection();
+        Drag from a node's right port to another's left port to patch. Only ports of the same
+        type connect: solid cables carry pictures, <span style="color:${TYPE_COL.points}">dotted</span>
+        cables carry data. Inputs take one cable; OUTPUT takes as many as you like.<br><br>
+        <b style="color:var(--text)">+ Points generator</b> adds a point source that runs inside the rack.</div>` + driveSection();
     mountDrive();
   }
   function renderConn(){
     const c = G.conns.find(x => x.id === selected.id);
     if(!c){ renderNone(); return; }
     const a = nodeById(c.from), b = nodeById(c.to);
-    const nameOf = n => !n ? "?" : n.kind === "output" ? "OUTPUT" : n.kind === "volume" ? "Volume" : (TOOLS.find(t => t.id === n.toolId) || {}).label;
+    const nameOf = n => GraphView.titleOf(n);
     const toOut = c.to === "n_out";
+    const data = c.type !== "image";
+    const pa = portOf(a, "out", c.fromPort), pb = portOf(b, "in", c.toPort);
     root.innerHTML =
-      `<div class="ihead"><span class="sw" style="background:${GraphView.colorOf(a || {})}"></span><b>${nameOf(a)} → ${nameOf(b)}</b></div>` +
-      (toOut
+      `<div class="ihead"><span class="sw" style="background:${data ? TYPE_COL[c.type] : GraphView.colorOf(a || {})}"></span><b>${nameOf(a)} → ${nameOf(b)}</b></div>` +
+      `<div class="empty" style="margin-bottom:10px">${(pa && pa.label) || c.fromPort} → ${(pb && pb.label) || c.toPort}
+         <span class="tbadge" style="color:${TYPE_COL[c.type]}">${c.type}</span></div>` +
+      (data
+        ? `<div class="empty">This cable carries ${c.type} — the producer's live data, handed over by reference each frame. It has no opacity or blend; mute it to let the receiver fall back to its own content.</div>`
+        : toOut
         ? fld("opacity", c.opacity.toFixed(2), `<input type="range" id="cOp" min="0" max="1" step="0.01" value="${c.opacity}">`) +
           `<div class="fld"><div class="lab"><span>blend</span></div>
              <select id="cBlend">${BLENDS.map(x => `<option value="${x}"${x===c.blend?" selected":""}>${x}</option>`).join("")}</select></div>`
@@ -772,9 +1147,16 @@ const Inspector = (() => {
       body += `<div class="empty">${volAPI ? "WebGPU is unavailable in this browser, so the renderer can't start. The mix still runs and OBS can capture it."
         : "Waiting for the renderer to report in…"}</div>`;
     } else {
-      body += `<div class="empty" style="margin-bottom:10px">${linked
-        ? "Fed from OUTPUT. Luminance becomes depth, pixel colour becomes point colour."
-        : "Not patched — connect OUTPUT's port to this node's input to feed it."}</div>`;
+      const feed = volumeFeed();
+      const ptsC = G.conns.find(c => c.to === "n_vol" && c.toPort === "points" && !c.muted);
+      body += `<div class="empty" style="margin-bottom:6px">${linked
+        ? "Image from <b style='color:var(--text)'>" + GraphView.titleOf(nodeById(feed.from)) + "</b> — luminance becomes depth, pixel colour becomes point colour."
+        : "No image patched into the <b style='color:var(--text)'>image</b> port."}</div>`;
+      body += `<div class="empty" style="margin-bottom:10px">${ptsC
+        ? (typeof volAPI.pushPoints === "function"
+            ? "Points from <b style='color:var(--text)'>" + GraphView.titleOf(nodeById(ptsC.from)) + "</b> — real 3D positions" + (volPtsOn && volPts ? ", " + volPts.count.toLocaleString() + " live." : ".")
+            : "Points are patched, but this volume-renderer.html has no pushPoints — update it.")
+        : "Nothing on the <b style='color:var(--text)'>points</b> port."}</div>`;
       body += `<h2>Mix relief</h2>`;
       VOL_LOCAL.forEach(v => {
         body += fld(v.label, (RP[v.key] ?? v.def).toFixed(2),
@@ -831,10 +1213,21 @@ const Inspector = (() => {
     }
 
     if(tool.accepts){
-      const fromName = inC ? (nodeById(inC.from) || {}).kind === "output" ? "OUTPUT"
-                           : (TOOLS.find(t => "n_" + t.id === inC.from) || {}).label : null;
+      const fromName = inC ? GraphView.titleOf(nodeById(inC.from)) : null;
       body += `<h2>Input <span style="color:var(--faint)">— ${tool.accepts === "frame" ? "per frame" : tool.accepts === "texture" ? "~8/s" : "on a 6s cycle"}</span></h2>`;
       body += `<div class="empty">${inC ? "Fed from <b style='color:var(--text)'>" + fromName + "</b>." : "No input patched — the tool uses its own content."}</div>`;
+    }
+
+    if(L.io){
+      const ports = portsOf(n);
+      const rowsFor = (dir, list) => list.filter(pt => pt.type !== "image").map(pt => {
+        const cs = G.conns.filter(c => dir === "in" ? (c.to === n.id && c.toPort === pt.id) : (c.from === n.id && c.fromPort === pt.id));
+        const peer = cs.length ? cs.map(c => GraphView.titleOf(nodeById(dir === "in" ? c.from : c.to))).join(", ") : "not patched";
+        return `<div class="empty" style="margin-bottom:4px">${dir === "in" ? "in" : "out"} · <b style="color:var(--text)">${pt.label || pt.id}</b>
+          <span class="tbadge" style="color:${TYPE_COL[pt.type]}">${pt.type}</span> — ${peer}</div>`;
+      }).join("");
+      const dataRows = rowsFor("in", ports.ins) + rowsFor("out", ports.outs);
+      if(dataRows) body += `<h2>Data ports <span style="color:var(--faint)">— published by the tool</span></h2>` + dataRows;
     }
 
     const keys = L.targets ? Object.keys(L.targets) : [];
@@ -861,6 +1254,92 @@ const Inspector = (() => {
     find.addEventListener("input", e => { paramFilter = e.target.value; buildParams(L); });
     buildParams(L);
     mountDrive();
+  }
+
+  /* A generator's panel is built from unlimiter-points.js's own parameter
+     metadata — the same lists manifold.html builds its sliders from. */
+  function renderGen(n){
+    const rt = genRuntime(n);
+    const modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
+    let body = `<div class="ihead"><span class="sw" style="background:${TYPE_COL.points};border-radius:50%"></span><b>${n.label || "Points"}</b></div>
+      <div class="empty" style="margin-bottom:10px">unlimiter-points.js running inside the rack, on its clock — no iframe.
+        <b style="color:var(--text)">3D</b> gives the points centred in unit space (the volume takes these);
+        <b style="color:var(--text)">2D</b> gives them through the view below (Flow Weave's emitters take these);
+        <b style="color:var(--text)">image</b> draws them for the mix.</div>` +
+      (rt.error ? `<div class="empty" style="color:var(--danger);margin-bottom:8px">${rt.error}</div>` : "") +
+      `<div class="fld"><div class="lab"><span>start from</span></div>
+        <select id="gPreset">${Object.keys(UP.PRESETS).map(k => `<option${k === n.preset ? " selected" : ""}>${k}</option>`).join("")}</select></div>`;
+    genParamGroups(n).forEach(g => {
+      body += `<h2>${g.title}</h2>`;
+      if(g.select){
+        const t = g.select.table;
+        body += `<div class="fld"><select data-gs="${g.select.field}">${Object.keys(t).map(k =>
+          `<option value="${k}"${k === n.P[g.select.field] ? " selected" : ""}>${t[k].label}</option>`).join("")}</select></div>`;
+      }
+      if(g.mod != null){
+        const cur = (n.P.mods || [])[g.mod] || "none";
+        body += `<div class="fld"><select data-gm="${g.mod}"><option value="none">— none —</option>${Object.keys(UP.MODIFIERS).map(k =>
+          `<option value="${k}"${k === cur ? " selected" : ""}>${UP.MODIFIERS[k].label}</option>`).join("")}</select></div>`;
+      }
+      body += g.rows.map(spec => genRow(n, spec, modded)).join("");
+    });
+    body += `<div class="row2" style="margin-top:12px"><span></span><button id="gDel" style="color:var(--danger)">delete node</button></div>` + driveSection();
+    root.innerHTML = body;
+
+    const persist = () => saveGraph();
+    root.querySelector("#gPreset").addEventListener("change", e => {
+      const keepView = {}; GEN_VIEW.forEach(p => { keepView[p.key] = n.P[p.key]; });
+      n.preset = e.target.value;
+      n.P = Object.assign(genPresetP(n.preset), keepView);
+      rt.flock = null; rt.radius = 0;
+      pruneGenTargets(n); GraphView.build(); persist(); render();
+    });
+    root.querySelectorAll("[data-gs]").forEach(sel => sel.addEventListener("change", e => {
+      const field = sel.dataset.gs, g = genParamGroups(n).find(g => g.select && g.select.field === field);
+      n.P[field] = e.target.value;
+      const m = UP.withDefaults(g.select.kind, e.target.value, {});
+      for(const k in m) if(n.P[g.select.prefix + k] == null) n.P[g.select.prefix + k] = m[k];
+      if(field === "dist") rt.flock = null;
+      if(field === "surface") rt.radius = 0;
+      pruneGenTargets(n); persist(); render();
+    }));
+    root.querySelectorAll("[data-gm]").forEach(sel => sel.addEventListener("change", e => {
+      const i = +sel.dataset.gm, type = e.target.value;
+      n.P.mods = (n.P.mods || ["none","none","none"]).slice(); n.P.mods[i] = type;
+      if(type !== "none"){ const m = UP.withDefaults("modifier", type, {}); for(const k in m) n.P["m" + i + "_" + k] = m[k]; }
+      pruneGenTargets(n); persist(); render();
+    }));
+    root.querySelectorAll(".gprow").forEach(row => {
+      const k = row.dataset.gk, key = genTargetKey(n, k);
+      const spec = genParamGroups(n).flatMap(g => g.rows).find(r => r.key === k);
+      const r = row.querySelector("input"), v = row.querySelector(".v");
+      r.addEventListener("input", e => {
+        const val = parseFloat(e.target.value);
+        v.textContent = fmt(val);
+        n.P[k] = val;                              // a user edit: the generator's own P
+        if(targetByKey.has(key)) RP[key] = val;    // and the drive's base, when routable
+        if(k === "rows" || k === "cols" || k === "shells") rt.flock = null;
+      });
+      r.addEventListener("change", persist);
+      const mb = row.querySelector(".mb");
+      if(mb) mb.addEventListener("click", () => {
+        if(targetByKey.has(key)) unregisterTarget(key);
+        else { RP[key] = n.P[k]; addGenTarget(n, spec); if(Drive) Drive.rebuildMatrix(); }
+        render();
+      });
+    });
+    root.querySelector("#gDel").addEventListener("click", () => removeGen(n.id));
+    mountDrive();
+  }
+  function genRow(n, spec, modded){
+    const key = genTargetKey(n, spec.key), isT = targetByKey.has(key);
+    const raw = isT ? (RP[key] ?? n.P[spec.key]) : n.P[spec.key];
+    const v = isFinite(+raw) ? +raw : spec.min;
+    const btn = spec.mod === false ? `<span></span>`
+      : `<button class="mb sm ${isT ? "on" : ""}" title="${isT ? "Registered with the drive — routable in the matrix" : "Make this routable from audio, LFOs or MIDI"}">◎</button>`;
+    return `<div class="prow gprow${modded.has(key) ? " mod" : ""}" data-gk="${spec.key}">
+      <div class="fld" style="margin:0"><div class="lab"><span>${spec.label}</span><span class="v">${fmt(v)}</span></div>
+        <input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${v}"></div>${btn}</div>`;
   }
 
   /* the tool's own registered parameters — real bounds, real labels */
@@ -897,8 +1376,11 @@ const Inspector = (() => {
       r.addEventListener("input", e => {
         const val = parseFloat(e.target.value);
         v.textContent = fmt(val);
-        if(targetByKey.has(key)) RP[key] = val;      // modulation resolves from RP
-        else { try{ L.P[k] = val; }catch(err){} }    // otherwise write the tool directly
+        // a slider move is a user edit, so it lands in the tool's own P either way;
+        // when registered, RP carries the same base value for the rack's drive
+        try{ L.P[k] = val; }catch(err){}
+        if(L.seen) L.seen[k] = val;
+        if(targetByKey.has(key)) RP[key] = val;
       });
       row.querySelector(".mb").addEventListener("click", () => {
         if(targetByKey.has(key)) unregisterTarget(key);
@@ -936,11 +1418,21 @@ const Inspector = (() => {
       const L = layers.get(n.toolId); if(!L || !L.P) return;
       const k = row.dataset.k, key = toolTargetKey(L, k);
       if(!modded.has(key)) return;
-      const v = Number(L.P[k]);
+      const v = Number(RQ[key] ?? L.P[k]);     // resolved value — P holds the user's base now
       if(!isFinite(v)) return;
       row.querySelector(".v").textContent = fmt(v);
       const r = row.querySelector("input");
       if(!r.matches(":active")) r.value = v;
+      row.classList.add("mod");
+    });
+    root.querySelectorAll(".gprow").forEach(row => {
+      const n = selected.kind === "node" ? nodeById(selected.id) : null;
+      if(!n || n.kind !== "gen") return;
+      const key = genTargetKey(n, row.dataset.gk);
+      if(!modded.has(key)) return;
+      const v = Number(RQ[key]); if(!isFinite(v)) return;
+      row.querySelector(".v").textContent = fmt(v);
+      const r = row.querySelector("input"); if(!r.matches(":active")) r.value = v;
       row.classList.add("mod");
     });
     root.querySelectorAll("[data-vk]").forEach(r => {
@@ -1013,6 +1505,7 @@ function buildVolumeTargets(){
    ============================================================ */
 function boot(){
   if(!loadGraph()) defaultGraph();
+  G.nodes.forEach(n => { if(n.kind === "gen") preRegisterGen(n); });
   initLayers();
   GraphView.build();
   linkVolume();
@@ -1023,23 +1516,49 @@ function boot(){
   document.getElementById("bBackToMix").addEventListener("click", () => { showMix(); Inspector.render(); });
   document.getElementById("bReset").addEventListener("click", () => {
     try{ localStorage.removeItem(LS_KEY); }catch(e){}
-    defaultGraph(); GraphView.build(); select({ kind:"node", id:"n_out" }); saveGraph();
+    G.nodes.filter(n => n.kind === "gen").forEach(n =>
+      RACK_TARGETS.filter(t => t.key.indexOf(n.id + ".") === 0).map(t => t.key).forEach(unregisterTarget));
+    gens.clear();
+    defaultGraph();
+    G.nodes.forEach(n => { if(n.kind === "gen") preRegisterGen(n); });
+    if(Drive) Drive.rebuildMatrix();
+    GraphView.build(); select({ kind:"node", id:"n_out" }); saveGraph();
   });
+  const bAddGen = document.getElementById("bAddGen");
+  if(UP && PT) bAddGen.addEventListener("click", addGen);
+  else { bAddGen.disabled = true; bAddGen.title = "unlimiter-points.js and unlimiter-ports.js must sit next to rack.html"; }
   window.addEventListener("resize", fitFrames);
   setTimeout(fitFrames, 300);
 
-  let last = performance.now(), fpsEma = 0, beatWas = 0, thumbAt = 0, insAt = 0, fpsAt = 0;
+  let last = performance.now(), fpsEma = 0, beatWas = 0, thumbAt = 0, insAt = 0, fpsAt = 0, pAt = 0;
+  /* Tools replace their P object on preset load (P = Object.assign({}, …)),
+     which would leave the rack holding a dead reference. Re-find it. */
+  function refreshToolP(){
+    layers.forEach(L => {
+      if(!L.ready || !L.win) return;
+      const p = peek(L.win, "P");
+      // a new P means the tool loaded a preset — a user edit — so mark every
+      // base stale and let sync() adopt the new values next frame
+      if(p && p !== L.P){ L.P = p; if(L.seen) for(const k in L.seen) L.seen[k] = NaN; }
+    });
+  }
   const fpsEl = document.getElementById("fps"), beatEl = document.getElementById("beat");
 
   function frame(now){
     const dt = Math.min(60, now - last); last = now;
 
+    if(now - pAt > 250){ pAt = now; refreshToolP(); }
+    RACK_TARGETS.forEach(t => { if(t.sync) t.sync(); });
     RQ = Drive ? Drive.resolve(RP) : RP;
     RACK_TARGETS.forEach(t => { const v = RQ[t.key]; if(typeof v === "number" && isFinite(v)) t.apply(v); });
 
+    if(UP && PT){ stepGens(dt / 1000); deliverData(); }
     feedSources(now);
     captureAndMix();
-    if(volReady && volAPI && volumeLinked()){ try{ volAPI.pushMixFrame(mixCanvas); }catch(e){} }
+    // whatever image is patched into the volume — patching something else in no
+    // longer silently stops the feed
+    const vf = volumeFeed();
+    if(volReady && volAPI && vf){ const src = canvasForNode(vf.from); if(src) try{ volAPI.pushMixFrame(src); }catch(e){} }
 
     if(now - thumbAt > 100){ thumbAt = now; GraphView.refreshThumbs(); }
     if(now - insAt > 160){ insAt = now; Inspector.tick(); }

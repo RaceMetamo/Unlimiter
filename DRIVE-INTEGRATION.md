@@ -10,6 +10,23 @@ tenth tool works like the first.
 |---|---|---|
 | anchor | yes | reference implementation |
 | sediment | yes | modulation is painted into the accumulation, not just displayed |
+| ouroboros | yes | the most standard wiring: `DEFAULTS`, `P`/`Q`, `NO_MOD`, `registerMod` in the slider factory |
+| relief | yes | also consumes `unlimiter-depth.js` |
+| manifold | yes | targets come from `unlimiter-points.js` parameter metadata |
+| depth-check | yes | |
+| flow-weave | yes | old `modulation.js` retired; `mod` kept as an adapter |
+| melted-world | yes | old `modulation.js` retired; uses `Drive.pushFrame()`; presets still save under `modulation`, not `_drive` |
+| rack | yes | a host: drives the tools it hosts through overrides (below) |
+| drive-check | n/a | it *is* the drive |
+| flow-field-plotter | — | carries an **inlined** copy of `modulation.js` v1.1 (`P`/`E`) — port with the adapter shim |
+| time-cube | — | still on `modulation.js` — port with the adapter shim |
+| worldseed | — | its own inline 3-slot modulation system (`applyMods` → `MP`), not `modulation.js` |
+| phylo-lsystem | — | no modulation; its own mic envelope; script is one IIFE, so a host can't reach it |
+| tbg-facade | — | no modulation; its own mic envelope; script is one IIFE |
+
+---|---|---|
+| anchor | yes | reference implementation |
+| sediment | yes | modulation is painted into the accumulation, not just displayed |
 | drive-check | n/a | it *is* the drive |
 | flow-field-plotter | — | |
 | flow-weave | yes | old `modulation.js` retired; `mod` kept as an adapter |
@@ -162,6 +179,36 @@ for(const k in TARGETS){
 
 Presets saved by the old system keep their look but lose their routing — the two
 serialisation formats differ. Re-save them once.
+
+---
+
+## Driven from outside: overrides (1.5)
+
+A host — the rack — drives a tool's parameters through the tool's own drive,
+never by writing its `P`:
+
+```js
+Drive.setOverride(key, value)   // replaces key's base value inside resolve() only
+Drive.clearOverride(key)        // hand it back — the tool returns exactly to its P
+Drive.clearOverrides()
+Drive.hasOverride(key)
+```
+
+`resolve(P)` takes an override as the base value, then applies the tool's own
+routes on top, so the tool's modulation still layers over the host's. `P` is
+never touched: the tool's sliders stay honest, its presets save what the user
+set, and clearing an override is a perfect undo — which is the guarantee this
+whole contract opens with.
+
+Two knock-on rules, both already handled inside the drive:
+
+- `isLive()` is true while any override is set, so a tool that only redraws
+  while modulated (Melted World) keeps redrawing while a host drives it.
+- `modulatedKeys()` includes overridden keys, so a tool that marks modulated
+  sliders shows that it is being driven from outside.
+
+Tools need no changes to support this — it lives in `resolve()`, which every
+drive-wired tool already calls once per frame.
 
 ---
 

@@ -139,6 +139,10 @@
       procedural point generator: surfaces, placements, a non-destructive modifier stack, noise carving and
       point-for-point morphing, with no DOM or WebGL in it. Manifold is its instrument panel; anything else in
       the suite can read the same buffers. See <code>POINTS.md</code>.</p>
+    <p><b style="color:var(--text)">On the data layer.</b> <code>unlimiter-ports.js</code> lets tools hand each
+      other what they compute — points, strokes, fields, masks — rather than only pictures of it. In the Rack,
+      a points generator can paint Flow Weave's fluid and send real 3D to the volume renderer.
+      See <code>PORTS.md</code>.</p>
     <p><b style="color:var(--text)">Microphone and MIDI need a secure context.</b> Served from GitHub
       Pages over https they work. Opened as a <code>file://</code> URL from your disk they are blocked
       by the browser. Run <code>drive-check.html</code> first if anything seems dead.</p>

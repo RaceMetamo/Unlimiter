@@ -1272,7 +1272,12 @@ function uploadDye(){
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, FW, FH, 0, gl.RGBA, gl.UNSIGNED_BYTE, dyePix);
 }
 
-function project(iter){
+/* Named pressureProject, not project: a second function project(pt, sc) for the
+   depth view is declared further down in this same script, and a later function
+   declaration silently replaces an earlier one. Under the shared name the fluid
+   step was calling the depth projector with a number and never removing
+   divergence. */
+function pressureProject(iter){
   for(let j = 1; j < FH-1; j++) for(let i = 1; i < FW-1; i++){
     const k = FIX(i,j);
     fdiv[k] = -0.5 * (fu[k+1] - fu[k-1] + fv[k+FW] - fv[k-FW]);
@@ -1363,10 +1368,10 @@ function fluidStep(){
   vorticity(E.fVort);
   diffuse(P.fVisc);
   walls();
-  project(P.fIter);
+  pressureProject(P.fIter);
   advect();
   walls();
-  project(P.fIter);
+  pressureProject(P.fIter);
   const d = 1 - E.fDissip;
   for(let k = 0; k < FN; k++){ fu[k] *= d; fv[k] *= d; }
   dyeStep();
