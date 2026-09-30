@@ -313,6 +313,7 @@ input[type=color]{width:28px;height:24px;padding:0;border:1px solid var(--rule);
 </div>
 
 <script src="modulation.js"></script>
+<script src="unlimiter-ports.js"></script>
 <script>
 /* ------------------------------------------------------------------ *
  * Time Cube v1.1 — volumetric time sculpture from a 2D camera feed.
@@ -688,6 +689,15 @@ makeVolume();
 const video = document.createElement('video');
 video.playsInline = true; video.muted = true; video.loop = true;
 let stream = null, sourceReady = false;
+/* a picture from the Rack can stand in for the camera: any canvas is a TexImageSource */
+let rackSrc = null;
+function setRackImage(cv){
+  if(!cv){ rackSrc = null; return; }
+  if(!rackSrc){                    // first frame of a new cable: start a fresh volume
+    sourceReady = true; S.running = true; statusBox.hidden = true; clearVolume();
+  }
+  rackSrc = cv;
+}
 
 async function startCamera(){
   try{
@@ -782,7 +792,7 @@ function captureSlice(E){
   vidCur ^= 1;
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.bindTexture(gl.TEXTURE_2D, vidTex[vidCur]);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, rackSrc || video);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
@@ -892,7 +902,7 @@ function loop(now){
   const ease = S.autoSpin ? smoothstep(SPIN_DELAY, SPIN_DELAY + 1.5, S.idle) : 0;
   S.az += E.spin * ease * dt;
 
-  if(S.running && sourceReady && !S.frozen && video.readyState >= 2){
+  if(S.running && sourceReady && !S.frozen && (rackSrc ? rackSrc.width > 0 : video.readyState >= 2)){
     S.frameCount++;
     if(S.frameCount % Math.max(1, Math.round(E.skip)) === 0) captureSlice(E);
   }
@@ -901,6 +911,17 @@ function loop(now){
   draw(E);
 }
 requestAnimationFrame(loop);
+
+/* ports (unlimiter-ports.js): the sculpture as an image out; a picture in */
+if(window.UnlimiterPorts){
+  try{
+    UnlimiterPorts.publish({
+      tool:'time-cube', label:'Time Cube',
+      outputs:{ out:{ type:'image', label:'image', get:() => canvas } },
+      inputs:{ image:{ type:'image', label:'source', set:setRackImage } }
+    });
+  }catch(e){ console.warn('[time-cube] ports', e); }
+}
 
 /* ---------------------------------- orbit ------------------------- */
 let dragging = false, lastX = 0, lastY = 0;

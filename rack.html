@@ -176,7 +176,7 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
     <button id="bStartAll">Wake all</button>
     <button id="bOutput">Output window</button>
     <button id="bReset">Reset layout</button>
-    <button id="bAddGen" title="A procedural point source — unlimiter-points.js running inside the rack">+ Points generator</button>
+    <button id="bAddGen" title="Manifold: a procedural point source — unlimiter-points.js running inside the rack, with morph between two forms">+ Manifold</button>
     <button id="bAddSig" title="Signals: audio, clock, LFO and MIDI sources, utilities, and parameter nodes that take them">+ Signal ▾</button>
     <div class="spacer"></div>
     <div id="beat"></div>
@@ -265,6 +265,12 @@ const TOOLS = [
     prefer:["waveAmp","noiseAmp","scatter","sizeS"],  boot:[],             accepts:null,       init:"P.anim = true; typeof startRender === 'function' && startRender();" },
   { id:"ou", file:"ouroboros.html",    label:"Ouroboros",    sel:"#gl",   capture:"push", color:"#6fce62",
     prefer:["zoom","twist","noiseAmp","decay"],       boot:["bSeed"],      accepts:"frame",    init:"" },
+  { id:"fa", file:"tbg-facade.html",   label:"TBG Facade",   sel:"#stage", capture:"pull", color:"#4d7cff",
+    prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"ff", file:"flow-field-plotter.html", label:"Flow Field Plotter", sel:"#gl", capture:"pull", color:"#e8c547",
+    prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"tc", file:"time-cube.html",    label:"Time Cube",    sel:"#gl",   capture:"pull", color:"#ff7a59",
+    prefer:[],                                        boot:[],             accepts:null,       init:"" },
 ];
 const BLENDS = ["source-over","screen","lighter","multiply","overlay","difference","soft-light","hard-light"];
 const LS_KEY_V1 = "unlimiter.rack.graph.v1";   // untyped cables — read once, then migrated
@@ -330,7 +336,7 @@ function defaultGraph(){
   TOOLS.forEach((t, i) => G.nodes.push({ id:"n_"+t.id, kind:"tool", toolId:t.id, x:16, y:14 + i * 120 }));
   G.nodes.push({ id:"n_out", kind:"output", x:236, y:196 });
   G.nodes.push({ id:"n_vol", kind:"volume", x:236, y:392 });
-  const defs = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"] };
+  const defs = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"], fa:[0.6,"screen"], ff:[0.6,"screen"], tc:[0.5,"screen"] };
   TOOLS.forEach((t, i) => {
     const [op, blend] = defs[t.id];
     G.conns.push(imgConn("n_"+t.id, "n_out", op, blend, i));
@@ -624,8 +630,14 @@ function loadGraph(){
     if(!s.nodes || !s.nodes.length) return false;
     // generator nodes need the geometry modules; without them they are dropped, not broken
     G.nodes = s.nodes.filter(n => n.kind !== "gen" || (UP && PT));
-    G.nodes.forEach(n => { if(n.kind === "gen") n.P = Object.assign(genPresetP(n.preset), n.P || {}); });
+    G.nodes.forEach(n => { if(n.kind === "gen"){ n.P = Object.assign(genPresetP(n.preset), n.P || {}); if(n.label === "Points") n.label = "Manifold"; } });
     G.nodes = G.nodes.filter(n => n.kind !== "util" || UTIL[n.util]);
+    // tools added to the rack since this layout was saved arrive uncabled, below the others
+    TOOLS.forEach(t => {
+      if(G.nodes.some(n => n.kind === "tool" && n.toolId === t.id)) return;
+      const ys = G.nodes.filter(n => n.kind === "tool").map(n => n.y);
+      G.nodes.push({ id:"n_" + t.id, kind:"tool", toolId:t.id, x:16, y:(ys.length ? Math.max(...ys) : -106) + 120 });
+    });
     G.nodes.forEach(n => { if(n.kind === "util"){ n.params = Object.assign({}, UTIL[n.util].params, n.params || {}); n.state = { y:0 }; } });
     let mx = 0; [...G.nodes, ...(s.conns || [])].forEach(o => { const m = /(\d+)$/.exec(o.id); if(m) mx = Math.max(mx, +m[1]); });
     nextId = mx + 1;
@@ -829,6 +841,12 @@ const GEN_CORE = [
   { key:"sizeMin", label:"size start", min:0.5, max:20, step:0.1,  def:3 },
   { key:"sizeMax", label:"size end",   min:0.5, max:20, step:0.1,  def:8 },
 ];
+/* the form to morph toward: same rows and columns, blended point by point at the same address */
+const GEN_MORPH = [
+  { key:"morphMix",    label:"morph mix",       min:0, max:1,  step:0.005, def:0.5 },
+  { key:"morphDrift",  label:"auto drift",      min:0, max:1,  step:0.01,  def:0 },
+  { key:"morphPeriod", label:"drift period (s)",min:2, max:60, step:1,     def:16 },
+];
 /* counts and identities reallocate buffers — never modulated */
 const GEN_STRUCT = [
   { key:"rows",   label:"rows",           min:4, max:160, step:1, mod:false },
@@ -836,7 +854,7 @@ const GEN_STRUCT = [
   { key:"shells", label:"nested shells",  min:1, max:12,  step:1, mod:false },
 ];
 function makeGenNode(x, y, preset){
-  return { id:uid("g"), kind:"gen", x, y, label:"Points", preset, P:genPresetP(preset) };
+  return { id:uid("g"), kind:"gen", x, y, label:"Manifold", preset, P:genPresetP(preset) };
 }
 /* a flat P from one of unlimiter-points.js's presets, namespaced by role like
    manifold.html: s_ surface, d_ placement, m0_… modifiers, pr_ presence, c_ colour */
@@ -852,6 +870,9 @@ function genPresetP(name){
   (spec.modifiers || []).slice(0, 3).forEach((m, i) => { P.mods[i] = m.type; load("m" + i + "_", "modifier", m.type, m.params); });
   GEN_CORE.forEach(p => { P[p.key] = p.def; });
   GEN_VIEW.forEach(p => { P[p.key] = p.def; });
+  GEN_MORPH.forEach(p => { P[p.key] = p.def; });
+  P.morphOn = 0; P.morphTo = "torus";
+  load("b_", "surface", P.morphTo, {});
   if(spec.sizeMin != null) P.sizeMin = spec.sizeMin;
   if(spec.sizeMax != null) P.sizeMax = spec.sizeMax;
   return P;
@@ -861,7 +882,7 @@ function genRuntime(n){
   if(!rt){
     const cv = document.createElement("canvas"); cv.width = LAYER_W; cv.height = LAYER_H;
     rt = { canvas:cv, ctx:cv.getContext("2d"), frame:null, unit:null, uv:null,
-           flock:null, flockKey:"", t:0, radius:0, ov:{}, error:null };
+           flock:null, flockKey:"", t:0, radius:0, ov:{}, error:null, morphPhase:0, sA:null, sB:null };
     gens.set(n.id, rt);
   }
   return rt;
@@ -889,7 +910,17 @@ function stepGen(n, dtSec){
       if(!rt.flock || rt.flockKey !== key){ rt.flock = UP.createFlock(count, spec.shells); rt.flockKey = key; }
       UP.stepFlock(rt.flock, Math.min(dtSec, 0.05), rt.t, UP.withDefaults("distribution", "flock", spec.distParams), null, null);
     } else rt.flock = null;
-    rt.frame = UP.generate(spec, rt.t, rt.frame, rt.flock);
+    if(Number(Q.morphOn) > 0){
+      // Manifold's morph: two forms evaluated at the same address and blended per point
+      let mix = Q.morphMix;
+      if(Q.morphDrift > 0){
+        rt.morphPhase += dtSec / Math.max(0.5, Q.morphPeriod);
+        mix = (1 - Q.morphDrift) * Q.morphMix + Q.morphDrift * (0.5 + 0.5 * Math.sin(rt.morphPhase * Math.PI * 2));
+      }
+      const specB = Object.assign({}, spec, { surface:Q.morphTo, surfaceParams:pickP(Q, "b_") });
+      const r = UP.morph(spec, specB, mix, rt.t, rt.frame, rt.flock, rt.flock, rt.sA, rt.sB);
+      rt.frame = r.frame; rt.sA = r.a; rt.sB = r.b;
+    } else rt.frame = UP.generate(spec, rt.t, rt.frame, rt.flock);
     // a stable scale into unit space: follow the form's size slowly, so moving
     // points don't make the whole thing breathe
     const r = UP.bounds(rt.frame).radius;
@@ -932,6 +963,8 @@ function genParamGroups(n){
   ];
   (P.mods || []).forEach((type, i) => groups.push({ title:"Modifier " + (i + 1), mod:i,
       rows: type && type !== "none" ? pref("m" + i + "_", meta(UP.MODIFIERS, type)) : [] }));
+  groups.push({ title:"Morph to another form", toggle:"morphOn", select:{ field:"morphTo", table:UP.SURFACES, prefix:"b_", kind:"surface" },
+                rows: GEN_MORPH.concat(pref("b_", meta(UP.SURFACES, P.morphTo))) });
   groups.push({ title:"Which points", select:{ field:"presence", table:UP.PRESENCE, prefix:"pr_", kind:"presence" },
                 rows: pref("pr_", meta(UP.PRESENCE, P.presence)) });
   groups.push({ title:"Colour & size", select:{ field:"colour", table:UP.COLOURS, prefix:"c_", kind:"colour" },
@@ -1000,6 +1033,17 @@ let volPts = null, volPtsVer = -1, volPtsOn = false;
 function deliverData(){
   const now = new Set();
   G.conns.forEach(c => {
+    if(c.type === "image" && !cOff(c)){
+      const tn = nodeById(c.to);
+      if(tn && tn.kind === "tool" && c.toPort !== "in"){
+        const L = layers.get(tn.toolId), inp = L && L.ready && L.io && L.io.inputs[c.toPort];
+        const src = canvasForNode(c.from);
+        if(inp && inp.type === "image" && src && src.width){
+          try{ inp.set(src); now.add(c.to + ":" + c.toPort); }catch(e){}
+        }
+      }
+      return;
+    }
     if(c.type === "image" || c.type === "scalar" || cOff(c)) return;
     const v = outputValue(nodeById(c.from), c.fromPort);
     if(!v || (PT && !PT.isType(c.type, v))) return;
@@ -1672,9 +1716,12 @@ const Inspector = (() => {
     }
 
     const keys = L.targets ? Object.keys(L.targets) : [];
-    body += `<h2>Parameters <span style="color:var(--faint)">— ${keys.length}</span></h2>
+    body += L.targets
+      ? `<h2>Parameters <span style="color:var(--faint)">— ${keys.length}</span></h2>
       <input type="search" id="pFind" placeholder="filter…" value="${paramFilter}" style="margin-bottom:8px">
-      <div class="plist" id="plist"></div>` + driveSection();
+      <div class="plist" id="plist"></div>`
+      : `<h2>Parameters</h2><div class="empty">This tool has no drive yet, so none of its settings are routable from here. Its own controls are under <b style="color:var(--text)">Edit in stage</b>; what it takes and gives through data ports is listed above.</div>`;
+    body += driveSection();
     root.innerHTML = body;
 
     root.querySelector("#tEdit").addEventListener("click", () => {
@@ -1693,7 +1740,7 @@ const Inspector = (() => {
     const lb = root.querySelector("#lBlend");
     if(lb) lb.addEventListener("change", e => { outC.blend = e.target.value; saveGraph(); });
     const find = root.querySelector("#pFind");
-    find.addEventListener("input", e => { paramFilter = e.target.value; buildParams(L); });
+    if(find) find.addEventListener("input", e => { paramFilter = e.target.value; buildParams(L); });
     buildParams(L);
     mountDrive();
   }
@@ -1713,6 +1760,7 @@ const Inspector = (() => {
         <select id="gPreset">${Object.keys(UP.PRESETS).map(k => `<option${k === n.preset ? " selected" : ""}>${k}</option>`).join("")}</select></div>`;
     genParamGroups(n).forEach(g => {
       body += `<h2>${g.title}</h2>`;
+      if(g.toggle) body += `<div class="fld"><label style="display:flex;gap:7px;align-items:center;font-size:.72rem;color:var(--dim)"><input type="checkbox" data-gt="${g.toggle}"${Number(n.P[g.toggle]) > 0 ? " checked" : ""}> on</label></div>`;
       if(g.select){
         const t = g.select.table;
         body += `<div class="fld"><select data-gs="${g.select.field}">${Object.keys(t).map(k =>
@@ -1731,6 +1779,7 @@ const Inspector = (() => {
     const persist = () => saveGraph();
     root.querySelector("#gPreset").addEventListener("change", e => {
       const keepView = {}; GEN_VIEW.forEach(p => { keepView[p.key] = n.P[p.key]; });
+      for(const k in n.P) if(k.indexOf("morph") === 0 || k.indexOf("b_") === 0) keepView[k] = n.P[k];   // the morph target survives a new start
       n.preset = e.target.value;
       n.P = Object.assign(genPresetP(n.preset), keepView);
       rt.flock = null; rt.radius = 0;
@@ -1745,6 +1794,7 @@ const Inspector = (() => {
       if(field === "surface") rt.radius = 0;
       pruneGenTargets(n); persist(); render();
     }));
+    root.querySelectorAll("[data-gt]").forEach(cb => cb.addEventListener("change", e => { n.P[cb.dataset.gt] = cb.checked ? 1 : 0; persist(); }));
     root.querySelectorAll("[data-gm]").forEach(sel => sel.addEventListener("change", e => {
       const i = +sel.dataset.gm, type = e.target.value;
       n.P.mods = (n.P.mods || ["none","none","none"]).slice(); n.P.mods[i] = type;

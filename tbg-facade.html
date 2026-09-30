@@ -158,6 +158,17 @@
   </details>
 
   <details class="group" open>
+    <summary>Seeds<span class="chev"></span></summary>
+    <div class="body">
+      <div class="note" id="seedStatus">No points patched in. Hosted in the Rack, a points cable into <b>seeds</b> turns each point into the root of its own folding growth, facing outward, and the growths follow the points as they move.</div>
+      <div class="row"><label>Seed count</label><div class="ctl"><input type="range" id="seedCount" min="1" max="64" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Spread</label><div class="ctl"><input type="range" id="seedSpread" min="100" max="900" step="10"><span class="val"></span></div></div>
+      <div class="row"><label>Seed size</label><div class="ctl"><input type="range" id="seedSize" min="0.2" max="1.5" step="0.01"><span class="val"></span></div></div>
+      <div class="note">Seed size scales the root panel of every seed. Raise Max panels (Growth) when there are many seeds — the budget is shared.</div>
+    </div>
+  </details>
+
+  <details class="group" open>
     <summary>Branching<span class="chev"></span></summary>
     <div class="body">
       <div class="row"><label>Branches min</label><div class="ctl"><input type="range" id="minChildren" min="0" max="3" step="1"><span class="val"></span></div></div>
@@ -265,6 +276,7 @@
 
 <button id="showPanelBtn" title="Show controls">☰</button>
 
+<script src="unlimiter-ports.js"></script>
 <script>
 (function(){
 "use strict";
@@ -328,6 +340,7 @@ const DEFAULTS={
   rootSize:96,
   growthSpeed:0.85, drag:3.4, genDecay:0.14, branchDecay:0.09, stall:0.02, spawnAt:0.42,
   maxGen:40, maxPanels:1200, paused:false,
+  seedCount:12, seedSpread:420, seedSize:0.6,
   minChildren:1, maxChildren:3, straightness:0.3,
   sizeMin:0.66, sizeMax:1.0, sizeJitter:0.18,
   angleMin:22, angleMax:104, flipChance:0.42,
@@ -386,15 +399,63 @@ function rateFor(gen){
   return state.growthSpeed*Math.pow(1-clamp(state.genDecay,0,0.95),gen);
 }
 
+/* ---- seeds: points handed in from the Rack --------------------------------
+   Each live point (up to Seed count, picked evenly through the cloud) becomes the
+   root of its own growth. The root sits on the point, faces outward from the
+   cloud's centre, and is tinted by the point's brightness. The growths follow the
+   points as they move — only a change in how many seeds there are regrows them. */
+const SEED={ src:null, ver:-1, want:-1, roots:[], used:0, live:0 };
+function setSeeds(frame){ SEED.src=frame||null; if(!frame){ SEED.ver=-1; SEED.want=-1; } }
+function cross3(a,b){ return {x:a.y*b.z-a.z*b.y, y:a.z*b.x-a.x*b.z, z:a.x*b.y-a.y*b.x}; }
+function basisFromNormal(n){
+  let xa=cross3({x:0,y:1,z:0},n), l=vlen(xa);
+  if(l<1e-3){ xa=cross3({x:1,y:0,z:0},n); l=vlen(xa); }
+  xa={x:xa.x/l,y:xa.y/l,z:xa.z/l};
+  const ya=cross3(n,xa);
+  return [[xa.x,ya.x,n.x],[xa.y,ya.y,n.y],[xa.z,ya.z,n.z]];
+}
+/* returns true when the number of roots changed, which needs a regrow */
+function syncSeeds(){
+  const f=SEED.src;
+  if(!f){
+    if(SEED.roots.length){ SEED.roots=[]; SEED.used=0; SEED.live=0; return true; }
+    return false;
+  }
+  const want=Math.max(1,state.seedCount|0);
+  if(f.version===SEED.ver && want===SEED.want) return false;
+  SEED.ver=f.version; SEED.want=want;
+  const uvSpace=f.space==='uv', asp=f.aspect||16/9, P=f.positions, C=f.colors, A=f.presence;
+  const live=[]; for(let i=0;i<f.count;i++) if(!A||A[i]>=0.3) live.push(i);
+  const take=Math.min(want,live.length);
+  const roots=[];
+  for(let k=0;k<take;k++){
+    const j=live[Math.floor((k+0.5)*live.length/take)], j3=j*3, sp=state.seedSpread;
+    // a 3D frame is centred and roughly unit radius; a uv frame is 0..1 with v running down
+    const x=uvSpace?(P[j3]-0.5)*2*asp:P[j3], y=uvSpace?-(P[j3+1]-0.5)*2:P[j3+1], z=P[j3+2];
+    const r=Math.hypot(x,y,z);
+    const n=r>0.08?{x:x/r,y:y/r,z:z/r}:{x:0,y:0,z:1};
+    const lum=C?(0.2126*C[j3]+0.7152*C[j3+1]+0.0722*C[j3+2]):0.5;
+    roots.push({x:x*sp,y:y*sp,z:z*sp,rot:basisFromNormal(n),t:clamp(0.15+lum*0.85,0,1)});
+  }
+  const changed=roots.length!==SEED.roots.length;
+  SEED.roots=roots; SEED.used=roots.length; SEED.live=live.length;
+  if(!changed){ for(let i=0;i<panels.length;i++){ const p=panels[i]; if(p.parent==null&&p.seedIx>=0&&roots[p.seedIx]) p.colorT=roots[p.seedIx].t; } }
+  return changed;
+}
+
 function resetGrowth(){
   panels=[];
   const rate=rateFor(0);
-  panels.push({
-    idx:0, parent:null, edge:null, usedEdge:null, childEdges:[],
-    w:state.rootSize, h:state.rootSize,
-    targetAngle:0, dirFlip:1, gen:0, colorT:0.5,
-    birth:simT, rate, spawnAt:simT+spawnDelay(rate), spawned:false
-  });
+  const n=Math.max(1,SEED.roots.length), sz=SEED.roots.length?state.rootSize*state.seedSize:state.rootSize;
+  for(let r=0;r<n;r++){
+    const sd=SEED.roots[r];
+    panels.push({
+      idx:panels.length, parent:null, edge:null, usedEdge:null, childEdges:[],
+      w:sz, h:sz, seedIx:sd?r:-1,
+      targetAngle:0, dirFlip:1, gen:0, colorT:sd?sd.t:0.5,
+      birth:simT, rate, spawnAt:simT+spawnDelay(rate), spawned:false
+    });
+  }
   mode='grow'; modeT=simT; fadeAlpha=1;
   framed=false;
 }
@@ -551,6 +612,7 @@ function project(x,y,z,out){
 let world=[];
 let frameCorners=[];
 let lastNow=0, fps=60, fpsAcc=0, fpsN=0;
+const seedStatusEl=document.getElementById('seedStatus'); let seedStatusMsg='';
 
 function resizeIfNeeded(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
@@ -570,6 +632,7 @@ function frame(now){
   if(fpsAcc>0.5){ fps=fpsN/fpsAcc; fpsAcc=0; fpsN=0; }
 
   updateAudio();
+  if(syncSeeds()) resetGrowth();
   let growthMul=1;
   if(state.audioEnabled&&(state.audioTarget==='growth'||state.audioTarget==='both')){
     growthMul=1+audio.envelope*state.audioSensitivity;
@@ -600,7 +663,11 @@ function frame(now){
   for(let i=0;i<panels.length;i++){
     const p=panels[i];
     if(p.parent==null){
-      world[i]={pos:{x:0,y:0,z:0},rot:IDENT3,w:p.w,h:p.h};
+      const sd=p.seedIx>=0?SEED.roots[p.seedIx]:null;
+      if(sd){
+        const c=m3vec(sd.rot,{x:p.w/2,y:p.h/2,z:0});      // centre the panel on the point
+        world[i]={pos:{x:sd.x-c.x,y:sd.y-c.y,z:sd.z-c.z},rot:sd.rot,w:p.w,h:p.h};
+      } else world[i]={pos:{x:0,y:0,z:0},rot:IDENT3,w:p.w,h:p.h};
       continue;
     }
     const u=progressOf(p,simT);
@@ -720,7 +787,13 @@ function frame(now){
   const label=mode==='grow'?'unfolding':mode==='hold'?'settled':'fading';
   const deepest=panels.length?panels[panels.length-1].gen:0;
   readout.innerHTML='<b>'+panels.length+'</b> panels · gen <b>'+deepest+'</b> · '+label+
+    (SEED.roots.length?' · <b>'+SEED.roots.length+'</b> seeds':'')+
     ' · seed <b>'+state.seed+'</b> · '+fps.toFixed(0)+'fps';
+  if(seedStatusEl){
+    const msg=SEED.src?('<b>'+SEED.used+'</b> seeds growing from '+SEED.live.toLocaleString()+' live points, from the Rack.')
+      :'No points patched in. Hosted in the Rack, a points cable into <b>seeds</b> turns each point into the root of its own folding growth, facing outward, and the growths follow the points as they move.';
+    if(msg!==seedStatusMsg){ seedStatusMsg=msg; seedStatusEl.innerHTML=msg; }
+  }
 
   requestAnimationFrame(frame);
 }
@@ -821,12 +894,12 @@ const SLIDERS=['rootSize','growthSpeed','drag','genDecay','branchDecay','stall',
   'minChildren','maxChildren','straightness','sizeMin','sizeMax','sizeJitter','angleMin','angleMax',
   'flipChance','cornerRadius','panelGap','edgeWidth','wobbleAmt','wobbleSpeed','holdTime','fadeTime',
   'frameZoom','camDist','camYaw','camPitch','camPersp','orbitSpeed','lightAz','lightEl',
-  'colourDrift','tintStrength','audioSensitivity','audioSmoothing'];
+  'colourDrift','tintStrength','audioSensitivity','audioSmoothing','seedCount','seedSpread','seedSize'];
 const CHECKS=['paused','autoRegrow','autoFrame'];
 const SELECTS=['bgMode','audioTarget'];
 const DECIMALS={growthSpeed:2,drag:1,genDecay:3,branchDecay:3,stall:3,spawnAt:2,straightness:2,sizeMin:2,sizeMax:2,
   sizeJitter:2,flipChance:2,panelGap:1,edgeWidth:1,wobbleAmt:3,wobbleSpeed:2,holdTime:1,fadeTime:1,
-  frameZoom:2,camPersp:2,orbitSpeed:1,colourDrift:2,tintStrength:2,audioSensitivity:2,audioSmoothing:2};
+  frameZoom:2,camPersp:2,orbitSpeed:1,colourDrift:2,tintStrength:2,audioSensitivity:2,audioSmoothing:2,seedSize:2};
 
 function fmt(id,v){
   const d=DECIMALS[id];
@@ -1014,6 +1087,17 @@ function init(){
   syncCamRows();
   resetGrowth();
   requestAnimationFrame(frame);
+}
+
+/* ports (unlimiter-ports.js): the stage as an image, and points in as seeds */
+if(window.UnlimiterPorts){
+  try{
+    UnlimiterPorts.publish({
+      tool:'tbg-facade', label:'TBG Facade',
+      outputs:{ out:{ type:'image',  label:'image', get:()=>canvas } },
+      inputs: { seeds:{ type:'points', label:'seeds', set:setSeeds } }
+    });
+  }catch(e){ console.warn('[facade] ports', e); }
 }
 
 init();

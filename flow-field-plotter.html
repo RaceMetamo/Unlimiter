@@ -153,6 +153,8 @@
       <input type="range" id="rCount" min="50" max="4000" step="10" value="900"></label>
     <label><span class="lab">Contour share <b id="vContour"></b></span>
       <input type="range" id="rContour" min="0" max="1" step="0.01" value="0.45"></label>
+    <label title="When points are patched in from the Rack: the share of new strokes that start at one of those points"><span class="lab">Seed pull <b id="vSeedPull"></b></span>
+      <input type="range" id="rSeedPull" min="0" max="1" step="0.01" value="0.9"></label>
     <label><span class="lab">Min spacing <b id="vRMin"></b></span>
       <input type="range" id="rRMin" min="1" max="30" step="0.5" value="3"></label>
     <label><span class="lab">Max spacing <b id="vRMax"></b></span>
@@ -1032,6 +1034,7 @@ global.Modulation = Modulation;
 
 /* ===== END modulation.js ===== */
 </script>
+<script src="unlimiter-ports.js"></script>
 <script>
 /* ============================================================================
    Flow Field Plotter v0.1
@@ -1051,7 +1054,7 @@ function clearSay(){ statusEl.className = ''; }
 /* ---------- parameters ---------- */
 const P = {
   wGrad:1, wAni:0.35, wDark:0.5, wMot:1.2, mDecay:0.88, floor:0.03,
-  count:900, contour:0.45, rMin:3, rMax:34, turn:0.25,
+  count:900, contour:0.45, seedPull:0.9, rMin:3, rMax:34, turn:0.25,
   drag:0.12, force:1.3, speed:2.2, wander:0.22, nScale:0.006, rest:0.18, life:140,
   sep:1.1, ali:0.35, coh:0.15, nbr:16,
   width:3.5, alpha:0.85, inkMode:0,
@@ -1501,12 +1504,76 @@ function contourPoint(){
   return {x: bx + (rnd()-0.5)*4, y: by + (rnd()-0.5)*4};
 }
 
+/* ---- points from the Rack: strokes can start at them ------------------------
+   A points frame arrives by reference (unlimiter-ports.js). 2D frames are laid
+   out on their own aspect and contain-fit into the page; 3D frames are flattened
+   front-on. Tangents, when the producer has them, set each stroke's first heading.
+   Live points are sampled evenly, up to SEED_MAX, and re-read whenever the
+   producer's version moves — so strokes trace a moving cloud. */
+const SEED_MAX = 1500;
+const SEED = { src:null, ver:-1, W:0, H:0, n:0, buf:new Float32Array(SEED_MAX * 4) };
+function setSeeds(f){
+  if(!f){ SEED.src = null; SEED.n = 0; SEED.ver = -1; return; }
+  SEED.src = f;
+  if(f.version === SEED.ver && SEED.W === W && SEED.H === H) return;
+  SEED.ver = f.version; SEED.W = W; SEED.H = H;
+  const uv = f.space === 'uv', Pp = f.positions, A = f.presence, T = f.tangents;
+  const live = []; for(let i = 0; i < f.count; i++) if(!A || A[i] >= 0.3) live.push(i);
+  const take = Math.min(live.length, SEED_MAX), aspect = f.aspect || W / H, fit = window.UnlimiterPorts && UnlimiterPorts.fitUV;
+  for(let k = 0; k < take; k++){
+    const j = live[Math.floor((k + 0.5) * live.length / take)], j3 = j * 3;
+    let px, py;
+    if(uv){
+      const q = fit ? fit(Pp[j3], Pp[j3+1], aspect, W / H) : [Pp[j3], Pp[j3+1]];
+      px = q[0] * W; py = q[1] * H;
+    } else { const s = 0.45 * Math.min(W, H); px = W / 2 + Pp[j3] * s; py = H / 2 - Pp[j3+1] * s; }
+    let tx = 0, ty = 0;
+    if(T){ tx = T[j3]; ty = uv ? T[j3+1] : -T[j3+1]; const l = Math.hypot(tx, ty); if(l > 1e-6){ tx /= l; ty /= l; } else tx = ty = 0; }
+    const o = k * 4; SEED.buf[o] = px; SEED.buf[o+1] = py; SEED.buf[o+2] = tx; SEED.buf[o+3] = ty;
+  }
+  SEED.n = take;
+}
+function seedPoint(){
+  const o = ((rnd() * SEED.n) | 0) * 4, b = SEED.buf;
+  return { x:Math.max(0, Math.min(W, b[o] + (rnd() - 0.5) * 3)), y:Math.max(0, Math.min(H, b[o+1] + (rnd() - 0.5) * 3)), tx:b[o+2], ty:b[o+3] };
+}
+/* ---- a picture from the Rack as the source ----------------------------------
+   Claimed once, when a cable first arrives; if you then pick a file or the webcam
+   in this page, that choice stands until the cable is re-patched. */
+const RACKIN = { src:null, claimed:false };
+function setRackImage(cv){
+  if(!cv){
+    RACKIN.src = null; 
+    if(RACKIN.claimed && srcKind === 'rack') useNoSource();     // the cable went away: back to curl noise
+    RACKIN.claimed = false; return;
+  }
+  RACKIN.src = cv;
+  if(!RACKIN.claimed){
+    RACKIN.claimed = true;
+    srcKind = 'rack'; srcEl = cv;
+    el('vSrc').textContent = 'Rack image';
+    el('empty').classList.add('hide');
+    setSize(1280, 720);
+    clearSay(); running = true; el('bRun').textContent = 'Pause';
+  }
+}
+/* the stage as one picture: colour layer, then the ink over it */
+const rackOut = document.createElement('canvas'); rackOut.width = 640; rackOut.height = 360;
+function rackOutCanvas(){
+  const x = rackOut.getContext('2d');
+  x.clearRect(0, 0, 640, 360);
+  x.drawImage(glc, 0, 0, 640, 360);
+  x.drawImage(inkc, 0, 0, 640, 360);
+  return rackOut;
+}
+
 function makeAgent(force){
   const isContour = hasAnalysis && rnd() < E.contour;
-  const p = (force === 'c' || isContour) ? contourPoint() : poissonPoint();
+  const seeded = SEED.n > 0 && rnd() < P.seedPull;
+  const p = seeded ? seedPoint() : ((force === 'c' || isContour) ? contourPoint() : poissonPoint());
   const rs = rnd();
   return {
-    x:p.x, y:p.y, vx:0, vy:0, age:0, resting:false,
+    x:p.x, y:p.y, vx:seeded ? p.tx * E.speed * 0.6 : 0, vy:seeded ? p.ty * E.speed * 0.6 : 0, age:0, resting:false,
     rseed: rs,
     sizeMul: P.sizeMin + rs * Math.max(0, P.sizeMax - P.sizeMin),
     // in slice mode a stroke keeps the depth of the moment it was born, so the
@@ -2274,6 +2341,7 @@ function tick(){
   lastModT = nowT;
   if(running){
     if(srcKind === 'cam' && vidEl.readyState >= 2 && (frame % 2 === 0)) analyse(vidEl);
+    else if(srcKind === 'rack' && RACKIN.src && RACKIN.src.width && (frame % 2 === 0)) analyse(RACKIN.src);
     if(P.zMode === 2) sliceZ += E.zRate / 60;
     // fading the whole layer is how older slices recede: already-drawn ink
     // cannot be moved, but it can be let go of
@@ -2301,6 +2369,20 @@ function tick(){
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);
+
+/* ports (unlimiter-ports.js): the stage as an image out; a picture and points in */
+if(window.UnlimiterPorts){
+  try{
+    UnlimiterPorts.publish({
+      tool:'flow-field-plotter', label:'Flow Field Plotter',
+      outputs:{ out:{ type:'image', label:'image', get:rackOutCanvas } },
+      inputs:{
+        image:{ type:'image',  label:'source', set:setRackImage },
+        seeds:{ type:'points', label:'seeds',  set:setSeeds }
+      }
+    });
+  }catch(e){ console.warn('[plotter] ports', e); }
+}
 
 /* ---------- exports ---------- */
 function download(blob, name){
@@ -2511,6 +2593,7 @@ bind('rMDecay','vMDecay','mDecay',f3);
 bind('rFloor','vFloor','floor',f3,reDens);
 bind('rCount','vCount','count',f0);
 bind('rContour','vContour','contour',f2);
+bind('rSeedPull','vSeedPull','seedPull',f2);
 bind('rRMin','vRMin','rMin',f2);
 bind('rRMax','vRMax','rMax',f0);
 bind('rTurn','vTurn','turn',f2);

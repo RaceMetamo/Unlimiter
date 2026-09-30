@@ -63,7 +63,7 @@ Every cable has a **type**, and only ports of the same type connect:
 
 ## Generator nodes
 
-**+ Points generator** adds a node that is `unlimiter-points.js` running inside
+**+ Manifold** (formerly *Points generator*) adds a node that is `unlimiter-points.js` running inside
 the rack's own realm — no iframe. Maths needs no GL context and no UI of its
 own, so it steps on the rack's clock and hands its frames out by reference.
 
@@ -81,6 +81,17 @@ slots, which points, colour and size, and the view. Every continuous slider has
 a **◎**; spin and zoom are routable from the start. Rows, columns and shells
 reallocate buffers, so they are never modulated. `Delete` removes a generator
 (tools, OUTPUT and Volume are fixed).
+
+**Morph.** Switch *morph* on and the node blends its form into a second one: pick
+the target form, set its own parameters (the `b_` rows) and drive **mix** by hand
+or from a signal. Both forms must share rows and columns.
+
+**Hosted tools that take points or images.** TBG Facade (seeds → one folding-panel
+growth per point), Flow Field Plotter (seeds start its agents; an image cable
+replaces its source) and Time Cube (an image cable replaces the camera) are Rack
+tools with ports. Patch a Manifold's **2D** or **3D** output, or any image, into
+them. Cut the cable and they return to their own source. They have no Drive yet,
+so their own sliders are not routable from the Rack — only their ports are.
 
 The default graph, and the first load of a migrated v1 layout, include one
 generator wired **2D → Flow Weave's emitters** and **3D → Volume's points**.
@@ -254,8 +265,9 @@ What that environment can't judge:
   the Drive panel); a sample-and-hold / slew utility; one engine per page.
 
 - More tools publishing ports: Anchor (oriented paths out), Flow Field Plotter
-  (seeds in, field out), Sediment (seeds and field in), Time Cube (image in).
-- Phylo and TBG Facade: lift their IIFEs so their branches and panels can leave.
+  (field out), Sediment (seeds and field in); Relief and points-as-brushes in Ouroboros.
+- Give Facade, Plotter and Time Cube a Drive so their settings are routable.
+- Phylo: lift its IIFE so its branches can leave.
 - One engine per page — the rack's clock and audio shared by every hosted tool.
 - Per-layer transform (scale/rotate/offset) before compositing, and masks —
   likely with a WebGL compositor.
