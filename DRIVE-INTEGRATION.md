@@ -182,6 +182,8 @@ serialisation formats differ. Re-save them once.
 
 ---
 
+`sourceList()` (added in 1.6) returns `[[id,label],…]` for every source the matrix can read, MIDI included — the rack's signal nodes build their source menu from it.
+
 ## Driven from outside: overrides (1.5)
 
 A host — the rack — drives a tool's parameters through the tool's own drive,

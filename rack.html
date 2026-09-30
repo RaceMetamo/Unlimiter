@@ -60,18 +60,41 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
     repeating-linear-gradient(0deg, transparent 0 23px, rgba(255,255,255,.017) 23px 24px),
     repeating-linear-gradient(90deg, transparent 0 23px, rgba(255,255,255,.017) 23px 24px);
 }
-#cables{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+#world{ position:absolute; left:0; top:0; width:0; height:0; transform-origin:0 0; }
+#graphWrap{ cursor:default; touch-action:none; }
+#graphWrap.panning{ cursor:grabbing; }
+#cables{ position:absolute; left:0; top:0; width:1px; height:1px; overflow:visible; pointer-events:none; }
 #cables path.cable{ fill:none; stroke-linecap:round; pointer-events:stroke; cursor:pointer; }
 #cables path.hit{ fill:none; stroke:transparent; stroke-width:16; pointer-events:stroke; cursor:pointer; }
 #cables path.sel{ stroke-dasharray:7 5; }
-#nodes{ position:absolute; inset:0; }
+#nodes{ position:absolute; left:0; top:0; }
+.vhud{ position:absolute; right:8px; bottom:8px; z-index:5; display:flex; gap:4px; align-items:center; font-size:.66rem; color:var(--dim); }
+.vhud button{ font-size:.66rem; padding:2px 8px; }
+.node.sg canvas.nt{ height:30px; }
+.node.sg .nf span:first-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:92px; }
+.sigmenu{ position:absolute; left:8px; top:8px; z-index:7; width:262px; background:var(--panel); border:1px solid var(--line);
+  border-radius:8px; padding:10px 11px 11px; box-shadow:0 10px 30px rgba(0,0,0,.5); font-size:.72rem; }
+.sigmenu[hidden]{ display:none; }
+.sigmenu h3{ font-size:.66rem; font-weight:500; color:var(--dim); margin:10px 0 5px; letter-spacing:.03em; }
+.sigmenu h3:first-child{ margin-top:0; }
+.sigmenu .row{ display:grid; grid-template-columns:1fr auto; gap:5px; }
+.sigmenu select{ min-width:0; }
+.sigmenu .utils{ display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.sigmenu .note{ color:var(--faint); font-size:.66rem; line-height:1.45; margin-top:6px; }
+.node.bypassed{ opacity:.42; }
+.node.bypassed .nh b{ text-decoration:line-through; }
+.node .nh .byp{ font-size:.62rem; line-height:1; padding:2px 4px; border:1px solid var(--line); border-radius:4px; color:var(--faint); background:transparent; cursor:pointer; }
+.node .nh .byp:hover{ color:var(--text); border-color:var(--accent); }
+.node.bypassed .nh .byp{ color:var(--warm); border-color:var(--warm); }
 .node{
   position:absolute; width:152px; background:var(--panel); border:1px solid var(--line);
-  border-radius:8px; overflow:hidden; user-select:none; cursor:grab;
+  border-radius:8px; overflow:visible; user-select:none; cursor:grab;
   box-shadow:0 6px 18px rgba(0,0,0,.34);
 }
 .node.dragging{ cursor:grabbing; }
 .node.sel{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 6px 20px rgba(0,0,0,.4); }
+.node > :first-child{ border-radius:7px 7px 0 0; }
+.node > :last-child:not(.port):not(.plabel){ border-radius:0 0 7px 7px; }
 .node .nh{ display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid var(--line-soft); }
 .node .nh .sw{ width:8px; height:8px; border-radius:2px; flex:none; }
 .node .nh b{ font-size:.75rem; font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -154,6 +177,7 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
     <button id="bOutput">Output window</button>
     <button id="bReset">Reset layout</button>
     <button id="bAddGen" title="A procedural point source — unlimiter-points.js running inside the rack">+ Points generator</button>
+    <button id="bAddSig" title="Signals: audio, clock, LFO and MIDI sources, utilities, and parameter nodes that take them">+ Signal ▾</button>
     <div class="spacer"></div>
     <div id="beat"></div>
     <div id="fps">—</div>
@@ -161,10 +185,24 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
 
   <main>
     <div class="col graph">
-      <div class="colhead"><b>Signal graph</b><span>drag ports to patch · click a node to edit it</span></div>
+      <div class="colhead"><b>Signal graph</b><span>drag ports to patch · drag empty space to pan · wheel zooms · dbl-click a cable or drag it off an input to disconnect · B bypasses a node</span></div>
       <div id="graphWrap">
-        <svg id="cables" xmlns="http://www.w3.org/2000/svg"><g id="cableG"></g><path id="pending" fill="none" stroke="#8b90a0" stroke-dasharray="5 4" stroke-width="2"></path></svg>
-        <div id="nodes"></div>
+        <div id="world">
+          <svg id="cables" xmlns="http://www.w3.org/2000/svg"><g id="cableG"></g><path id="pending" fill="none" stroke="#8b90a0" stroke-dasharray="5 4" stroke-width="2"></path></svg>
+          <div id="nodes"></div>
+        </div>
+        <div id="sigMenu" class="sigmenu" hidden>
+          <h3>SIGNAL SOURCE</h3>
+          <div class="row"><select id="smSrc"></select><button id="smAddSrc">Add</button></div>
+          <h3>UTILITY</h3>
+          <div class="utils" id="smUtils"></div>
+          <h3>PARAMETER — takes a signal</h3>
+          <div class="row"><select id="smParam"></select><button id="smAddParam">Add</button></div>
+          <h3>IMPORT</h3>
+          <button id="smImport">Control Surface patch…</button><input type="file" id="smFile" accept=".json,application/json" hidden>
+          <div class="note" id="smNote">Audio, clock, LFO and MIDI come from the Drive panel under the inspector. Patch a source through utilities into a parameter; scalar cables are dashed yellow.</div>
+        </div>
+        <div class="vhud"><span id="vZoom">100%</span><button id="vFit" title="Fit all nodes (F)">Fit</button><button id="vReset" title="Reset view (0)">1:1</button></div>
       </div>
     </div>
 
@@ -234,7 +272,7 @@ const LS_KEY    = "unlimiter.rack.graph.v2";   // typed {node, port} cables + ge
 const PT = window.UnlimiterPorts || null;      // typed data between nodes
 const UP = window.UnlimiterPoints || null;     // the geometry behind generator nodes
 /* cable colours by type; image cables keep their source node's colour */
-const TYPE_COL = { image:"#8b90a0", points:"#7fd1c0", field:"#ffb02e", mask:"#9d7bff" };
+const TYPE_COL = { image:"#8b90a0", points:"#7fd1c0", field:"#ffb02e", mask:"#9d7bff", scalar:"#f2d45c" };
 
 /* ---- rack parameter store: the same P/Q contract the tools use ---- */
 const RP = {};
@@ -313,7 +351,210 @@ function addDefaultGenerator(){
   return n;
 }
 const nodeById = id => G.nodes.find(n => n.id === id);
-const nodeSize = n => n.kind === "output" ? {w:176,h:124} : n.kind === "volume" ? {w:150,h:86} : {w:152,h:108};
+const nodeSize = n => n.kind === "output" ? {w:176,h:124} : n.kind === "volume" ? {w:150,h:86} : isSig(n) ? {w:152,h:78} : {w:152,h:108};
+
+/* ============================================================
+   Signals — the old Control Surface, as ordinary nodes
+   ------------------------------------------------------------
+   A `sig` node reads one drive source (audio, clock, LFO, MIDI — or a hand
+   knob). `util` nodes reshape it. A `param` node takes the result and drives one
+   parameter: 0..1 in, the parameter's own range out. Scalar cables sit in the
+   same graph as pictures and points, and several cables into one input add.
+   ============================================================ */
+const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+const UTIL = {
+  scale:     { label:"Scale / remap", sub:"min · max · curve", ins:["in"],      params:{ min:0, max:1, curve:1 } },
+  smooth:    { label:"Smooth",        sub:"extra lag",         ins:["in"],      params:{ lagMs:120 } },
+  invert:    { label:"Invert",        sub:"1 − x",             ins:["in"],      params:{} },
+  combine:   { label:"Combine",       sub:"mix a · b",         ins:["a","b"],   params:{ mix:0.5 } },
+  threshold: { label:"Threshold",     sub:"gate at t",         ins:["in"],      params:{ t:0.5 } },
+};
+const SIG = { v:new Map(), cv:new Map(), hist:new Map(), pv:new Map(), order:[], dirty:true };
+function isSig(n){ return !!n && (n.kind === "sig" || n.kind === "util" || n.kind === "param"); }
+const BASIC_SOURCES = [["audio.low","Audio — low"],["audio.mid","Audio — mid"],["audio.high","Audio — high"],["audio.level","Audio — level"],
+  ["audio.onset","Audio — onset"],["clock.beat","Clock — beat ramp"],["clock.beatPulse","Clock — beat pulse"],["clock.bar","Clock — bar ramp"],
+  ["clock.barPulse","Clock — bar pulse"],["random.beat","Random per beat"],["lfo.0","LFO 1"],["lfo.1","LFO 2"],["lfo.2","LFO 3"],["lfo.3","LFO 4"]];
+function sourceChoices(){
+  const l = (Drive && typeof Drive.sourceList === "function") ? Drive.sourceList() : BASIC_SOURCES;
+  return l.concat([["manual","Manual knob"]]);
+}
+function sigTitle(n){
+  if(n.kind === "sig"){ if(n.src === "manual") return "Manual knob"; const f = sourceChoices().find(s => s[0] === n.src); return f ? f[1] : n.src; }
+  if(n.kind === "util") return (UTIL[n.util] || {}).label || n.util;
+  const l = n.label || n.key, i = l.indexOf(" — ");
+  return i > 0 ? l.slice(i + 3) : l;           // "Flow Weave — emitter dye" → the parameter; the tool goes in the footer
+}
+function sigSub(n){
+  if(n.kind === "sig") return n.src === "manual" ? "hand value" : n.src;
+  if(n.kind === "util") return (UTIL[n.util] || {}).sub || "";
+  const l = n.label || n.key, i = l.indexOf(" — ");
+  return i > 0 ? l.slice(0, i) : n.key;
+}
+function makeSigNode(kind, x, y, extra){
+  const n = Object.assign({ id:uid("s"), kind, x:Math.round(x), y:Math.round(y) }, extra || {});
+  if(kind === "util"){ n.params = Object.assign({}, UTIL[n.util].params, n.params || {}); n.state = { y:0 }; }
+  return n;
+}
+/* the summed input of a scalar port, or null when nothing live is patched into it */
+function scalarIn(id, port){
+  let s = 0, any = false;
+  for(const c of G.conns){
+    if(c.type !== "scalar" || c.to !== id || c.toPort !== port || cOff(c)) continue;
+    const v = (SIG.v.get(c.from) || 0) * (c.scale == null ? 1 : c.scale) + (c.offset || 0);
+    SIG.cv.set(c.id, v); s += v; any = true;
+  }
+  return any ? s : null;
+}
+function sigOrder(){
+  const rem = new Set(G.nodes.filter(n => n.kind === "util").map(n => n.id));
+  const order = []; let guard = rem.size + 1;
+  while(rem.size && guard--){
+    for(const id of [...rem]){
+      const deps = G.conns.filter(c => c.type === "scalar" && c.to === id).map(c => c.from);
+      if(deps.every(d => !rem.has(d))){ order.push(id); rem.delete(id); }
+    }
+  }
+  rem.forEach(id => order.push(id));          // cycles are refused at connect(); this is only a safety net
+  SIG.order = order; SIG.dirty = false;
+}
+function evalSignals(dtMs){
+  if(SIG.dirty) sigOrder();
+  G.nodes.forEach(n => {
+    if(n.kind === "sig") SIG.v.set(n.id, n.src === "manual" ? (+n.value || 0) : (Drive ? Drive.sourceValue(n.src) : 0));
+  });
+  SIG.order.forEach(id => {
+    const n = nodeById(id); if(!n) return;
+    const P = n.params; let out = 0;
+    if(n.util === "combine"){
+      const a = scalarIn(id, "a"), b = scalarIn(id, "b");
+      out = (a == null ? 0 : a) * (1 - P.mix) + (b == null ? 0 : b) * P.mix;
+    } else {
+      const x0 = scalarIn(id, "in"), x = x0 == null ? 0 : x0;
+      if(n.util === "scale"){ const span = (P.max - P.min) || 1e-6; out = Math.pow(clamp01((x - P.min) / span), P.curve); }
+      else if(n.util === "smooth"){ n.state.y += (x - n.state.y) * Math.min(1, dtMs / Math.max(1, P.lagMs)); out = n.state.y; }
+      else if(n.util === "invert") out = 1 - x;
+      else if(n.util === "threshold") out = x >= P.t ? 1 : 0;
+    }
+    SIG.v.set(id, out);
+  });
+}
+/* Parameter nodes have the last word: the drive's routes resolve first, then a
+   patched parameter node replaces the value outright (0..1 → the parameter's range).
+   Unpatched or bypassed, the parameter goes back to its own value. */
+function applyParamNodes(rq){
+  let out = rq, copied = false;
+  G.nodes.forEach(n => {
+    if(n.kind !== "param") return;
+    if(n.bypass){ SIG.pv.delete(n.id); return; }
+    const v = scalarIn(n.id, "in");
+    if(v == null){ SIG.pv.delete(n.id); return; }
+    const t = targetByKey.get(n.key); if(!t) return;
+    if(!copied){ if(out === RP) out = Object.assign({}, RP); copied = true; }
+    const c = clamp01(v);
+    out[n.key] = t.min + c * (t.max - t.min);
+    SIG.v.set(n.id, c); SIG.pv.set(n.id, out[n.key]);
+  });
+  return out;
+}
+/* A parameter node may point at a parameter that isn't routable yet — its tool is
+   still loading, or the ◎ wasn't on. Register it on demand. */
+function ensureTarget(key){
+  if(targetByKey.has(key)) return targetByKey.get(key);
+  const tool = TOOLS.find(t => key.indexOf(t.id + ".") === 0);
+  if(tool){
+    const L = layers.get(tool.id), k = key.slice(tool.id.length + 1);
+    if(L && L.ready && L.targets && L.targets[k]){ const t = addToolTarget(L, k); if(Drive) Drive.rebuildMatrix(); return t; }
+    return null;
+  }
+  const g = G.nodes.find(n => n.kind === "gen" && key.indexOf(n.id + ".") === 0);
+  if(g){
+    const k = key.slice(g.id.length + 1);
+    let spec = null; genParamGroups(g).forEach(gr => gr.rows.forEach(r => { if(r.key === k) spec = r; }));
+    if(spec){ const t = addGenTarget(g, spec); if(Drive) Drive.rebuildMatrix(); return t; }
+  }
+  return null;
+}
+function ensureParamTarget(n){
+  if(targetByKey.has(n.key)) return true;
+  const t = ensureTarget(n.key);
+  if(t){ n.autoReg = true; return true; }
+  return false;
+}
+function ensureParamTargets(){ G.nodes.forEach(n => { if(n.kind === "param" && !targetByKey.has(n.key)) ensureParamTarget(n); }); }
+function releaseParamTarget(key){
+  if(G.nodes.some(m => m.kind === "param" && m.key === key)) return;          // another node still uses it
+  if(Drive && Drive.state.matrix.some(r => r.target === key)) return;          // the drive panel routes to it
+  unregisterTarget(key);                                                       // hands it back to the tool
+}
+function paramChoices(){
+  const out = [];
+  layers.forEach(L => {
+    if(!L.ready || !L.targets) return;
+    Object.keys(L.targets).forEach(k => out.push({ group:L.tool.label, key:toolTargetKey(L, k), label:(L.targets[k].label || k) }));
+  });
+  G.nodes.filter(n => n.kind === "gen").forEach(n => genParamGroups(n).forEach(g => g.rows.forEach(r => {
+    if(r.mod !== false) out.push({ group:(n.label || "Points") + " · " + n.id, key:genTargetKey(n, r.key), label:r.label });
+  })));
+  VOL_LOCAL.forEach(v => out.push({ group:"Volume", key:v.key, label:v.label }));
+  volParams.forEach(p => out.push({ group:"Volume", key:"vol." + p.id, label:p.label }));
+  return out;
+}
+function addSigNode(kind, extra){
+  const c = GraphView.centerPoint();
+  const n = makeSigNode(kind, c.x - 76 + (Math.random() * 70 - 35), c.y - 39 + (Math.random() * 70 - 35), extra);
+  G.nodes.push(n);
+  if(kind === "param") ensureParamTarget(n);
+  SIG.dirty = true; GraphView.build(); select({ kind:"node", id:n.id }); saveGraph();
+  return n;
+}
+function removeSigNode(id){
+  const n = nodeById(id); if(!isSig(n)) return;
+  G.conns = G.conns.filter(c => c.from !== id && c.to !== id);
+  G.nodes = G.nodes.filter(x => x.id !== id);
+  SIG.v.delete(id); SIG.hist.delete(id); SIG.pv.delete(id);
+  if(n.kind === "param" && n.autoReg) releaseParamTarget(n.key);
+  SIG.dirty = true; select(null); GraphView.build(); saveGraph();
+}
+function scalarWouldLoop(from, to){
+  const seen = new Set([to]), stack = [to];
+  while(stack.length){
+    const cur = stack.pop(); if(cur === from) return true;
+    G.conns.forEach(c => { if(c.type === "scalar" && c.from === cur && !seen.has(c.to)){ seen.add(c.to); stack.push(c.to); } });
+  }
+  return false;
+}
+/* a patch saved by the old standalone Control Surface, brought into this graph */
+const CS_SOURCES = { "band.low":"audio.low", "band.mid":"audio.mid", "band.high":"audio.high", "env.low":"audio.low", "env.mid":"audio.mid",
+  "env.mix":"audio.level", "onset.beat":"audio.onset", "tempo.phase":"clock.beat", "scalar.lfo":"lfo.0", "scalar.manual":"manual" };
+function importControlSurface(p){
+  const ids = new Map(), c0 = GraphView.centerPoint(); let made = 0, skipped = 0;
+  (p.nodes || []).forEach(sn => {
+    const pos = (p.layout && p.layout[sn.id]) || { x:0, y:0 };
+    const x = c0.x - 200 + pos.x * 0.6, y = c0.y - 140 + pos.y * 0.6;
+    let n = null;
+    if(sn.kind === "source"){
+      const src = CS_SOURCES[sn.channel]; if(src) n = makeSigNode("sig", x, y, { src, value:0.5 });
+    } else if(sn.kind === "target"){
+      const tool = TOOLS.find(t => t.id === sn.toolId || t.file.replace(".html", "") === sn.toolId);
+      const L = tool && layers.get(tool.id), spec = L && L.targets && L.targets[sn.param];
+      if(spec) n = makeSigNode("param", x, y, { key:toolTargetKey(L, sn.param), label:L.tool.label + " — " + (spec.label || sn.param) });
+    } else if(String(sn.kind).indexOf("utility.") === 0 && UTIL[sn.kind.slice(8)]){
+      const { id, kind, ...rest } = sn;
+      n = makeSigNode("util", x, y, { util:sn.kind.slice(8), params:rest });
+    }
+    if(n){ G.nodes.push(n); ids.set(sn.id, n.id); made++; if(n.kind === "param") ensureParamTarget(n); } else skipped++;
+  });
+  let cables = 0;
+  (p.connections || []).forEach(sc => {
+    const [fn] = String(sc.from).split(":"), [tn, tp] = String(sc.to).split(":");
+    if(!ids.has(fn) || !ids.has(tn)) return;
+    if(connect(ids.get(fn), "out", ids.get(tn), tp || "in")){
+      const c = G.conns[G.conns.length - 1]; c.scale = sc.scale == null ? 1 : sc.scale; c.offset = sc.offset || 0; cables++;
+    }
+  });
+  SIG.dirty = true; GraphView.build(); saveGraph();
+  return { made, skipped, cables };
+}
 
 /* What a node can take and give. Tools add ports from the contract they
    publish through unlimiter-ports.js; tools that don't publish keep the one
@@ -323,6 +564,10 @@ function portsOf(n){
   if(n.kind === "output") return { ins:[{ id:"in", type:"image", label:"layers", multi:true }], outs:[{ id:"out", type:"image" }] };
   if(n.kind === "volume") return { ins:[{ id:"in", type:"image", label:"image" }, { id:"points", type:"points", label:"points" }], outs:[] };
   if(n.kind === "gen")    return { ins:[], outs:[{ id:"out", type:"image", label:"image" }, { id:"points3d", type:"points", label:"3D" }, { id:"uv", type:"points", label:"2D" }] };
+  if(n.kind === "sig")    return { ins:[], outs:[{ id:"out", type:"scalar", label:"" }] };
+  if(n.kind === "util"){  const ins = (UTIL[n.util] || UTIL.scale).ins;
+    return { ins:ins.map(id => ({ id, type:"scalar", label: ins.length > 1 ? id : "", multi:true })), outs:[{ id:"out", type:"scalar", label:"" }] }; }
+  if(n.kind === "param")  return { ins:[{ id:"in", type:"scalar", label:"", multi:true }], outs:[] };
   const t = TOOLS.find(t => t.id === n.toolId), L = layers.get(n.toolId);
   const ins = [], outs = [{ id:"out", type:"image" }];
   if(t && t.accepts) ins.push({ id:"in", type:"image" });
@@ -335,29 +580,37 @@ function portsOf(n){
 }
 function portOf(n, dir, id){ const P = portsOf(n); return (dir === "out" ? P.outs : P.ins).find(p => p.id === id) || null; }
 
+/* a cable is silent if it is muted itself or its source node is bypassed */
+function cOff(c){ if(c.muted) return true; const f = nodeById(c.from); return !!(f && f.bypass); }
 function outConns(){ return G.conns.filter(c => c.to === "n_out" && c.type === "image").sort((a,b) => a.order - b.order); }
 function inputConnFor(nodeId){ return G.conns.find(c => c.to === nodeId && nodeId !== "n_out" && c.toPort === "in" && c.type === "image"); }
 /* whatever image is patched into the volume node — no longer only OUTPUT */
-function volumeFeed(){ return G.conns.find(c => c.to === "n_vol" && c.toPort === "in" && c.type === "image" && !c.muted) || null; }
+function volumeFeed(){ return G.conns.find(c => c.to === "n_vol" && c.toPort === "in" && c.type === "image" && !cOff(c)) || null; }
 function volumeLinked(){ return !!volumeFeed(); }
 function canAccept(n){ return portsOf(n).ins.length > 0; }
 function hasOut(n){ return portsOf(n).outs.length > 0; }
 
 /* v1 cables had no ports and no type: every one of them was an image */
 function normConn(c){
-  return Object.assign({ fromPort:"out", toPort:"in", type:"image", opacity:1, blend:"source-over", order:0, muted:false }, c);
+  return Object.assign({ fromPort:"out", toPort:"in", type:"image", opacity:1, blend:"source-over", order:0, muted:false, scale:1, offset:0 }, c);
 }
 function saveGraph(){
+  SIG.dirty = true;                          // every graph edit lands here
   try{
     localStorage.setItem(LS_KEY, JSON.stringify({
       version: 2,
       nodes: G.nodes.map(n => {
         const o = { id:n.id, kind:n.kind, toolId:n.toolId, x:Math.round(n.x), y:Math.round(n.y) };
+        if(n.bypass) o.bypass = true;
         if(n.kind === "gen"){ o.label = n.label; o.preset = n.preset; o.P = n.P; }
+        if(n.kind === "sig"){ o.src = n.src; if(n.src === "manual") o.value = n.value; }
+        if(n.kind === "util"){ o.util = n.util; o.params = n.params; }
+        if(n.kind === "param"){ o.key = n.key; o.label = n.label; }
         return o;
       }),
       conns: G.conns.map(c => ({ id:c.id, from:c.from, fromPort:c.fromPort, to:c.to, toPort:c.toPort, type:c.type,
-                                 opacity:c.opacity, blend:c.blend, order:c.order, muted:!!c.muted })),
+                                 opacity:c.opacity, blend:c.blend, order:c.order, muted:!!c.muted,
+                                 scale:c.scale == null ? 1 : c.scale, offset:c.offset || 0 })),
       mix: { gain: mixGain, bg: mixBg },
     }));
   }catch(e){}
@@ -372,6 +625,8 @@ function loadGraph(){
     // generator nodes need the geometry modules; without them they are dropped, not broken
     G.nodes = s.nodes.filter(n => n.kind !== "gen" || (UP && PT));
     G.nodes.forEach(n => { if(n.kind === "gen") n.P = Object.assign(genPresetP(n.preset), n.P || {}); });
+    G.nodes = G.nodes.filter(n => n.kind !== "util" || UTIL[n.util]);
+    G.nodes.forEach(n => { if(n.kind === "util"){ n.params = Object.assign({}, UTIL[n.util].params, n.params || {}); n.state = { y:0 }; } });
     let mx = 0; [...G.nodes, ...(s.conns || [])].forEach(o => { const m = /(\d+)$/.exec(o.id); if(m) mx = Math.max(mx, +m[1]); });
     nextId = mx + 1;
     G.conns = (s.conns || []).map(normConn).filter(c => nodeById(c.from) && nodeById(c.to));
@@ -523,7 +778,7 @@ function feedSources(now){
   layers.forEach(L => {
     if(!L.ready || !L.tool.accepts) return;
     const c = inputConnFor("n_" + L.tool.id);
-    if(!c || c.muted) return;
+    if(!c || cOff(c)) return;
     const src = canvasForNode(c.from);
     if(!src || !src.width) return;
     try{
@@ -700,8 +955,9 @@ function pruneGenTargets(n){
 function removeGen(id){
   const n = nodeById(id); if(!n || n.kind !== "gen") return;
   RACK_TARGETS.filter(t => t.key.indexOf(id + ".") === 0).map(t => t.key).forEach(unregisterTarget);
-  G.conns = G.conns.filter(c => c.from !== id && c.to !== id);
-  G.nodes = G.nodes.filter(x => x.id !== id);
+  const dead = G.nodes.filter(m => m.kind === "param" && m.key.indexOf(id + ".") === 0).map(m => m.id);   // parameter nodes aimed at it
+  G.conns = G.conns.filter(c => c.from !== id && c.to !== id && dead.indexOf(c.to) < 0);
+  G.nodes = G.nodes.filter(x => x.id !== id && dead.indexOf(x.id) < 0);
   gens.delete(id);
   select(null); GraphView.build(); saveGraph();
 }
@@ -744,7 +1000,7 @@ let volPts = null, volPtsVer = -1, volPtsOn = false;
 function deliverData(){
   const now = new Set();
   G.conns.forEach(c => {
-    if(c.type === "image" || c.muted) return;
+    if(c.type === "image" || c.type === "scalar" || cOff(c)) return;
     const v = outputValue(nodeById(c.from), c.fromPort);
     if(!v || (PT && !PT.isType(c.type, v))) return;
     const to = nodeById(c.to); if(!to) return;
@@ -795,7 +1051,7 @@ function captureAndMix(){
     mixCtx.fillStyle = mixBg; mixCtx.fillRect(0, 0, MIX_W, MIX_H);
   }
   outConns().forEach(c => {
-    if(c.muted) return;
+    if(cOff(c)) return;
     const src = canvasForNode(c.from);
     if(!src) return;
     const a = c.opacity * mixGain;
@@ -817,13 +1073,41 @@ const GraphView = (() => {
   const cableG = document.getElementById("cableG");
   const pending = document.getElementById("pending");
   const els = new Map();       // nodeId -> {el, thumb, ctx, st}
-  let drag = null, wire = null;
+  let drag = null, wire = null, pan = null, lastCableTap = { id:null, t:0 };
+  const world = document.getElementById("world");
+  const V = { x:0, y:0, k:1 };
+  try{ const sv = JSON.parse(localStorage.getItem("unlimiter.rack.view") || "null"); if(sv && isFinite(sv.k)){ V.x = +sv.x || 0; V.y = +sv.y || 0; V.k = Math.min(2.5, Math.max(0.25, +sv.k)); } }catch(e){}
+  function applyView(){
+    world.style.transform = `translate(${V.x}px, ${V.y}px) scale(${V.k})`;
+    const z = document.getElementById("vZoom"); if(z) z.textContent = Math.round(V.k * 100) + "%";
+    wrap.style.backgroundPosition = `0 0, ${V.x % 24}px ${V.y % 24}px, ${V.x % 24}px ${V.y % 24}px`;
+  }
+  let viewSaveT = 0;
+  function saveView(){ clearTimeout(viewSaveT); viewSaveT = setTimeout(() => { try{ localStorage.setItem("unlimiter.rack.view", JSON.stringify(V)); }catch(e){} }, 250); }
+  /* pointer → graph coordinates (undoes pan and zoom) */
+  function gp(e){ const r = wrap.getBoundingClientRect(); return { x:(e.clientX - r.left - V.x) / V.k, y:(e.clientY - r.top - V.y) / V.k }; }
+  function fitView(){
+    const r = wrap.getBoundingClientRect(); if(!G.nodes.length || !r.width) return;
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    G.nodes.forEach(n => { const s = nodeSize(n); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + s.w); y1 = Math.max(y1, n.y + s.h); });
+    const pad = 40, k = Math.min(2, Math.max(0.25, Math.min((r.width - pad*2) / (x1 - x0), (r.height - pad*2) / (y1 - y0))));
+    V.k = k; V.x = (r.width - (x1 - x0) * k) / 2 - x0 * k; V.y = (r.height - (y1 - y0) * k) / 2 - y0 * k;
+    applyView(); saveView();
+  }
+  function bypassNode(n){
+    if(!n || n.kind === "output" || n.kind === "volume") return;
+    n.bypass = !n.bypass;
+    const e = els.get(n.id); if(e) e.el.classList.toggle("bypassed", !!n.bypass);
+    drawCables(); saveGraph(); if(selected && selected.id === n.id) Inspector.render();
+  }
+  function dropConn(id){ G.conns = G.conns.filter(c => c.id !== id); if(selected && selected.id === id) select(null); drawCables(); saveGraph(); Inspector.render(); }
 
   function colorOf(n){
     if(!n) return "#8b90a0";
     if(n.kind === "output") return "#e8e9ee";
     if(n.kind === "volume") return "#8b90a0";
     if(n.kind === "gen") return TYPE_COL.points;
+    if(isSig(n)) return TYPE_COL.scalar;
     const t = TOOLS.find(t => t.id === n.toolId);
     return t ? t.color : "#8b90a0";
   }
@@ -832,6 +1116,7 @@ const GraphView = (() => {
     if(n.kind === "output") return "OUTPUT";
     if(n.kind === "volume") return "Volume";
     if(n.kind === "gen") return n.label || "Points";
+    if(isSig(n)) return sigTitle(n);
     return (TOOLS.find(t => t.id === n.toolId) || {}).label || n.toolId;
   }
   function build(){
@@ -839,15 +1124,16 @@ const GraphView = (() => {
     G.nodes.forEach(n => {
       const d = document.createElement("div");
       const col = colorOf(n);
-      d.className = "node" + (n.kind === "output" ? " out" : n.kind === "volume" ? " vol" : n.kind === "gen" ? " gen" : "");
+      d.className = "node" + (n.kind === "output" ? " out" : n.kind === "volume" ? " vol" : n.kind === "gen" ? " gen" : isSig(n) ? " sg" : "");
       d.dataset.id = n.id;
-      const sub = n.kind === "output" ? "mix → OBS" : n.kind === "volume" ? "" : n.kind === "gen" ? (n.preset || "") : n.toolId;
+      const sub = n.kind === "output" ? "mix → OBS" : n.kind === "volume" ? "" : n.kind === "gen" ? (n.preset || "") : isSig(n) ? sigSub(n) : n.toolId;
       d.innerHTML =
         `<div class="nh"><span class="sw" style="background:${col}"></span><b>${titleOf(n)}</b>` +
-        (n.kind === "tool" ? `<span class="st"></span>` : "") + `</div>` +
+        (n.kind === "tool" ? `<span class="st"></span>` : "") +
+        (n.kind !== "output" && n.kind !== "volume" ? `<button class="byp" data-byp title="Bypass (B): silence this node's outputs">off</button>` : "") + `</div>` +
         (n.kind === "volume"
           ? `<div class="vbody" data-vb>relief<br>3D points</div>`
-          : `<canvas class="nt" width="180" height="72"></canvas><div class="nf"><span>${sub}</span><span data-info></span></div>`);
+          : `<canvas class="nt" width="180" height="${isSig(n) ? 36 : 72}"></canvas><div class="nf"><span>${sub}</span><span data-info></span></div>`);
       const P = portsOf(n), s = nodeSize(n);
       [["in", P.ins], ["out", P.outs]].forEach(([dir, list]) => {
         list.forEach((pt, i) => {
@@ -857,9 +1143,9 @@ const GraphView = (() => {
           d.insertAdjacentHTML("beforeend",
             `<div class="port ${dir}${data ? " data" : ""}" data-port="${pt.id}" data-dir="${dir}" data-type="${pt.type}" data-node="${n.id}"
                   style="top:${y}px;${border}" title="${pt.label || pt.id} · ${pt.type}"></div>`);
-          if(list.length > 1 || data)
+          if((list.length > 1 || data) && pt.label !== "")
             d.insertAdjacentHTML("beforeend",
-              `<span class="plabel ${dir}" style="top:${y}px;color:${TYPE_COL[pt.type]}">${pt.label || pt.id}</span>`);
+              `<span class="plabel ${dir}" style="top:${y}px;color:${TYPE_COL[pt.type]}">${pt.label == null ? pt.id : pt.label}</span>`);
         });
       });
       nodesEl.appendChild(d);
@@ -868,20 +1154,35 @@ const GraphView = (() => {
       // a rebuild must not forget which tools are live
       if(n.kind === "tool"){ const L = layers.get(n.toolId); if(L && (L.ready || L.error)) markState(n.toolId, L.ready ? "live" : "err", L.error); }
 
+      if(n.bypass) d.classList.add("bypassed");
+      const byp = d.querySelector("[data-byp]");
+      if(byp) byp.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); bypassNode(n); });
       d.addEventListener("pointerdown", e => {
-        if(e.target.classList.contains("port")) return;
+        if(e.target.classList.contains("port") || e.target.hasAttribute("data-byp")) return;
+        e.stopPropagation();
         select({ kind:"node", id:n.id });
-        const r = wrap.getBoundingClientRect();
-        drag = { id:n.id, dx:e.clientX - r.left - n.x, dy:e.clientY - r.top - n.y };
+        const g = gp(e);
+        drag = { id:n.id, dx:g.x - n.x, dy:g.y - n.y };
         d.classList.add("dragging");
         d.setPointerCapture(e.pointerId);
       });
       d.querySelectorAll(".port").forEach(p => {
         p.addEventListener("pointerdown", e => {
           e.stopPropagation();
-          const r = wrap.getBoundingClientRect();
-          wire = { node:n.id, dir:p.dataset.dir, port:p.dataset.port, type:p.dataset.type, x:e.clientX - r.left, y:e.clientY - r.top };
+          const g = gp(e);
+          wire = { node:n.id, dir:p.dataset.dir, port:p.dataset.port, type:p.dataset.type, x:g.x, y:g.y };
+          // grabbing a patched input picks the cable up: drop it on another input to move it,
+          // or on empty space to disconnect. (OUTPUT stacks layers, so it patches new ones instead.)
+          if(wire.dir === "in" && n.id !== "n_out"){
+            const c = G.conns.find(c => c.to === n.id && c.toPort === wire.port);
+            if(c){
+              G.conns = G.conns.filter(x => x !== c);
+              wire = { node:c.from, dir:"out", port:c.fromPort, type:c.type, x:g.x, y:g.y };
+              saveGraph(); drawCables(); Inspector.render();
+            }
+          }
           pending.setAttribute("stroke", TYPE_COL[wire.type] || "#8b90a0");
+          pending.setAttribute("d", "");
           wrap.setPointerCapture(e.pointerId);
         });
       });
@@ -901,8 +1202,38 @@ const GraphView = (() => {
     const dx = Math.max(38, Math.abs(b.x - a.x) * 0.55);
     return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`;
   }
+  const scalarPaths = new Map();
+  function pulseCables(){
+    scalarPaths.forEach((p, id) => {
+      const c = G.conns.find(x => x.id === id); if(!c) return;
+      const off = cOff(c), v = Math.min(1, Math.abs(SIG.cv.get(id) || 0));
+      p.setAttribute("stroke-width", (1.4 + 2.6 * (off ? 0 : v)).toFixed(2));
+      p.setAttribute("stroke-opacity", off ? "0.2" : (0.35 + 0.6 * v).toFixed(2));
+    });
+  }
+  function centerPoint(){
+    const r = wrap.getBoundingClientRect();
+    return { x:(r.width / 2 - V.x) / V.k, y:(r.height / 2 - V.y) / V.k };
+  }
+  function drawScope(n, e){
+    const v = SIG.v.get(n.id) || 0;
+    let h = SIG.hist.get(n.id); if(!h){ h = []; SIG.hist.set(n.id, h); }
+    h.push(v); if(h.length > 90) h.shift();
+    const c = e.ctx, W = e.thumb.width, H = e.thumb.height;
+    c.fillStyle = "#0b0d13"; c.fillRect(0, 0, W, H);
+    c.strokeStyle = "rgba(255,255,255,.06)"; c.lineWidth = 1; c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
+    const live = n.kind !== "param" || SIG.pv.has(n.id);
+    c.strokeStyle = live && !n.bypass ? TYPE_COL.scalar : "#4a4f5e"; c.lineWidth = 1.8; c.beginPath();
+    h.forEach((y, i) => { const px = i / 89 * W, py = H - 3 - clamp01(y) * (H - 6); if(i) c.lineTo(px, py); else c.moveTo(px, py); });
+    c.stroke();
+    if(e.info){
+      e.info.textContent = n.kind === "param"
+        ? (!targetByKey.has(n.key) ? "waiting" : SIG.pv.has(n.id) ? SIG.pv.get(n.id).toFixed(2) : "idle")
+        : v.toFixed(2);
+    }
+  }
   function drawCables(){
-    cableG.innerHTML = "";
+    cableG.innerHTML = ""; scalarPaths.clear();
     G.conns.forEach(c => {
       const a = portPos(c.from, "out", c.fromPort), b = portPos(c.to, "in", c.toPort);
       const data = c.type !== "image";
@@ -910,35 +1241,55 @@ const GraphView = (() => {
       const d = path(a, b);
       const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
       hit.setAttribute("d", d); hit.setAttribute("class", "hit");
-      hit.addEventListener("pointerdown", e => { e.stopPropagation(); select({ kind:"conn", id:c.id }); });
+      const tap = e => {
+        e.stopPropagation();
+        // selecting redraws the cables, which swallows a native dblclick — so time the second press ourselves
+        const now = performance.now();
+        if(lastCableTap.id === c.id && now - lastCableTap.t < 400){ lastCableTap = { id:null, t:0 }; dropConn(c.id); return; }
+        lastCableTap = { id:c.id, t:now };
+        select({ kind:"conn", id:c.id });
+      };
+      const ctx = e => { e.preventDefault(); e.stopPropagation(); dropConn(c.id); };
+      hit.addEventListener("pointerdown", tap); hit.addEventListener("contextmenu", ctx);
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", d);
+      p.addEventListener("pointerdown", tap); p.addEventListener("contextmenu", ctx);
       p.setAttribute("class", "cable" + (selected && selected.kind === "conn" && selected.id === c.id ? " sel" : ""));
       p.setAttribute("stroke", col);
-      if(data){
+      if(c.type === "scalar"){
+        // signals are dashed yellow and breathe with the value they carry
+        p.setAttribute("stroke-dasharray", "5 4");
+        scalarPaths.set(c.id, p);
+      } else if(data){
         // data cables are dotted, so a cable carrying points never reads as a picture
         p.setAttribute("stroke-width", "2.6");
         p.setAttribute("stroke-dasharray", "1 6");
-        p.setAttribute("stroke-opacity", c.muted ? "0.2" : "0.95");
+        p.setAttribute("stroke-opacity", cOff(c) ? "0.2" : "0.95");
       } else {
-        p.setAttribute("stroke-width", String(1.4 + 3.2 * (c.muted ? 0 : c.opacity)));
-        p.setAttribute("stroke-opacity", String(c.muted ? 0.18 : 0.3 + 0.6 * c.opacity));
+        p.setAttribute("stroke-width", String(1.4 + 3.2 * (cOff(c) ? 0 : c.opacity)));
+        p.setAttribute("stroke-opacity", String(cOff(c) ? 0.18 : 0.3 + 0.6 * c.opacity));
       }
       cableG.appendChild(hit); cableG.appendChild(p);
     });
+    pulseCables();
   }
   wrap.addEventListener("pointermove", e => {
-    const r = wrap.getBoundingClientRect();
+    if(pan){
+      V.x = pan.vx + (e.clientX - pan.sx); V.y = pan.vy + (e.clientY - pan.sy);
+      if(Math.abs(e.clientX - pan.sx) + Math.abs(e.clientY - pan.sy) > 3) pan.moved = true;
+      applyView(); return;
+    }
     if(drag){
-      const n = nodeById(drag.id);
-      if(n){ n.x = Math.max(0, e.clientX - r.left - drag.dx); n.y = Math.max(0, e.clientY - r.top - drag.dy); layout(); drawCables(); }
+      const n = nodeById(drag.id), g = gp(e);
+      if(n){ n.x = g.x - drag.dx; n.y = g.y - drag.dy; layout(); drawCables(); }
     } else if(wire){
-      const p = { x:e.clientX - r.left, y:e.clientY - r.top };
+      const p = gp(e);
       const a = portPos(wire.node, wire.dir, wire.port);
       pending.setAttribute("d", wire.dir === "out" ? path(a, p) : path(p, a));
     }
   });
   wrap.addEventListener("pointerup", e => {
+    if(pan){ if(!pan.moved) select(null); pan = null; wrap.classList.remove("panning"); saveView(); }
     if(drag){ const el = els.get(drag.id); if(el) el.el.classList.remove("dragging"); drag = null; saveGraph(); }
     if(wire){
       const tgt = document.elementFromPoint(e.clientX, e.clientY);
@@ -950,20 +1301,45 @@ const GraphView = (() => {
       wire = null; pending.setAttribute("d", "");
     }
   });
-  wrap.addEventListener("pointerdown", e => { if(e.target === wrap || e.target.id === "cables") select(null); });
+  /* empty space pans (any button), so the view can be moved without a modifier */
+  wrap.addEventListener("pointerdown", e => {
+    if(e.target === wrap || e.target === world || e.target === nodesEl || e.target.id === "cables"){
+      pan = { sx:e.clientX, sy:e.clientY, vx:V.x, vy:V.y, moved:false };
+      wrap.classList.add("panning"); wrap.setPointerCapture(e.pointerId);
+    }
+  });
+  wrap.addEventListener("wheel", e => {
+    if(e.target.closest && e.target.closest(".sigmenu")) return;     // let the menu's own lists scroll
+    e.preventDefault();
+    const r = wrap.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    const k = Math.min(2.5, Math.max(0.25, V.k * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
+    V.x = mx - (mx - V.x) * (k / V.k); V.y = my - (my - V.y) * (k / V.k); V.k = k;
+    applyView(); saveView();
+  }, { passive:false });
+  wrap.addEventListener("dblclick", e => { if(e.target === wrap || e.target === world || e.target === nodesEl) fitView(); });
+  wrap.addEventListener("contextmenu", e => { if(e.target.closest && e.target.closest(".node")) return; });
+  document.getElementById("vFit").addEventListener("click", fitView);
+  document.getElementById("vReset").addEventListener("click", () => { V.x = 0; V.y = 0; V.k = 1; applyView(); saveView(); });
+  applyView();
   window.addEventListener("keydown", e => {
-    if(!(e.key === "Delete" || e.key === "Backspace") || !selected) return;
     if(/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+    if(e.key === "f" || e.key === "F"){ fitView(); return; }
+    if(e.key === "0"){ V.x = 0; V.y = 0; V.k = 1; applyView(); saveView(); return; }
+    if((e.key === "b" || e.key === "B") && selected && selected.kind === "node"){ bypassNode(nodeById(selected.id)); return; }
+    if(!(e.key === "Delete" || e.key === "Backspace") || !selected) return;
     if(selected.kind === "conn"){
       G.conns = G.conns.filter(c => c.id !== selected.id);
       select(null); drawCables(); saveGraph();
     } else if(selected.kind === "node" && (nodeById(selected.id) || {}).kind === "gen"){
       removeGen(selected.id);        // generators are yours to delete; tools, OUTPUT and Volume are fixed
+    } else if(selected.kind === "node" && isSig(nodeById(selected.id))){
+      removeSigNode(selected.id);
     }
   });
   function refreshThumbs(){
     G.nodes.forEach(n => {
       const e = els.get(n.id); if(!e || !e.ctx) return;
+      if(isSig(n)){ drawScope(n, e); return; }
       const src = n.kind === "output" ? mixCanvas : canvasForNode(n.id);
       if(src) { try{ e.ctx.drawImage(src, 0, 0, e.thumb.width, e.thumb.height); }catch(err){} }
       if(n.kind === "gen" && e.info){
@@ -981,7 +1357,7 @@ const GraphView = (() => {
     els.forEach((e, id) => e.el.classList.toggle("sel", !!selected && selected.kind === "node" && selected.id === id));
     drawCables();
   }
-  return { build, layout, drawCables, refreshThumbs, markState, refreshSel, colorOf, titleOf };
+  return { build, layout, drawCables, refreshThumbs, markState, refreshSel, colorOf, titleOf, fitView, bypassNode, pulseCables, centerPoint };
 })();
 
 /* Patch an output port to an input port. Only same-type ports connect. Every
@@ -992,12 +1368,15 @@ function connect(from, fromPort, to, toPort){
   const a = nodeById(from), b = nodeById(to);
   const po = portOf(a, "out", fromPort), pi = portOf(b, "in", toPort);
   if(!po || !pi) return false;
-  if(!(PT ? PT.compatible(po.type, pi.type) : po.type === pi.type)) return false;
+  const typeOk = (po.type === "scalar" || pi.type === "scalar") ? po.type === pi.type
+               : (PT ? PT.compatible(po.type, pi.type) : po.type === pi.type);
+  if(!typeOk) return false;
+  if(po.type === "scalar" && scalarWouldLoop(from, to)) return false;
   if(G.conns.some(c => c.from === from && c.fromPort === fromPort && c.to === to && c.toPort === toPort)) return false;
   if(!pi.multi) G.conns = G.conns.filter(c => !(c.to === to && c.toPort === toPort));
   const order = to === "n_out" ? (outConns().length ? Math.max(...outConns().map(c => c.order)) + 1 : 0) : 0;
   G.conns.push({ id:uid("c"), from, fromPort, to, toPort, type:po.type,
-                 opacity:1, blend: to === "n_out" ? "screen" : "source-over", order, muted:false });
+                 opacity:1, blend: to === "n_out" ? "screen" : "source-over", order, muted:false, scale:1, offset:0 });
   GraphView.drawCables(); saveGraph(); Inspector.render();
   return true;
 }
@@ -1053,6 +1432,9 @@ const Inspector = (() => {
     if(n.kind === "output") renderOutput(modded);
     else if(n.kind === "volume") renderVolume(modded);
     else if(n.kind === "gen") renderGen(n);
+    else if(n.kind === "sig") renderSig(n);
+    else if(n.kind === "util") renderUtil(n);
+    else if(n.kind === "param") renderParam(n);
     else renderTool(n, modded);
   }
   function renderNone(){
@@ -1063,7 +1445,9 @@ const Inspector = (() => {
         Drag from a node's right port to another's left port to patch. Only ports of the same
         type connect: solid cables carry pictures, <span style="color:${TYPE_COL.points}">dotted</span>
         cables carry data. Inputs take one cable; OUTPUT takes as many as you like.<br><br>
-        <b style="color:var(--text)">+ Points generator</b> adds a point source that runs inside the rack.</div>` + driveSection();
+        <b style="color:var(--text)">+ Points generator</b> adds a point source that runs inside the rack.<br><br>
+        <b style="color:var(--text)">+ Signal</b> adds audio / clock / LFO / MIDI sources, utilities and parameter nodes.
+        <span style="color:${TYPE_COL.scalar}">Dashed yellow</span> cables carry signals; several into one input add together.</div>` + driveSection();
     mountDrive();
   }
   function renderConn(){
@@ -1078,7 +1462,12 @@ const Inspector = (() => {
       `<div class="ihead"><span class="sw" style="background:${data ? TYPE_COL[c.type] : GraphView.colorOf(a || {})}"></span><b>${nameOf(a)} → ${nameOf(b)}</b></div>` +
       `<div class="empty" style="margin-bottom:10px">${(pa && pa.label) || c.fromPort} → ${(pb && pb.label) || c.toPort}
          <span class="tbadge" style="color:${TYPE_COL[c.type]}">${c.type}</span></div>` +
-      (data
+      (c.type === "scalar"
+        ? `<div class="fld"><div class="lab"><span>scale</span></div><input type="number" id="cScale" step="0.05" value="${c.scale == null ? 1 : c.scale}"></div>
+           <div class="fld"><div class="lab"><span>offset</span></div><input type="number" id="cOffset" step="0.05" value="${c.offset || 0}"></div>
+           <div class="fld"><div class="lab"><span>carrying</span><span class="v" data-live>—</span></div></div>
+           <div class="empty">A signal cable carries value × scale + offset. Several cables into one input add together; mute one to drop it out.</div>`
+        : data
         ? `<div class="empty">This cable carries ${c.type} — the producer's live data, handed over by reference each frame. It has no opacity or blend; mute it to let the receiver fall back to its own content.</div>`
         : toOut
         ? fld("opacity", c.opacity.toFixed(2), `<input type="range" id="cOp" min="0" max="1" step="0.01" value="${c.opacity}">`) +
@@ -1091,6 +1480,9 @@ const Inspector = (() => {
        </div>` + driveSection();
     const op = root.querySelector("#cOp");
     if(op) op.addEventListener("input", e => { c.opacity = parseFloat(e.target.value); GraphView.drawCables(); saveGraph(); touchVal(op, c.opacity.toFixed(2)); });
+    const scI = root.querySelector("#cScale"), ofI = root.querySelector("#cOffset");
+    if(scI) scI.addEventListener("input", e => { c.scale = parseFloat(e.target.value) || 0; saveGraph(); });
+    if(ofI) ofI.addEventListener("input", e => { c.offset = parseFloat(e.target.value) || 0; saveGraph(); });
     const bl = root.querySelector("#cBlend");
     if(bl) bl.addEventListener("change", e => { c.blend = e.target.value; saveGraph(); });
     root.querySelector("#cMute").addEventListener("click", () => { c.muted = !c.muted; GraphView.drawCables(); saveGraph(); render(); });
@@ -1148,7 +1540,7 @@ const Inspector = (() => {
         : "Waiting for the renderer to report in…"}</div>`;
     } else {
       const feed = volumeFeed();
-      const ptsC = G.conns.find(c => c.to === "n_vol" && c.toPort === "points" && !c.muted);
+      const ptsC = G.conns.find(c => c.to === "n_vol" && c.toPort === "points" && !cOff(c));
       body += `<div class="empty" style="margin-bottom:6px">${linked
         ? "Image from <b style='color:var(--text)'>" + GraphView.titleOf(nodeById(feed.from)) + "</b> — luminance becomes depth, pixel colour becomes point colour."
         : "No image patched into the <b style='color:var(--text)'>image</b> port."}</div>`;
@@ -1186,6 +1578,53 @@ const Inspector = (() => {
     }));
     mountDrive();
   }
+  function nodeButtons(n){
+    return `<div class="row2" style="margin-top:12px;grid-template-columns:1fr 1fr"><button id="nByp" class="${n.bypass ? "on" : ""}">${n.bypass ? "Bypassed — enable" : "Bypass (B)"}</button><button id="nDel" style="color:var(--danger)">delete node</button></div>`;
+  }
+  function wireNodeButtons(n){
+    root.querySelector("#nByp").addEventListener("click", () => GraphView.bypassNode(n));
+    root.querySelector("#nDel").addEventListener("click", () => removeSigNode(n.id));
+  }
+  function renderSig(n){
+    const list = sourceChoices();
+    if(n.src !== "manual" && !list.some(s => s[0] === n.src)) list.push([n.src, n.src]);
+    const audioHint = n.src.indexOf("audio.") === 0 && Drive && !Drive.audio.on
+      ? `<div class="empty" style="margin-bottom:8px;color:var(--warm)">Audio is off — switch it on in the Drive panel below, or this reads zero.</div>` : "";
+    root.innerHTML =
+      `<div class="ihead"><span class="sw" style="background:${TYPE_COL.scalar};border-radius:50%"></span><b>${sigTitle(n)}</b></div>
+       <div class="empty" style="margin-bottom:10px">A 0–1 signal from the drive — audio, clock, LFO or MIDI — or a hand knob. Patch its output through utilities into a parameter node.</div>` + audioHint +
+      `<div class="fld"><div class="lab"><span>source</span></div><select id="sSrc">${list.map(([id, l]) => `<option value="${id}"${id === n.src ? " selected" : ""}>${l}</option>`).join("")}</select></div>` +
+      (n.src === "manual" ? fld("value", (+n.value || 0).toFixed(2), `<input type="range" id="sVal" min="0" max="1" step="0.005" value="${+n.value || 0}">`) : "") +
+      `<div class="fld"><div class="lab"><span>now</span><span class="v" data-live>—</span></div></div>` +
+      nodeButtons(n) + driveSection();
+    root.querySelector("#sSrc").addEventListener("change", e => {
+      n.src = e.target.value; if(n.src === "manual" && n.value == null) n.value = 0.5;
+      SIG.hist.delete(n.id); saveGraph(); GraphView.build(); render();
+    });
+    const sv = root.querySelector("#sVal");
+    if(sv) sv.addEventListener("input", e => { n.value = parseFloat(e.target.value); touchVal(sv, n.value.toFixed(2)); saveGraph(); });
+    wireNodeButtons(n); mountDrive();
+  }
+  function renderUtil(n){
+    const d = UTIL[n.util];
+    root.innerHTML =
+      `<div class="ihead"><span class="sw" style="background:${TYPE_COL.scalar};border-radius:3px"></span><b>${d.label}</b></div>
+       <div class="empty" style="margin-bottom:10px">${d.sub}. Several cables into one input add together; each cable has its own scale and offset (click it).</div>` +
+      Object.keys(n.params).map(k => `<div class="fld"><div class="lab"><span>${k}</span></div><input type="number" data-up="${k}" step="${k === "lagMs" ? 10 : 0.05}" value="${n.params[k]}"></div>`).join("") +
+      `<div class="fld"><div class="lab"><span>out</span><span class="v" data-live>—</span></div></div>` + nodeButtons(n) + driveSection();
+    root.querySelectorAll("[data-up]").forEach(i => i.addEventListener("input", e => { n.params[e.target.dataset.up] = parseFloat(e.target.value) || 0; saveGraph(); }));
+    wireNodeButtons(n); mountDrive();
+  }
+  function renderParam(n){
+    const t = targetByKey.get(n.key);
+    root.innerHTML =
+      `<div class="ihead"><span class="sw" style="background:${TYPE_COL.scalar};border-radius:3px"></span><b>${n.label || n.key}</b></div>` +
+      `<div class="empty" style="margin-bottom:10px">${t
+        ? `Maps the 0–1 arriving here onto this parameter's range, <b style="color:var(--text)">${t.min} … ${t.max}</b>. While a live cable is patched in, this node has the last word — drive routes from the panel below stack underneath it. Unpatch it, or bypass the node, and the parameter goes back to its own value.`
+        : `This parameter isn't available yet — its tool is still loading, or it no longer exists. The node will pick it up as soon as it is.`}</div>` +
+      `<div class="fld"><div class="lab"><span>value now</span><span class="v" data-live>—</span></div></div>` + nodeButtons(n) + driveSection();
+    wireNodeButtons(n); mountDrive();
+  }
   function renderTool(n, modded){
     const tool = TOOLS.find(t => t.id === n.toolId);
     const L = layers.get(n.toolId);
@@ -1201,7 +1640,9 @@ const Inspector = (() => {
       <button id="tPop">Open tab ↗</button></div>
       <div class="row2" style="grid-template-columns:1fr 1fr;margin-bottom:4px">
       <button id="tWake">Wake</button>
-      <button id="tSolo">Solo to OUTPUT</button></div>`;
+      <button id="tSolo">Solo to OUTPUT</button></div>
+      <div class="row2" style="grid-template-columns:1fr;margin-bottom:4px">
+      <button id="tByp" class="${n.bypass ? "on" : ""}">${n.bypass ? "Bypassed — click to enable" : "Bypass (B)"}</button></div>`;
 
     body += `<h2>Into OUTPUT</h2>`;
     if(outC){
@@ -1242,6 +1683,7 @@ const Inspector = (() => {
     });
     root.querySelector("#tPop").addEventListener("click", () => window.open(tool.file, "_blank"));
     root.querySelector("#tWake").addEventListener("click", () => wake(L));
+    root.querySelector("#tByp").addEventListener("click", () => GraphView.bypassNode(n));
     root.querySelector("#tSolo").addEventListener("click", () => {
       outConns().forEach(c => { c.muted = (c.from !== n.id); });
       GraphView.drawCables(); saveGraph(); render();
@@ -1283,7 +1725,7 @@ const Inspector = (() => {
       }
       body += g.rows.map(spec => genRow(n, spec, modded)).join("");
     });
-    body += `<div class="row2" style="margin-top:12px"><span></span><button id="gDel" style="color:var(--danger)">delete node</button></div>` + driveSection();
+    body += `<div class="row2" style="margin-top:12px;grid-template-columns:1fr 1fr"><button id="gByp" class="${n.bypass ? "on" : ""}">${n.bypass ? "Bypassed — enable" : "Bypass (B)"}</button><button id="gDel" style="color:var(--danger)">delete node</button></div>` + driveSection();
     root.innerHTML = body;
 
     const persist = () => saveGraph();
@@ -1329,6 +1771,7 @@ const Inspector = (() => {
       });
     });
     root.querySelector("#gDel").addEventListener("click", () => removeGen(n.id));
+    root.querySelector("#gByp").addEventListener("click", () => GraphView.bypassNode(n));
     mountDrive();
   }
   function genRow(n, spec, modded){
@@ -1411,6 +1854,16 @@ const Inspector = (() => {
   /* live values for whatever is on screen, without rebuilding the panel */
   function tick(){
     if(!selected) return;
+    {   // live readouts for signal nodes and cables
+      const el = root.querySelector("[data-live]");
+      if(el){
+        let v = null;
+        if(selected.kind === "conn") v = SIG.cv.get(selected.id);
+        else { const sn = nodeById(selected.id);
+          if(isSig(sn)) v = sn.kind === "param" ? (SIG.pv.has(sn.id) ? SIG.pv.get(sn.id) : null) : SIG.v.get(sn.id); }
+        el.textContent = v == null ? "—" : fmt(v);
+      }
+    }
     const modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
     root.querySelectorAll(".prow").forEach(row => {
       const n = selected.kind === "node" ? nodeById(selected.id) : null;
@@ -1527,6 +1980,44 @@ function boot(){
   const bAddGen = document.getElementById("bAddGen");
   if(UP && PT) bAddGen.addEventListener("click", addGen);
   else { bAddGen.disabled = true; bAddGen.title = "unlimiter-points.js and unlimiter-ports.js must sit next to rack.html"; }
+  /* ---- + Signal menu ---- */
+  const sm = document.getElementById("sigMenu"), smNote = document.getElementById("smNote");
+  function fillMenu(){
+    document.getElementById("smSrc").innerHTML = sourceChoices().map(([id, l]) => `<option value="${id}">${l}</option>`).join("");
+    const groups = new Map();
+    paramChoices().forEach(p => { if(!groups.has(p.group)) groups.set(p.group, []); groups.get(p.group).push(p); });
+    document.getElementById("smParam").innerHTML = groups.size
+      ? [...groups].map(([g, list]) => `<optgroup label="${g}">${list.map(p => `<option value="${p.key}" data-label="${g} — ${p.label}">${p.label}</option>`).join("")}</optgroup>`).join("")
+      : `<option value="">(tools still loading…)</option>`;
+  }
+  const smUtils = document.getElementById("smUtils");
+  Object.keys(UTIL).forEach(k => {
+    const b = document.createElement("button"); b.textContent = UTIL[k].label; b.title = UTIL[k].sub;
+    b.addEventListener("click", () => { sm.hidden = true; addSigNode("util", { util:k }); });
+    smUtils.appendChild(b);
+  });
+  document.getElementById("bAddSig").addEventListener("click", () => { if(sm.hidden){ fillMenu(); sm.hidden = false; } else sm.hidden = true; });
+  document.addEventListener("pointerdown", e => { if(!sm.hidden && !sm.contains(e.target) && e.target.id !== "bAddSig") sm.hidden = true; }, true);
+  document.getElementById("smAddSrc").addEventListener("click", () => {
+    const v = document.getElementById("smSrc").value; sm.hidden = true; addSigNode("sig", { src:v, value:0.5 });
+  });
+  document.getElementById("smAddParam").addEventListener("click", () => {
+    const sel = document.getElementById("smParam"), o = sel.selectedOptions[0];
+    if(!o || !o.value) return;
+    sm.hidden = true;
+    addSigNode("param", { key:o.value, label:o.dataset.label || o.textContent });
+  });
+  document.getElementById("smImport").addEventListener("click", () => document.getElementById("smFile").click());
+  document.getElementById("smFile").addEventListener("change", e => {
+    const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+    f.text().then(txt => {
+      try{
+        const r = importControlSurface(JSON.parse(txt));
+        smNote.textContent = `Imported ${r.made} node${r.made === 1 ? "" : "s"} and ${r.cables} cable${r.cables === 1 ? "" : "s"}` +
+          (r.skipped ? ` — ${r.skipped} skipped (a source or target that has no match here).` : ".");
+      }catch(err){ smNote.textContent = "That file isn't a Control Surface patch."; }
+    });
+  });
   window.addEventListener("resize", fitFrames);
   setTimeout(fitFrames, 300);
 
@@ -1547,9 +2038,11 @@ function boot(){
   function frame(now){
     const dt = Math.min(60, now - last); last = now;
 
-    if(now - pAt > 250){ pAt = now; refreshToolP(); }
+    if(now - pAt > 250){ pAt = now; refreshToolP(); ensureParamTargets(); }
     RACK_TARGETS.forEach(t => { if(t.sync) t.sync(); });
     RQ = Drive ? Drive.resolve(RP) : RP;
+    evalSignals(dt);
+    RQ = applyParamNodes(RQ);
     RACK_TARGETS.forEach(t => { const v = RQ[t.key]; if(typeof v === "number" && isFinite(v)) t.apply(v); });
 
     if(UP && PT){ stepGens(dt / 1000); deliverData(); }
@@ -1560,7 +2053,7 @@ function boot(){
     const vf = volumeFeed();
     if(volReady && volAPI && vf){ const src = canvasForNode(vf.from); if(src) try{ volAPI.pushMixFrame(src); }catch(e){} }
 
-    if(now - thumbAt > 100){ thumbAt = now; GraphView.refreshThumbs(); }
+    if(now - thumbAt > 100){ thumbAt = now; GraphView.refreshThumbs(); GraphView.pulseCables(); }
     if(now - insAt > 160){ insAt = now; Inspector.tick(); }
 
     if(Drive){

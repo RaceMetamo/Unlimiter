@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.5";
+const VERSION = "1.6";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -783,6 +783,8 @@ function create(opts){
     set master(v){ S.master=clamp(v,0,1); },
     clearTargets(){ for(const k in targets) delete targets[k]; },
     resolve, sourceValue, isLive,
+    /** [[id,label], ...] of every source the matrix (and the rack's signal nodes) can read, MIDI included. */
+    sourceList,
     get beatPhase(){ return beatPhase(); },
     get barPhase(){ return barPhase(); },
     get bpm(){ return S.clock.bpm; },

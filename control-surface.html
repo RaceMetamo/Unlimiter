@@ -111,6 +111,7 @@ footer label{ color:var(--dim); }
     <button id="btnDemo" class="on">Demo signal</button>
     <button id="btnMic">Mic input</button>
     <div class="spacer"></div>
+    <a href="rack.html" title="The Rack now has these nodes in its own graph, wired to the real tools. Save a patch here, then + Signal → Import in the Rack." style="color:var(--env);font-size:.74rem;text-decoration:none;border:1px solid var(--line);border-radius:5px;padding:4px 9px">Signals now live in the Rack →</a>
     <div id="bpm"><span id="beatDot"></span><span id="bpmVal">—</span></div>
     <input type="text" id="patchName" value="untitled patch" aria-label="Patch name">
     <button id="btnSave">Save patch</button>
@@ -134,11 +135,13 @@ footer label{ color:var(--dim); }
 
     <div id="canvasWrap">
       <svg id="graph" xmlns="http://www.w3.org/2000/svg">
-        <g id="cableLayer"></g>
-        <g id="nodeLayer"></g>
-        <path id="pendingCable" class="pending" d=""></path>
+        <g id="viewport">
+          <g id="cableLayer"></g>
+          <g id="nodeLayer"></g>
+          <path id="pendingCable" class="pending" d=""></path>
+        </g>
       </svg>
-      <div id="emptyHint">drag from an output port to an input port to patch</div>
+      <div id="emptyHint">drag from an output port to an input port to patch · drag empty space to pan · wheel zooms · F fits</div>
     </div>
 
     <div class="rail right">
@@ -529,6 +532,19 @@ const GraphView = (() => {
   const NODE_W = 132, NODE_H = 46;
   let selected = null;          // {type:"node"|"conn", id}
   let drag = null;              // {id, dx, dy}
+  let pan = null;
+  const viewport = document.getElementById("viewport");
+  const V = { x:0, y:0, k:1 };
+  function applyView(){ viewport.setAttribute("transform", `translate(${V.x} ${V.y}) scale(${V.k})`); }
+  /* pointer -> graph coordinates, undoing pan and zoom */
+  function gp(e){ const r = svg.getBoundingClientRect(); return { x:(e.clientX - r.left - V.x) / V.k, y:(e.clientY - r.top - V.y) / V.k }; }
+  function fitView(){
+    const r = svg.getBoundingClientRect(); if(!Graph.nodes.length || !r.width) return;
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    Graph.nodes.forEach(n => { x0=Math.min(x0,n.x); y0=Math.min(y0,n.y); x1=Math.max(x1,n.x+NODE_W); y1=Math.max(y1,n.y+NODE_H); });
+    const pad = 40, k = Math.min(2, Math.max(0.25, Math.min((r.width-pad*2)/(x1-x0), (r.height-pad*2)/(y1-y0))));
+    V.k = k; V.x = (r.width-(x1-x0)*k)/2 - x0*k; V.y = (r.height-(y1-y0)*k)/2 - y0*k; applyView();
+  }
   let wire = null;              // {from:{node,port}, x, y}
   const nodeEls = new Map(), cableEls = new Map();
 
@@ -593,7 +609,7 @@ const GraphView = (() => {
         c.dataset.node = n.id; c.dataset.port = port; c.dataset.dir = "out";
         c.addEventListener("pointerdown", e => {
           e.stopPropagation();
-          wire = { from:{ node:n.id, port }, x:e.clientX, y:e.clientY };
+          wire = { from:{ node:n.id, port }, x:0, y:0 };
           svg.setPointerCapture(e.pointerId);
         });
         g.appendChild(c);
@@ -601,7 +617,8 @@ const GraphView = (() => {
       g.addEventListener("pointerdown", e => {
         if(e.target.classList.contains("port")) return;
         select({ type:"node", id:n.id });
-        drag = { id:n.id, dx:e.clientX - n.x, dy:e.clientY - n.y };
+        const g0 = gp(e);
+        drag = { id:n.id, dx:g0.x - n.x, dy:g0.y - n.y };
         g.classList.add("dragging");
         svg.setPointerCapture(e.pointerId);
       });
@@ -631,20 +648,19 @@ const GraphView = (() => {
       el.style.strokeWidth = (1.5 + 2.6 * v).toFixed(2);
     });
   }
-  function svgPoint(e){
-    const r = svg.getBoundingClientRect();
-    return { x:e.clientX - r.left, y:e.clientY - r.top };
-  }
+  function svgPoint(e){ return gp(e); }
   svg.addEventListener("pointermove", e => {
+    if(pan){ V.x = pan.vx + e.clientX - pan.sx; V.y = pan.vy + e.clientY - pan.sy; if(Math.abs(e.clientX-pan.sx)+Math.abs(e.clientY-pan.sy) > 3) pan.moved = true; applyView(); return; }
     if(drag){
-      const n = Graph.nodes.find(x => x.id === drag.id);
-      if(n){ n.x = e.clientX - drag.dx; n.y = e.clientY - drag.dy; layout(); }
+      const n = Graph.nodes.find(x => x.id === drag.id), g1 = gp(e);
+      if(n){ n.x = g1.x - drag.dx; n.y = g1.y - drag.dy; layout(); }
     } else if(wire){
       const p = svgPoint(e);
       pending.setAttribute("d", cablePath(portPos(wire.from.node, wire.from.port, true), p));
     }
   });
   svg.addEventListener("pointerup", e => {
+    if(pan){ if(!pan.moved) select(null); pan = null; svg.style.cursor = ""; }
     if(drag){
       const g = nodeEls.get(drag.id);
       if(g) g.classList.remove("dragging");
@@ -660,7 +676,20 @@ const GraphView = (() => {
       pending.setAttribute("d", "");
     }
   });
-  svg.addEventListener("pointerdown", e => { if(e.target === svg) select(null); });
+  /* empty space pans */
+  svg.addEventListener("pointerdown", e => {
+    if(e.target === svg){ pan = { sx:e.clientX, sy:e.clientY, vx:V.x, vy:V.y, moved:false }; svg.style.cursor = "grabbing"; svg.setPointerCapture(e.pointerId); }
+  });
+  svg.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = svg.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    const k = Math.min(2.5, Math.max(0.25, V.k * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
+    V.x = mx - (mx - V.x) * (k / V.k); V.y = my - (my - V.y) * (k / V.k); V.k = k; applyView();
+  }, { passive:false });
+  svg.addEventListener("dblclick", e => { if(e.target === svg) fitView(); });
+  window.addEventListener("keydown", e => {
+    if((e.key === "f" || e.key === "F") && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) fitView();
+  });
   window.addEventListener("keydown", e => {
     if((e.key === "Delete" || e.key === "Backspace") && selected && document.activeElement.tagName !== "INPUT"){
       if(selected.type === "conn") Graph.removeConn(selected.id);
@@ -677,7 +706,7 @@ const GraphView = (() => {
     nodeEls.forEach((g,id) => g.classList.toggle("selected", !!selected && selected.type==="node" && selected.id===id));
     cableEls.forEach((p,id) => p.classList.toggle("selected", !!selected && selected.type==="conn" && selected.id===id));
   }
-  return { build, layout, pulseCables, select };
+  return { build, layout, pulseCables, select, fitView };
 })();
 </script>
 <script>

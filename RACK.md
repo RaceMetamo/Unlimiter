@@ -28,12 +28,14 @@ Every cable has a **type**, and only ports of the same type connect:
 |---|---|---|
 | image | solid, the source node's colour | a picture — what the rack has always passed |
 | points | dotted teal | a points frame, by reference (see PORTS.md) |
+| scalar | dashed yellow | a 0–1 signal — audio, clock, LFO, MIDI, a knob — that thickens and brightens with its value |
 | field, mask | dotted amber / violet | reserved; the types exist, no producer yet |
 
 - **Drag** from an output port (right) to an input port (left) to patch. A port
   on a node with more than one port on that side is labelled.
 - Every input takes one cable — a new one replaces the old — except OUTPUT's,
-  which stacks as many layers as you like. Each OUTPUT cable is a layer with its
+  which stacks as many layers as you like, and scalar inputs, where several
+  signals add together. Each OUTPUT cable is a layer with its
   own opacity and blend mode.
 - **Click a cable** to set that layer's opacity/blend, mute it, or delete it.
   Select + `Delete` also removes it. Data cables have no opacity or blend: mute
@@ -41,6 +43,18 @@ Every cable has a **type**, and only ports of the same type connect:
 - Cycles are allowed on image cables on purpose — OUTPUT → Ouroboros is the
   default, and it reads the previous frame's mix, so the loop is one frame late
   by construction.
+- **Moving around:** drag empty space to pan, wheel (or pinch) to zoom about the
+  cursor, **F** or double-click empty space to fit everything, **0** for 1:1, or
+  the Fit / 1:1 buttons bottom-right. The view is remembered. Control Surface
+  pans and zooms the same way.
+- **Disconnecting:** double-click a cable, right-click it, or select it and press
+  Delete. Or grab a patched **input** port and drag: the cable comes off in your
+  hand — drop it on another input to move it, on empty space to disconnect.
+- **Bypass:** tools and generators have an **off** button in their header (also
+  **B** with the node selected, or the inspector button). A bypassed node is
+  dimmed and all its outgoing cables go silent — image layers drop out of the mix
+  and data receivers fall back to their own content — without losing any patching.
+  Bypass is saved with the layout. OUTPUT and Volume aren't bypassable.
 - Node positions, cables, generator settings, layer settings and mix gain
   persist to localStorage (`unlimiter.rack.graph.v2`). A layout saved by the
   older rack (`…v1`) is migrated once on first load — every old cable becomes a
@@ -71,6 +85,42 @@ reallocate buffers, so they are never modulated. `Delete` removes a generator
 The default graph, and the first load of a migrated v1 layout, include one
 generator wired **2D → Flow Weave's emitters** and **3D → Volume's points**.
 
+## Signals — the old Control Surface, inside the graph
+
+There is one graph. **+ Signal ▾** adds three kinds of node, all wired with
+scalar cables:
+
+| Node | What it is |
+|---|---|
+| **Source** | one signal from the Drive: audio low / mid / high / level / onset, clock beat / bar ramps and pulses, random-per-beat, the four LFOs, any MIDI CC or note it has seen — or a hand **Manual knob** |
+| **Utility** | Scale / remap (min, max, curve), Smooth (lag), Invert, Combine (mix of a and b), Threshold (gate) |
+| **Parameter** | takes the 0–1 arriving at its input and drives one parameter across that parameter's own range — any tool parameter, any generator parameter, the volume renderer's |
+
+Each cable carries `value × scale + offset` (click it to edit), and several cables
+into one input add together — so two LFOs into one parameter just sum. Scalar
+cables can't loop: a cable that would close a cycle is refused.
+
+A parameter node **has the last word**. The Drive panel's routes resolve first,
+then a patched parameter node replaces the value outright. Unpatch it, bypass it
+or delete it and the parameter returns to its own value — the tool's `P` was never
+touched, same override mechanism as ◎. A parameter node whose tool hasn't loaded
+yet waits and binds when it does, so a saved graph restores in any order.
+
+Sources, utilities and parameters have the same header **off** button and `B` key
+as every other node. Every node draws a live scope of the value passing through
+it.
+
+The Drive panel (audio input, LFO shapes and rates, clock, MIDI learn, the routing
+matrix) still sits under the inspector — it is the signal *engine*; the graph is
+where signals are *patched*. Both work at once.
+
+**Import:** `+ Signal ▾ → Control Surface patch…` brings in a patch saved from the
+old `control-surface.html`: its `band.*`/`env.*`/`onset`/`tempo`/`lfo` sources map
+onto the Drive's, utilities keep their settings, cable scale and offset carry over,
+and targets that name a real tool parameter are bound (targets on that page's two
+demo tools have no counterpart and are skipped, and the count is reported).
+`control-surface.html` itself stays as a standalone sandbox with a pointer here.
+
 ## Clicking a node gives you its controls
 
 | Node | Inspector |
@@ -79,7 +129,8 @@ generator wired **2D → Flow Weave's emitters** and **3D → Volume's points**.
 | a generator | form, placement, modifiers, look, 2D view — from `unlimiter-points.js` metadata |
 | OUTPUT | the layer stack in draw order with ↑↓ reordering, mix gain, background (black, or *keep* for trails) |
 | Volume | what's on its image and points ports, mix relief/gain/point size, the renderer's own params, scene buttons |
-| a cable | its type; for image cables into OUTPUT, opacity and blend; mute, delete |
+| a signal node | its source / settings and a live value; bypass, delete |
+| a cable | its type; for image cables into OUTPUT, opacity and blend; for scalar cables, scale and offset; mute, delete |
 
 The Drive panel (audio, MIDI, LFOs, matrix) sits under every view — it is one
 live DOM tree that gets moved between views rather than rebuilt, so its state
@@ -198,6 +249,9 @@ What that environment can't judge:
   above passes with pixels.
 
 ## Next
+
+- Signal nodes for MIDI learn and the LFO shapes themselves (today they are set in
+  the Drive panel); a sample-and-hold / slew utility; one engine per page.
 
 - More tools publishing ports: Anchor (oriented paths out), Flow Field Plotter
   (seeds in, field out), Sediment (seeds and field in), Time Cube (image in).
