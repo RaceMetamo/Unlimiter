@@ -108,7 +108,7 @@ the mode:
 | **Motion** (pyramidal Lucas–Kanade) | velocity, uv per second | where it moves | on the moving areas, heading along the motion |
 | **Edges** (Sobel, thinned) | orientation of structure (sign arbitrary) | the edges | on the edges, tangent runs along them |
 | **Foreground** (running background, selective update) | points out of the silhouette | the silhouette | spread over it |
-| **Feature tracks** (Shi–Tomasi + sparse LK) | their motion, smoothed | — | tracked corners, tangent = velocity |
+| **Feature tracks** (Shi–Tomasi + sparse LK) | their motion, smoothed | — | tracked corners, tangent = velocity, `ids` stable per track |
 
 An output a mode doesn't make is empty, and whatever was patched to it falls back to its
 own content. The **image** output is a picture of what it found (flow as hue and
@@ -120,6 +120,13 @@ Patch **field → Plotter's field** and strokes are pushed and steered by it (*F
 Weave's emitters / Plotter's seeds / Facade's seeds** and found things become brushes,
 agent starts and panel roots. Flow Weave's *Follow strength* sets how hard the fluid tracks
 the field.
+
+**Lattice** is the drawing end of the same vision engine, as a tool of its own (`lattice.html`,
+also hosted here). Patch an **image** into it and it tracks that picture as if it were a camera;
+patch **points** in and it draws those (a Manifold's 3D points are linked in 3D). Its own
+**points** output carries what it tracked with real velocity — tangent is the direction of
+travel, size grows with speed, and every point has a stable `ids` entry — so Lattice can feed
+Ouroboros's brushes or Flow Weave's emitters with tracked, velocity-coloured points.
 
 ## Signals — the old Control Surface, inside the graph
 

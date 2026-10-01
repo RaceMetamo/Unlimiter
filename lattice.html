@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lattice — tracked points, streaks and the lines between them</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto;text-align:right}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px;position:relative}
+  #gl{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#000}
+  #srcNote{position:absolute;left:34px;bottom:30px;font-family:var(--mono);font-size:11px;color:var(--dim);
+    background:rgba(16,18,20,.75);padding:4px 8px;border-radius:var(--radius);pointer-events:none}
+  #srcNote:empty{display:none}
+  #dropHint{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(20,22,24,.86);z-index:50;font-size:16px;color:var(--accent);border:2px dashed var(--accent)}
+  body.dragging #dropHint{display:flex}
+
+  #panel{width:352px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  .group{border-bottom:1px solid var(--line)}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:28px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:56px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--accent);margin-top:-4.5px;border:none}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:none}
+  select{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-size:12px;font-family:inherit}
+  input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.on{border-color:var(--accent);color:var(--accent)}
+  .btnrow{display:flex;gap:6px;padding:6px 0}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
+    border-top:1px solid var(--line);margin-top:8px}
+  #footer{border-top:1px solid var(--line);padding:12px 16px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Lattice <span>— tracked points, streaks and the lines between them</span></h1>
+    <div id="status">starting</div>
+  </div>
+  <div id="canvasWrap"><canvas id="gl"></canvas><div id="srcNote"></div></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+    <details class="group" open>
+      <summary>Source<span class="chev"></span></summary>
+      <div class="body" id="g-src"></div>
+    </details>
+    <details class="group" open id="grpMan">
+      <summary>Geometry — Manifold forms<span class="chev"></span></summary>
+      <div class="body" id="g-man"></div>
+    </details>
+    <details class="group" open>
+      <summary>Looks<span class="chev"></span></summary>
+      <div class="body" id="g-look"></div>
+    </details>
+    <details class="group" open>
+      <summary>Colour from velocity<span class="chev"></span></summary>
+      <div class="body" id="g-col"></div>
+    </details>
+    <details class="group" open>
+      <summary>Streaks<span class="chev"></span></summary>
+      <div class="body" id="g-st"></div>
+    </details>
+    <details class="group" open>
+      <summary>Links — proximity plexus<span class="chev"></span></summary>
+      <div class="body" id="g-lk"></div>
+    </details>
+    <details class="group">
+      <summary>Mesh — Delaunay &amp; Voronoi<span class="chev"></span></summary>
+      <div class="body" id="g-mesh"></div>
+    </details>
+    <details class="group">
+      <summary>Nodes<span class="chev"></span></summary>
+      <div class="body" id="g-nd"></div>
+    </details>
+    <details class="group">
+      <summary>Flow hair<span class="chev"></span></summary>
+      <div class="body" id="g-fh"></div>
+    </details>
+    <details class="group">
+      <summary>Afterimage &amp; backdrop<span class="chev"></span></summary>
+      <div class="body" id="g-post"></div>
+    </details>
+    <details class="group">
+      <summary>Display<span class="chev"></span></summary>
+      <div class="body" id="g-disp"></div>
+    </details>
+    <details class="group">
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+  </div>
+  <div id="footer">
+    <div class="btnrow">
+      <button class="primary" id="bPNG">PNG</button>
+      <button class="primary" id="bRec">● Record</button>
+    </div>
+  </div>
+</div>
+
+<div id="dropHint">Drop a video file to track</div>
+<input type="file" id="fVideo" accept="video/*" class="hidden">
+<input type="file" id="fPreset" accept="application/json,.json" class="hidden">
+
+<script src="unlimiter-drive.js"></script>
+<script src="unlimiter-ports.js"></script>
+<script src="unlimiter-points.js"></script>
+<script src="unlimiter-vision.js"></script>
+<script>
+"use strict";
+/* ============================================================
+   LATTICE
+   Every source becomes the same thing: a set of points that keep
+   their identity from frame to frame. Identity is what lets a point
+   have a past (a streak) and a velocity (a colour). Proximity between
+   points becomes structure: plexus links, the triangles they close,
+   a Delaunay mesh, its Voronoi dual.
+
+   Sources
+     camera / video / demo / rack image  →  unlimiter-vision.js
+        corners:   Shi–Tomasi corners followed by sparse pyramidal
+                   Lucas–Kanade (vision "tracks", stable ids)
+        particles: particles spawned on motion and carried by the
+                   dense optical flow field (vision "flow")
+     Manifold forms  →  unlimiter-points.js, morphing A↔B, linked in 3D
+     rack points     →  any points cable
+
+   Everything is drawn additively into a float buffer that decays
+   (the afterimage), tone-mapped, and screened over the backdrop.
+   ============================================================ */
+
+const PT = window.UnlimiterPorts || null;
+const UP = window.UnlimiterPoints || null;
+const UV = window.UnlimiterVision || null;
+
+/* ============================ parameters ============================ */
+const DEFAULTS = {
+  // source
+  source:"camera", mirror:1, track:"corners",
+  nPts:220, anaFps:30, quality:0.03, mindist:6,
+  motion:0.35, spawn:0.35, life:2.2, inertia:0.85, follow:1,
+  // manifold
+  formA:"Supershape bloom", formB:"Möbius scatter", morphPeriod:16, morphAmt:1,
+  spin:9, pitch:-18, zoom:1.1, persp:0.35, mfMax:700, tSpeed:1,
+  // colour
+  palette:"ember", monoCol:"#7fd1c0", velAuto:1, velMax:0.6, palFloor:0.22, gate:0,
+  // streaks
+  stOn:1, stLen:24, stWidth:2, stAlpha:0.8, stTaper:1,
+  // links
+  lkOn:1, lkDist:0.11, lkMax:5, lkWidth:1.1, lkAlpha:0.55, lkCoh:0, lkColour:"velocity", trAlpha:0.06,
+  // mesh
+  mesh:"off", meshFill:"source", meshFillAlpha:0.35, meshWire:0.25, meshMaxEdge:0.25,
+  // nodes
+  ndOn:1, ndSize:3, ndSpeed:4, ndAlpha:0.9,
+  // flow hair
+  fhOn:0, fhDensity:2, fhLen:1, fhAlpha:0.6, fhColour:"direction",
+  // post
+  persist:0.55, exposure:1.4, bgMix:0.3, bgDesat:0.7, depthFade:0.6,
+  // display
+  res:"1280x720"
+};
+let P = Object.assign({}, DEFAULTS);
+let Q = P;
+
+/* looks touch only how things are drawn, never where the points come from */
+const SOURCE_KEYS = new Set(["source","mirror","track","nPts","anaFps","quality","mindist","motion","spawn","life",
+  "inertia","follow","formA","formB","morphPeriod","morphAmt","spin","pitch","zoom","persp","mfMax","tSpeed","res"]);
+const LOOKS = {
+  "Constellation": {},
+  "Comet trails": { stLen:48, stWidth:3, stAlpha:0.9, lkOn:0, trAlpha:0, ndSize:2.5, ndSpeed:6, persist:0.8, palette:"ember", bgMix:0.15 },
+  "Kinetic web": { lkCoh:0.85, lkDist:0.2, lkMax:7, lkAlpha:0.75, palette:"spectral", stLen:16, persist:0.6, trAlpha:0.04 },
+  "Shatter": { mesh:"delaunay", meshFill:"source", meshFillAlpha:0.8, meshWire:0.3, meshMaxEdge:0.4,
+               lkOn:0, stOn:0, ndOn:0, bgMix:0, persist:0.15, exposure:1.1 },
+  "Cells": { mesh:"voronoi", meshWire:0.8, lkOn:0, stLen:12, palette:"verdigris", persist:0.5, ndSize:2 },
+  "Flow hair": { fhOn:1, fhDensity:1, fhLen:1.4, fhAlpha:0.8, lkOn:0, stOn:0, ndOn:0, persist:0.75, bgMix:0.1 },
+  "Geodesic": { lkDist:0.12, lkMax:6, lkAlpha:0.8, trAlpha:0.12, stOn:0, ndSize:2.5, palette:"verdigris", palFloor:0.35, persist:0.2, depthFade:0.75 },
+  "Long exposure": { stLen:64, stWidth:1.2, stAlpha:0.6, stTaper:0.3, lkAlpha:0.25, persist:0.94, exposure:1, palette:"ice", bgMix:0.1 }
+};
+
+/* ============================ drive ============================ */
+const cv = document.getElementById("gl");
+const Drive = (window.UnlimiterDrive)
+  ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
+  : null;
+const NO_MOD = new Set(["nPts","mfMax","lkMax","stLen","fhDensity","anaFps"]);
+let GRP = "";
+function registerMod(key,label,min,max){
+  if(!Drive || NO_MOD.has(key)) return;
+  Drive.registerTarget(key, GRP ? GRP+" — "+label : label, min, max);
+}
+
+/* ============================ control builders ============================ */
+const bound = {}, rows = {};
+function row(parent,label,nodes,key){
+  const r=document.createElement("div"); r.className="row";
+  const l=document.createElement("label"); l.textContent=label;
+  const c=document.createElement("div"); c.className="ctl";
+  nodes.forEach(n=>c.appendChild(n));
+  r.appendChild(l); r.appendChild(c); parent.appendChild(r);
+  if(key) rows[key]=r;
+  return r;
+}
+function note(p,t,id){const d=document.createElement("div");d.className="note";d.textContent=t;if(id)d.id=id;p.appendChild(d);return d;}
+function subhead(p,t){const d=document.createElement("div");d.className="subhead";d.textContent=t;p.appendChild(d);return d;}
+function fmt(v,step){
+  if(step>=1) return String(Math.round(v));
+  const dec=Math.max(0,Math.round(-Math.log10(step)));
+  return v.toFixed(Math.min(dec,4));
+}
+function slider(parent,key,label,min,max,step,suffix){
+  const i=document.createElement("input");
+  i.type="range"; i.min=min; i.max=max; i.step=step; i.value=P[key];
+  const v=document.createElement("span"); v.className="val";
+  const show=()=>v.textContent=fmt(Number(P[key]),step)+(suffix||"");
+  show();
+  i.addEventListener("input",()=>{P[key]=Number(i.value);show();});
+  bound[key]=()=>{i.value=P[key];show();};
+  registerMod(key,label,min,max);
+  return row(parent,label,[i,v],key);
+}
+function select(parent,key,label,opts,onChange){
+  const s=document.createElement("select");
+  opts.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;s.appendChild(o);});
+  s.value=P[key];
+  s.addEventListener("change",()=>{P[key]=isNaN(+s.value)?s.value:+s.value;if(onChange)onChange();vis();});
+  bound[key]=()=>{s.value=P[key];};
+  return row(parent,label,[s],key);
+}
+function check(parent,key,label){
+  const c=document.createElement("input"); c.type="checkbox"; c.checked=!!P[key];
+  c.addEventListener("change",()=>{P[key]=c.checked?1:0;vis();});
+  bound[key]=()=>{c.checked=!!P[key];};
+  return row(parent,label,[c],key);
+}
+function colorPick(parent,key,label){
+  const c=document.createElement("input"); c.type="color"; c.value=P[key];
+  c.addEventListener("input",()=>{P[key]=c.value;});
+  bound[key]=()=>{c.value=P[key];};
+  return row(parent,label,[c],key);
+}
+function buttons(parent,list){
+  const d=document.createElement("div"); d.className="btnrow";
+  list.forEach(([id,t])=>{const b=document.createElement("button");b.id=id;b.textContent=t;d.appendChild(b);});
+  parent.appendChild(d); return d;
+}
+function syncUI(){ for(const k in bound) bound[k](); vis(); }
+
+/* ============================ panel ============================ */
+const IMAGE_SOURCES = new Set(["camera","video","demo","rack-image"]);
+GRP="Source";
+const gS=document.getElementById("g-src");
+select(gS,"source","Source",[["camera","Camera"],["video","Video file"],["demo","Demo motion"],
+  ["manifold","Manifold forms (3D)"],["rack-points","Rack: points cable"],["rack-image","Rack: image cable"]],()=>{ if(P.source==="camera") startCamera(); resetTracking(); });
+const camBtns=buttons(gS,[["bCam","Start camera"],["bVideo","Load video…"]]);
+check(gS,"mirror","Mirror camera");
+select(gS,"track","Tracking",[["corners","Corners — tracked features"],["particles","Particles — carried by optical flow"]],()=>resetTracking());
+slider(gS,"nPts","Points",20,1500,1,"");
+slider(gS,"anaFps","Analysis rate",5,60,1," fps");
+slider(gS,"quality","Corner quality",0.005,0.3,0.005,"");
+slider(gS,"mindist","Corner spacing",3,20,1,"");
+slider(gS,"motion","Motion threshold",0.05,2,0.01,"");
+slider(gS,"spawn","Spawn rate",0,1,0.01,"");
+slider(gS,"life","Particle life",0.3,8,0.05," s");
+slider(gS,"inertia","Inertia",0,0.98,0.01,"");
+slider(gS,"follow","Flow follow",0,3,0.01,"");
+note(gS,"Corners finds texture that stays put on things (a hand, an edge of a shirt) and follows each one with Lucas–Kanade; every point keeps a number, so it keeps a past. Particles are born where the dense flow says something moved and ride the flow until they fade — more of a smear, less of a skeleton. Corners holds at most 400.","srcHelp");
+
+GRP="Manifold";
+const gM=document.getElementById("g-man");
+const presetNames = UP ? Object.keys(UP.PRESETS) : [];
+select(gM,"formA","Form A",presetNames.map(n=>[n,n]),()=>resetManifold());
+select(gM,"formB","Form B",presetNames.map(n=>[n,n]),()=>resetManifold());
+slider(gM,"morphAmt","Morph depth",0,1,0.01,"");
+slider(gM,"morphPeriod","Morph period",2,60,0.5," s");
+slider(gM,"tSpeed","Time",0,3,0.01,"×");
+slider(gM,"spin","Spin",-60,60,0.5,"°/s");
+slider(gM,"pitch","Pitch",-90,90,0.5,"°");
+slider(gM,"zoom","Zoom",0.4,3,0.01,"");
+slider(gM,"persp","Perspective",0,1,0.01,"");
+slider(gM,"mfMax","Most points",50,3000,10,"");
+note(gM,"The forms morph point for point, so every point keeps its index and its velocity is real: the colour shows where the shape is travelling, not where it is. Spinning the view doesn't count as motion — velocity is measured on the form itself. Links are measured in 3D, so the far side of a form does not wire itself to the near side. Rack 3D points use this view too.");
+
+GRP="Looks";
+const gL=document.getElementById("g-look");
+P.look="Constellation";
+select(gL,"look","Look",Object.keys(LOOKS).map(n=>[n,n]),()=>applyLook(P.look));
+buttons(gL,[["bExport","Export preset"],["bImport","Import preset"]]);
+note(gL,"A look only sets how things are drawn. It leaves the source, tracking and Manifold forms as they are.");
+
+GRP="Colour";
+const gC=document.getElementById("g-col");
+select(gC,"palette","Palette",[["ember","Ember"],["ice","Ice"],["verdigris","Verdigris"],["spectral","Spectral"],
+  ["direction","Direction — flow wheel"],["source","Source colour"],["mono","Single colour"]]);
+colorPick(gC,"monoCol","Colour");
+check(gC,"velAuto","Auto speed range");
+slider(gC,"velMax","Full speed at",0.02,3,0.01,"");
+slider(gC,"palFloor","Floor",0,0.8,0.01,"");
+slider(gC,"gate","Motion gate",0,0.5,0.005,"");
+note(gC,"Speed is measured in frame heights per second. Auto range follows the fastest tenth of the points, so a slow morph and a fast arm both use the whole palette. Motion gate fades out anything slower than it — still background corners drop away and only movement is drawn.");
+
+GRP="Streaks";
+const gT=document.getElementById("g-st");
+check(gT,"stOn","Draw streaks");
+slider(gT,"stLen","Length",2,64,1," samples");
+slider(gT,"stWidth","Width",0.3,10,0.05," px");
+slider(gT,"stAlpha","Opacity",0,1,0.01,"");
+slider(gT,"stTaper","Taper",0,1,0.01,"");
+note(gT,"Each sample keeps the speed it was drawn at, so a streak records its own acceleration along its length. When a point is lost its streak drains back into where it was last seen.");
+
+GRP="Links";
+const gK=document.getElementById("g-lk");
+check(gK,"lkOn","Draw links");
+slider(gK,"lkDist","Reach",0.01,0.5,0.001,"");
+slider(gK,"lkMax","Links per point",1,12,1,"");
+slider(gK,"lkWidth","Width",0.3,6,0.05," px");
+slider(gK,"lkAlpha","Opacity",0,1,0.01,"");
+slider(gK,"lkCoh","Coherence",0,1,0.01,"");
+select(gK,"lkColour","Colour by",[["velocity","Velocity of each end"],["distance","Closeness"],["source","Source colour"]]);
+slider(gK,"trAlpha","Triangle fill",0,0.6,0.005,"");
+note(gK,"Reach is in frame heights. Coherence keeps only links between points moving the same way — the lines start to find limbs and objects instead of just neighbours. Triangle fill shades every three points that are all linked to each other.");
+
+GRP="Mesh";
+const gX=document.getElementById("g-mesh");
+select(gX,"mesh","Mesh",[["off","Off"],["delaunay","Delaunay triangles"],["voronoi","Voronoi cells"]]);
+select(gX,"meshFill","Fill",[["none","None"],["source","Source colour — low poly"],["palette","Palette by speed"]]);
+slider(gX,"meshFillAlpha","Fill",0,1,0.01,"");
+slider(gX,"meshWire","Wire",0,1,0.01,"");
+slider(gX,"meshMaxEdge","Longest edge",0.02,1,0.005,"");
+note(gX,"Delaunay connects the points into the triangulation with no thin slivers (OpenCV's Subdiv2D); filled with the camera's colour it becomes a low-poly mirror. Voronoi draws the dual: the cell around each point that is closer to it than to any other. Longest edge drops triangles that would bridge across empty space.");
+
+GRP="Nodes";
+const gN=document.getElementById("g-nd");
+check(gN,"ndOn","Draw nodes");
+slider(gN,"ndSize","Size",0,16,0.1," px");
+slider(gN,"ndSpeed","Size from speed",0,20,0.1," px");
+slider(gN,"ndAlpha","Opacity",0,1,0.01,"");
+
+GRP="Flow hair";
+const gF=document.getElementById("g-fh");
+check(gF,"fhOn","Draw flow hair");
+slider(gF,"fhDensity","Spacing",1,4,1,"");
+slider(gF,"fhLen","Length",0.1,4,0.01,"");
+slider(gF,"fhAlpha","Opacity",0,1,0.01,"");
+select(gF,"fhColour","Colour by",[["direction","Direction — flow wheel"],["palette","Palette by speed"]]);
+note(gF,"The dense optical flow drawn as a combed field — one short stroke per cell, pointing where that part of the picture is moving. Image sources only.");
+
+GRP="Post";
+const gP=document.getElementById("g-post");
+slider(gP,"persist","Afterimage",0,0.97,0.005,"");
+slider(gP,"exposure","Exposure",0.2,4,0.01,"");
+slider(gP,"bgMix","Backdrop",0,1,0.01,"");
+slider(gP,"bgDesat","Backdrop grey",0,1,0.01,"");
+slider(gP,"depthFade","Depth fade",0,1,0.01,"");
+note(gP,"Everything adds light into a buffer that fades by the afterimage amount each frame, then rolls off softly instead of clipping. Depth fade dims the far side of 3D sources.");
+
+GRP="Display";
+const gD=document.getElementById("g-disp");
+select(gD,"res","Resolution",[["1280x720","1280 × 720"],["1920x1080","1920 × 1080"],["1080x1080","1080 × 1080"],["1080x1920","1080 × 1920 (vertical)"]]);
+buttons(gD,[["bWipe","Clear afterimage"]]);
+
+const drivePanel=document.getElementById("g-drive");
+if(Drive){ Drive.mountPanel(drivePanel); }
+else drivePanel.innerHTML='<div class="note">unlimiter-drive.js was not found. It must sit in the same folder, served over http://localhost or https.</div>';
+
+function vis(){
+  const src=P.source, img=IMAGE_SOURCES.has(src), corners=P.track==="corners";
+  const show=(k,on)=>{ if(rows[k]) rows[k].classList.toggle("hidden",!on); };
+  camBtns.classList.toggle("hidden",!(src==="camera"||src==="video"));
+  show("mirror",src==="camera");
+  ["track","anaFps"].forEach(k=>show(k,img));
+  show("nPts",img);
+  ["quality","mindist"].forEach(k=>show(k,img&&corners));
+  ["motion","spawn","life","inertia","follow"].forEach(k=>show(k,img&&!corners));
+  document.getElementById("srcHelp").classList.toggle("hidden",!img);
+  document.getElementById("grpMan").classList.toggle("hidden",!(src==="manifold"||src==="rack-points"));
+  show("monoCol",P.palette==="mono");
+  show("velMax",!P.velAuto);
+}
+
+/* ============================ colour ============================ */
+const RAMPS = {
+  ember:     [[0.10,0.02,0.05],[0.55,0.05,0.10],[1.00,0.35,0.05],[1.00,0.78,0.30],[1.00,0.98,0.90]],
+  ice:       [[0.02,0.05,0.20],[0.05,0.25,0.60],[0.10,0.70,0.90],[0.70,0.95,1.00],[1.00,1.00,1.00]],
+  verdigris: [[0.03,0.08,0.09],[0.10,0.45,0.42],[0.50,0.82,0.75],[0.95,0.85,0.55],[1.00,0.97,0.90]],
+};
+function hex2rgb(h){ const n=parseInt(String(h).slice(1),16)||0; return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; }
+function hsv(h,s,v,o){
+  h=((h%1)+1)%1; const i=Math.floor(h*6), f=h*6-i, p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  switch(i%6){case 0:o[0]=v;o[1]=t;o[2]=p;break;case 1:o[0]=q;o[1]=v;o[2]=p;break;case 2:o[0]=p;o[1]=v;o[2]=t;break;
+    case 3:o[0]=p;o[1]=q;o[2]=v;break;case 4:o[0]=t;o[1]=p;o[2]=v;break;default:o[0]=v;o[1]=p;o[2]=q;}
+  return o;
+}
+let monoRGB=[0.5,0.8,0.75], velScale=0.6, autoVm=0.3;
+/* speed (frame heights / s), direction (dx,dy), source colour → out */
+function ramp(spd, dx, dy, sr, sg, sb, out){
+  let t = spd / velScale; t = t < 0 ? 0 : t > 1 ? 1 : Math.pow(t, 0.75);
+  const fl = Q.palFloor; t = fl + (1 - fl) * t;
+  const pal = Q.palette;
+  if(pal === "spectral"){ hsv(0.70 - t * 0.72, 0.85, 0.25 + 0.75 * t, out); return out; }
+  if(pal === "direction"){ hsv(Math.atan2(dy, dx) / (Math.PI * 2), 0.8, t, out); return out; }
+  if(pal === "source"){ out[0] = sr * t; out[1] = sg * t; out[2] = sb * t; return out; }
+  if(pal === "mono"){ out[0] = monoRGB[0] * t; out[1] = monoRGB[1] * t; out[2] = monoRGB[2] * t; return out; }
+  const R = RAMPS[pal] || RAMPS.ember, x = t * (R.length - 1), i = Math.min(R.length - 2, Math.floor(x)), f = x - i;
+  out[0] = R[i][0] + (R[i + 1][0] - R[i][0]) * f;
+  out[1] = R[i][1] + (R[i + 1][1] - R[i][1]) * f;
+  out[2] = R[i][2] + (R[i + 1][2] - R[i][2]) * f;
+  return out;
+}
+function gateOf(spd){
+  const g = Q.gate; if(!(g > 0)) return 1;
+  const t = (spd - g * 0.5) / (g * 0.5); return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+}
+
+/* ============================ the point set ============================
+   One shared representation, refilled by whichever source is active.
+     X,Y   canvas uv (v down)          Z  depth -1..1 (0 for flat sources)
+     MX..  metric: frame heights, used for distances and velocity
+     SU,SV source-image uv (or -1)     CR.. source colour   PR presence
+     ID    identity across frames
+   ====================================================================== */
+const MAXP = 4096;
+const X=new Float32Array(MAXP), Y=new Float32Array(MAXP), Z=new Float32Array(MAXP);
+const MX=new Float32Array(MAXP), MY=new Float32Array(MAXP), MZ=new Float32Array(MAXP);
+/* velocity is measured here: the same as M for flat sources, the un-rotated form for 3D ones,
+   so spinning the view doesn't read as motion — only the shape travelling does */
+const VX0=new Float32Array(MAXP), VY0=new Float32Array(MAXP), VZ0=new Float32Array(MAXP);
+const SU=new Float32Array(MAXP), SV=new Float32Array(MAXP);
+const CR=new Float32Array(MAXP), CG=new Float32Array(MAXP), CB=new Float32Array(MAXP), PR=new Float32Array(MAXP);
+const ID=new Float64Array(MAXP), SPD=new Float32Array(MAXP), VDX=new Float32Array(MAXP), VDY=new Float32Array(MAXP);
+const KR=new Float32Array(MAXP), KG=new Float32Array(MAXP), KB=new Float32Array(MAXP), GT=new Float32Array(MAXP), DF=new Float32Array(MAXP);
+let n = 0, is3D = false;
+
+/* ---------------- histories: identity → past ---------------- */
+const HCAP = 64;
+const H = new Map();
+let tickNo = 0;
+function resetTracking(){
+  H.clear(); parts.n = 0; n = 0;
+  if(visT) visT.reset(); if(visF) visF.reset();
+  lastRackVer = -1;
+}
+function updateHistories(dt){
+  tickNo++;
+  dt = Math.max(1 / 240, Math.min(0.5, dt));
+  for(let i = 0; i < n; i++){
+    const id = ID[i];
+    let r = H.get(id);
+    if(!r){
+      r = { buf:new Float32Array(HCAP * 4), head:-1, len:0, px:VX0[i], py:VY0[i], pz:VZ0[i], vx:0, vy:0, vz:0, spd:0, seen:0 };
+      H.set(id, r);
+    } else {
+      const ix = (VX0[i] - r.px) / dt, iy = (VY0[i] - r.py) / dt, iz = (VZ0[i] - r.pz) / dt;
+      const jump = Math.hypot(VX0[i] - r.px, VY0[i] - r.py, VZ0[i] - r.pz);
+      if(jump > 0.35){ r.len = 0; r.vx = r.vy = r.vz = 0; }            // a teleport is not a velocity
+      else { r.vx = r.vx * 0.45 + ix * 0.55; r.vy = r.vy * 0.45 + iy * 0.55; r.vz = r.vz * 0.45 + iz * 0.55; }
+      r.px = VX0[i]; r.py = VY0[i]; r.pz = VZ0[i];
+    }
+    r.spd = Math.hypot(r.vx, r.vy, r.vz);
+    r.head = (r.head + 1) % HCAP;
+    const o = r.head * 4; r.buf[o] = X[i]; r.buf[o + 1] = Y[i]; r.buf[o + 2] = r.spd; r.buf[o + 3] = Z[i];
+    r.len = Math.min(HCAP, r.len + 1);
+    r.seen = tickNo; r.pres = PR[i]; r.dx = r.vx; r.dy = r.vy;
+    r.sr = CR[i]; r.sg = CG[i]; r.sb = CB[i];
+    SPD[i] = r.spd; VDX[i] = r.vx; VDY[i] = r.vy;
+  }
+  // lost points drain their streak back toward where they were last seen
+  const cap = Math.max(2, Math.round(Q.stLen));
+  H.forEach((r, id) => {
+    if(r.len > cap) r.len = cap;
+    if(r.seen !== tickNo){ r.len -= 1; if(r.len < 2) H.delete(id); }
+  });
+  // auto speed range: the fastest tenth of the points sets full scale
+  if(n > 0){
+    const m = Math.min(n, 512), s = new Float32Array(m), step = n / m;
+    for(let k = 0; k < m; k++) s[k] = SPD[Math.floor(k * step)];
+    s.sort();
+    const p90 = s[Math.min(m - 1, Math.floor(m * 0.9))];
+    autoVm = autoVm * 0.94 + Math.max(0.03, p90 * 1.25) * 0.06;
+  }
+}
+
+/* ============================ image sources ============================ */
+const camVideo = document.createElement("video"); camVideo.muted = true; camVideo.playsInline = true;
+const fileVideo = document.createElement("video"); fileVideo.muted = true; fileVideo.playsInline = true; fileVideo.loop = true;
+let camState = "off";            // off | asking | live | failed
+let camErr = "";
+function startCamera(){
+  if(camState === "live" || camState === "asking") return;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camState = "failed"; camErr = "no camera API here"; return; }
+  camState = "asking";
+  navigator.mediaDevices.getUserMedia({ video:{ width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false })
+    .then(s => { camVideo.srcObject = s; return camVideo.play(); })
+    .then(() => { camState = "live"; resetTracking(); })
+    .catch(e => { camState = "failed"; camErr = (e && e.name) || "blocked"; });
+}
+function loadVideoFile(file){
+  if(!file || !/^video\//.test(file.type)) return;
+  try{ if(fileVideo.src) URL.revokeObjectURL(fileVideo.src); }catch(e){}
+  fileVideo.src = URL.createObjectURL(file);
+  fileVideo.play().catch(()=>{});
+  P.source = "video"; syncUI(); resetTracking();
+}
+
+/* the demo: textured shapes on Lissajous paths — corners to find, motion to follow */
+const demo = document.createElement("canvas"); demo.width = 640; demo.height = 360;
+const dg = demo.getContext("2d");
+const demoBG = (() => {
+  const c = document.createElement("canvas"); c.width = 640; c.height = 360; const g = c.getContext("2d");
+  const gr = g.createLinearGradient(0, 0, 640, 360); gr.addColorStop(0, "#14171c"); gr.addColorStop(1, "#1d1a22");
+  g.fillStyle = gr; g.fillRect(0, 0, 640, 360);
+  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for(let i = 0; i < 70; i++){ g.fillStyle = `rgba(${150 + rnd() * 100},${140 + rnd() * 90},${120 + rnd() * 80},${0.25 + rnd() * 0.3})`;
+    g.fillRect(rnd() * 640, rnd() * 360, 2 + rnd() * 5, 2 + rnd() * 5); }
+  return c;
+})();
+const DEMO_SHAPES = [
+  { sides:5, r:44, ax:0.34, ay:0.30, fx:0.21, fy:0.33, ph:0.0, spin:0.6,  hue:18 },
+  { sides:3, r:52, ax:0.30, ay:0.28, fx:0.29, fy:0.17, ph:1.7, spin:-0.9, hue:190 },
+  { sides:6, r:38, ax:0.38, ay:0.22, fx:0.13, fy:0.41, ph:3.1, spin:1.3,  hue:300 },
+  { sides:4, r:46, ax:0.22, ay:0.34, fx:0.37, fy:0.23, ph:4.4, spin:-0.4, hue:95 },
+  { sides:7, r:30, ax:0.40, ay:0.30, fx:0.47, fy:0.29, ph:5.6, spin:2.1,  hue:45 },
+  { sides:4, r:34, ax:0.18, ay:0.36, fx:0.53, fy:0.37, ph:2.4, spin:1.6,  hue:220 },
+  { sides:5, r:26, ax:0.42, ay:0.18, fx:0.31, fy:0.51, ph:0.9, spin:-1.8, hue:350 }
+];
+function drawDemo(t){
+  dg.drawImage(demoBG, 0, 0);
+  DEMO_SHAPES.forEach(S => {
+    const x = 320 + Math.sin(t * S.fx * 2 + S.ph) * S.ax * 640, y = 180 + Math.sin(t * S.fy * 2 + S.ph * 1.3) * S.ay * 360;
+    dg.save(); dg.translate(x, y); dg.rotate(t * S.spin);
+    dg.beginPath();
+    for(let k = 0; k <= S.sides; k++){ const a = k / S.sides * Math.PI * 2; dg[k ? "lineTo" : "moveTo"](Math.cos(a) * S.r, Math.sin(a) * S.r); }
+    dg.fillStyle = `hsl(${S.hue},65%,52%)`; dg.fill();
+    dg.clip();
+    dg.fillStyle = `hsl(${S.hue + 30},70%,22%)`;
+    for(let k = -S.r; k < S.r; k += 12) for(let q = -S.r; q < S.r; q += 12) if(((k + q) / 12 & 1) === 0) dg.fillRect(k, q, 7, 7);
+    dg.restore();
+  });
+  // a swinging arm: a long bar that sweeps, to give the flow something big
+  dg.save(); dg.translate(320, 360); dg.rotate(Math.sin(t * 0.7) * 0.9);
+  dg.fillStyle = "#c9c2b4"; dg.fillRect(-14, -250, 28, 250);
+  dg.fillStyle = "#2a2622"; for(let k = 0; k < 250; k += 22) dg.fillRect(-14, -k - 8, 28, 6);
+  dg.restore();
+}
+
+let rackImage = null, rackPts = null, lastRackVer = -1, prevSource = null;
+/* which element feeds the vision engine right now, and what it is called */
+function imageSource(){
+  const s = P.source;
+  if(s === "camera"){
+    if(camState === "live" && camVideo.readyState >= 2 && camVideo.videoWidth) return { el:camVideo, w:camVideo.videoWidth, h:camVideo.videoHeight, mirror:!!P.mirror, label:"camera" };
+    return { el:demo, w:640, h:360, mirror:false, label:"demo (camera " + (camState === "asking" ? "waiting for permission" : camState === "failed" ? "unavailable: " + camErr : "off") + ")" };
+  }
+  if(s === "video"){
+    if(fileVideo.readyState >= 2 && fileVideo.videoWidth) return { el:fileVideo, w:fileVideo.videoWidth, h:fileVideo.videoHeight, mirror:false, label:"video file" };
+    return { el:demo, w:640, h:360, mirror:false, label:"demo (no video loaded)" };
+  }
+  if(s === "rack-image"){
+    const c = rackImage;
+    if(c && (c.width || c.videoWidth)) return { el:c, w:c.videoWidth || c.width, h:c.videoHeight || c.height, mirror:false, label:"rack image" };
+    return { el:demo, w:640, h:360, mirror:false, label:"demo (no image cable)" };
+  }
+  if(s === "demo") return { el:demo, w:640, h:360, mirror:false, label:"demo motion" };
+  return null;
+}
+
+/* ---------------- vision ---------------- */
+const ana = document.createElement("canvas");
+const AW = UV ? UV.W : 192, AH = UV ? UV.H : 108;
+ana.width = AW; ana.height = AH;
+const ag = ana.getContext("2d", { willReadFrequently:true });
+let visT = null, visF = null, lastAna = -1e9, lastTickT = 0, anaMs = 0, anaRGBA = null;
+let tracksOut = null, flowOut = null, srcAspect = 16 / 9, srcMirror = false;
+if(UV && PT){ try{ visT = UV.create(PT); visF = UV.create(PT); }catch(e){ console.warn("[lattice] vision", e); } }
+
+/* where the source image sits inside the canvas (contain-fit), in canvas uv */
+const FIT = { x0:0, y0:0, w:1, h:1 };
+function computeFit(srcAsp, canAsp){
+  const k = srcAsp / canAsp;
+  if(k <= 1){ FIT.x0 = 0.5 - 0.5 * k; FIT.w = k; FIT.y0 = 0; FIT.h = 1; }
+  else { FIT.x0 = 0; FIT.w = 1; FIT.y0 = 0.5 - 0.5 / k; FIT.h = 1 / k; }
+}
+function sampleRGBA(su, sv, out){
+  if(!anaRGBA){ out[0] = out[1] = out[2] = 0.5; return out; }
+  const x = Math.max(0, Math.min(AW - 1, (su * AW) | 0)), y = Math.max(0, Math.min(AH - 1, (sv * AH) | 0)), j = (y * AW + x) * 4;
+  out[0] = anaRGBA[j] / 255; out[1] = anaRGBA[j + 1] / 255; out[2] = anaRGBA[j + 2] / 255; return out;
+}
+
+/* flow particles, in source uv */
+const parts = { n:0, x:new Float32Array(MAXP), y:new Float32Array(MAXP), vx:new Float32Array(MAXP), vy:new Float32Array(MAXP),
+  age:new Float32Array(MAXP), life:new Float32Array(MAXP), id:new Float64Array(MAXP),
+  r:new Float32Array(MAXP), g:new Float32Array(MAXP), b:new Float32Array(MAXP) };
+let nextPid = 1;
+function fieldAt(f, u, v, out){
+  const fx = Math.max(0, Math.min(f.w - 1.001, u * f.w - 0.5)), fy = Math.max(0, Math.min(f.h - 1.001, v * f.h - 0.5));
+  const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0, d = f.data, w = f.w;
+  const i00 = (y0 * w + x0) * 2, i10 = i00 + 2, i01 = i00 + w * 2, i11 = i01 + 2;
+  out[0] = (d[i00] * (1 - ax) + d[i10] * ax) * (1 - ay) + (d[i01] * (1 - ax) + d[i11] * ax) * ay;
+  out[1] = (d[i00 + 1] * (1 - ax) + d[i10 + 1] * ax) * (1 - ay) + (d[i01 + 1] * (1 - ax) + d[i11 + 1] * ax) * ay;
+  return out;
+}
+const tmp2 = [0, 0], tmp3 = [0, 0, 0];
+function spawnParticles(fo){
+  const pts = fo && fo.points; if(!pts) return;
+  const cap = Math.min(MAXP, Math.round(Q.nPts));
+  for(let i = 0; i < pts.count && parts.n < cap; i++){
+    if(Math.random() > Q.spawn * pts.presence[i]) continue;
+    const k = parts.n++;
+    parts.x[k] = pts.positions[i * 3] + (Math.random() - 0.5) * 3 / AW;
+    parts.y[k] = pts.positions[i * 3 + 1] + (Math.random() - 0.5) * 3 / AH;
+    fieldAt(fo.field, parts.x[k], parts.y[k], tmp2);
+    parts.vx[k] = tmp2[0] * Q.follow; parts.vy[k] = tmp2[1] * Q.follow;
+    parts.age[k] = 0; parts.life[k] = Q.life * (0.6 + Math.random() * 0.8); parts.id[k] = nextPid++;
+    sampleRGBA(parts.x[k], parts.y[k], tmp3); parts.r[k] = tmp3[0]; parts.g[k] = tmp3[1]; parts.b[k] = tmp3[2];
+  }
+}
+function stepParticles(dt, field){
+  const k = Math.pow(Math.max(0, Math.min(0.995, Q.inertia)), dt * 60);
+  let w = 0;
+  for(let i = 0; i < parts.n; i++){
+    parts.age[i] += dt;
+    if(field){ fieldAt(field, parts.x[i], parts.y[i], tmp2);
+      parts.vx[i] = parts.vx[i] * k + tmp2[0] * Q.follow * (1 - k); parts.vy[i] = parts.vy[i] * k + tmp2[1] * Q.follow * (1 - k); }
+    parts.x[i] += parts.vx[i] * dt; parts.y[i] += parts.vy[i] * dt;
+    if(parts.age[i] > parts.life[i] || parts.x[i] < -0.02 || parts.x[i] > 1.02 || parts.y[i] < -0.02 || parts.y[i] > 1.02) continue;
+    if(w !== i){ for(const key of ["x","y","vx","vy","age","life","id","r","g","b"]) parts[key][w] = parts[key][i]; }
+    w++;
+  }
+  parts.n = w;
+}
+
+/* image source → points */
+function acquireImage(now, dt, src){
+  srcAspect = src.w / src.h; srcMirror = src.mirror;
+  computeFit(srcAspect, cv.width / cv.height);
+  const corners = Q.track === "corners";
+  const needFlow = !corners || !!Q.fhOn;
+  let fresh = false;
+  if(now - lastAna >= 1000 / Math.max(1, Q.anaFps) - 2){
+    lastAna = now;
+    const t0 = performance.now();
+    try{
+      ag.save();
+      if(src.mirror){ ag.translate(AW, 0); ag.scale(-1, 1); }
+      ag.drawImage(src.el, 0, 0, AW, AH);
+      ag.restore();
+      anaRGBA = ag.getImageData(0, 0, AW, AH).data;
+      const ts = now / 1000;
+      if(corners && visT) tracksOut = visT.step(anaRGBA, srcAspect, ts, "tracks",
+        { fps:60, points:Math.min(400, Q.nPts), gain:1, quality:Q.quality, mindist:Q.mindist, maxage:600 });
+      if(needFlow && visF) flowOut = visF.step(anaRGBA, srcAspect, ts, "flow",
+        { fps:60, points:400, gain:1, thresh:Q.motion, smooth:0.45 });
+      if(!corners) spawnParticles(flowOut);
+      fresh = true;
+    }catch(e){ /* a source that isn't ready yet (or cross-origin) — try again next frame */ }
+    anaMs = anaMs * 0.9 + (performance.now() - t0) * 0.1;
+  }
+  is3D = false;
+  if(corners){
+    if(!fresh) return false;
+    const p = tracksOut && tracksOut.points;
+    n = p ? Math.min(MAXP, p.count) : 0;
+    for(let i = 0; i < n; i++){
+      fillFlat(i, p.positions[i * 3], p.positions[i * 3 + 1], p.colors[i * 3], p.colors[i * 3 + 1], p.colors[i * 3 + 2], p.presence[i]);
+      ID[i] = p.ids ? p.ids[i] : i;
+    }
+    return true;
+  }
+  stepParticles(dt, flowOut && flowOut.field);
+  n = parts.n;
+  for(let i = 0; i < n; i++){
+    const fade = Math.min(1, parts.age[i] / 0.15) * Math.min(1, (parts.life[i] - parts.age[i]) / 0.5);
+    fillFlat(i, parts.x[i], parts.y[i], parts.r[i], parts.g[i], parts.b[i], Math.max(0, fade));
+    ID[i] = parts.id[i];
+  }
+  return true;
+}
+function fillFlat(i, su, sv, r, g, b, pres){
+  const asp = cv.width / cv.height;
+  SU[i] = su; SV[i] = sv;
+  X[i] = FIT.x0 + su * FIT.w; Y[i] = FIT.y0 + sv * FIT.h; Z[i] = 0;
+  MX[i] = X[i] * asp; MY[i] = Y[i]; MZ[i] = 0;
+  VX0[i] = MX[i]; VY0[i] = MY[i]; VZ0[i] = 0;
+  CR[i] = r; CG[i] = g; CB[i] = b; PR[i] = pres;
+}
+
+/* ============================ 3D sources ============================ */
+let mfFrame = null, mfA = null, mfB = null, flockA = null, flockB = null, mfScale = 0, mfT = 0, mfPhase = 0, mfYaw = 0;
+function resetManifold(){ mfFrame = mfA = mfB = flockA = flockB = null; mfScale = 0; H.clear(); }
+function specOf(name){ return UP && UP.PRESETS[name] ? UP.PRESETS[name] : null; }
+function flockFor(spec, st){
+  if(!spec || spec.distribution !== "flock") return null;
+  const cnt = Math.max(1, spec.rows | 0) * Math.max(1, spec.cols | 0);
+  if(!st || st.count !== cnt) st = UP.createFlock(cnt, Math.max(1, spec.shells | 0));
+  return st;
+}
+const VIEW = { cy:1, sy:0, cp:1, sp:0 };
+function setView(){
+  const D = Math.PI / 180;
+  VIEW.cy = Math.cos(mfYaw * D); VIEW.sy = Math.sin(mfYaw * D);
+  VIEW.cp = Math.cos(Q.pitch * D); VIEW.sp = Math.sin(Q.pitch * D);
+}
+/* unit-radius xyz (y up) → canvas + metric, the same projection as UnlimiterPorts.project */
+function fill3D(i, x, y, z, r, g, b, pres){
+  const asp = cv.width / cv.height;
+  const x1 = x * VIEW.cy + z * VIEW.sy, z1 = -x * VIEW.sy + z * VIEW.cy;
+  const y1 = y * VIEW.cp - z1 * VIEW.sp, z2 = y * VIEW.sp + z1 * VIEW.cp;
+  const zc = Math.max(-1, Math.min(1, z2)), zoom = Q.zoom;
+  const f = zoom / (1 - Math.max(0, Math.min(1, Q.persp)) * zc * 0.5);
+  X[i] = 0.5 + (x1 * f * 0.5) / asp; Y[i] = 0.5 - y1 * f * 0.5; Z[i] = zc;
+  MX[i] = x1 * zoom * 0.5; MY[i] = -y1 * zoom * 0.5; MZ[i] = z2 * zoom * 0.5;
+  VX0[i] = x * zoom * 0.5; VY0[i] = -y * zoom * 0.5; VZ0[i] = z * zoom * 0.5;
+  SU[i] = -1; SV[i] = -1;
+  CR[i] = r; CG[i] = g; CB[i] = b; PR[i] = pres;
+}
+function acquireManifold(dt){
+  if(!UP) { n = 0; return false; }
+  const A = specOf(Q.formA) || UP.PRESETS[Object.keys(UP.PRESETS)[0]], B = specOf(Q.formB) || A;
+  mfT += dt * Q.tSpeed;
+  mfPhase += dt / Math.max(0.5, Q.morphPeriod);
+  mfYaw += Q.spin * dt;
+  const mix = Q.morphAmt * (0.5 - 0.5 * Math.cos(mfPhase * Math.PI * 2));
+  flockA = flockFor(A, flockA); flockB = flockFor(B, flockB);
+  const stepF = (spec, st) => { if(st) UP.stepFlock(st, dt * Q.tSpeed, mfT, UP.withDefaults("distribution", "flock", spec.distParams), null, null); };
+  stepF(A, flockA); stepF(B, flockB);
+  const r = UP.morph(A, B, mix, mfT, mfFrame, flockA, flockB, mfA, mfB);
+  mfFrame = r.frame; mfA = r.a; mfB = r.b;
+  const fr = mfFrame, bd = UP.bounds(fr), want = 1 / Math.max(1e-3, bd.radius);
+  mfScale = mfScale ? mfScale * 0.97 + want * 0.03 : want;      // no pumping as the form breathes
+  const c = bd.centre, s = mfScale;
+  setView(); is3D = true;
+  const stride = Math.max(1, Math.ceil(fr.count / Math.max(10, Q.mfMax)));
+  n = 0;
+  for(let i = 0; i < fr.count && n < MAXP; i += stride){
+    const pres = fr.presence[i]; if(pres < 0.05) continue;
+    const i3 = i * 3;
+    fill3D(n, (fr.positions[i3] - c[0]) * s, (fr.positions[i3 + 1] - c[1]) * s, (fr.positions[i3 + 2] - c[2]) * s,
+      fr.colors[i3], fr.colors[i3 + 1], fr.colors[i3 + 2], pres);
+    ID[n] = i; n++;
+  }
+  return true;
+}
+function acquireRack(dt){
+  const f = rackPts;
+  if(!f || !f.count){ n = 0; return lastRackVer !== -2 ? (lastRackVer = -2, true) : false; }
+  if(f.space === "3d"){ mfYaw += Q.spin * dt; setView(); }
+  else computeFit(f.aspect || 1, cv.width / cv.height);
+  if(f.version === lastRackVer && f.space !== "3d") return false;
+  lastRackVer = f.version;
+  const cnt = Math.min(MAXP, f.count), p = f.positions, col = f.colors, pr = f.presence;
+  n = 0;
+  is3D = f.space === "3d";
+  for(let i = 0; i < cnt; i++){
+    const pres = pr ? pr[i] : 1; if(pres < 0.03) continue;
+    const r = col ? col[i * 3] : 1, g = col ? col[i * 3 + 1] : 1, b = col ? col[i * 3 + 2] : 1;
+    if(is3D) fill3D(n, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], r, g, b, pres);
+    else { fillFlat(n, p[i * 3], p[i * 3 + 1], r, g, b, pres); SU[n] = -1; }
+    ID[n] = f.ids ? f.ids[i] : i; n++;
+  }
+  return true;
+}
+
+/* ============================ geometry buffers ============================ */
+let SEG = new Float32Array(14 * 8192), segN = 0;
+let TRI = new Float32Array(6 * 3 * 4096), triV = 0;
+let PTS = new Float32Array(7 * 4096), ptN = 0;
+function seg(ax, ay, bx, by, r1, g1, b1, a1, r2, g2, b2, a2, w1, w2){
+  if((a1 <= 0.002 && a2 <= 0.002)) return;
+  if(segN * 14 + 14 > SEG.length){ const g = new Float32Array(SEG.length * 2); g.set(SEG); SEG = g; }
+  const o = segN++ * 14;
+  SEG[o] = ax; SEG[o + 1] = ay; SEG[o + 2] = bx; SEG[o + 3] = by;
+  SEG[o + 4] = r1; SEG[o + 5] = g1; SEG[o + 6] = b1; SEG[o + 7] = a1;
+  SEG[o + 8] = r2; SEG[o + 9] = g2; SEG[o + 10] = b2; SEG[o + 11] = a2;
+  SEG[o + 12] = w1; SEG[o + 13] = w2;
+}
+function triVert(x, y, r, g, b, a){
+  if(triV * 6 + 6 > TRI.length){ const g2 = new Float32Array(TRI.length * 2); g2.set(TRI); TRI = g2; }
+  const o = triV++ * 6;
+  TRI[o] = x; TRI[o + 1] = y; TRI[o + 2] = r; TRI[o + 3] = g; TRI[o + 4] = b; TRI[o + 5] = a;
+}
+function tri(i, j, k, r, g, b, a){ if(a <= 0.002) return; triVert(X[i], Y[i], r, g, b, a); triVert(X[j], Y[j], r, g, b, a); triVert(X[k], Y[k], r, g, b, a); }
+function dot(x, y, r, g, b, a, size){
+  if(a <= 0.002 || size <= 0.2) return;
+  if(ptN * 7 + 7 > PTS.length){ const g2 = new Float32Array(PTS.length * 2); g2.set(PTS); PTS = g2; }
+  const o = ptN++ * 7;
+  PTS[o] = x; PTS[o + 1] = y; PTS[o + 2] = r; PTS[o + 3] = g; PTS[o + 4] = b; PTS[o + 5] = a; PTS[o + 6] = size;
+}
+
+/* ---------------- per-point colour, gate, depth ---------------- */
+const col3 = [0, 0, 0];
+function shadePoints(){
+  for(let i = 0; i < n; i++){
+    ramp(SPD[i], VDX[i], VDY[i], CR[i], CG[i], CB[i], col3);
+    KR[i] = col3[0]; KG[i] = col3[1]; KB[i] = col3[2];
+    GT[i] = gateOf(SPD[i]) * PR[i];
+    DF[i] = is3D ? 1 - Q.depthFade * (1 - (0.15 + 0.85 * (Z[i] + 1) * 0.5)) : 1;
+  }
+}
+
+/* ---------------- streaks ---------------- */
+function buildStreaks(S){
+  const L = Math.max(2, Math.round(Q.stLen)), W = Q.stWidth * S, A = Q.stAlpha, tp = Q.stTaper;
+  const c0 = [0, 0, 0], c1 = [0, 0, 0];
+  H.forEach(r => {
+    const len = Math.min(r.len, L); if(len < 2) return;
+    const pres = (r.seen === tickNo ? 1 : 0.6) * (r.pres == null ? 1 : r.pres);
+    let o = r.head * 4, bx = r.buf[o], by = r.buf[o + 1], bs = r.buf[o + 2], bz = r.buf[o + 3];
+    ramp(bs, r.dx, r.dy, r.sr, r.sg, r.sb, c0);
+    for(let k = 1; k < len; k++){
+      o = ((r.head - k + HCAP) % HCAP) * 4;
+      const ax = r.buf[o], ay = r.buf[o + 1], as = r.buf[o + 2], az = r.buf[o + 3];
+      ramp(as, r.dx, r.dy, r.sr, r.sg, r.sb, c1);
+      const dx = bx - ax, dy = by - ay;
+      if(dx * dx + dy * dy > 1e-10 && dx * dx + dy * dy < 0.09){
+        const f0 = 1 - (k - 1) / (len - 1), f1 = 1 - k / (len - 1);
+        const d0 = is3D ? 1 - Q.depthFade * (1 - (0.15 + 0.85 * (bz + 1) * 0.5)) : 1;
+        const d1 = is3D ? 1 - Q.depthFade * (1 - (0.15 + 0.85 * (az + 1) * 0.5)) : 1;
+        const a0 = A * pres * Math.pow(f0, 1 + tp) * gateOf(bs) * d0, a1 = A * pres * Math.pow(f1, 1 + tp) * gateOf(as) * d1;
+        seg(bx, by, ax, ay, c0[0], c0[1], c0[2], a0, c1[0], c1[1], c1[2], a1,
+          W * (1 - tp + tp * f0), W * (1 - tp + tp * f1));
+      }
+      bx = ax; by = ay; bs = as; bz = az; c0[0] = c1[0]; c0[1] = c1[1]; c0[2] = c1[2];
+    }
+  });
+}
+
+/* ---------------- proximity: a hashed grid, nearest K per point ---------------- */
+const HB = 8192;
+const hCount = new Int32Array(HB + 1), hStart = new Int32Array(HB + 1), hItems = new Int32Array(MAXP), hKey = new Int32Array(MAXP);
+const KMAX = 12;
+const NB = new Int32Array(MAXP * KMAX), NBD = new Float32Array(MAXP * KMAX), NBN = new Int32Array(MAXP);
+let linkCount = 0, triCount = 0;
+function cellHash(cx, cy, cz){ return ((cx * 73856093) ^ (cy * 19349663) ^ (cz * 83492791)) & (HB - 1); }
+function neighbours(R, K){
+  hCount.fill(0);
+  for(let i = 0; i < n; i++){
+    const k = cellHash(Math.floor(MX[i] / R), Math.floor(MY[i] / R), is3D ? Math.floor(MZ[i] / R) : 0);
+    hKey[i] = k; hCount[k]++;
+  }
+  let s = 0; for(let b = 0; b < HB; b++){ hStart[b] = s; s += hCount[b]; } hStart[HB] = s;
+  const fillAt = hCount; fillAt.fill(0);
+  for(let i = 0; i < n; i++){ const k = hKey[i]; hItems[hStart[k] + fillAt[k]++] = i; }
+  const R2 = R * R, seen = [], zr = is3D ? 1 : 0;
+  for(let i = 0; i < n; i++){
+    NBN[i] = 0;
+    if(GT[i] <= 0.01) continue;
+    const cx = Math.floor(MX[i] / R), cy = Math.floor(MY[i] / R), cz = is3D ? Math.floor(MZ[i] / R) : 0;
+    seen.length = 0;
+    const base = i * KMAX;
+    for(let dz = -zr; dz <= zr; dz++) for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++){
+      const b = cellHash(cx + dx, cy + dy, cz + dz);
+      if(seen.indexOf(b) >= 0) continue; seen.push(b);
+      for(let q = hStart[b], e = hStart[b] + hCount[b]; q < e; q++){
+        const j = hItems[q]; if(j === i || GT[j] <= 0.01) continue;
+        const ex = MX[j] - MX[i], ey = MY[j] - MY[i], ez = MZ[j] - MZ[i], d2 = ex * ex + ey * ey + ez * ez;
+        if(d2 >= R2) continue;
+        // insertion into the sorted K-nearest list
+        let m = NBN[i];
+        if(m === K && d2 >= NBD[base + m - 1]) continue;
+        if(m < K) m = ++NBN[i];
+        let p = m - 1;
+        while(p > 0 && NBD[base + p - 1] > d2){ NB[base + p] = NB[base + p - 1]; NBD[base + p] = NBD[base + p - 1]; p--; }
+        NB[base + p] = j; NBD[base + p] = d2;
+      }
+    }
+  }
+}
+function hasNb(i, j){ const b = i * KMAX; for(let q = 0, m = NBN[i]; q < m; q++) if(NB[b + q] === j) return true; return false; }
+function coherence(i, j){
+  const c = Q.lkCoh; if(!(c > 0)) return 1;
+  const dvx = VDX[i] - VDX[j], dvy = VDY[i] - VDY[j], s = 0.25 * velScale + 1e-3;
+  const sim = Math.exp(-(dvx * dvx + dvy * dvy) / (s * s));
+  // still pairs count as "the same", which would wire the whole background; ask for shared motion too
+  const mv = Math.min(1, (SPD[i] + SPD[j]) / (0.3 * velScale + 1e-3));
+  return 1 - c + c * sim * mv;
+}
+function buildLinks(S){
+  const R = Math.max(0.005, Q.lkDist), K = Math.max(1, Math.min(KMAX, Math.round(Q.lkMax)));
+  neighbours(R, K);
+  linkCount = 0; triCount = 0;
+  const W = Q.lkWidth * S, A = Q.lkAlpha, mode = Q.lkColour, c = [0, 0, 0];
+  if(Q.lkOn) for(let i = 0; i < n; i++){
+    const b = i * KMAX;
+    for(let q = 0, m = NBN[i]; q < m; q++){
+      const j = NB[b + q];
+      if(j < i && hasNb(j, i)) continue;               // drawn already from j's side
+      const d = Math.sqrt(NBD[b + q]) / R, fall = Math.pow(1 - d, 1.5);
+      const a = A * fall * Math.min(GT[i], GT[j]) * coherence(i, j);
+      if(a <= 0.003) continue;
+      const ai = a * DF[i], aj = a * DF[j];
+      if(mode === "distance"){ ramp(velScale * (1 - d), VDX[i], VDY[i], CR[i], CG[i], CB[i], c);
+        seg(X[i], Y[i], X[j], Y[j], c[0], c[1], c[2], ai, c[0], c[1], c[2], aj, W, W); }
+      else if(mode === "source") seg(X[i], Y[i], X[j], Y[j], CR[i], CG[i], CB[i], ai, CR[j], CG[j], CB[j], aj, W, W);
+      else seg(X[i], Y[i], X[j], Y[j], KR[i], KG[i], KB[i], ai, KR[j], KG[j], KB[j], aj, W, W);
+      linkCount++;
+    }
+  }
+  // triangles: three points that are all linked to one another
+  const TA = Q.trAlpha;
+  if(TA > 0.002) for(let i = 0; i < n; i++){
+    const b = i * KMAX, m = NBN[i];
+    for(let p = 0; p < m; p++){
+      const j = NB[b + p]; if(j < i) continue;
+      for(let q = p + 1; q < m; q++){
+        const k = NB[b + q]; if(k < i) continue;
+        if(!(hasNb(j, k) || hasNb(k, j))) continue;
+        const dij = Math.sqrt(NBD[b + p]) / R, dik = Math.sqrt(NBD[b + q]) / R;
+        const a = TA * (1 - Math.max(dij, dik)) * Math.min(GT[i], GT[j], GT[k]) * (DF[i] + DF[j] + DF[k]) / 3 * coherence(i, j) * coherence(i, k);
+        if(a <= 0.002) continue;
+        tri(i, j, k, (KR[i] + KR[j] + KR[k]) / 3, (KG[i] + KG[j] + KG[k]) / 3, (KB[i] + KB[j] + KB[k]) / 3, a);
+        triCount++;
+      }
+    }
+  }
+}
+
+/* ---------------- Delaunay (Bowyer–Watson, x-sorted, Bourke's completion test) ---------------- */
+const DX = new Float64Array(MAXP + 3), DY = new Float64Array(MAXP + 3);
+function circum(a, b, c){
+  const ax = DX[a], ay = DY[a], bx = DX[b], by = DY[b], cx = DX[c], cy = DY[c];
+  const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+  if(Math.abs(d) < 1e-14) return { a, b, c, x:(ax + bx + cx) / 3, y:(ay + by + cy) / 3, r2:1e30 };
+  const a2 = ax * ax + ay * ay, b2 = bx * bx + by * by, c2 = cx * cx + cy * cy;
+  const x = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d, y = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d;
+  return { a, b, c, x, y, r2:(ax - x) * (ax - x) + (ay - y) * (ay - y) };
+}
+function delaunay(list){
+  const m = list.length; if(m < 3) return [];
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for(let k = 0; k < m; k++){
+    const x = DX[k], y = DY[k];
+    if(x < minx) minx = x; if(x > maxx) maxx = x; if(y < miny) miny = y; if(y > maxy) maxy = y;
+  }
+  const dmax = Math.max(maxx - minx, maxy - miny, 1e-3), mx = (minx + maxx) / 2, my = (miny + maxy) / 2;
+  DX[m] = mx - 20 * dmax; DY[m] = my - dmax; DX[m + 1] = mx; DY[m + 1] = my + 20 * dmax; DX[m + 2] = mx + 20 * dmax; DY[m + 2] = my - dmax;
+  const order = new Int32Array(m); for(let k = 0; k < m; k++) order[k] = k;
+  order.sort((a, b) => DX[a] - DX[b]);
+  const open = [circum(m, m + 1, m + 2)], closed = [], edges = [];
+  for(let q = 0; q < m; q++){
+    const v = order[q], px = DX[v], py = DY[v];
+    edges.length = 0;
+    for(let j = open.length - 1; j >= 0; j--){
+      const t = open[j], dx = px - t.x;
+      if(dx > 0 && dx * dx > t.r2){ closed.push(t); open[j] = open[open.length - 1]; open.pop(); continue; }
+      const dy = py - t.y;
+      if(dx * dx + dy * dy - t.r2 > 1e-12) continue;
+      edges.push(t.a, t.b, t.b, t.c, t.c, t.a);
+      open[j] = open[open.length - 1]; open.pop();
+    }
+    // an edge shared by two removed triangles is interior to the hole — drop both copies
+    const E = edges.length >> 1, dead = new Uint8Array(E);
+    for(let e = 0; e < E; e++){
+      if(dead[e]) continue;
+      const a = edges[e * 2], b = edges[e * 2 + 1];
+      for(let f = e + 1; f < E; f++){
+        if(dead[f]) continue;
+        const c = edges[f * 2], d = edges[f * 2 + 1];
+        if((a === d && b === c) || (a === c && b === d)){ dead[e] = dead[f] = 1; break; }
+      }
+    }
+    for(let e = 0; e < E; e++) if(!dead[e]) open.push(circum(edges[e * 2], edges[e * 2 + 1], v));
+  }
+  const out = [];
+  const all = closed.concat(open);
+  for(let k = 0; k < all.length; k++){ const t = all[k]; if(t.a < m && t.b < m && t.c < m) out.push(t); }
+  return out;
+}
+let meshTris = 0;
+function buildMesh(S){
+  meshTris = 0;
+  if(Q.mesh === "off" || n < 3) return;
+  const asp = cv.width / cv.height, cap = 1500;
+  const stride = Math.max(1, Math.ceil(n / cap)), map = [];
+  for(let i = 0; i < n; i += stride){
+    if(GT[i] <= 0.05) continue;
+    const k = map.length;
+    // a deterministic nudge so coincident points never make a zero-area triangle
+    DX[k] = X[i] * asp + ((ID[i] * 0.6180339) % 1) * 1e-6; DY[k] = Y[i] + ((ID[i] * 0.4142135) % 1) * 1e-6;
+    map.push(i);
+  }
+  const T = delaunay(map);
+  const maxE = Q.meshMaxEdge, maxE2 = maxE * maxE, fillA = Q.meshFillAlpha, wire = Q.meshWire, fill = Q.meshFill;
+  const W = Math.max(0.6, 1.0 * S), c = [0, 0, 0], emap = new Map();
+  const keep = new Uint8Array(T.length);
+  for(let t = 0; t < T.length; t++){
+    const tr = T[t], a = tr.a, b = tr.b, cc = tr.c;
+    const l1 = (DX[a] - DX[b]) ** 2 + (DY[a] - DY[b]) ** 2, l2 = (DX[b] - DX[cc]) ** 2 + (DY[b] - DY[cc]) ** 2, l3 = (DX[cc] - DX[a]) ** 2 + (DY[cc] - DY[a]) ** 2;
+    keep[t] = Math.max(l1, l2, l3) <= maxE2 ? 1 : 0;
+  }
+  if(Q.mesh === "delaunay"){
+    for(let t = 0; t < T.length; t++){
+      if(!keep[t]) continue;
+      const i = map[T[t].a], j = map[T[t].b], k = map[T[t].c];
+      const g = Math.min(GT[i], GT[j], GT[k]), df = (DF[i] + DF[j] + DF[k]) / 3;
+      if(fill !== "none" && fillA > 0.002){
+        if(fill === "source"){
+          if(SU[i] >= 0 && anaRGBA) sampleRGBA((SU[i] + SU[j] + SU[k]) / 3, (SV[i] + SV[j] + SV[k]) / 3, c);
+          else { c[0] = (CR[i] + CR[j] + CR[k]) / 3; c[1] = (CG[i] + CG[j] + CG[k]) / 3; c[2] = (CB[i] + CB[j] + CB[k]) / 3; }
+        } else { c[0] = (KR[i] + KR[j] + KR[k]) / 3; c[1] = (KG[i] + KG[j] + KG[k]) / 3; c[2] = (KB[i] + KB[j] + KB[k]) / 3; }
+        tri(i, j, k, c[0], c[1], c[2], fillA * g * df);
+      }
+      meshTris++;
+      if(wire > 0.002){
+        const ed = [[T[t].a, T[t].b], [T[t].b, T[t].c], [T[t].c, T[t].a]];
+        for(const [p, q] of ed){
+          const key = p < q ? p * 8192 + q : q * 8192 + p;
+          if(emap.has(key)) continue; emap.set(key, 1);
+          const u = map[p], v = map[q];
+          seg(X[u], Y[u], X[v], Y[v], KR[u], KG[u], KB[u], wire * GT[u] * DF[u], KR[v], KG[v], KB[v], wire * GT[v] * DF[v], W, W);
+        }
+      }
+    }
+    return;
+  }
+  // Voronoi: join the circumcentres of triangles that share an edge
+  for(let t = 0; t < T.length; t++){
+    const tr = T[t], ed = [[tr.a, tr.b], [tr.b, tr.c], [tr.c, tr.a]];
+    for(const [p, q] of ed){
+      const key = p < q ? p * 8192 + q : q * 8192 + p;
+      const other = emap.get(key);
+      if(other === undefined){ emap.set(key, t); continue; }
+      emap.delete(key);
+      if(!keep[t] && !keep[other]) continue;
+      const A = T[other], x1 = tr.x / asp, y1 = tr.y, x2 = A.x / asp, y2 = A.y;
+      if(x1 < -0.1 || x1 > 1.1 || y1 < -0.1 || y1 > 1.1 || x2 < -0.1 || x2 > 1.1 || y2 < -0.1 || y2 > 1.1) continue;
+      // colour the wall by the two points it separates
+      const u = map[p], v = map[q];
+      const r = (KR[u] + KR[v]) / 2, g = (KG[u] + KG[v]) / 2, b = (KB[u] + KB[v]) / 2;
+      const a = wire * Math.min(GT[u], GT[v]) * (DF[u] + DF[v]) / 2;
+      seg(x1, y1, x2, y2, r, g, b, a, r, g, b, a, W, W);
+    }
+    meshTris++;
+  }
+}
+
+/* ---------------- nodes ---------------- */
+function buildNodes(S){
+  if(!Q.ndOn) return;
+  for(let i = 0; i < n; i++){
+    const t = Math.min(1, SPD[i] / velScale);
+    const size = (Q.ndSize + Q.ndSpeed * t) * S * (is3D ? 0.6 + 0.4 * DF[i] : 1);
+    dot(X[i], Y[i], KR[i], KG[i], KB[i], Q.ndAlpha * GT[i] * DF[i], size * 2.4);
+  }
+}
+
+/* ---------------- flow hair ---------------- */
+function buildHair(S){
+  if(!Q.fhOn || !flowOut || !flowOut.field || !IMAGE_SOURCES.has(P.source)) return;
+  const f = flowOut.field, st = Math.max(1, Math.round(Q.fhDensity)), asp = cv.width / cv.height;
+  const L = Q.fhLen * 0.12, A = Q.fhAlpha, W = Math.max(0.6, 1.1 * S), c = [0, 0, 0];
+  for(let fy = 0; fy < f.h; fy += st) for(let fx = 0; fx < f.w; fx += st){
+    const o = (fy * f.w + fx) * 2, vu = f.data[o], vv = f.data[o + 1];
+    const su = (fx + 0.5) / f.w, sv = (fy + 0.5) / f.h;
+    const x0 = FIT.x0 + su * FIT.w, y0 = FIT.y0 + sv * FIT.h;
+    const dx = vu * FIT.w * L, dy = vv * FIT.h * L;
+    const spd = Math.hypot(vu * FIT.w * asp, vv * FIT.h);       // frame heights per second
+    const a = A * Math.min(1, Math.max(0, (spd - 0.015) / 0.08));
+    if(a <= 0.003) continue;
+    if(Q.fhColour === "direction"){ hsv(Math.atan2(vv, vu) / (Math.PI * 2), 0.8, 1, c); }
+    else ramp(spd, vu, vv, 1, 1, 1, c);
+    seg(x0, y0, x0 + dx, y0 + dy, c[0], c[1], c[2], a * 0.25, c[0], c[1], c[2], a, W, W * 0.4);
+  }
+}
+
+/* ============================ GL ============================ */
+const gl = cv.getContext("webgl2", { antialias:false, alpha:false, premultipliedAlpha:false, preserveDrawingBuffer:true });
+const statusEl = document.getElementById("status"), srcNote = document.getElementById("srcNote");
+if(!gl){ statusEl.textContent = "WebGL2 is not available in this browser"; throw new Error("no webgl2"); }
+const floatOK = !!gl.getExtension("EXT_color_buffer_float");
+function sh(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function prog(vs, fs){
+  const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p); if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for(let i = 0; i < nu; i++){ const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); }
+  return { p, u };
+}
+const SEG_VS = `#version 300 es
+layout(location=0) in vec2 aCorner;
+layout(location=1) in vec4 iAB;
+layout(location=2) in vec4 iCA;
+layout(location=3) in vec4 iCB;
+layout(location=4) in vec2 iW;
+uniform vec2 uRes;
+out vec4 vCol; out float vAcross; out float vHalf;
+void main(){
+  vec2 a = iAB.xy * uRes, b = iAB.zw * uRes;
+  vec2 d = b - a; float L = length(d);
+  vec2 dir = L > 1e-4 ? d / L : vec2(1.0, 0.0), nrm = vec2(-dir.y, dir.x);
+  float t = aCorner.x, hw = mix(iW.x, iW.y, t) * 0.5, ext = max(hw, 0.5) + 1.0;
+  vec2 p = mix(a, b, t) + dir * (t * 2.0 - 1.0) * 0.5 + nrm * aCorner.y * ext;
+  vAcross = aCorner.y * ext; vHalf = hw; vCol = mix(iCA, iCB, t);
+  gl_Position = vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
+}`;
+const SEG_FS = `#version 300 es
+precision highp float;
+in vec4 vCol; in float vAcross; in float vHalf;
+out vec4 o;
+void main(){
+  float cov = clamp(vHalf + 0.5 - abs(vAcross), 0.0, 1.0);
+  o = vec4(vCol.rgb * vCol.a * cov, 0.0);
+}`;
+const TRI_VS = `#version 300 es
+layout(location=0) in vec2 aP; layout(location=1) in vec4 aC;
+out vec4 vC;
+void main(){ vC = aC; gl_Position = vec4(aP.x * 2.0 - 1.0, 1.0 - aP.y * 2.0, 0.0, 1.0); }`;
+const TRI_FS = `#version 300 es
+precision highp float; in vec4 vC; out vec4 o;
+void main(){ o = vec4(vC.rgb * vC.a, 0.0); }`;
+const PT_VS = `#version 300 es
+layout(location=0) in vec2 aP; layout(location=1) in vec4 aC; layout(location=2) in float aS;
+uniform float uMaxPt;
+out vec4 vC;
+void main(){ vC = aC; gl_PointSize = min(aS, uMaxPt); gl_Position = vec4(aP.x * 2.0 - 1.0, 1.0 - aP.y * 2.0, 0.0, 1.0); }`;
+const PT_FS = `#version 300 es
+precision highp float; in vec4 vC; out vec4 o;
+void main(){
+  vec2 d = gl_PointCoord - 0.5; float r2 = dot(d, d);
+  float f = exp(-r2 * 22.0) + 0.6 * smoothstep(0.035, 0.012, r2);
+  o = vec4(vC.rgb * vC.a * f, 0.0);
+}`;
+const FULL_VS = `#version 300 es
+out vec2 vUv;
+void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+const FADE_FS = `#version 300 es
+precision highp float; in vec2 vUv; uniform sampler2D uPrev; uniform float uK; out vec4 o;
+void main(){ o = vec4(texture(uPrev, vUv).rgb * uK, 1.0); }`;
+const COMP_FS = `#version 300 es
+precision highp float; in vec2 vUv;
+uniform sampler2D uAcc, uBg; uniform float uBgMix, uDesat, uExp, uHasBg, uMirror; uniform vec4 uFit;
+out vec4 o;
+void main(){
+  vec3 acc = texture(uAcc, vUv).rgb;
+  vec3 tone = 1.0 - exp(-acc * uExp);
+  vec3 bg = vec3(0.0);
+  if(uHasBg > 0.5){
+    vec2 c = vec2(vUv.x, 1.0 - vUv.y);
+    vec2 s = (c - uFit.xy) / uFit.zw;
+    if(s.x >= 0.0 && s.x <= 1.0 && s.y >= 0.0 && s.y <= 1.0){
+      if(uMirror > 0.5) s.x = 1.0 - s.x;
+      bg = texture(uBg, s).rgb;
+      float g = dot(bg, vec3(0.299, 0.587, 0.114));
+      bg = mix(bg, vec3(g), uDesat) * uBgMix;
+    }
+  }
+  o = vec4(1.0 - (1.0 - bg) * (1.0 - tone), 1.0);
+}`;
+const PS = prog(SEG_VS, SEG_FS), PTR = prog(TRI_VS, TRI_FS), PP = prog(PT_VS, PT_FS), PF = prog(FULL_VS, FADE_FS), PC = prog(FULL_VS, COMP_FS);
+const ptRange = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE);
+const MAXPT = ptRange ? ptRange[1] : 64;
+
+// segments: a 4-corner strip, instanced
+const segVAO = gl.createVertexArray(); gl.bindVertexArray(segVAO);
+const cornerBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 0, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+const segBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, segBuf);
+[[1, 4, 0], [2, 4, 16], [3, 4, 32], [4, 2, 48]].forEach(([loc, sz, off]) => {
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, sz, gl.FLOAT, false, 56, off); gl.vertexAttribDivisor(loc, 1);
+});
+const triVAO = gl.createVertexArray(); gl.bindVertexArray(triVAO);
+const triBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, triBuf);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 24, 0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 24, 8);
+const ptVAO = gl.createVertexArray(); gl.bindVertexArray(ptVAO);
+const ptBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ptBuf);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 28, 0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 28, 8);
+gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 28, 24);
+const fullVAO = gl.createVertexArray();
+gl.bindVertexArray(null);
+
+// the afterimage: two light buffers, ping-pong
+let acc = [null, null], fbo = [null, null], cur = 0, accW = 0, accH = 0;
+function makeAcc(w, h){
+  for(let k = 0; k < 2; k++){
+    if(acc[k]) gl.deleteTexture(acc[k]); if(fbo[k]) gl.deleteFramebuffer(fbo[k]);
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    if(floatOK) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    acc[k] = t; fbo[k] = f;
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  accW = w; accH = h;
+}
+function wipe(){ for(let k = 0; k < 2; k++){ gl.bindFramebuffer(gl.FRAMEBUFFER, fbo[k]); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); } gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+const bgTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, bgTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+
+function sizeCanvas(){
+  const [w, h] = String(P.res).split("x").map(Number);
+  if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+  if(accW !== cv.width || accH !== cv.height){ makeAcc(cv.width, cv.height); H.clear(); }
+}
+
+function render(src){
+  const w = cv.width, h = cv.height;
+  const prev = cur; cur ^= 1;
+  // fade what was there
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo[cur]); gl.viewport(0, 0, w, h);
+  gl.disable(gl.BLEND);
+  gl.useProgram(PF.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, acc[prev]);
+  gl.uniform1i(PF.u.uPrev, 0); gl.uniform1f(PF.u.uK, Math.max(0, Math.min(0.995, Q.persist)));
+  gl.bindVertexArray(fullVAO); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // add this frame's light
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  if(triV){
+    gl.useProgram(PTR.p); gl.bindVertexArray(triVAO); gl.bindBuffer(gl.ARRAY_BUFFER, triBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, TRI.subarray(0, triV * 6), gl.STREAM_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, triV);
+  }
+  if(segN){
+    gl.useProgram(PS.p); gl.uniform2f(PS.u.uRes, w, h);
+    gl.bindVertexArray(segVAO); gl.bindBuffer(gl.ARRAY_BUFFER, segBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, SEG.subarray(0, segN * 14), gl.STREAM_DRAW);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, segN);
+  }
+  if(ptN){
+    gl.useProgram(PP.p); gl.uniform1f(PP.u.uMaxPt, MAXPT);
+    gl.bindVertexArray(ptVAO); gl.bindBuffer(gl.ARRAY_BUFFER, ptBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, PTS.subarray(0, ptN * 7), gl.STREAM_DRAW);
+    gl.drawArrays(gl.POINTS, 0, ptN);
+  }
+  gl.disable(gl.BLEND);
+  // backdrop
+  let hasBg = 0;
+  if(src && Q.bgMix > 0.002){
+    try{
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bgTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src.el);
+      hasBg = 1;
+    }catch(e){ hasBg = 0; }
+  }
+  // composite to the screen
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h);
+  gl.useProgram(PC.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, acc[cur]); gl.uniform1i(PC.u.uAcc, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bgTex); gl.uniform1i(PC.u.uBg, 1);
+  gl.uniform1f(PC.u.uBgMix, Q.bgMix); gl.uniform1f(PC.u.uDesat, Q.bgDesat); gl.uniform1f(PC.u.uExp, Q.exposure);
+  gl.uniform1f(PC.u.uHasBg, hasBg); gl.uniform1f(PC.u.uMirror, src && src.mirror ? 1 : 0);
+  gl.uniform4f(PC.u.uFit, FIT.x0, FIT.y0, FIT.w, FIT.h);
+  gl.bindVertexArray(fullVAO); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindVertexArray(null);
+}
+
+/* ============================ the outgoing points (for the rack) ============================ */
+let OUT = PT ? PT.makePoints(64, "uv") : null;
+function publishPoints(){
+  if(!PT) return;
+  OUT = PT.ensurePoints(OUT, n, "uv");
+  if(!OUT.tangents || OUT.tangents.length < OUT.capacity * 3) OUT.tangents = new Float32Array(OUT.capacity * 3);
+  if(!OUT.ids || OUT.ids.length < OUT.capacity) OUT.ids = new Uint32Array(OUT.capacity);
+  OUT.aspect = cv.width / cv.height;
+  for(let i = 0; i < n; i++){
+    const i3 = i * 3, s = SPD[i] || 0;
+    OUT.positions[i3] = X[i]; OUT.positions[i3 + 1] = Y[i]; OUT.positions[i3 + 2] = Z[i] || 1;
+    OUT.colors[i3] = KR[i]; OUT.colors[i3 + 1] = KG[i]; OUT.colors[i3 + 2] = KB[i];
+    OUT.sizes[i] = 1 + Math.min(3, s / velScale * 3); OUT.presence[i] = GT[i];
+    OUT.tangents[i3] = s > 1e-4 ? VDX[i] / s : 0; OUT.tangents[i3 + 1] = s > 1e-4 ? VDY[i] / s : 0; OUT.tangents[i3 + 2] = 0;
+    OUT.ids[i] = ID[i] >>> 0;
+  }
+  PT.bump(OUT);
+}
+
+/* ============================ loop ============================ */
+let lastT = performance.now(), fpsEma = 60, statusAt = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.max(1 / 240, Math.min(0.1, (now - lastT) / 1000)); lastT = now;
+  Q = Drive ? Drive.resolve(P) : P;
+  monoRGB = hex2rgb(P.monoCol);
+  sizeCanvas();
+
+  const isImg = IMAGE_SOURCES.has(P.source);
+  const src = isImg ? imageSource() : null;
+  if(src && src.el === demo) drawDemo(now / 1000);
+  let ticked = false, tickDt = dt;
+  if(isImg && src){ ticked = acquireImage(now, dt, src); tickDt = (now - lastTickT) / 1000; }
+  else if(P.source === "manifold"){ ticked = acquireManifold(dt); }
+  else if(P.source === "rack-points"){ ticked = acquireRack(dt); }
+  if(ticked){ updateHistories(tickDt); lastTickT = now; }
+
+  velScale = Q.velAuto ? autoVm : Math.max(0.01, Q.velMax);
+  const S = cv.height / 720;
+  segN = 0; triV = 0; ptN = 0;
+  shadePoints();
+  buildMesh(S);
+  buildLinks(S);
+  if(Q.stOn) buildStreaks(S);
+  buildHair(S);
+  buildNodes(S);
+  render(src);
+  if(ticked) publishPoints();
+  if(Drive) Drive.pushFrame(cv);
+
+  fpsEma = fpsEma * 0.92 + (1 / dt) * 0.08;
+  if(now - statusAt > 400){
+    statusAt = now;
+    const label = src ? src.label : P.source === "manifold" ? "Manifold " + Q.formA + " ↔ " + Q.formB
+      : rackPts ? "rack points" : "rack points (no cable)";
+    statusEl.textContent = `${n} points · ${linkCount} links · ${triCount + meshTris} tris` +
+      (src ? ` · vision ${anaMs.toFixed(1)} ms` : "") + ` · ${fpsEma.toFixed(0)} fps`;
+    srcNote.textContent = label;
+  }
+}
+
+/* ============================ presets, files, capture ============================ */
+function applyLook(name){
+  const L = LOOKS[name]; if(!L) return;
+  for(const k in DEFAULTS) if(!SOURCE_KEYS.has(k)) P[k] = DEFAULTS[k];
+  Object.assign(P, L); P.look = name;
+  syncUI();
+}
+function download(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const stamp = () => new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+document.getElementById("bExport").addEventListener("click", () => {
+  const out = Object.assign({ tool:"lattice", version:1 }, P);
+  if(Drive) out._drive = Drive.serialize();
+  download(new Blob([JSON.stringify(out, null, 2)], { type:"application/json" }), "lattice-" + stamp() + ".json");
+});
+document.getElementById("bImport").addEventListener("click", () => document.getElementById("fPreset").click());
+document.getElementById("fPreset").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  f.text().then(t => { const j = JSON.parse(t);
+    for(const k in DEFAULTS) if(j[k] !== undefined) P[k] = j[k];
+    if(Drive && j._drive) Drive.load(j._drive);
+    syncUI(); resetTracking(); resetManifold(); }).catch(err => console.warn("[lattice] preset", err));
+  e.target.value = "";
+});
+document.getElementById("bCam").addEventListener("click", () => { P.source = "camera"; camState = camState === "failed" ? "off" : camState; startCamera(); syncUI(); });
+document.getElementById("bVideo").addEventListener("click", () => document.getElementById("fVideo").click());
+document.getElementById("fVideo").addEventListener("change", e => { loadVideoFile(e.target.files[0]); e.target.value = ""; });
+document.getElementById("bWipe").addEventListener("click", () => { wipe(); H.clear(); });
+document.getElementById("bPNG").addEventListener("click", () => cv.toBlob(b => b && download(b, "lattice-" + stamp() + ".png")));
+let rec = null, recChunks = [];
+document.getElementById("bRec").addEventListener("click", e => {
+  const b = e.currentTarget;
+  if(rec){ rec.stop(); return; }
+  if(!window.MediaRecorder){ b.textContent = "No recorder"; return; }
+  const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find(m => MediaRecorder.isTypeSupported(m)) || "";
+  rec = new MediaRecorder(cv.captureStream(60), mime ? { mimeType:mime, videoBitsPerSecond:16e6 } : undefined);
+  recChunks = [];
+  rec.ondataavailable = ev => { if(ev.data.size) recChunks.push(ev.data); };
+  rec.onstop = () => { download(new Blob(recChunks, { type:"video/webm" }), "lattice-" + stamp() + ".webm"); rec = null; b.textContent = "● Record"; b.classList.remove("on"); };
+  rec.start(250); b.textContent = "■ Stop"; b.classList.add("on");
+});
+["dragenter", "dragover"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); document.body.classList.add("dragging"); }));
+["dragleave", "drop"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if(t === "drop" || e.target === document.getElementById("dropHint")) document.body.classList.remove("dragging"); }));
+document.addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if(f) loadVideoFile(f); });
+
+/* ============================ ports ============================
+   in:  points (any cable — 2D or 3D) and image (tracked like a camera).
+   out: the canvas, and these points with their velocity: tangent = the
+        direction of travel, size = 1 + speed, colour = the palette colour,
+        ids = stable identity. A cable arriving switches the source to it;
+        releasing it puts back whatever was chosen before.
+   ============================================================== */
+function setRackPoints(v){
+  rackPts = v || null;
+  if(rackPts && P.source !== "rack-points"){ prevSource = P.source; P.source = "rack-points"; resetTracking(); syncUI(); }
+  else if(!rackPts && P.source === "rack-points" && prevSource){ P.source = prevSource; prevSource = null; resetTracking(); syncUI(); }
+}
+function setRackImage(v){
+  rackImage = v || null;
+  if(rackImage && P.source !== "rack-image"){ prevSource = P.source; P.source = "rack-image"; resetTracking(); syncUI(); }
+  else if(!rackImage && P.source === "rack-image" && prevSource){ P.source = prevSource; prevSource = null; resetTracking(); syncUI(); }
+}
+if(PT){
+  try{ PT.publish({ tool:"lattice", label:"Lattice",
+    outputs:{ out:{ type:"image", get:() => cv }, points:{ type:"points", label:"points", get:() => OUT } },
+    inputs:{ points:{ type:"points", label:"points", set:setRackPoints }, image:{ type:"image", label:"image", set:setRackImage } } }); }
+  catch(e){ console.warn("[lattice] ports", e); }
+}
+
+/* ============================ boot ============================ */
+if(!UV) srcNote.textContent = "unlimiter-vision.js missing — image sources can't be tracked";
+vis();
+sizeCanvas();
+if(P.source === "camera") startCamera();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

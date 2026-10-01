@@ -17,7 +17,8 @@
      bgsub    what is new (running background,       mask   the foreground silhouette
               selective update)                      points spread over it
                                                      field  outward normal of the silhouette
-     tracks   corners that stay put on the thing     points tracked features, tangent = velocity
+     tracks   corners that stay put on the thing     points tracked features, tangent = velocity,
+                                                            ids = a stable number per track
               (Shi–Tomasi + sparse LK)               field  their motion, splatted smooth
 
    const V = UnlimiterVision.create();
@@ -504,7 +505,10 @@ function create(PT){
       }
     }
     const pf = ensurePts(T.length, aspect);
+    // stable identity per track, so a consumer can keep its own history (trails)
+    if(!pf.ids || pf.ids.length < pf.capacity) pf.ids = new Uint32Array(pf.capacity);
     T.forEach((t, k) => {
+      pf.ids[k] = t.id;
       const sp = Math.hypot(t.vx, t.vy);
       const pres = Math.min(1, t.age / 6 + 0.15) * Math.min(1, (p.maxage - t.age) / 20);
       setPt(pf, k, t.x, t.y, sp > 0.05 ? t.vx / sp : 0, sp > 0.05 ? t.vy / sp : 0, 1 + Math.min(3, sp * 0.8), pres, rgba);

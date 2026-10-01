@@ -166,6 +166,9 @@ const TOOLS = [
   { file:"ouroboros.html", name:"Ouroboros", motif:"ouro",
     desc:"Recursive video feedback. Each frame is transformed, warped and coloured, then fed back in as the next frame's source. The oldest trick in video art, running on a GPU.",
     tags:["webcam","feedback","realtime","drive"] },
+  { file:"lattice.html", name:"Lattice", motif:"lattice",
+    desc:"Machine vision as drawing. Tracks features or flow particles from a camera or video \u2014 or takes Manifold's morphing forms \u2014 and draws each point's streak coloured by its speed, the plexus of links between neighbours, and Delaunay or Voronoi meshes over them.",
+    tags:["webcam","tracking","optical flow","plexus","3d","drive"] },
   { file:"anchor.html", name:"Anchor", motif:"anchor",
     desc:"Turns type, point clouds, images or your own drawn strokes into ordered anchor points, then stamps shapes — or characters — on every one. Anchors carry depth, so the whole thing can be orbited in 3D. Exports real vector.",
     tags:["typography","ascii","point clouds","3d","draw","svg","drive"] },
@@ -282,6 +285,22 @@ const MOTIF = {
       g.strokeStyle=`hsla(${168+r*3},62%,${38+r*3}%,${0.35+r*0.04})`;
       g.lineWidth=1.1; g.stroke();
     }
+  },
+  lattice(g,w,h,t){
+    // drifting points, linked to whatever is near, each trailing its own past
+    const N=26, pts=[];
+    for(let i=0;i<N;i++){
+      const a=hash(i,3)*TAU, r=0.18+hash(i,7)*0.3, s=0.25+hash(i,11)*0.5;
+      const ang=a+t*s*(i%2?1:-1)*0.6;
+      pts.push([w/2+Math.cos(ang)*r*w*0.9, h/2+Math.sin(ang*1.3)*r*h*1.1, s]);
+    }
+    for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
+      const d=Math.hypot(pts[i][0]-pts[j][0], pts[i][1]-pts[j][1]), R=w*0.2;
+      if(d>R) continue;
+      g.strokeStyle=`hsla(${168+(pts[i][2]+pts[j][2])*60},60%,62%,${(1-d/R)*0.55})`;
+      g.lineWidth=1; g.beginPath(); g.moveTo(pts[i][0],pts[i][1]); g.lineTo(pts[j][0],pts[j][1]); g.stroke();
+    }
+    pts.forEach(p=>{ g.fillStyle=`hsl(${20+p[2]*50},85%,${55+p[2]*30}%)`; g.beginPath(); g.arc(p[0],p[1],1.6,0,TAU); g.fill(); });
   },
   ouro(g,w,h,t){
     const cx=w/2, cy=h/2;

@@ -272,6 +272,8 @@ const TOOLS = [
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
   { id:"ff", file:"flow-field-plotter.html", label:"Flow Field Plotter", sel:"#gl", capture:"pull", color:"#e8c547",
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"la", file:"lattice.html",      label:"Lattice",      sel:"#gl",   capture:"pull", color:"#c9a2ff",
+    prefer:["lkDist","persist","velMax","stWidth"],   boot:[],             accepts:null,       init:"" },
   { id:"tc", file:"time-cube.html",    label:"Time Cube",    sel:"#gl",   capture:"pull", color:"#ff7a59",
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
 ];
@@ -343,8 +345,9 @@ function defaultGraph(){
   TOOLS.forEach((t, i) => G.nodes.push({ id:"n_"+t.id, kind:"tool", toolId:t.id, x:16, y:14 + i * 120 }));
   G.nodes.push({ id:"n_out", kind:"output", x:236, y:196 });
   G.nodes.push({ id:"n_vol", kind:"volume", x:236, y:392 });
-  const defs = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"], fa:[0.6,"screen"], ff:[0.6,"screen"], tc:[0.5,"screen"] };
+  const defs = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"], fa:[0.6,"screen"], ff:[0.6,"screen"], tc:[0.5,"screen"], la:[0.6,"screen"] };
   TOOLS.forEach((t, i) => {
+    if(!defs[t.id] || t.id === "la") return;      // Lattice arrives uncabled — patch it when you want it
     const [op, blend] = defs[t.id];
     G.conns.push(imgConn("n_"+t.id, "n_out", op, blend, i));
   });

@@ -10,6 +10,7 @@ tenth tool works like the first.
 |---|---|---|
 | anchor | yes | reference implementation |
 | sediment | yes | modulation is painted into the accumulation, not just displayed |
+| lattice | yes | same wiring as ouroboros; structural counts (points, links per point, streak length) are in `NO_MOD` |
 | ouroboros | yes | the most standard wiring: `DEFAULTS`, `P`/`Q`, `NO_MOD`, `registerMod` in the slider factory |
 | relief | yes | also consumes `unlimiter-depth.js` |
 | manifold | yes | targets come from `unlimiter-points.js` parameter metadata |
