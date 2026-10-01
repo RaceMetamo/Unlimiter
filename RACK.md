@@ -116,7 +116,7 @@ brightness, edges glowing, the cut-out, trails) and mixes like any layer. Analys
 point count and each mode's thresholds are sliders with a **◎**, so audio or a signal can
 drive them. **Reset** forgets the background and the tracks.
 
-Patch **field → Flow Weave's force** and camera motion pushes the fluid; **points → Flow
+Patch **field → Plotter's field** and strokes are pushed and steered by it (*Field push*, *Field steer*); **mask → Plotter's mask** and strokes only start inside it and are cut off when they wander out (*Stay inside mask*, plus *Invert* to draw outside). Patch **field → Flow Weave's force** and camera motion pushes the fluid; **points → Flow
 Weave's emitters / Plotter's seeds / Facade's seeds** and found things become brushes,
 agent starts and panel roots. Flow Weave's *Follow strength* sets how hard the fluid tracks
 the field.
@@ -289,8 +289,8 @@ What that environment can't judge:
 - Signal nodes for MIDI learn and the LFO shapes themselves (today they are set in
   the Drive panel); a sample-and-hold / slew utility; one engine per page.
 
-- More tools taking `field` and `mask`: Plotter (a field to bend strokes, a mask to confine them), Sediment (drift along a field), Melted World / Anchor (mask regions). Relief and points-as-brushes in Ouroboros.
-- More Vision modes: corner-pin warp (projection mapping), contours, depth.
+- More tools taking `field` and `mask`: Sediment (drift along a field), Melted World / Anchor (mask regions). Relief and points-as-brushes in Ouroboros.
+- More Vision modes: contours, depth. (Corner-pin warp for projection mapping, parked.)
 - Give Facade, Plotter and Time Cube a Drive so their settings are routable.
 - Phylo: lift its IIFE so its branches can leave.
 - One engine per page — the rack's clock and audio shared by every hosted tool.

@@ -147,6 +147,18 @@
     <div class="note">Direction uses normal optical flow — strokes get pushed the way things actually moved, not just excited where they moved. The density map is the composition — it decides where agents exist before a single line is drawn. Switch View to see it.</div>
   </details>
 
+  <details class="sec sec-rackdata" open>
+    <summary>Field & mask — from the rack</summary>
+    <div class="note" id="rackDataNote">Nothing patched. In the rack, patch a Vision node's <b>field</b> into <b>field</b> and its <b>mask</b> into <b>mask</b>.</div>
+    <label title="Camera motion (or any field) as a real force on every stroke"><span class="lab">Field push <b id="vFldPush"></b></span>
+      <input type="range" id="rFldPush" min="0" max="4" step="0.01" value="1"></label>
+    <label title="How far strokes turn to run along the field's direction"><span class="lab">Field steer <b id="vFldSteer"></b></span>
+      <input type="range" id="rFldSteer" min="0" max="1" step="0.01" value="0.4"></label>
+    <label title="Strokes only start inside the mask. This is the chance per frame that one leaving it is cut off"><span class="lab">Stay inside mask <b id="vMaskStay"></b></span>
+      <input type="range" id="rMaskStay" min="0" max="1" step="0.01" value="0.6"></label>
+    <label class="chk"><input type="checkbox" id="cMaskInv"> Invert (draw outside the mask)</label>
+  </details>
+
   <details class="sec sec-seed">
     <summary>Seeding</summary>
     <label><span class="lab">Agents <b id="vCount"></b></span>
@@ -1054,7 +1066,7 @@ function clearSay(){ statusEl.className = ''; }
 /* ---------- parameters ---------- */
 const P = {
   wGrad:1, wAni:0.35, wDark:0.5, wMot:1.2, mDecay:0.88, floor:0.03,
-  count:900, contour:0.45, seedPull:0.9, rMin:3, rMax:34, turn:0.25,
+  count:900, contour:0.45, seedPull:0.9, fldPush:1, fldSteer:0.4, maskStay:0.6, maskInv:false, rMin:3, rMax:34, turn:0.25,
   drag:0.12, force:1.3, speed:2.2, wander:0.22, nScale:0.006, rest:0.18, life:140,
   sep:1.1, ali:0.35, coh:0.15, nbr:16,
   width:3.5, alpha:0.85, inkMode:0,
@@ -1510,6 +1522,37 @@ function contourPoint(){
    front-on. Tangents, when the producer has them, set each stroke's first heading.
    Live points are sampled evenly, up to SEED_MAX, and re-read whenever the
    producer's version moves — so strokes trace a moving cloud. */
+/* ---- a field and a mask from the Rack (unlimiter-ports.js, by reference) ----
+   field: uv per second, v down — pushes and steers strokes (camera motion,
+          optical flow, structure orientation…)
+   mask:  w×h bytes over the frame — strokes start only where it is lit (or
+          only where it isn't, inverted) and are cut off when they wander out. */
+const RFLD = { src:null }, RMASK = { src:null };
+function rackNote(){
+  const n = el('rackDataNote'); if(!n) return;
+  const a = [];
+  if(RFLD.src) a.push('field <b>' + RFLD.src.w + '×' + RFLD.src.h + '</b>');
+  if(RMASK.src) a.push('mask <b>' + RMASK.src.w + '×' + RMASK.src.h + '</b>');
+  n.innerHTML = a.length ? 'Receiving ' + a.join(' and ') + ' from the rack.'
+    : 'Nothing patched. In the rack, patch a Vision node\'s <b>field</b> into <b>field</b> and its <b>mask</b> into <b>mask</b>.';
+}
+function setRackField(f){ RFLD.src = f || null; rackNote(); }
+function setRackMask(m){ RMASK.src = m || null; rackNote(); }
+/* the field's vector at a page position, in page pixels per frame */
+const fv2 = [0, 0];
+function rackFieldAt(x, y){
+  const f = RFLD.src; if(!f){ fv2[0] = fv2[1] = 0; return fv2; }
+  const cx = Math.min(f.w - 1, Math.max(0, (x / W * f.w) | 0)), cy = Math.min(f.h - 1, Math.max(0, (y / H * f.h) | 0)), i = (cy * f.w + cx) * 2;
+  fv2[0] = f.data[i]; fv2[1] = f.data[i + 1];
+  return fv2;
+}
+function rackAllows(x, y){
+  const m = RMASK.src; if(!m) return true;
+  const cx = Math.min(m.w - 1, Math.max(0, (x / W * m.w) | 0)), cy = Math.min(m.h - 1, Math.max(0, (y / H * m.h) | 0));
+  const lit = m.data[cy * m.w + cx] > 127;
+  return P.maskInv ? !lit : lit;
+}
+
 const SEED_MAX = 1500;
 const SEED = { src:null, ver:-1, W:0, H:0, n:0, buf:new Float32Array(SEED_MAX * 4) };
 function setSeeds(f){
@@ -1570,7 +1613,9 @@ function rackOutCanvas(){
 function makeAgent(force){
   const isContour = hasAnalysis && rnd() < E.contour;
   const seeded = SEED.n > 0 && rnd() < P.seedPull;
-  const p = seeded ? seedPoint() : ((force === 'c' || isContour) ? contourPoint() : poissonPoint());
+  const gen = () => seeded ? seedPoint() : ((force === 'c' || isContour) ? contourPoint() : poissonPoint());
+  let p = gen();
+  if(RMASK.src) for(let t = 0; t < 24 && !rackAllows(p.x, p.y); t++) p = gen();     // start inside the mask
   const rs = rnd();
   return {
     x:p.x, y:p.y, vx:seeded ? p.tx * E.speed * 0.6 : 0, vy:seeded ? p.ty * E.speed * 0.6 : 0, age:0, resting:false,
@@ -1616,6 +1661,15 @@ function fieldAngle(a){
     ang = Math.atan2(sy, sx);
   }
   if(E.fieldRot) ang += E.fieldRot * Math.PI/180;   // a global twist on the whole field
+  if(P.fldSteer > 0 && RFLD.src){
+    const v = rackFieldAt(a.x, a.y), fm = Math.hypot(v[0], v[1]);
+    if(fm > 0.01){
+      const k = Math.min(1, fm / 0.08) * P.fldSteer;
+      const sx = Math.cos(ang)*(1-k) + (v[0]/fm)*k;
+      const sy = Math.sin(ang)*(1-k) + (v[1]/fm)*k;
+      ang = Math.atan2(sy, sx);
+    }
+  }
   if(P.mFlow > 0 && hasAnalysis){
     const i = ay(a.y)*AW + ax(a.x);
     const fm = Math.hypot(flowX[i], flowY[i]);
@@ -1662,6 +1716,11 @@ function step(){
 
     // the field is an orientation, not a direction — keep going the way we were
     if(a.vx*axx + a.vy*ayy < 0){ axx = -axx; ayy = -ayy; }
+    // a field from the rack is a direction, not an orientation: added after the flip
+    if(P.fldPush > 0 && RFLD.src){
+      const v = rackFieldAt(a.x, a.y), k = P.fldPush * 0.15 * W / 60;
+      axx += v[0] * k; ayy += v[1] * k;
+    }
 
     if(E.sep > 0 || E.ali > 0 || E.coh > 0){
       const nb = neighbours(a, E.nbr);
@@ -1695,6 +1754,7 @@ function step(){
     a.x += a.vx; a.y += a.vy; a.age++;
 
     if(a.x < 0 || a.y < 0 || a.x >= W || a.y >= H){ retire(a, idx); continue; }
+    if(RMASK.src && P.maskStay > 0 && !rackAllows(a.x, a.y) && rnd() < P.maskStay){ retire(a, idx); continue; }
     if(P.zMode === 1){
       const li = hasAnalysis ? lum[ay(a.y)*AW + ax(a.x)] : 0.5;
       a.z += P.zWind * (1 + (li - 0.5) * 2 * P.zLum) * 0.02;
@@ -2378,7 +2438,9 @@ if(window.UnlimiterPorts){
       outputs:{ out:{ type:'image', label:'image', get:rackOutCanvas } },
       inputs:{
         image:{ type:'image',  label:'source', set:setRackImage },
-        seeds:{ type:'points', label:'seeds',  set:setSeeds }
+        seeds:{ type:'points', label:'seeds',  set:setSeeds },
+        field:{ type:'field',  label:'field',  set:setRackField },
+        mask: { type:'mask',   label:'mask',   set:setRackMask }
       }
     });
   }catch(e){ console.warn('[plotter] ports', e); }
@@ -2594,6 +2656,8 @@ bind('rFloor','vFloor','floor',f3,reDens);
 bind('rCount','vCount','count',f0);
 bind('rContour','vContour','contour',f2);
 bind('rSeedPull','vSeedPull','seedPull',f2);
+bind('rFldPush','vFldPush','fldPush',f2); bind('rFldSteer','vFldSteer','fldSteer',f2); bind('rMaskStay','vMaskStay','maskStay',f2);
+el('cMaskInv').addEventListener('change', e => { P.maskInv = e.target.checked; });
 bind('rRMin','vRMin','rMin',f2);
 bind('rRMax','vRMax','rMax',f0);
 bind('rTurn','vTurn','turn',f2);

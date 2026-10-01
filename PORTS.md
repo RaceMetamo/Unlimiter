@@ -13,7 +13,7 @@ internally, which until now never left its iframe except as a picture of itself.
 | rack generator nodes | `3D`, `2D` points · `image` | `unlimiter-points.js` running in the rack, no iframe |
 | volume-renderer | `pushPoints()` on its API | the rack routes a points cable into it |
 | tbg-facade | `out` image · `seeds` points in | each point roots a folding-panel growth, panel centred on the point and facing outward |
-| flow-field-plotter | `out` image · `image` source in · `seeds` points in | a Rack image replaces the file/webcam source; seeds start most agents (tangent heading) |
+| flow-field-plotter | `out` image · `image` source in · `seeds` points in · `field` in · `mask` in | a Rack image replaces the file/webcam source; seeds start most agents (tangent heading); a field pushes and steers strokes; a mask confines where they start and run |
 | time-cube | `out` image · `image` source in | a Rack image stands in for the camera, filling the time volume |
 | anchor, sediment, phylo | — | next; ARCHITECTURE.md lists the seam in each |
 
