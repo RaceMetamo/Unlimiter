@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-points.js"></script>
+<script src="unlimiter-vision.js"></script>
 <script src="unlimiter-ports.js"></script>
 <style>
 :root{
@@ -177,6 +178,7 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
     <button id="bOutput">Output window</button>
     <button id="bReset">Reset layout</button>
     <button id="bAddGen" title="Manifold: a procedural point source — unlimiter-points.js running inside the rack, with morph between two forms">+ Manifold</button>
+    <button id="bAddVision" title="Vision: finds motion, edges, foreground or trackable corners in any picture and gives them out as a field, a mask and points">+ Vision</button>
     <button id="bAddSig" title="Signals: audio, clock, LFO and MIDI sources, utilities, and parameter nodes that take them">+ Signal ▾</button>
     <div class="spacer"></div>
     <div id="beat"></div>
@@ -277,6 +279,7 @@ const LS_KEY_V1 = "unlimiter.rack.graph.v1";   // untyped cables — read once, 
 const LS_KEY    = "unlimiter.rack.graph.v2";   // typed {node, port} cables + generator nodes
 const PT = window.UnlimiterPorts || null;      // typed data between nodes
 const UP = window.UnlimiterPoints || null;     // the geometry behind generator nodes
+const UV = window.UnlimiterVision || null;     // machine vision behind Vision nodes
 /* cable colours by type; image cables keep their source node's colour */
 const TYPE_COL = { image:"#8b90a0", points:"#7fd1c0", field:"#ffb02e", mask:"#9d7bff", scalar:"#f2d45c" };
 
@@ -472,6 +475,12 @@ function ensureTarget(key){
     if(L && L.ready && L.targets && L.targets[k]){ const t = addToolTarget(L, k); if(Drive) Drive.rebuildMatrix(); return t; }
     return null;
   }
+  const vn = G.nodes.find(n => n.kind === "vision" && key.indexOf(n.id + ".") === 0);
+  if(vn){
+    const k = key.slice(vn.id.length + 1), spec = visionParamRows(vn).find(r => r.key === k);
+    if(spec){ const t = addVisionTarget(vn, spec); if(Drive) Drive.rebuildMatrix(); return t; }
+    return null;
+  }
   const g = G.nodes.find(n => n.kind === "gen" && key.indexOf(n.id + ".") === 0);
   if(g){
     const k = key.slice(g.id.length + 1);
@@ -501,6 +510,8 @@ function paramChoices(){
   G.nodes.filter(n => n.kind === "gen").forEach(n => genParamGroups(n).forEach(g => g.rows.forEach(r => {
     if(r.mod !== false) out.push({ group:(n.label || "Points") + " · " + n.id, key:genTargetKey(n, r.key), label:r.label });
   })));
+  G.nodes.filter(n => n.kind === "vision").forEach(n => visionParamRows(n).forEach(r =>
+    out.push({ group:(n.label || "Vision") + " · " + n.id, key:genTargetKey(n, r.key), label:r.label })));
   VOL_LOCAL.forEach(v => out.push({ group:"Volume", key:v.key, label:v.label }));
   volParams.forEach(p => out.push({ group:"Volume", key:"vol." + p.id, label:p.label }));
   return out;
@@ -570,6 +581,8 @@ function portsOf(n){
   if(n.kind === "output") return { ins:[{ id:"in", type:"image", label:"layers", multi:true }], outs:[{ id:"out", type:"image" }] };
   if(n.kind === "volume") return { ins:[{ id:"in", type:"image", label:"image" }, { id:"points", type:"points", label:"points" }], outs:[] };
   if(n.kind === "gen")    return { ins:[], outs:[{ id:"out", type:"image", label:"image" }, { id:"points3d", type:"points", label:"3D" }, { id:"uv", type:"points", label:"2D" }] };
+  if(n.kind === "vision") return { ins:[{ id:"in", type:"image", label:"image" }],
+    outs:[{ id:"out", type:"image", label:"image" }, { id:"points", type:"points", label:"points" }, { id:"field", type:"field", label:"field" }, { id:"mask", type:"mask", label:"mask" }] };
   if(n.kind === "sig")    return { ins:[], outs:[{ id:"out", type:"scalar", label:"" }] };
   if(n.kind === "util"){  const ins = (UTIL[n.util] || UTIL.scale).ins;
     return { ins:ins.map(id => ({ id, type:"scalar", label: ins.length > 1 ? id : "", multi:true })), outs:[{ id:"out", type:"scalar", label:"" }] }; }
@@ -609,6 +622,7 @@ function saveGraph(){
         const o = { id:n.id, kind:n.kind, toolId:n.toolId, x:Math.round(n.x), y:Math.round(n.y) };
         if(n.bypass) o.bypass = true;
         if(n.kind === "gen"){ o.label = n.label; o.preset = n.preset; o.P = n.P; }
+        if(n.kind === "vision"){ o.label = n.label; o.mode = n.mode; o.source = n.source; o.P = n.P; }
         if(n.kind === "sig"){ o.src = n.src; if(n.src === "manual") o.value = n.value; }
         if(n.kind === "util"){ o.util = n.util; o.params = n.params; }
         if(n.kind === "param"){ o.key = n.key; o.label = n.label; }
@@ -631,6 +645,8 @@ function loadGraph(){
     // generator nodes need the geometry modules; without them they are dropped, not broken
     G.nodes = s.nodes.filter(n => n.kind !== "gen" || (UP && PT));
     G.nodes.forEach(n => { if(n.kind === "gen"){ n.P = Object.assign(genPresetP(n.preset), n.P || {}); if(n.label === "Points") n.label = "Manifold"; } });
+    G.nodes = G.nodes.filter(n => n.kind !== "vision" || (UV && PT));
+    G.nodes.forEach(n => { if(n.kind === "vision"){ if(UV.MODES.indexOf(n.mode) < 0) n.mode = "flow"; n.source = n.source === "camera" ? "camera" : "cable"; n.P = Object.assign(visionDefaults(n.mode), n.P || {}); n.label = n.label || "Vision"; } });
     G.nodes = G.nodes.filter(n => n.kind !== "util" || UTIL[n.util]);
     // tools added to the rack since this layout was saved arrive uncabled, below the others
     TOOLS.forEach(t => {
@@ -782,6 +798,7 @@ function canvasForNode(id){
   if(id === "n_out") return mixCanvas;
   const n = nodeById(id);
   if(n && n.kind === "gen"){ const rt = gens.get(n.id); return rt ? rt.canvas : null; }
+  if(n && n.kind === "vision"){ const rt = visions.get(n.id); return rt && rt.out ? rt.canvas : null; }
   if(!n || n.kind !== "tool") return null;
   const L = layers.get(n.toolId);
   return L && L.ready ? L.canvas : null;
@@ -951,6 +968,114 @@ function drawGen(rt){
 }
 function stepGens(dtSec){ G.nodes.forEach(n => { if(n.kind === "gen") stepGen(n, dtSec); }); }
 
+/* ============================================================
+   Vision nodes — unlimiter-vision.js running in the rack itself.
+   Takes any picture (a patched cable, or the webcam), finds motion, edges,
+   foreground or trackable corners at 192×108, and gives them out as the other
+   three port types: a field, a mask and points — by reference, no copy.
+   ============================================================ */
+const visions = new Map();       // nodeId -> runtime
+const VISION_MODES = [["flow", "Motion — optical flow"], ["edges", "Edges & structure"], ["bgsub", "Foreground — background subtraction"], ["tracks", "Feature tracks"]];
+function visionDefaults(mode){
+  const P = {}; UV.PARAMS.common.concat(UV.PARAMS[mode] || []).forEach(p => { P[p.key] = p.def; }); return P;
+}
+function makeVisionNode(x, y){ return { id:uid("v"), kind:"vision", x, y, label:"Vision", mode:"flow", source:"cable", P:visionDefaults("flow") }; }
+function visionParamRows(n){ return UV.PARAMS.common.concat(UV.PARAMS[n.mode] || []); }
+function visionRuntime(n){
+  let rt = visions.get(n.id);
+  if(!rt){
+    const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+    const small = mk(UV.W, UV.H), visc = mk(UV.W, UV.H), cv = mk(LAYER_W, LAYER_H);
+    rt = { engine:UV.create(PT), small, sctx:small.getContext("2d", { willReadFrequently:true }), visc, vctx:visc.getContext("2d"),
+           canvas:cv, ctx:cv.getContext("2d"), out:null, last:0, lastVT:-1, video:null, stream:null,
+           camState:"off", camTried:false, camError:null, error:null, ov:{}, idle:false };
+    rt.ctx.fillStyle = "#000"; rt.ctx.fillRect(0, 0, LAYER_W, LAYER_H);
+    visions.set(n.id, rt);
+  }
+  return rt;
+}
+function visionSource(n, rt){
+  if(n.source === "camera"){
+    const v = rt.video; if(!v || v.readyState < 2 || !v.videoWidth) return null;
+    return { el:v, w:v.videoWidth, h:v.videoHeight, fresh:v.currentTime !== rt.lastVT, vt:v.currentTime };
+  }
+  const c = inputConnFor(n.id); if(!c || cOff(c)) return null;
+  const el = canvasForNode(c.from); if(!el || !el.width) return null;
+  return { el, w:el.width, h:el.height, fresh:true, vt:null };
+}
+async function visionCamera(n, on){
+  const rt = visionRuntime(n);
+  if(rt.stream){ rt.stream.getTracks().forEach(t => t.stop()); rt.stream = null; }
+  rt.video = null; rt.camState = "off"; rt.camError = null;
+  if(!on) return;
+  rt.camState = "starting";
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ width:{ ideal:640 }, height:{ ideal:360 } }, audio:false });
+    const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.srcObject = stream;
+    await v.play();
+    rt.stream = stream; rt.video = v; rt.camState = "on";
+  }catch(e){ rt.camState = "error"; rt.camError = e.message || String(e); }
+  if(selected && selected.id === n.id) Inspector.render();
+}
+function stepVision(n, nowMs){
+  const rt = visionRuntime(n);
+  if(n.bypass) return;
+  if(n.source === "camera" && rt.camState === "off" && !rt.camTried){ rt.camTried = true; visionCamera(n, true); }
+  try{
+    const P = Object.assign({}, n.P, rt.ov), fps = Number(P.fps) || 30;
+    const src = visionSource(n, rt);
+    if(!src){
+      rt.out = null;
+      if(!rt.idle){ rt.idle = true; rt.ctx.fillStyle = "#000"; rt.ctx.fillRect(0, 0, LAYER_W, LAYER_H); rt.engine.reset(); }
+      return;
+    }
+    rt.idle = false;
+    if(!src.fresh || nowMs - rt.last < 1000 / fps - 2) return;
+    rt.last = nowMs; if(src.vt != null) rt.lastVT = src.vt;
+    rt.sctx.drawImage(src.el, 0, 0, UV.W, UV.H);
+    const img = rt.sctx.getImageData(0, 0, UV.W, UV.H);
+    const out = rt.engine.step(img.data, src.w / src.h, nowMs / 1000, n.mode, P);
+    rt.out = out;
+    rt.vctx.putImageData(new ImageData(out.vis, UV.W, UV.H), 0, 0);
+    rt.ctx.imageSmoothingEnabled = true; rt.ctx.drawImage(rt.visc, 0, 0, LAYER_W, LAYER_H);
+    rt.error = null;
+  }catch(e){ rt.error = e.message || String(e); }
+}
+function stepVisions(nowMs){ G.nodes.forEach(n => { if(n.kind === "vision") stepVision(n, nowMs); }); }
+function addVisionTarget(n, spec){
+  const key = genTargetKey(n, spec.key), rt = visionRuntime(n);
+  if(RP[key] == null) RP[key] = Number(n.P[spec.key] != null ? n.P[spec.key] : spec.def);
+  const t = registerTarget(key, (n.label || "Vision") + " — " + spec.label, spec.min, spec.max, v => { rt.ov[spec.key] = v; });
+  t.release = () => { delete rt.ov[spec.key]; };
+  return t;
+}
+function pruneVisionTargets(n){
+  const live = new Set(visionParamRows(n).map(r => genTargetKey(n, r.key)));
+  RACK_TARGETS.filter(t => t.key.indexOf(n.id + ".") === 0 && !live.has(t.key)).map(t => t.key).forEach(unregisterTarget);
+}
+function setVisionMode(n, mode){
+  n.mode = mode;
+  (UV.PARAMS[mode] || []).forEach(p => { n.P[p.key] = p.def; });     // thresholds mean different things per mode
+  pruneVisionTargets(n);
+  const rt = visionRuntime(n); rt.engine.reset(); rt.out = null;
+}
+function removeVision(id){
+  const n = nodeById(id); if(!n || n.kind !== "vision") return;
+  RACK_TARGETS.filter(t => t.key.indexOf(id + ".") === 0).map(t => t.key).forEach(unregisterTarget);
+  const dead = G.nodes.filter(m => m.kind === "param" && m.key.indexOf(id + ".") === 0).map(m => m.id);
+  G.conns = G.conns.filter(c => c.from !== id && c.to !== id && dead.indexOf(c.to) < 0);
+  G.nodes = G.nodes.filter(x => x.id !== id && dead.indexOf(x.id) < 0);
+  visionCamera(n, false); visions.delete(id);
+  select(null); GraphView.build(); saveGraph();
+}
+function addVision(){
+  if(!UV || !PT) return;
+  const c = GraphView.centerPoint(), n = makeVisionNode(c.x - 76 + (Math.random() * 60 - 30), c.y - 54 + (Math.random() * 60 - 30));
+  G.nodes.push(n);
+  GraphView.build(); select({ kind:"node", id:n.id }); saveGraph();
+  return n;
+}
+
 /* every number a generator exposes, in inspector order, from the module's own metadata */
 function genParamGroups(n){
   const P = n.P, meta = (table, id) => (table[id] && table[id].params) || [];
@@ -1016,6 +1141,10 @@ function outputValue(n, port){
   if(n.kind === "gen"){
     const rt = gens.get(n.id); if(!rt) return null;
     return port === "points3d" ? rt.unit : port === "uv" ? rt.uv : port === "out" ? rt.canvas : null;
+  }
+  if(n.kind === "vision"){
+    const rt = visions.get(n.id), o = rt && rt.out;
+    return !o ? null : port === "out" ? rt.canvas : port === "points" ? o.points : port === "field" ? o.field : port === "mask" ? o.mask : null;
   }
   if(n.kind === "tool"){
     const L = layers.get(n.toolId), o = L && L.ready && L.io && L.io.outputs[port];
@@ -1151,6 +1280,7 @@ const GraphView = (() => {
     if(n.kind === "output") return "#e8e9ee";
     if(n.kind === "volume") return "#8b90a0";
     if(n.kind === "gen") return TYPE_COL.points;
+    if(n.kind === "vision") return "#6fe0a8";
     if(isSig(n)) return TYPE_COL.scalar;
     const t = TOOLS.find(t => t.id === n.toolId);
     return t ? t.color : "#8b90a0";
@@ -1160,6 +1290,7 @@ const GraphView = (() => {
     if(n.kind === "output") return "OUTPUT";
     if(n.kind === "volume") return "Volume";
     if(n.kind === "gen") return n.label || "Points";
+    if(n.kind === "vision") return n.label || "Vision";
     if(isSig(n)) return sigTitle(n);
     return (TOOLS.find(t => t.id === n.toolId) || {}).label || n.toolId;
   }
@@ -1168,9 +1299,9 @@ const GraphView = (() => {
     G.nodes.forEach(n => {
       const d = document.createElement("div");
       const col = colorOf(n);
-      d.className = "node" + (n.kind === "output" ? " out" : n.kind === "volume" ? " vol" : n.kind === "gen" ? " gen" : isSig(n) ? " sg" : "");
+      d.className = "node" + (n.kind === "output" ? " out" : n.kind === "volume" ? " vol" : (n.kind === "gen" || n.kind === "vision") ? " gen" : isSig(n) ? " sg" : "");
       d.dataset.id = n.id;
-      const sub = n.kind === "output" ? "mix → OBS" : n.kind === "volume" ? "" : n.kind === "gen" ? (n.preset || "") : isSig(n) ? sigSub(n) : n.toolId;
+      const sub = n.kind === "output" ? "mix → OBS" : n.kind === "volume" ? "" : n.kind === "gen" ? (n.preset || "") : n.kind === "vision" ? n.mode : isSig(n) ? sigSub(n) : n.toolId;
       d.innerHTML =
         `<div class="nh"><span class="sw" style="background:${col}"></span><b>${titleOf(n)}</b>` +
         (n.kind === "tool" ? `<span class="st"></span>` : "") +
@@ -1376,6 +1507,8 @@ const GraphView = (() => {
       select(null); drawCables(); saveGraph();
     } else if(selected.kind === "node" && (nodeById(selected.id) || {}).kind === "gen"){
       removeGen(selected.id);        // generators are yours to delete; tools, OUTPUT and Volume are fixed
+    } else if(selected.kind === "node" && (nodeById(selected.id) || {}).kind === "vision"){
+      removeVision(selected.id);
     } else if(selected.kind === "node" && isSig(nodeById(selected.id))){
       removeSigNode(selected.id);
     }
@@ -1386,6 +1519,10 @@ const GraphView = (() => {
       if(isSig(n)){ drawScope(n, e); return; }
       const src = n.kind === "output" ? mixCanvas : canvasForNode(n.id);
       if(src) { try{ e.ctx.drawImage(src, 0, 0, e.thumb.width, e.thumb.height); }catch(err){} }
+      if(n.kind === "vision" && e.info){
+        const rt = visions.get(n.id), o = rt && rt.out;
+        e.info.textContent = rt && rt.error ? "error" : o ? o.stats.n + " pts · " + Math.round(o.stats.activity * 100) + "%" : n.source === "camera" ? (rt && rt.camState || "camera") : "no input";
+      }
       if(n.kind === "gen" && e.info){
         const rt = gens.get(n.id), f = rt && rt.uv;
         e.info.textContent = rt && rt.error ? "error" : f ? f.count.toLocaleString() + " pts" : "";
@@ -1476,6 +1613,7 @@ const Inspector = (() => {
     if(n.kind === "output") renderOutput(modded);
     else if(n.kind === "volume") renderVolume(modded);
     else if(n.kind === "gen") renderGen(n);
+    else if(n.kind === "vision") renderVision(n);
     else if(n.kind === "sig") renderSig(n);
     else if(n.kind === "util") renderUtil(n);
     else if(n.kind === "param") renderParam(n);
@@ -1824,6 +1962,49 @@ const Inspector = (() => {
     root.querySelector("#gByp").addEventListener("click", () => GraphView.bypassNode(n));
     mountDrive();
   }
+  function renderVision(n){
+    const rt = visionRuntime(n), modded = Drive ? new Set(Drive.modulatedKeys()) : new Set();
+    const gives = { flow:"field (velocity) · mask (where it moves) · points (on the motion, heading along it)",
+                    edges:"points (on edges, tangent along them) · field (structure orientation) · mask (the edges)",
+                    bgsub:"mask (the silhouette) · points (over it) · field (pointing out of it)",
+                    tracks:"points (tracked corners, tangent = velocity) · field (their motion, smoothed)" };
+    const cam = n.source === "camera";
+    const camNote = !cam ? "" : rt.camState === "on" ? "webcam running" : rt.camState === "starting" ? "waiting for permission…" :
+      rt.camState === "error" ? `<span style="color:var(--danger)">${rt.camError}</span> — needs https or localhost` : "webcam off";
+    let body = `<div class="ihead"><span class="sw" style="background:#6fe0a8;border-radius:50%"></span><b>${n.label || "Vision"}</b></div>
+      <div class="empty" style="margin-bottom:10px">Machine vision, written for the page — no library. It looks at a picture and gives back
+        <b style="color:var(--text)">${gives[n.mode]}</b>. Patch a <span style="color:${TYPE_COL.field}">field</span> into Flow Weave's <b style="color:var(--text)">force</b>,
+        <span style="color:${TYPE_COL.points}">points</span> into any <b style="color:var(--text)">seeds</b> or <b style="color:var(--text)">emitters</b>.</div>` +
+      (rt.error ? `<div class="empty" style="color:var(--danger);margin-bottom:8px">${rt.error}</div>` : "") +
+      `<div class="fld"><div class="lab"><span>looks for</span></div><select id="vMode">${VISION_MODES.map(([k, l]) => `<option value="${k}"${k === n.mode ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+       <div class="fld"><div class="lab"><span>picture from</span><span class="v">${camNote}</span></div>
+         <select id="vSrc"><option value="cable"${cam ? "" : " selected"}>the patched image cable</option><option value="camera"${cam ? " selected" : ""}>webcam</option></select></div>` +
+      visionParamRows(n).map(spec => genRow(n, spec, modded)).join("") +
+      `<div class="row2" style="margin-top:12px;grid-template-columns:1fr 1fr 1fr"><button id="vReset" title="Forget the background and tracks">reset</button><button id="gByp" class="${n.bypass ? "on" : ""}">${n.bypass ? "Bypassed" : "Bypass (B)"}</button><button id="gDel" style="color:var(--danger)">delete</button></div>` + driveSection();
+    root.innerHTML = body;
+    const persist = () => saveGraph();
+    root.querySelector("#vMode").addEventListener("change", e => { setVisionMode(n, e.target.value); GraphView.build(); persist(); render(); });
+    root.querySelector("#vSrc").addEventListener("change", e => {
+      n.source = e.target.value; rt.camTried = true; visionCamera(n, n.source === "camera");
+      rt.out = null; GraphView.build(); persist(); render();
+    });
+    root.querySelector("#vReset").addEventListener("click", () => { rt.engine.reset(); rt.out = null; });
+    root.querySelectorAll(".gprow").forEach(row => {
+      const k = row.dataset.gk, key = genTargetKey(n, k), spec = visionParamRows(n).find(r => r.key === k);
+      const r = row.querySelector("input"), v = row.querySelector(".v");
+      r.addEventListener("input", e => { const val = parseFloat(e.target.value); v.textContent = fmt(val); n.P[k] = val; if(targetByKey.has(key)) RP[key] = val; });
+      r.addEventListener("change", persist);
+      const mb = row.querySelector(".mb");
+      if(mb) mb.addEventListener("click", () => {
+        if(targetByKey.has(key)) unregisterTarget(key);
+        else { RP[key] = n.P[k]; addVisionTarget(n, spec); if(Drive) Drive.rebuildMatrix(); }
+        render();
+      });
+    });
+    root.querySelector("#gDel").addEventListener("click", () => removeVision(n.id));
+    root.querySelector("#gByp").addEventListener("click", () => GraphView.bypassNode(n));
+    mountDrive();
+  }
   function genRow(n, spec, modded){
     const key = genTargetKey(n, spec.key), isT = targetByKey.has(key);
     const raw = isT ? (RP[key] ?? n.P[spec.key]) : n.P[spec.key];
@@ -2027,6 +2208,9 @@ function boot(){
     if(Drive) Drive.rebuildMatrix();
     GraphView.build(); select({ kind:"node", id:"n_out" }); saveGraph();
   });
+  const bAddVision = document.getElementById("bAddVision");
+  if(UV && PT) bAddVision.addEventListener("click", addVision);
+  else { bAddVision.disabled = true; bAddVision.title = "unlimiter-vision.js and unlimiter-ports.js must sit next to rack.html"; }
   const bAddGen = document.getElementById("bAddGen");
   if(UP && PT) bAddGen.addEventListener("click", addGen);
   else { bAddGen.disabled = true; bAddGen.title = "unlimiter-points.js and unlimiter-ports.js must sit next to rack.html"; }
@@ -2095,6 +2279,7 @@ function boot(){
     RQ = applyParamNodes(RQ);
     RACK_TARGETS.forEach(t => { const v = RQ[t.key]; if(typeof v === "number" && isFinite(v)) t.apply(v); });
 
+    if(UV && PT) stepVisions(now);
     if(UP && PT){ stepGens(dt / 1000); deliverData(); }
     feedSources(now);
     captureAndMix();

@@ -96,6 +96,31 @@ so their own sliders are not routable from the Rack — only their ports are.
 The default graph, and the first load of a migrated v1 layout, include one
 generator wired **2D → Flow Weave's emitters** and **3D → Volume's points**.
 
+## Vision nodes
+
+**+ Vision** adds `unlimiter-vision.js` running inside the Rack — plain JS on a 192×108
+copy of the picture, no library, about 5–10 ms a frame. It takes any picture (the patched
+image cable, or the webcam) and gives back all three data types. What it makes depends on
+the mode:
+
+| Mode | field | mask | points |
+|---|---|---|---|
+| **Motion** (pyramidal Lucas–Kanade) | velocity, uv per second | where it moves | on the moving areas, heading along the motion |
+| **Edges** (Sobel, thinned) | orientation of structure (sign arbitrary) | the edges | on the edges, tangent runs along them |
+| **Foreground** (running background, selective update) | points out of the silhouette | the silhouette | spread over it |
+| **Feature tracks** (Shi–Tomasi + sparse LK) | their motion, smoothed | — | tracked corners, tangent = velocity |
+
+An output a mode doesn't make is empty, and whatever was patched to it falls back to its
+own content. The **image** output is a picture of what it found (flow as hue and
+brightness, edges glowing, the cut-out, trails) and mixes like any layer. Analysis rate,
+point count and each mode's thresholds are sliders with a **◎**, so audio or a signal can
+drive them. **Reset** forgets the background and the tracks.
+
+Patch **field → Flow Weave's force** and camera motion pushes the fluid; **points → Flow
+Weave's emitters / Plotter's seeds / Facade's seeds** and found things become brushes,
+agent starts and panel roots. Flow Weave's *Follow strength* sets how hard the fluid tracks
+the field.
+
 ## Signals — the old Control Surface, inside the graph
 
 There is one graph. **+ Signal ▾** adds three kinds of node, all wired with
@@ -264,8 +289,8 @@ What that environment can't judge:
 - Signal nodes for MIDI learn and the LFO shapes themselves (today they are set in
   the Drive panel); a sample-and-hold / slew utility; one engine per page.
 
-- More tools publishing ports: Anchor (oriented paths out), Flow Field Plotter
-  (field out), Sediment (seeds and field in); Relief and points-as-brushes in Ouroboros.
+- More tools taking `field` and `mask`: Plotter (a field to bend strokes, a mask to confine them), Sediment (drift along a field), Melted World / Anchor (mask regions). Relief and points-as-brushes in Ouroboros.
+- More Vision modes: corner-pin warp (projection mapping), contours, depth.
 - Give Facade, Plotter and Time Cube a Drive so their settings are routable.
 - Phylo: lift its IIFE so its branches can leave.
 - One engine per page — the rack's clock and audio shared by every hosted tool.

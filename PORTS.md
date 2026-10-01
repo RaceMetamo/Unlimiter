@@ -8,7 +8,8 @@ internally, which until now never left its iframe except as a picture of itself.
 
 | Tool | Publishes | Notes |
 |---|---|---|
-| flow-weave | `out` image · `emitters` points in | reference implementation — every point becomes a brush |
+| flow-weave | `out` image · `emitters` points in · `force` field in | `force` relaxes the fluid toward the field (uv/s) wherever it is non-zero |
+| rack Vision nodes | `image`, `points`, `field`, `mask` | `unlimiter-vision.js` in the rack — motion, edges, foreground, tracked corners |
 | rack generator nodes | `3D`, `2D` points · `image` | `unlimiter-points.js` running in the rack, no iframe |
 | volume-renderer | `pushPoints()` on its API | the rack routes a points cable into it |
 | tbg-facade | `out` image · `seeds` points in | each point roots a folding-panel growth, panel centred on the point and facing outward |
