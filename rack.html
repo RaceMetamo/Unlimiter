@@ -210,14 +210,15 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
 
     <div class="col stage">
       <div class="colhead"><b id="workTitle">Output</b><span id="workSub">the mix — what OBS captures</span>
-        <div class="spacer"></div><button id="bBackToMix" class="sm" style="display:none">← back to mix</button></div>
+        <div class="spacer"></div><button id="bBackToMix" class="sm" style="display:none">← back to mix</button>
+        <button id="bVol" class="sm" title="Show or hide the 3D volume view. Hidden means it is not loaded or drawn, so it costs nothing.">Volume: off</button></div>
       <div id="work">
         <canvas id="mixCanvas"></canvas>
         <div id="farm"></div>
       </div>
       <div id="volPane">
         <div class="tag">VOLUME — the mix as a live 3D relief</div>
-        <iframe id="volFrame" src="volume-renderer.html?embed=1" title="Volume renderer"></iframe>
+        <iframe id="volFrame" data-src="volume-renderer.html?embed=1" title="Volume renderer"></iframe>
       </div>
     </div>
 
@@ -295,6 +296,9 @@ const mixCtx = mixCanvas.getContext("2d");
 
 const layers = new Map();       // toolId -> runtime state
 let volAPI = null, volReady = false;
+const VOL_LS = "unlimiter.rack.volume.on";
+let volOn = false;
+try{ volOn = localStorage.getItem(VOL_LS) === "1"; }catch(e){}
 let editingTool = null;         // toolId whose own UI is on the stage
 
 const Drive = (window.UnlimiterDrive)
@@ -1181,7 +1185,7 @@ function deliverData(){
       const L = layers.get(to.toolId), inp = L && L.ready && L.io && L.io.inputs[c.toPort];
       if(!inp) return;
       try{ inp.set(v); now.add(c.to + ":" + c.toPort); }catch(e){}
-    } else if(to.kind === "volume" && c.toPort === "points" && volReady && volAPI && typeof volAPI.pushPoints === "function"){
+    } else if(to.kind === "volume" && c.toPort === "points" && volOn && volReady && volAPI && typeof volAPI.pushPoints === "function"){
       now.add("n_vol:points");
       if(v.version !== volPtsVer){
         volPtsVer = v.version;
@@ -1717,7 +1721,9 @@ const Inspector = (() => {
   function renderVolume(modded){
     const linked = volumeLinked();
     let body = `<div class="ihead"><span class="sw" style="background:#8b90a0"></span><b>Volume</b></div>`;
-    if(!volReady){
+    if(!volOn){
+      body += `<div class="empty">The volume view is switched off, so it is not loaded or drawn. Turn it on with <b style="color:var(--text)">Volume</b> in the stage header.</div>`;
+    } else if(!volReady){
       body += `<div class="empty">${volAPI ? "WebGPU is unavailable in this browser, so the renderer can't start. The mix still runs and OBS can capture it."
         : "Waiting for the renderer to report in…"}</div>`;
     } else {
@@ -2141,6 +2147,17 @@ const VOL_LOCAL = [
   { key:"vol.size",   label:"point size",                    min:0.5, max:8, def:2.4,  apply:v => volAPI && volAPI.setMix({ size:v }) },
 ];
 let volParams = [];
+function setVolume(on){
+  volOn = !!on;
+  try{ localStorage.setItem(VOL_LS, volOn ? "1" : "0"); }catch(e){}
+  const pane = document.getElementById("volPane"), f = document.getElementById("volFrame"), b = document.getElementById("bVol");
+  pane.style.display = volOn ? "" : "none";
+  b.textContent = "Volume: " + (volOn ? "on" : "off");
+  b.classList.toggle("on", volOn);
+  // first switch-on is when the renderer actually loads (no WebGPU spent before that)
+  if(volOn && !f.getAttribute("src")) f.setAttribute("src", f.dataset.src);
+  Inspector.render();
+}
 function linkVolume(){
   const f = document.getElementById("volFrame");
   f.addEventListener("load", () => {
@@ -2193,6 +2210,8 @@ function boot(){
   initLayers();
   GraphView.build();
   linkVolume();
+  document.getElementById("bVol").addEventListener("click", () => setVolume(!volOn));
+  setVolume(volOn);
   select({ kind:"node", id:"n_out" });
 
   document.getElementById("bOutput").addEventListener("click", () => { if(Drive) Drive.openOutput(() => mixCanvas); });
@@ -2286,7 +2305,7 @@ function boot(){
     // whatever image is patched into the volume — patching something else in no
     // longer silently stops the feed
     const vf = volumeFeed();
-    if(volReady && volAPI && vf){ const src = canvasForNode(vf.from); if(src) try{ volAPI.pushMixFrame(src); }catch(e){} }
+    if(volOn && volReady && volAPI && vf){ const src = canvasForNode(vf.from); if(src) try{ volAPI.pushMixFrame(src); }catch(e){} }
 
     if(now - thumbAt > 100){ thumbAt = now; GraphView.refreshThumbs(); GraphView.pulseCables(); }
     if(now - insAt > 160){ insAt = now; Inspector.tick(); }
