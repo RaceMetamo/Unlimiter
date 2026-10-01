@@ -309,6 +309,9 @@
       <input type="range" id="rMAmt" min="0" max="1" step="0.01" value="1"></label>
     <label class="file" tabindex="0">Mask image<input type="file" id="fMask" accept="image/*"></label>
     <button id="bMaskClear">Clear mask image</button>
+    <div class="note" id="rackNote">Nothing patched. In the rack, patch a Vision node's <b>mask</b> into <b>mask</b> and its <b>field</b> into <b>field</b>.</div>
+    <label title="How far a field from the rack pushes the lookup, in seconds of its motion"><span class="lab">Field warp <b id="vFldAmt"></b></span>
+      <input type="range" id="rFldAmt" min="0" max="2" step="0.01" value="0.5"></label>
     <div class="note">Red channel scales melt strength. Black leaves the photograph untouched.</div>
   </details>
 
@@ -457,6 +460,7 @@
      To update: replace everything between the BEGIN and END markers below.
      =========================================================================== -->
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-ports.js"></script>
 <script>
 const cv = document.getElementById('gl');
 const statusEl = document.getElementById('status');
@@ -481,7 +485,7 @@ void main(){ gl_Position = vec4(aPos,0.,1.); }`;
 const FS = `#version 300 es
 precision highp float; precision highp int; precision highp sampler2D;
 
-uniform sampler2D uSrc, uSrcB, uMaskTex;
+uniform sampler2D uSrc, uSrcB, uMaskTex, uFld;
 uniform vec2  uRes;
 uniform vec3  uWSMul;
 uniform vec2  uPlane;
@@ -497,7 +501,8 @@ uniform float uTime, uMorph;
 uniform int   uFieldA, uFieldB;
 uniform float uVorDensity;
 uniform int   uAxis, uDepthMode, uMaskMode;
-uniform bool  uMInvert, uUseMaskTex;
+uniform bool  uMInvert, uUseMaskTex, uHasFld;
+uniform float uFldAmt;
 out vec4 fragColor;
 
 const uvec3 MGradientMask  = uvec3(0x8000u, 0x4000u, 0x2000u);
@@ -662,6 +667,8 @@ void main(){
   vec2  uvGlitch = mix(uv, NG, galpha);
 
   vec2 uvOut = mix(uvMelt, uvGlitch, uMorph);
+  // a field from the rack (uv per second, v down) pushes the lookup — scaled by the same mask
+  if(uHasFld) uvOut += texture(uFld, uv).xy * uFldAmt * m;
   vec2 p = uvOut - 0.5;
   if(uRot != 0.0){                                   // rotate in physical proportions,
     p.x *= uFrameA;                                  // so the image turns without skewing
@@ -726,7 +733,7 @@ const U = {};
 for(const n of ['uSrc','uSrcB','uMaskTex','uRes','uWSMul','uPlane','uSlice','uPower','uDistance',
   'uSharpness','uDepth','uTiltAmt','uTiltAng','uMAng','uMSoft','uMAmt','uMCenter',
   'uTile','uOffset','uFit','uEV','uContrast','uSat','uHue','uGamma','uPost','uInvert','uFade','uRot','uFrameA','uGMul','uGAdd','uGDrift','uGPhase','uGAnimated','uGSpeed','uGBlend','uGDist','uGSharp','uGTimeAlpha','uTime','uMorph','uFieldA','uFieldB','uVorDensity',
-  'uAxis','uDepthMode','uMaskMode','uMInvert','uUseMaskTex'])
+  'uAxis','uDepthMode','uMaskMode','uMInvert','uUseMaskTex','uFld','uHasFld','uFldAmt'])
   U[n] = gl.getUniformLocation(prog, n);
 
 function makeTex(unit){
@@ -739,7 +746,7 @@ function makeTex(unit){
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   return t;
 }
-const texSrc = makeTex(0), texMask = makeTex(1), texB = makeTex(2);
+const texSrc = makeTex(0), texMask = makeTex(1), texB = makeTex(2), texFld = makeTex(3);
 if(gl){                                  // 1×1 black so both slots are always sampleable
   const px = new Uint8Array([0,0,0,255]);
   for(const [t,u] of [[texSrc,0],[texB,2]]){
@@ -748,14 +755,16 @@ if(gl){                                  // 1×1 black so both slots are always 
   }
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texMask);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,255]));
-  gl.uniform1i(U.uSrc, 0); gl.uniform1i(U.uMaskTex, 1); gl.uniform1i(U.uSrcB, 2);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, texFld);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RG16F,1,1,0,gl.RG,gl.FLOAT,new Float32Array([0,0]));
+  gl.uniform1i(U.uSrc, 0); gl.uniform1i(U.uMaskTex, 1); gl.uniform1i(U.uSrcB, 2); gl.uniform1i(U.uFld, 3);
 }
 
 /* ---------------- state ---------------- */
 const P = {
   power:8, sx:.03, sy:.03, sz:.03, plane:100, slice:0, drift:6, axis:0,
   dist:0, sharp:1, depth:500, depthMode:0, tiltA:.5, tiltR:0,
-  maskMode:0, mAng:0, mCx:.5, mCy:.5, mSoft:.35, mInv:false, mAmt:1,
+  maskMode:0, mAng:0, mCx:.5, mCy:.5, mSoft:.35, mInv:false, mAmt:1, fldAmt:0.5,
   edge:0, tileX:1, tileY:1, offX:0, offY:0,
   aspect:0, aw:16, ah:10, fit:0, zoom:0, rot:0,
   ev:0, con:1, sat:1, hue:0, gam:1, post:1, inv:false,
@@ -826,6 +835,7 @@ bind('rMAng','vMAng','mAng',n=>n.toFixed(0)+'°');
 bind('rMCx','vMCx','mCx',f2); bind('rMCy','vMCy','mCy',f2);
 bind('rMSoft','vMSoft','mSoft',f2);
 bind('rMAmt','vMAmt','mAmt',f2);
+bind('rFldAmt','vFldAmt','fldAmt',f2);
 bind('rTileX','vTileX','tileX',f2);
 bind('rTileY','vTileY','tileY',f2);
 bind('rOffX','vOffX','offX',f3);
@@ -1242,10 +1252,51 @@ function setUniforms(w, h){
   gl.uniform1i(U.uMaskMode, E.maskMode);
   gl.uniform1i(U.uMInvert, E.mInv ? 1 : 0);
   gl.uniform1i(U.uUseMaskTex, hasMask ? 1 : 0);
+  gl.uniform1i(U.uHasFld, RK.hasFld ? 1 : 0);
+  gl.uniform1f(U.uFldAmt, E.fldAmt);
+}
+/* ---- a mask and a field from the Rack (unlimiter-ports.js, by reference) ----
+   mask  w×h bytes → the same texture the mask image uses: lit = melts, dark = untouched
+   field uv per second, v down → pushes where each pixel looks, scaled by that mask */
+const RK = { mask:null, mver:-1, rackMask:false, fld:null, fver:-1, hasFld:false };
+function rackNote(){
+  const n = el('rackNote'); if(!n) return;
+  const a = []; if(RK.mask) a.push('mask <b>' + RK.mask.w + '×' + RK.mask.h + '</b>'); if(RK.fld) a.push('field <b>' + RK.fld.w + '×' + RK.fld.h + '</b>');
+  n.innerHTML = a.length ? 'Receiving ' + a.join(' and ') + ' from the rack.' : 'Nothing patched. In the rack, patch a Vision node\'s <b>mask</b> into <b>mask</b> and its <b>field</b> into <b>field</b>.';
+}
+function setRackMask(m){
+  RK.mask = m || null;
+  if(!m){ RK.mver = -1; if(RK.rackMask){ hasMask = false; RK.rackMask = false; } }
+  rackNote();
+}
+function setRackField(f){
+  RK.fld = f || null;
+  if(!f){ RK.fver = -1; RK.hasFld = false; }
+  rackNote();
+}
+function uploadRack(){
+  if(!gl) return;
+  const m = RK.mask;
+  if(m && m.version !== RK.mver){
+    RK.mver = m.version;
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texMask);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, m.w, m.h, 0, gl.RED, gl.UNSIGNED_BYTE, m.data);
+    hasMask = true; RK.rackMask = true;
+  }
+  const f = RK.fld;
+  if(f && f.version !== RK.fver){
+    RK.fver = f.version;
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, texFld);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, f.w, f.h, 0, gl.RG, gl.FLOAT, f.data);
+    RK.hasFld = true;
+  }
 }
 function draw(){
   el('vCells').textContent = '≈ ' + (P.plane * P.sx).toFixed(1) + ' cells across the frame';
   if(!img || !glOK) return;
+  uploadRack();
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, cv.width, cv.height);
   setUniforms(cv.width, cv.height);
@@ -1607,6 +1658,13 @@ pushHistory();
 
 for(const l of document.querySelectorAll('label.file'))
   l.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); l.querySelector('input').click(); }});
+
+/* What this tool takes, for the rack (unlimiter-ports.js). */
+if(window.UnlimiterPorts){
+  try{ UnlimiterPorts.publish({ tool:'melted-world', label:'Melted World',
+    inputs:{ mask:{ type:'mask', label:'mask', set:setRackMask }, field:{ type:'field', label:'field', set:setRackField } } }); }
+  catch(e){ console.warn('[melted-world] ports', e); }
+}
 </script>
 </body>
 </html>

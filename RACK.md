@@ -116,7 +116,7 @@ brightness, edges glowing, the cut-out, trails) and mixes like any layer. Analys
 point count and each mode's thresholds are sliders with a **◎**, so audio or a signal can
 drive them. **Reset** forgets the background and the tracks.
 
-Patch **field → Plotter's field** and strokes are pushed and steered by it (*Field push*, *Field steer*); **mask → Plotter's mask** and strokes only start inside it and are cut off when they wander out (*Stay inside mask*, plus *Invert* to draw outside). Patch **field → Flow Weave's force** and camera motion pushes the fluid; **points → Flow
+Patch **field → Plotter's field** and strokes are pushed and steered by it (*Field push*, *Field steer*); **mask → Plotter's mask** and strokes only start inside it and are cut off when they wander out (*Stay inside mask*, plus *Invert* to draw outside). **mask → Melted World's mask** and only the lit parts melt (the same strength slider as the mask image); **field → Melted World's field** and the lookup is pushed along it (*Field warp*). **field → Sediment's field** and particles drift along it instead of the noise (*Field drift*, *Field over noise*); **mask → Sediment's mask** and particles only deposit where it is lit (*Invert* flips it). Patch **field → Flow Weave's force** and camera motion pushes the fluid; **points → Flow
 Weave's emitters / Plotter's seeds / Facade's seeds** and found things become brushes,
 agent starts and panel roots. Flow Weave's *Follow strength* sets how hard the fluid tracks
 the field.
@@ -289,7 +289,7 @@ What that environment can't judge:
 - Signal nodes for MIDI learn and the LFO shapes themselves (today they are set in
   the Drive panel); a sample-and-hold / slew utility; one engine per page.
 
-- More tools taking `field` and `mask`: Sediment (drift along a field), Melted World / Anchor (mask regions). Relief and points-as-brushes in Ouroboros.
+- More tools taking `field` and `mask`: Anchor (mask regions), Time Cube (a mask as its cut-out). Relief and points-as-brushes in Ouroboros.
 - More Vision modes: contours, depth. (Corner-pin warp for projection mapping, parked.)
 - Give Facade, Plotter and Time Cube a Drive so their settings are routable.
 - Phylo: lift its IIFE so its branches can leave.

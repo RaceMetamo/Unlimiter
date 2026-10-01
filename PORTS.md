@@ -15,7 +15,9 @@ internally, which until now never left its iframe except as a picture of itself.
 | tbg-facade | `out` image · `seeds` points in | each point roots a folding-panel growth, panel centred on the point and facing outward |
 | flow-field-plotter | `out` image · `image` source in · `seeds` points in · `field` in · `mask` in | a Rack image replaces the file/webcam source; seeds start most agents (tangent heading); a field pushes and steers strokes; a mask confines where they start and run |
 | time-cube | `out` image · `image` source in | a Rack image stands in for the camera, filling the time volume |
-| anchor, sediment, phylo | — | next; ARCHITECTURE.md lists the seam in each |
+| melted-world | `mask` in · `field` in | the mask feeds the same texture as the mask image (lit = melts); the field pushes each pixel's lookup, scaled by that mask |
+| sediment | `field` in · `mask` in | the field replaces the noise drift where it speaks; the mask gates where particles deposit |
+| anchor, phylo | — | next; ARCHITECTURE.md lists the seam in each |
 
 ---
 

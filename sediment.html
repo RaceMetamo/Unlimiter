@@ -236,6 +236,11 @@
       <div class="body" id="g-y"></div>
     </details>
 
+    <details class="group" open>
+      <summary>Field &amp; mask — from the rack<span class="chev"></span></summary>
+      <div class="body" id="g-rack"></div>
+    </details>
+
     <details class="group">
       <summary>Size, colour, opacity<span class="chev"></span></summary>
       <div class="body" id="g-sco"></div>
@@ -278,6 +283,7 @@
 <input type="file" id="filePreset" accept="application/json,.json" class="hidden">
 
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-ports.js"></script>
 <script>
 "use strict";
 
@@ -416,6 +422,8 @@ const DEFAULTS = {
   offS: 14, offE: 2, offEase: "linear",
   opaS: 0.22, opaE: 0.75, opaEase: "inOutQuad",
   drift: 0,
+  // from the rack: a field pushes particles, a mask gates where they deposit
+  fldAmt: 1, fldOver: 0.6, maskInv: false,
   // post
   postApply: true, blur: 0, sharpGain: 0, sharpRadius: 2, posterize: 0,
   brightness: 1, contrast: 1, saturation: 1, gRed: 1, gGreen: 1, gBlue: 1, grain: 0
@@ -658,6 +666,12 @@ GRP="Motion X"; motionGroup(document.getElementById("g-x"),"x");
 GRP="Motion Y"; motionGroup(document.getElementById("g-y"),"y");
 note(document.getElementById("g-y"),"Flow sets the noise frequency along the axis; attract sets it across the axis, which reads as invisible lines the particles gather on.");
 
+GRP="Rack";
+const gRack=document.getElementById("g-rack");
+const rackNoteEl = note(gRack,"Nothing patched. In the rack, patch a Vision node's field into field and its mask into mask.");
+slider(gRack,"fldAmt","Field drift",0,4,0.01,"",false);
+slider(gRack,"fldOver","Field over noise",0,1,0.01,"",false);
+check(gRack,"maskInv","Invert mask (deposit outside it)",false);
 GRP="Size/colour";
 const gSco=document.getElementById("g-sco");
 subhead(gSco,"Shape size (px)");
@@ -907,6 +921,12 @@ function drawShape(ctx,p,shape,size,sc){
   return "path";
 }
 
+/* ---- a field and a mask from the Rack (unlimiter-ports.js, by reference) ---- */
+const RACK = { fld:null, mask:null };
+function rackNoteS(){
+  const a=[]; if(RACK.fld) a.push("field "+RACK.fld.w+"×"+RACK.fld.h); if(RACK.mask) a.push("mask "+RACK.mask.w+"×"+RACK.mask.h);
+  if(typeof rackNoteEl!=="undefined" && rackNoteEl) rackNoteEl.textContent = a.length ? "Receiving "+a.join(" and ")+" from the rack." : "Nothing patched. In the rack, patch a Vision node's field into field and its mask into mask.";
+}
 function renderStep(ctx, sc){
   const {w,h}=dims();
   const F=Math.max(1,P.frames);
@@ -919,6 +939,7 @@ function renderStep(ctx, sc){
   const off  = Q.offS + (Q.offE-Q.offS)*EASE[Q.offEase](t);
   const opa  = Q.opaS + (Q.opaE-Q.opaS)*EASE[Q.opaEase](t);
   const zt   = Q.drift * frame;
+  const rf = RACK.fld, rm = RACK.mask, fAmt = Number(Q.fldAmt) || 0, fOver = Number(Q.fldOver) || 0, mInv = !!Q.maskInv;
 
   ctx.globalCompositeOperation = Q.blend;
   ctx.globalAlpha = Math.max(0,Math.min(1,opa));
@@ -935,11 +956,21 @@ function renderStep(ctx, sc){
     const nx = noise.noise3D(p.x*Q.xFlow, p.y*Q.xAttract, 11.7+zt);
     const ny = noise.noise3D(p.x*Q.yAttract, p.y*Q.yFlow, 91.3+zt);
     p.px=p.x; p.py=p.y;
-    p.x += nx*spdX*0.14 + (p.rnd()*2-1)*scX*400;
-    p.y += ny*spdY*0.14 + (p.rnd()*2-1)*scY*400;
+    let fx=0, fy=0, ov=0;
+    if(rf && fAmt>0){                     // where the field speaks, it replaces the noise
+      const ci=Math.min(rf.w-1,Math.max(0,(p.x/w*rf.w)|0)), cj=Math.min(rf.h-1,Math.max(0,(p.y/h*rf.h)|0)), k=(cj*rf.w+ci)*2;
+      fx=rf.data[k]*fAmt*w/60; fy=rf.data[k+1]*fAmt*h/60;
+      ov=Math.min(1,Math.hypot(rf.data[k],rf.data[k+1])/0.1)*fOver;
+    }
+    p.x += nx*spdX*0.14*(1-ov) + fx + (p.rnd()*2-1)*scX*400;
+    p.y += ny*spdY*0.14*(1-ov) + fy + (p.rnd()*2-1)*scY*400;
     if(Q.wrap){
       if(p.x<0) p.x+=w; else if(p.x>=w) p.x-=w;
       if(p.y<0) p.y+=h; else if(p.y>=h) p.y-=h;
+    }
+    if(rm){                               // deposit only where the mask is lit (or only where it isn't)
+      const ci=Math.min(rm.w-1,Math.max(0,(p.x/w*rm.w)|0)), cj=Math.min(rm.h-1,Math.max(0,(p.y/h*rm.h)|0));
+      if((rm.data[cj*rm.w+ci]>127) === mInv) continue;
     }
     // ---- colour
     let cs;
@@ -1396,6 +1427,14 @@ if(Drive){
     +'on file:// URLs.</div>';
 }
 setSource(makePattern(4821));
+
+/* What this tool takes, for the rack (unlimiter-ports.js). */
+if(window.UnlimiterPorts){
+  try{ UnlimiterPorts.publish({ tool:'sediment', label:'Sediment',
+    inputs:{ field:{ type:'field', label:'field', set:f=>{ RACK.fld=f||null; rackNoteS(); } },
+             mask:{ type:'mask', label:'mask', set:m=>{ RACK.mask=m||null; rackNoteS(); } } } }); }
+  catch(e){ console.warn('[sediment] ports', e); }
+}
 </script>
 </body>
 </html>
