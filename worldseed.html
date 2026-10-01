@@ -206,6 +206,9 @@ const SCHEMA=[
  {g:'Rings', id:'ringOpacity',l:'Density',min:0,max:1,step:0.005,v:0.75},
  {g:'Rings', id:'ringBands',l:'Band count',min:1,max:40,step:0.1,v:9},
  {g:'Rings', id:'ringGap',l:'Gap contrast',min:0,max:1,step:0.005,v:0.45},
+ {g:'Rings', id:'ringTurb',l:'Density variation',min:0,max:1,step:0.005,v:0.25},
+ {g:'Rings', id:'ringRainbow',l:'Rainbow iridescence',min:0,max:1,step:0.005,v:0},
+ {g:'Rings', id:'shepherd',l:'I\u2019m a shepherd moon (carve a gap)',min:0,max:1,step:1,v:0,int:true,chk:true},
 
  {g:'Face', id:'faceOn',l:'Give it a face',min:0,max:1,step:1,v:0,int:true,chk:true},
  {g:'Face', id:'faceSize',l:'Face size',min:0.15,max:1.3,step:0.005,v:0.6},
@@ -395,10 +398,39 @@ float terrainBase(vec3 d){
 }`;
 
 const RINGFN=`
-float ringDensity(float t,float bands,float gap,float sd){
+float ringHash(float n){ return fract(sin(n*127.1+43.7)*43758.5453123); }
+float ringNoise1(float x){
+  float i=floor(x),f=fract(x);
+  float a=ringHash(i),b=ringHash(i+1.0);
+  f=f*f*(3.0-2.0*f);
+  return mix(a,b,f);
+}
+float ringTurbulence(float t,float sd){
+  float x=t*37.0+sd*11.3;
+  return ringNoise1(x)*0.55+ringNoise1(x*2.7+3.1)*0.3+ringNoise1(x*6.1+9.7)*0.15;
+}
+float shepherdCut(float t,float gapT[4],float gapW[4],int n){
+  float m=1.0;
+  for(int i=0;i<4;i++){
+    if(i>=n) break;
+    float dd=abs(t-gapT[i]);
+    m*=smoothstep(0.0,max(gapW[i],0.002),dd);
+  }
+  return m;
+}
+vec3 ring_hsv2rgb(vec3 c){
+  vec3 p=abs(fract(c.xxx+vec3(0.0,1.0/3.0,2.0/3.0))*6.0-3.0);
+  return c.z*mix(vec3(1.0),clamp(p-1.0,0.0,1.0),c.y);
+}
+vec3 ringRainbowCol(float t,float sd){
+  float hue=fract(t*1.7+sd*0.21+ringNoise1(t*9.0+sd)*0.12);
+  return ring_hsv2rgb(vec3(hue,0.72,1.0));
+}
+float ringDensity(float t,float bands,float gap,float sd,float turb){
   float v=0.0,a=0.6,f=max(bands,1.0);
   for(int i=0;i<4;i++){ v+=a*(0.5+0.5*sin((t*f+sd*0.37+float(i)*2.3)*6.2831853)); f*=1.87; a*=0.6; }
   v/=1.35;
+  if(turb>0.0){ float tb=ringTurbulence(t,sd); v=mix(v,v*(0.25+1.5*tb),clamp(turb,0.0,1.0)); }
   float d=smoothstep(gap*0.55,0.92,v);
   d*=smoothstep(0.0,0.05,t)*smoothstep(1.0,0.93,t);
   return clamp(d,0.0,1.0);
@@ -539,7 +571,8 @@ uniform float uRough,uMetal,uTransp,uIor,uDisp,uSparkle,uSparkScale,
               uIrid,uIridScale,uSSS,uEmis,uEmisThresh,uCoat,uEnvAmt;
 uniform vec3 uEnvA,uEnvB,uMetalTint;
 uniform float uSea,uRim,uPaint,uCel,uFacet,uSpec,uSnow;
-uniform float uRingOn,uRingIn,uRingOut,uRingOpacity,uRingBands,uRingGap,uRingSeed;
+uniform float uRingOn,uRingIn,uRingOut,uRingOpacity,uRingBands,uRingGap,uRingSeed,uRingTurb;
+uniform float uGapT[4],uGapW[4]; uniform int uNumGaps;
 uniform vec3 uRingAxis,uCenter;
 uniform int uEyes;
 uniform vec4 uEyePos[50];
@@ -613,7 +646,9 @@ float shadeLam(vec3 n,vec3 L,float nl){
       if(tt>0.0){
         float rr=length(rel+L*tt);
         if(rr>uRingIn&&rr<uRingOut){
-          float rd=ringDensity((rr-uRingIn)/max(uRingOut-uRingIn,1e-4),uRingBands,uRingGap,uRingSeed);
+          float tnorm=(rr-uRingIn)/max(uRingOut-uRingIn,1e-4);
+          float rd=ringDensity(tnorm,uRingBands,uRingGap,uRingSeed,uRingTurb);
+          rd*=shepherdCut(tnorm,uGapT,uGapW,uNumGaps);
           lam*=1.0-clamp(rd*uRingOpacity,0.0,0.93);
         }
       }
@@ -843,14 +878,17 @@ in vec3 vWorld; in float vT;
 uniform vec3 uCam,uCenter,cRingA,cRingB;
 uniform vec3 uLightDir[4],uSunCol[4];
 uniform int uNumLights;
-uniform float uOpacity,uBands,uGap,uRingSeed,uPlanetR;
+uniform float uOpacity,uBands,uGap,uRingSeed,uPlanetR,uTurb,uRainbow;
+uniform float uGapT[4],uGapW[4]; uniform int uNumGaps;
 layout(location=0) out vec4 oColor;
 layout(location=1) out vec4 oNorm;
 ${RINGFN}
 void main(){
-  float d=ringDensity(vT,uBands,uGap,uRingSeed);
+  float d=ringDensity(vT,uBands,uGap,uRingSeed,uTurb);
+  d*=shepherdCut(vT,uGapT,uGapW,uNumGaps);
   if(d<=0.004) discard;
   vec3 col=mix(cRingA,cRingB,clamp(vT*0.7+d*0.3,0.0,1.0));
+  if(uRainbow>0.0) col=mix(col,ringRainbowCol(vT,uRingSeed),clamp(uRainbow,0.0,1.0));
   vec3 rel=vWorld-uCenter;
   float c=dot(rel,rel)-uPlanetR*uPlanetR;
   vec3 Vv=normalize(uCam-vWorld);
@@ -1738,7 +1776,7 @@ function faceLookVec(w,model,eye){
   return [x,y];
 }
 function modelAxis(m){ const a=[m[4],m[5],m[6]]; const l=Math.hypot(...a)||1; return [a[0]/l,a[1]/l,a[2]/l]; }
-function drawPlanet(w,seed,colors,facet,model,accTex,eye,time,geo){
+function drawPlanet(w,seed,colors,facet,model,accTex,eye,time,geo,gaps){
   gl.useProgram(pPlanet);
   gl.uniformMatrix4fv(U(pPlanet,'uModel'),false,model);
   gl.uniform1f(U(pPlanet,'uTime'),time);
@@ -1776,7 +1814,11 @@ function drawPlanet(w,seed,colors,facet,model,accTex,eye,time,geo){
   gl.uniform1f(U(pPlanet,'uRingOpacity'),num(w.ringOpacity,0.75));
   gl.uniform1f(U(pPlanet,'uRingBands'),num(w.ringBands,9));
   gl.uniform1f(U(pPlanet,'uRingGap'),num(w.ringGap,0.45));
+  gl.uniform1f(U(pPlanet,'uRingTurb'),num(w.ringTurb,0.25));
   gl.uniform1f(U(pPlanet,'uRingSeed'),seed);
+  const gg=gaps||EMPTY_GAPS;
+  gl.uniform1fv(U(pPlanet,'uGapT[0]'),gg.t); gl.uniform1fv(U(pPlanet,'uGapW[0]'),gg.w);
+  gl.uniform1i(U(pPlanet,'uNumGaps'),gg.n);
   gl.uniform3fv(U(pPlanet,'uRingAxis'),new Float32Array(modelAxis(model)));
   gl.uniform3fv(U(pPlanet,'uCenter'),new Float32Array([model[12],model[13],model[14]]));
   gl.uniform1f(U(pPlanet,'uFaceOn'),num(w.faceOn,0)>0.5?1:0);
@@ -1811,9 +1853,10 @@ function drawPlanet(w,seed,colors,facet,model,accTex,eye,time,geo){
   gl.drawElements(gl.TRIANGLES,geo.count,gl.UNSIGNED_INT,0);
 }
 
+const EMPTY_GAPS={t:new Float32Array(4),w:new Float32Array(4),n:0};
 const RING_SEGS=192;
 let curVP=null;
-function drawRing(w,colors,ringModel,eye,planetR,seed){
+function drawRing(w,colors,ringModel,eye,planetR,seed,gaps){
   if(num(w.ringOn,0)<0.5||num(w.ringOpacity,0.75)<=0) return;
   const sc=modelScale(ringModel);
   gl.useProgram(pRing);
@@ -1825,7 +1868,12 @@ function drawRing(w,colors,ringModel,eye,planetR,seed){
   gl.uniform1f(U(pRing,'uOpacity'),num(w.ringOpacity,0.75));
   gl.uniform1f(U(pRing,'uBands'),num(w.ringBands,9));
   gl.uniform1f(U(pRing,'uGap'),num(w.ringGap,0.45));
+  gl.uniform1f(U(pRing,'uTurb'),num(w.ringTurb,0.25));
+  gl.uniform1f(U(pRing,'uRainbow'),num(w.ringRainbow,0));
   gl.uniform1f(U(pRing,'uRingSeed'),seed);
+  const gg=gaps||EMPTY_GAPS;
+  gl.uniform1fv(U(pRing,'uGapT[0]'),gg.t); gl.uniform1fv(U(pRing,'uGapW[0]'),gg.w);
+  gl.uniform1i(U(pRing,'uNumGaps'),gg.n);
   gl.uniform1f(U(pRing,'uPlanetR'),planetR*sc);
   gl.uniform3fv(U(pRing,'uCam'),new Float32Array(eye));
   gl.uniform1i(U(pRing,'uNumLights'),lights.n);
@@ -2066,7 +2114,7 @@ function render(now){
     // planets
     gl.useProgram(pPlanet); gl.uniformMatrix4fv(U(pPlanet,'uVP'),false,VP);
     const rings=[];
-    for(const b of bodies){
+    bodies.forEach((b,bi)=>{
       const pos=bodyPos(b);
       // each star lights this body from wherever it happens to be right now
       for(let k=0;k<stars.length;k++){
@@ -2077,15 +2125,17 @@ function render(now){
       const bsc=b.scale*(1+singState(b.world.p).bounce);
       const base=mul(mul(trs(pos,1),rotZ(bTilt(b))),trs([0,0,0],bsc));
       const model=mul(mul(trs(pos,1),rotZ(bTilt(b))),mul(rotY(b._spin||0),trs([0,0,0],bsc)));
+      const ringsOn=num(b.world.p.ringOn,0)>0.5;
+      const gaps=ringsOn?shepherdGapsFor(bi,b.world.p,bsc):EMPTY_GAPS;
       drawPlanet(b.world.p,b.world.seed,b.world.colors,b.world.facet,model,
-                 bodyAccum(b),eye,time,meshSys);
-      if(num(b.world.p.ringOn,0)>0.5)
-        rings.push({b,base,dir:lights.dir.slice(0,stars.length*3),d:dist2(pos,eye)});
-    }
+                 bodyAccum(b),eye,time,meshSys,gaps);
+      if(ringsOn)
+        rings.push({b,base,gaps,dir:lights.dir.slice(0,stars.length*3),d:dist2(pos,eye)});
+    });
     rings.sort((x,y)=>y.d-x.d);
     for(const r of rings){
       lights.dir.set(r.dir,0);
-      drawRing(r.b.world.p,r.b.world.colors,r.base,eye,1+num(r.b.world.p.amp,0.1),r.b.world.seed);
+      drawRing(r.b.world.p,r.b.world.colors,r.base,eye,1+num(r.b.world.p.amp,0.1),r.b.world.seed,r.gaps);
     }
 
     // star glow in screen space
@@ -2104,6 +2154,22 @@ function kidsOf(i){
   const out=[];
   bodies.forEach((o,j)=>{ if(j!==i&&(o.parent===undefined?-1:o.parent)===i) out.push(j); });
   return out;
+}
+function shepherdGapsFor(i,w,bsc){
+  const t=new Float32Array(4), ww=new Float32Array(4);
+  let n=0;
+  const rin=num(w.ringInner,1.38), rout=Math.max(num(w.ringOuter,2.3),rin+0.02);
+  for(const j of kidsOf(i)){
+    if(n>=4) break;
+    const m=bodies[j];
+    if(!m||num(m.world.p.shepherd,0)<0.5) continue;
+    const rr=m.orbit.r/Math.max(bsc,1e-4);
+    if(rr<=rin||rr>=rout) continue;
+    t[n]=(rr-rin)/(rout-rin);
+    ww[n]=Math.max(0.006,Math.min(0.3,(m.scale*3)/Math.max(bsc,1e-4)/(rout-rin)));
+    n++;
+  }
+  return {t,w:ww,n};
 }
 function uniqueName(base){
   let n=base, k=2;
@@ -2552,7 +2618,7 @@ function buildPlanetUI(){
         P.faceOn=1; buildUI(); };
       mr.appendChild(ms); body.appendChild(mr);
     }
-    if(g==='Rings') body.appendChild(el('p','note','Rings sit in the planet\u2019s equatorial plane, so axial tilt swings them. They cast a banded shadow onto the surface.'));
+    if(g==='Rings') body.appendChild(el('p','note','Rings sit in the planet\u2019s equatorial plane, so axial tilt swings them. They cast a banded shadow onto the surface. Turn up density variation for a less uniform, clumpier look, or rainbow iridescence for an oil-slick sheen. In System mode, flag a moon as a shepherd and it will carve a real gap in its parent\u2019s rings at its orbit.'));
     for(const s of SCHEMA.filter(x=>x.g===g)){
       if(s.chk) checkbox(body,s.l,()=>P[s.id]>0.5,v=>P[s.id]=v?1:0);
       else if(s.sel){
@@ -2833,6 +2899,13 @@ function buildSystemUI(){
           wp('singAmount'); wp('singBounce');
         }
       }
+      box.appendChild(el('p','subhead','Rings'));
+      wchk('ringOn','Show rings');
+      if(num(b.world.p.ringOn,0)>0.5){
+        wp('ringInner'); wp('ringOuter'); wp('ringOpacity'); wp('ringBands'); wp('ringGap');
+        wp('ringTurb'); wp('ringRainbow');
+      }
+      wchk('shepherd','I\u2019m a shepherd moon (carve a gap)');
       box.appendChild(el('p','subhead','Editor'));
       const bb2=el('div','btns');
       const be=el('button',null,'Open in editor');
