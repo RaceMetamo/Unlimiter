@@ -17,6 +17,7 @@ internally, which until now never left its iframe except as a picture of itself.
 | time-cube | `out` image · `image` source in | a Rack image stands in for the camera, filling the time volume |
 | melted-world | `mask` in · `field` in | the mask feeds the same texture as the mask image (lit = melts); the field pushes each pixel's lookup, scaled by that mask |
 | sediment | `field` in · `mask` in | the field replaces the noise drift where it speaks; the mask gates where particles deposit |
+| ouroboros | `brushes` points in | every point is a stamped brush held down — a GL point-sprite pass into the loop's destination, same gaussian as the mouse brush, up to 1024 |
 | anchor, phylo | — | next; ARCHITECTURE.md lists the seam in each |
 
 ---
