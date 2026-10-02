@@ -127,6 +127,14 @@
       <div class="body" id="g-fh"></div>
     </details>
     <details class="group">
+      <summary>Contours — outlines, hull, defects<span class="chev"></span></summary>
+      <div class="body" id="g-ct"></div>
+    </details>
+    <details class="group">
+      <summary>Motion history<span class="chev"></span></summary>
+      <div class="body" id="g-mh"></div>
+    </details>
+    <details class="group">
       <summary>Afterimage &amp; backdrop<span class="chev"></span></summary>
       <div class="body" id="g-post"></div>
     </details>
@@ -203,6 +211,11 @@ const DEFAULTS = {
   ndOn:1, ndSize:3, ndSpeed:4, ndAlpha:0.9,
   // flow hair
   fhOn:0, fhDensity:2, fhLen:1, fhAlpha:0.6, fhColour:"direction",
+  // contours
+  ctOn:0, ctSource:"history", ctLevel:0.5, bgThresh:0.1, bgLearn:0.01, ctSmooth:1, ctMin:40, ctSimplify:0,
+  ctWidth:1.6, ctAlpha:0.85, ctColour:"speed", ctEcho:0, ctEchoGap:2, ctHull:0, ctDefect:0, ctDepth:8, ctBox:0, ctFill:0,
+  // motion history
+  mhOn:0, mhThresh:0.08, mhDur:1.5, mhAlpha:0.8, mhMode:"age", mhBands:8,
   // post
   persist:0.55, exposure:1.4, bgMix:0.3, bgDesat:0.7, depthFade:0.6,
   // display
@@ -223,6 +236,14 @@ const LOOKS = {
   "Cells": { mesh:"voronoi", meshWire:0.8, lkOn:0, stLen:12, palette:"verdigris", persist:0.5, ndSize:2 },
   "Flow hair": { fhOn:1, fhDensity:1, fhLen:1.4, fhAlpha:0.8, lkOn:0, stOn:0, ndOn:0, persist:0.75, bgMix:0.1 },
   "Geodesic": { lkDist:0.12, lkMax:6, lkAlpha:0.8, trAlpha:0.12, stOn:0, ndSize:2.5, palette:"verdigris", palFloor:0.35, persist:0.2, depthFade:0.75 },
+  "Echo outlines": { ctOn:1, ctSource:"history", ctEcho:24, ctEchoGap:2, ctWidth:1.6, ctAlpha:0.9, ctSimplify:1.5,
+                     lkOn:0, stOn:0, ndOn:0, persist:0.35, palette:"ice", bgMix:0.15 },
+  "Hand HUD": { ctOn:1, ctSource:"foreground", ctSimplify:2, ctHull:0.55, ctDefect:0.9, ctBox:0.4, ctAlpha:0.8, ctFill:0.12,
+                lkAlpha:0.25, stOn:0, ndOn:1, ndSize:2, palette:"verdigris", bgMix:0.35, persist:0.15 },
+  "Motion history": { mhOn:1, mhMode:"age", mhAlpha:0.9, mhDur:1.5, lkOn:0, stOn:0, ndOn:0, persist:0.3, bgMix:0.1, palette:"ember" },
+  "Time rings": { mhOn:1, mhMode:"bands", mhBands:8, mhDur:2.5, mhAlpha:0.7, ctOn:1, ctSource:"history", ctAlpha:0.5,
+                  lkOn:0, stOn:0, ndOn:0, palette:"spectral", persist:0.2, bgMix:0.1 },
+  "Motion compass": { mhOn:1, mhMode:"direction", mhAlpha:0.85, mhDur:1.2, fhOn:1, fhAlpha:0.35, lkOn:0, stOn:0, ndOn:0, persist:0.25, bgMix:0.2 },
   "Long exposure": { stLen:64, stWidth:1.2, stAlpha:0.6, stTaper:0.3, lkAlpha:0.25, persist:0.94, exposure:1, palette:"ice", bgMix:0.1 }
 };
 
@@ -231,7 +252,7 @@ const cv = document.getElementById("gl");
 const Drive = (window.UnlimiterDrive)
   ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
   : null;
-const NO_MOD = new Set(["nPts","mfMax","lkMax","stLen","fhDensity","anaFps"]);
+const NO_MOD = new Set(["nPts","mfMax","lkMax","stLen","fhDensity","anaFps","ctEcho","ctEchoGap","mhBands","ctSmooth"]);
 let GRP = "";
 function registerMod(key,label,min,max){
   if(!Drive || NO_MOD.has(key)) return;
@@ -393,6 +414,41 @@ slider(gF,"fhAlpha","Opacity",0,1,0.01,"");
 select(gF,"fhColour","Colour by",[["direction","Direction — flow wheel"],["palette","Palette by speed"]]);
 note(gF,"The dense optical flow drawn as a combed field — one short stroke per cell, pointing where that part of the picture is moving. Image sources only.");
 
+GRP="Contours";
+const gCt=document.getElementById("g-ct");
+check(gCt,"ctOn","Draw contours");
+select(gCt,"ctSource","Outline of",[["history","Recent motion (motion history)"],["motion","Frame difference"],
+  ["foreground","Foreground — background subtraction"],["bright","Bright areas"],["dark","Dark areas"]],()=>{ if(visB) visB.reset(); });
+slider(gCt,"ctLevel","Level",0.02,0.98,0.01,"");
+slider(gCt,"bgThresh","Difference",0.02,0.5,0.005,"");
+slider(gCt,"bgLearn","Background learn",0,0.2,0.001,"");
+buttons(gCt,[["bRelearn","Relearn background"]]);
+slider(gCt,"ctSmooth","Smoothing",0,4,1,"");
+slider(gCt,"ctMin","Smallest outline",4,400,1," px");
+slider(gCt,"ctSimplify","Simplify",0,8,0.05," px");
+slider(gCt,"ctWidth","Width",0.3,8,0.05," px");
+slider(gCt,"ctAlpha","Opacity",0,1,0.01,"");
+select(gCt,"ctColour","Colour by",[["speed","Speed of the blob"],["source","Source colour"]]);
+slider(gCt,"ctEcho","Echoes",0,48,1,"");
+slider(gCt,"ctEchoGap","Echo spacing",1,8,1,"");
+subhead(gCt,"Shape analysis");
+slider(gCt,"ctHull","Convex hull",0,1,0.01,"");
+slider(gCt,"ctDefect","Defects",0,1,0.01,"");
+slider(gCt,"ctDepth","Defect depth",2,30,0.5," px");
+slider(gCt,"ctBox","Tracker box",0,1,0.01,"");
+slider(gCt,"ctFill","Silhouette fill",0,1,0.01,"");
+note(gCt,"The chosen mask is smoothed and traced into closed outlines (marching squares — OpenCV's findContours), then simplified into straight runs (approxPolyDP). Each blob gets its convex hull and its convexity defects — the deepest dips between hull points, which on a hand are the valleys between fingers. Echoes keep the last outlines fading behind the current one. Foreground learns what the empty scene looks like: step out of frame and press Relearn. Image sources only; px are analysis pixels (192 across).");
+
+GRP="Motion history";
+const gMh=document.getElementById("g-mh");
+check(gMh,"mhOn","Draw motion history");
+select(gMh,"mhMode","Show",[["age","How long ago — palette by age"],["bands","Time rings — age in steps"],["direction","Direction — gradient of the history"]]);
+slider(gMh,"mhThresh","Sensitivity",0.01,0.4,0.005,"");
+slider(gMh,"mhDur","Memory",0.1,6,0.05," s");
+slider(gMh,"mhAlpha","Opacity",0,1,0.01,"");
+slider(gMh,"mhBands","Rings",2,24,1,"");
+note(gMh,"Every pixel that changes by more than the sensitivity is stamped with the time; the picture is how long ago that was, fading over the memory (OpenCV's motion templates). Time rings quantise the age, so a movement leaves contour lines of when it happened. Direction colours each pixel by the slope of those timestamps — which way the motion was travelling. Contours set to Recent motion trace the edge of this same memory.");
+
 GRP="Post";
 const gP=document.getElementById("g-post");
 slider(gP,"persist","Afterimage",0,0.97,0.005,"");
@@ -423,6 +479,11 @@ function vis(){
   document.getElementById("srcHelp").classList.toggle("hidden",!img);
   document.getElementById("grpMan").classList.toggle("hidden",!(src==="manifold"||src==="rack-points"));
   show("monoCol",P.palette==="mono");
+  show("ctLevel",P.ctSource==="bright"||P.ctSource==="dark");
+  ["bgThresh","bgLearn"].forEach(k=>show(k,P.ctSource==="foreground"));
+  const rl=document.getElementById("bRelearn"); if(rl) rl.parentNode.classList.toggle("hidden",P.ctSource!=="foreground");
+  show("mhBands",P.mhMode==="bands");
+  show("ctEchoGap",P.ctEcho>=1);
   show("velMax",!P.velAuto);
 }
 
@@ -699,6 +760,7 @@ function acquireImage(now, dt, src){
       if(needFlow && visF) flowOut = visF.step(anaRGBA, srcAspect, ts, "flow",
         { fps:60, points:400, gain:1, thresh:Q.motion, smooth:0.45 });
       if(!corners) spawnParticles(flowOut);
+      analyseExtras(anaRGBA, ts);
       fresh = true;
     }catch(e){ /* a source that isn't ready yet (or cross-origin) — try again next frame */ }
     anaMs = anaMs * 0.9 + (performance.now() - t0) * 0.1;
@@ -806,6 +868,368 @@ function acquireRack(dt){
     ID[n] = f.ids ? f.ids[i] : i; n++;
   }
   return true;
+}
+
+/* ============================ contours & motion history ============================
+   Two more OpenCV classics, both on the 192×108 analysis copy.
+
+   Motion history (motempl): every pixel remembers when it last changed. The
+   picture is how long ago — a fading silhouette of everything that moved —
+   and its gradient points the way the motion went (calcMotionGradient).
+
+   Contours (findContours): a mask — recent motion, frame difference,
+   background subtraction, or a brightness level — is smoothed and traced
+   with marching squares into closed outlines, simplified (approxPolyDP),
+   then each blob gets its convex hull and convexity defects (the valleys
+   between fingers), a box, and a velocity from following its centroid.
+   =================================================================================== */
+const AN = AW * AH;
+const XG = {
+  gray:new Float32Array(AN), prev:new Float32Array(AN), havePrev:false,
+  mhi:new Float32Array(AN).fill(-1e9), hist:new Float32Array(AN), hb:new Float32Array(AN), diff:new Uint8Array(AN),
+  fld:new Float32Array(AN), t1:new Float32Array(AN), t2:new Float32Array(AN),
+  ov:new Uint8Array(AN * 4), ovDirty:false, ovOn:false,
+  ex:new Float32Array(AN * 2), ey:new Float32Array(AN * 2), adj0:new Int32Array(AN * 2), adj1:new Int32Array(AN * 2),
+  segs:new Int32Array(AN * 4), blobs:[], prevBlobs:[], nextBlob:1, echoes:[], echoTick:0, lastTs:0, live:false
+};
+let visB = null;
+if(UV && PT){ try{ visB = UV.create(PT); }catch(e){} }
+const MASK_OUT = PT ? PT.makeMask(AW, AH) : null, HIST_OUT = PT ? PT.makeMask(AW, AH) : null;
+
+function blurInto(src, dst, r){
+  if(r <= 0){ if(dst !== src) dst.set(src); return dst; }
+  const W = AW, Hh = AH, t = XG.t2 === dst || XG.t2 === src ? XG.t1 : XG.t2, k = 1 / (2 * r + 1);
+  for(let y = 0; y < Hh; y++){
+    const o = y * W; let s = 0;
+    for(let i = -r; i <= r; i++) s += src[o + Math.min(W - 1, Math.max(0, i))];
+    for(let x = 0; x < W; x++){
+      t[o + x] = s * k;
+      s += src[o + Math.min(W - 1, x + r + 1)] - src[o + Math.max(0, x - r)];
+    }
+  }
+  for(let x = 0; x < W; x++){
+    let s = 0;
+    for(let i = -r; i <= r; i++) s += t[Math.min(Hh - 1, Math.max(0, i)) * W + x];
+    for(let y = 0; y < Hh; y++){
+      dst[y * W + x] = s * k;
+      s += t[Math.min(Hh - 1, y + r + 1) * W + x] - t[Math.max(0, y - r) * W + x];
+    }
+  }
+  return dst;
+}
+
+/* marching squares on XG.fld at iso 0.5 → closed chains of (x,y) in analysis pixels */
+function traceContours(){
+  const f = XG.fld, W = AW, Hh = AH, ex = XG.ex, ey = XG.ey, a0 = XG.adj0, a1 = XG.adj1, S = XG.segs;
+  a0.fill(-1); a1.fill(-1);
+  let ns = 0;
+  const pt = (key, x0, y0, v0, x1, y1, v1) => {
+    if(a0[key] >= 0) return;                                     // placed already by the neighbouring cell
+    const t = (0.5 - v0) / ((v1 - v0) || 1e-9);
+    ex[key] = x0 + (x1 - x0) * t; ey[key] = y0 + (y1 - y0) * t;
+  };
+  const add = (k1, k2) => {
+    if(ns * 2 + 2 > S.length) return;
+    S[ns * 2] = k1; S[ns * 2 + 1] = k2;
+    if(a0[k1] < 0) a0[k1] = ns; else a1[k1] = ns;
+    if(a0[k2] < 0) a0[k2] = ns; else a1[k2] = ns;
+    ns++;
+  };
+  for(let y = 0; y < Hh - 1; y++) for(let x = 0; x < W - 1; x++){
+    const i = y * W + x;
+    const a = f[i], b = f[i + 1], c = f[i + W + 1], d = f[i + W];
+    const idx = (a >= 0.5 ? 8 : 0) | (b >= 0.5 ? 4 : 0) | (c >= 0.5 ? 2 : 0) | (d >= 0.5 ? 1 : 0);
+    if(idx === 0 || idx === 15) continue;
+    const T = i, B = i + W, L = AN + i, R = AN + i + 1;
+    const need = k => {
+      if(k === T) pt(T, x, y, a, x + 1, y, b);
+      else if(k === B) pt(B, x, y + 1, d, x + 1, y + 1, c);
+      else if(k === L) pt(L, x, y, a, x, y + 1, d);
+      else pt(R, x + 1, y, b, x + 1, y + 1, c);
+    };
+    const s = (k1, k2) => { need(k1); need(k2); add(k1, k2); };
+    const mid = (a + b + c + d) * 0.25 >= 0.5;
+    switch(idx){
+      case 1: case 14: s(L, B); break;
+      case 2: case 13: s(B, R); break;
+      case 3: case 12: s(L, R); break;
+      case 4: case 11: s(T, R); break;
+      case 6: case 9:  s(T, B); break;
+      case 7: case 8:  s(T, L); break;
+      case 5:  if(mid){ s(T, L); s(B, R); } else { s(T, R); s(L, B); } break;
+      case 10: if(mid){ s(T, R); s(L, B); } else { s(T, L); s(B, R); } break;
+    }
+  }
+  // chain the segments through their shared edge points
+  const seen = new Uint8Array(ns), chains = [];
+  for(let s0 = 0; s0 < ns; s0++){
+    if(seen[s0]) continue;
+    seen[s0] = 1;
+    const keys = [S[s0 * 2], S[s0 * 2 + 1]];
+    let cur = keys[1], prevSeg = s0;
+    for(let guard = 0; guard < ns; guard++){
+      const nx = a0[cur] === prevSeg ? a1[cur] : a0[cur];
+      if(nx < 0 || seen[nx]) break;
+      seen[nx] = 1;
+      const other = S[nx * 2] === cur ? S[nx * 2 + 1] : S[nx * 2];
+      if(other === keys[0]) break;                                // closed
+      keys.push(other); cur = other; prevSeg = nx;
+    }
+    if(keys.length < 4) continue;
+    const xs = new Float32Array(keys.length), ys = new Float32Array(keys.length);
+    for(let k = 0; k < keys.length; k++){ xs[k] = ex[keys[k]]; ys[k] = ey[keys[k]]; }
+    chains.push({ xs, ys, n:keys.length });
+  }
+  return chains;
+}
+/* Douglas–Peucker on a closed chain */
+function simplify(c, eps){
+  if(!(eps > 0.05) || c.n < 8) return c;
+  const n = c.n, xs = c.xs, ys = c.ys, keep = new Uint8Array(n);
+  // split the loop at the point farthest from the first
+  let far = 0, fd = -1;
+  for(let i = 1; i < n; i++){ const d = (xs[i] - xs[0]) ** 2 + (ys[i] - ys[0]) ** 2; if(d > fd){ fd = d; far = i; } }
+  keep[0] = keep[far] = 1;
+  const stack = [[0, far], [far, n]];
+  const e2 = eps * eps;
+  while(stack.length){
+    const [s, e] = stack.pop(), ei = e % n;
+    if(e - s < 2) continue;
+    const ax = xs[s], ay = ys[s], bx = xs[ei], by = ys[ei], dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-9;
+    let best = -1, bd = -1;
+    for(let i = s + 1; i < e; i++){
+      const t = ((xs[i] - ax) * dx + (ys[i] - ay) * dy) / L2, px = ax + dx * t, py = ay + dy * t;
+      const d = (xs[i] - px) ** 2 + (ys[i] - py) ** 2;
+      if(d > bd){ bd = d; best = i; }
+    }
+    if(bd > e2){ keep[best] = 1; stack.push([s, best], [best, e]); }
+  }
+  let m = 0; for(let i = 0; i < n; i++) if(keep[i]) m++;
+  const X2 = new Float32Array(m), Y2 = new Float32Array(m);
+  for(let i = 0, k = 0; i < n; i++) if(keep[i]){ X2[k] = xs[i]; Y2[k] = ys[i]; k++; }
+  return { xs:X2, ys:Y2, n:m };
+}
+/* hull (monotone chain) as indices into the chain, in the chain's own order */
+function hullOf(c){
+  const n = c.n, xs = c.xs, ys = c.ys, idx = Array.from({ length:n }, (_, i) => i);
+  idx.sort((p, q) => xs[p] - xs[q] || ys[p] - ys[q]);
+  const cross = (o, a, b) => (xs[a] - xs[o]) * (ys[b] - ys[o]) - (ys[a] - ys[o]) * (xs[b] - xs[o]);
+  const lo = [], up = [];
+  for(const p of idx){ while(lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for(let k = idx.length - 1; k >= 0; k--){ const p = idx[k]; while(up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  const h = lo.slice(0, -1).concat(up.slice(0, -1));
+  return h.sort((a, b) => a - b);
+}
+/* convexity defects: between consecutive hull points, the contour point that dips deepest */
+function defectsOf(c, hull, minDepth){
+  const out = [], n = c.n, xs = c.xs, ys = c.ys, m = hull.length;
+  if(m < 3) return out;
+  for(let k = 0; k < m; k++){
+    const s = hull[k], e = hull[(k + 1) % m];
+    const ax = xs[s], ay = ys[s], bx = xs[e], by = ys[e], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1e-9;
+    let best = -1, bd = 0;
+    for(let i = (s + 1) % n; i !== e; i = (i + 1) % n){
+      const d = Math.abs((xs[i] - ax) * dy - (ys[i] - ay) * dx) / L;
+      if(d > bd){ bd = d; best = i; }
+    }
+    if(best >= 0 && bd >= minDepth) out.push({ s, e, f:best, depth:bd });
+  }
+  return out;
+}
+
+function analyseExtras(rgba, ts){
+  const needCT = !!Q.ctOn, needMH = !!Q.mhOn || (needCT && (Q.ctSource === "history" || Q.ctSource === "motion"));
+  if(!needCT && !needMH){ XG.havePrev = false; XG.ovOn = false; XG.blobs = []; XG.live = false; return; }
+  const dtA = Math.max(1 / 120, Math.min(0.5, ts - (XG.lastTs || ts - 1 / 30))); XG.lastTs = ts;
+  const g = XG.gray, N = AN;
+  for(let i = 0, j = 0; i < N; i++, j += 4) g[i] = (0.299 * rgba[j] + 0.587 * rgba[j + 1] + 0.114 * rgba[j + 2]) / 255;
+  const dur = Math.max(0.05, Q.mhDur), h = XG.hist;
+  if(needMH){
+    const thr = Q.mhThresh, mhi = XG.mhi, d = XG.diff, p = XG.prev;
+    if(XG.havePrev) for(let i = 0; i < N; i++){ const m = Math.abs(g[i] - p[i]) > thr ? 1 : 0; d[i] = m; if(m) mhi[i] = ts; }
+    else d.fill(0);
+    for(let i = 0; i < N; i++){ const v = 1 - (ts - mhi[i]) / dur; h[i] = v > 0 ? v : 0; }
+  }
+  XG.prev.set(g); XG.havePrev = true;
+
+  /* ---- the overlay: motion history colours, plus the silhouette fill ---- */
+  const ov = XG.ov; ov.fill(0);
+  let ovAny = false;
+  if(Q.mhOn && Q.mhAlpha > 0.002){
+    ovAny = true;
+    const A = Q.mhAlpha * 255, mode = Q.mhMode, bands = Math.max(2, Math.round(Q.mhBands)), c = [0, 0, 0];
+    // a soft copy for the picture: the raw history is a hard per-pixel stamp
+    const hb = blurInto(h, XG.hb, mode === "direction" ? 2 : 1);
+    for(let y = 1; y < AH - 1; y++) for(let x = 1; x < AW - 1; x++){
+      const i = y * AW + x; let v = hb[i]; if(v <= 0.01) continue;
+      if(mode === "bands"){ v = Math.ceil(v * bands) / bands; ramp(v * velScale, 1, 0, 1, 1, 1, c); }
+      else if(mode === "direction"){
+        // the gradient of the timestamps points from old motion to new: that is the direction of travel
+        // (the history rises with the timestamp, so its slope points the same way)
+        const gx = (hb[i + 1] > 0.01 && hb[i - 1] > 0.01) ? hb[i + 1] - hb[i - 1] : 0;
+        const gy = (hb[i + AW] > 0.01 && hb[i - AW] > 0.01) ? hb[i + AW] - hb[i - AW] : 0;
+        if(Math.abs(gx) + Math.abs(gy) < 0.004) ramp(v * velScale * 0.5, 1, 0, 1, 1, 1, c);
+        else hsv(Math.atan2(gy, gx) / (Math.PI * 2), 0.8, 1, c);
+      }
+      else ramp(v * velScale, 1, 0, 1, 1, 1, c);
+      const k = A * (mode === "bands" ? Math.pow(v, 0.6) : v), o = i * 4;
+      ov[o] = c[0] * k; ov[o + 1] = c[1] * k; ov[o + 2] = c[2] * k;
+    }
+  }
+
+  /* ---- contours ---- */
+  XG.blobs = []; XG.live = false;
+  if(needCT){
+    const f = XG.fld, src = Q.ctSource;
+    if(src === "history") for(let i = 0; i < N; i++) f[i] = h[i] > 0 ? 1 : 0;
+    else if(src === "motion"){ const d = XG.diff; for(let i = 0; i < N; i++) f[i] = d[i]; blurInto(f, f, 2); for(let i = 0; i < N; i++) f[i] = f[i] > 0.12 ? 1 : 0; }
+    else if(src === "foreground" && visB){
+      const r = visB.step(rgba, srcAspect, ts, "bgsub", { points:8, gain:1, thresh:Q.bgThresh, learn:Q.bgLearn });
+      const m = r.mask ? r.mask.data : null;
+      for(let i = 0; i < N; i++) f[i] = m ? m[i] / 255 : 0;
+    }
+    else { const lv = Q.ctLevel, dark = src === "dark"; for(let i = 0; i < N; i++) f[i] = (dark ? g[i] < lv : g[i] > lv) ? 1 : 0; }
+    blurInto(f, f, 1 + Math.round(Q.ctSmooth));
+    for(let x = 0; x < AW; x++){ f[x] = 0; f[(AH - 1) * AW + x] = 0; }            // a closed border closes every outline
+    for(let y = 0; y < AH; y++){ f[y * AW] = 0; f[y * AW + AW - 1] = 0; }
+    const raw = traceContours();
+    const minP = Q.ctMin, eps = Q.ctSimplify, asp = cv.width / cv.height;
+    let big = 0, bigSign = 1;
+    const list = [];
+    for(const c of raw){
+      let per = 0, area = 0, cx = 0, cy = 0, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for(let k = 0; k < c.n; k++){
+        const q = (k + 1) % c.n, xa = c.xs[k], ya = c.ys[k];
+        per += Math.hypot(c.xs[q] - xa, c.ys[q] - ya); area += xa * c.ys[q] - c.xs[q] * ya;
+        cx += xa; cy += ya; if(xa < x0) x0 = xa; if(xa > x1) x1 = xa; if(ya < y0) y0 = ya; if(ya > y1) y1 = ya;
+      }
+      if(per < minP) continue;
+      area *= 0.5;
+      if(Math.abs(area) > big){ big = Math.abs(area); bigSign = Math.sign(area) || 1; }
+      list.push({ raw:c, per, area, cx:cx / c.n, cy:cy / c.n, x0, y0, x1, y1 });
+    }
+    for(const b of list){
+      b.outer = Math.sign(b.area) === bigSign;
+      b.poly = simplify(b.raw, eps);
+      if(b.outer && (Q.ctHull > 0.002 || Q.ctDefect > 0.002)){
+        b.hull = hullOf(b.raw);
+        b.defects = Q.ctDefect > 0.002 ? defectsOf(b.raw, b.hull, Q.ctDepth) : [];
+      }
+    }
+    // follow blobs: nearest centroid from the last analysis frame gives each one a velocity
+    const prev = XG.prevBlobs, used = new Uint8Array(prev.length);
+    for(const b of list){
+      if(!b.outer){ b.vx = 0; b.vy = 0; b.spd = 0; continue; }
+      let best = -1, bd = 30 * 30;
+      for(let k = 0; k < prev.length; k++){ if(used[k]) continue; const d = (prev[k].cx - b.cx) ** 2 + (prev[k].cy - b.cy) ** 2; if(d < bd){ bd = d; best = k; } }
+      const ivx = best >= 0 ? (b.cx - prev[best].cx) / AW * FIT.w * asp / dtA : 0;
+      const ivy = best >= 0 ? (b.cy - prev[best].cy) / AH * FIT.h / dtA : 0;
+      if(best >= 0){ used[best] = 1; b.id = prev[best].id; b.vx = prev[best].vx * 0.5 + ivx * 0.5; b.vy = prev[best].vy * 0.5 + ivy * 0.5; }
+      else { b.id = XG.nextBlob++; b.vx = 0; b.vy = 0; }
+      b.spd = Math.hypot(b.vx, b.vy);
+    }
+    XG.prevBlobs = list.filter(b => b.outer).map(b => ({ cx:b.cx, cy:b.cy, vx:b.vx, vy:b.vy, id:b.id }));
+    XG.blobs = list; XG.live = true;
+    // colour per blob
+    for(const b of list){
+      const c = [0, 0, 0];
+      if(Q.ctColour === "source"){ sampleRGBA((b.cx + 0.5) / AW, (b.cy + 0.5) / AH, c); const k = 0.4 + 0.6 * Math.min(1, b.spd / velScale); c[0] *= k * 1.6; c[1] *= k * 1.6; c[2] *= k * 1.6; }
+      else ramp(b.spd || 0, b.vx || 0, b.vy || 0, 1, 1, 1, c);
+      b.col = c;
+    }
+    // echoes: a snapshot of the outlines every few analysis frames
+    if(Q.ctEcho >= 1 && (XG.echoTick++ % Math.max(1, Math.round(Q.ctEchoGap))) === 0){
+      let m = 0; for(const b of list) m += b.poly.n;
+      const sg = new Float32Array(m * 4), cl = new Float32Array(m * 3);
+      let o = 0;
+      for(const b of list){
+        const p = b.poly;
+        for(let k = 0; k < p.n; k++){
+          const q = (k + 1) % p.n;
+          sg[o * 4] = cuX(p.xs[k]); sg[o * 4 + 1] = cuY(p.ys[k]); sg[o * 4 + 2] = cuX(p.xs[q]); sg[o * 4 + 3] = cuY(p.ys[q]);
+          cl[o * 3] = b.col[0]; cl[o * 3 + 1] = b.col[1]; cl[o * 3 + 2] = b.col[2]; o++;
+        }
+      }
+      XG.echoes.unshift({ sg, cl, n:o });
+      if(XG.echoes.length > 64) XG.echoes.length = 64;
+    }
+    // silhouette fill into the overlay
+    if(Q.ctFill > 0.002){
+      ovAny = true;
+      const fc = [0, 0, 0]; ramp(velScale * 0.7, 1, 0, 0.7, 0.7, 0.7, fc);
+      const k = Q.ctFill * 255;
+      for(let i = 0; i < N; i++){
+        const v = f[i]; if(v <= 0.02) continue;
+        const o = i * 4, s = Math.min(1, v * 1.4) * k;
+        ov[o] = Math.min(255, ov[o] + fc[0] * s); ov[o + 1] = Math.min(255, ov[o + 1] + fc[1] * s); ov[o + 2] = Math.min(255, ov[o + 2] + fc[2] * s);
+      }
+    }
+    if(MASK_OUT){ const md = MASK_OUT.data; for(let i = 0; i < N; i++) md[i] = f[i] >= 0.5 ? 255 : Math.round(f[i] * 2 * 120); PT.bump(MASK_OUT); }
+  }
+  if(needMH && HIST_OUT){ const hd = HIST_OUT.data; for(let i = 0; i < N; i++) hd[i] = Math.round(h[i] * 255); PT.bump(HIST_OUT); }
+  XG.mhLive = needMH;
+  XG.ovOn = ovAny; XG.ovDirty = ovAny;
+}
+/* analysis pixels → canvas uv */
+function cuX(x){ return FIT.x0 + (x + 0.5) / AW * FIT.w; }
+function cuY(y){ return FIT.y0 + (y + 0.5) / AH * FIT.h; }
+
+let ctCount = 0;
+function buildContours(S){
+  ctCount = 0;
+  if(!Q.ctOn || !XG.live) return;
+  const W = Q.ctWidth * S, A = Q.ctAlpha, thin = Math.max(0.7, W * 0.6);
+  // echoes first, oldest faintest
+  const ne = Math.min(XG.echoes.length, Math.round(Q.ctEcho));
+  for(let e = ne - 1; e >= 1; e--){
+    const E = XG.echoes[e], fa = A * 0.75 * Math.pow(1 - e / (ne + 1), 1.6), w = W * (1 - 0.5 * e / ne);
+    for(let k = 0; k < E.n; k++){
+      const r = E.cl[k * 3], g = E.cl[k * 3 + 1], b = E.cl[k * 3 + 2];
+      seg(E.sg[k * 4], E.sg[k * 4 + 1], E.sg[k * 4 + 2], E.sg[k * 4 + 3], r, g, b, fa, r, g, b, fa, w, w);
+    }
+  }
+  for(const b of XG.blobs){
+    ctCount++;
+    const c = b.col, p = b.poly, a = A * (b.outer ? 1 : 0.6);
+    if(A > 0.002) for(let k = 0; k < p.n; k++){
+      const q = (k + 1) % p.n;
+      seg(cuX(p.xs[k]), cuY(p.ys[k]), cuX(p.xs[q]), cuY(p.ys[q]), c[0], c[1], c[2], a, c[0], c[1], c[2], a, W, W);
+    }
+    if(Q.ctSimplify > 0.05 && Q.ndOn) for(let k = 0; k < p.n; k++) dot(cuX(p.xs[k]), cuY(p.ys[k]), c[0], c[1], c[2], A * 0.8, (2 + W) * 2.2);
+    if(!b.outer) continue;
+    const r = b.raw;
+    if(b.hull && Q.ctHull > 0.002){
+      const hA = Q.ctHull, hl = b.hull;
+      for(let k = 0; k < hl.length; k++){
+        const i = hl[k], j = hl[(k + 1) % hl.length];
+        seg(cuX(r.xs[i]), cuY(r.ys[i]), cuX(r.xs[j]), cuY(r.ys[j]), c[0], c[1], c[2], hA, c[0], c[1], c[2], hA, thin, thin);
+      }
+    }
+    if(b.defects && Q.ctDefect > 0.002){
+      const dA = Q.ctDefect;
+      for(const d of b.defects){
+        const fx = cuX(r.xs[d.f]), fy = cuY(r.ys[d.f]);
+        const mx = (cuX(r.xs[d.s]) + cuX(r.xs[d.e])) / 2, my = (cuY(r.ys[d.s]) + cuY(r.ys[d.e])) / 2;
+        seg(mx, my, fx, fy, 1, 1, 1, dA * 0.25, c[0], c[1], c[2], dA, thin, thin);
+        dot(fx, fy, 1, 0.95, 0.85, dA, (4 + d.depth * 0.25) * S * 2.4);
+        dot(cuX(r.xs[d.s]), cuY(r.ys[d.s]), c[0], c[1], c[2], dA * 0.8, 5 * S * 2.4);
+      }
+    }
+    if(Q.ctBox > 0.002){
+      const bA = Q.ctBox, x0 = cuX(b.x0), y0 = cuY(b.y0), x1 = cuX(b.x1), y1 = cuY(b.y1);
+      // corner brackets rather than a full box: reads as a tracker, stays out of the way
+      const lx = (x1 - x0) * 0.22, ly = (y1 - y0) * 0.22;
+      [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]].forEach(([x, y, sx, sy]) => {
+        seg(x, y, x + lx * sx, y, c[0], c[1], c[2], bA, c[0], c[1], c[2], bA, thin, thin);
+        seg(x, y, x, y + ly * sy, c[0], c[1], c[2], bA, c[0], c[1], c[2], bA, thin, thin);
+      });
+      const cx = cuX(b.cx), cy = cuY(b.cy), k = 0.012;
+      seg(cx - k / (cv.width / cv.height), cy, cx + k / (cv.width / cv.height), cy, 1, 1, 1, bA, 1, 1, 1, bA, thin, thin);
+      seg(cx, cy - k, cx, cy + k, 1, 1, 1, bA, 1, 1, 1, bA, thin, thin);
+      // the blob's velocity, drawn from its centre
+      if(b.spd > 0.01){ const L = 0.25; seg(cx, cy, cx + b.vx * L / (cv.width / cv.height), cy + b.vy * L, c[0], c[1], c[2], bA, c[0], c[1], c[2], bA * 0.2, thin * 1.5, thin * 0.5); }
+    }
+  }
 }
 
 /* ============================ geometry buffers ============================ */
@@ -945,7 +1369,7 @@ function buildLinks(S){
   }
   // triangles: three points that are all linked to one another
   const TA = Q.trAlpha;
-  if(TA > 0.002) for(let i = 0; i < n; i++){
+  if(TA > 0.002 && Q.lkOn) for(let i = 0; i < n; i++){
     const b = i * KMAX, m = NBN[i];
     for(let p = 0; p < m; p++){
       const j = NB[b + p]; if(j < i) continue;
@@ -1197,6 +1621,15 @@ void main(){
   }
   o = vec4(1.0 - (1.0 - bg) * (1.0 - tone), 1.0);
 }`;
+const OV_FS = `#version 300 es
+precision highp float; in vec2 vUv;
+uniform sampler2D uOv; uniform vec4 uFit; uniform float uK; out vec4 o;
+void main(){
+  vec2 c = vec2(vUv.x, 1.0 - vUv.y), s = (c - uFit.xy) / uFit.zw;
+  if(s.x < 0.0 || s.x > 1.0 || s.y < 0.0 || s.y > 1.0){ o = vec4(0.0); return; }
+  o = vec4(texture(uOv, s).rgb * uK, 0.0);
+}`;
+const PO = prog(FULL_VS, OV_FS);
 const PS = prog(SEG_VS, SEG_FS), PTR = prog(TRI_VS, TRI_FS), PP = prog(PT_VS, PT_FS), PF = prog(FULL_VS, FADE_FS), PC = prog(FULL_VS, COMP_FS);
 const ptRange = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE);
 const MAXPT = ptRange ? ptRange[1] : 64;
@@ -1246,6 +1679,11 @@ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParamet
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
 
+const ovTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ovTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, AW, AH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
 function sizeCanvas(){
   const [w, h] = String(P.res).split("x").map(Number);
   if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
@@ -1263,6 +1701,14 @@ function render(src){
   gl.bindVertexArray(fullVAO); gl.drawArrays(gl.TRIANGLES, 0, 3);
   // add this frame's light
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  if(XG.ovOn){
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, ovTex);
+    if(XG.ovDirty){ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, AW, AH, gl.RGBA, gl.UNSIGNED_BYTE, XG.ov); XG.ovDirty = false; }
+    gl.useProgram(PO.p); gl.uniform1i(PO.u.uOv, 2); gl.uniform4f(PO.u.uFit, FIT.x0, FIT.y0, FIT.w, FIT.h);
+    // drawn every frame into a buffer that keeps (persist) of itself: scaling by (1 - persist) makes it settle at its own level
+    gl.uniform1f(PO.u.uK, 1 - Math.max(0, Math.min(0.995, Q.persist)));
+    gl.bindVertexArray(fullVAO); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
   if(triV){
     gl.useProgram(PTR.p); gl.bindVertexArray(triVAO); gl.bindBuffer(gl.ARRAY_BUFFER, triBuf);
     gl.bufferData(gl.ARRAY_BUFFER, TRI.subarray(0, triV * 6), gl.STREAM_DRAW);
@@ -1348,6 +1794,7 @@ function frame(now){
   buildLinks(S);
   if(Q.stOn) buildStreaks(S);
   buildHair(S);
+  if(isImg) buildContours(S); else { XG.ovOn = false; XG.live = false; ctCount = 0; }
   buildNodes(S);
   render(src);
   if(ticked) publishPoints();
@@ -1358,7 +1805,7 @@ function frame(now){
     statusAt = now;
     const label = src ? src.label : P.source === "manifold" ? "Manifold " + Q.formA + " ↔ " + Q.formB
       : rackPts ? "rack points" : "rack points (no cable)";
-    statusEl.textContent = `${n} points · ${linkCount} links · ${triCount + meshTris} tris` +
+    statusEl.textContent = `${n} points · ${linkCount} links · ${triCount + meshTris} tris` + (ctCount ? ` · ${ctCount} outlines` : "") +
       (src ? ` · vision ${anaMs.toFixed(1)} ms` : "") + ` · ${fpsEma.toFixed(0)} fps`;
     srcNote.textContent = label;
   }
@@ -1393,6 +1840,7 @@ document.getElementById("fPreset").addEventListener("change", e => {
 document.getElementById("bCam").addEventListener("click", () => { P.source = "camera"; camState = camState === "failed" ? "off" : camState; startCamera(); syncUI(); });
 document.getElementById("bVideo").addEventListener("click", () => document.getElementById("fVideo").click());
 document.getElementById("fVideo").addEventListener("change", e => { loadVideoFile(e.target.files[0]); e.target.value = ""; });
+document.getElementById("bRelearn").addEventListener("click", () => { if(visB) visB.reset(); });
 document.getElementById("bWipe").addEventListener("click", () => { wipe(); H.clear(); });
 document.getElementById("bPNG").addEventListener("click", () => cv.toBlob(b => b && download(b, "lattice-" + stamp() + ".png")));
 let rec = null, recChunks = [];
@@ -1430,7 +1878,9 @@ function setRackImage(v){
 }
 if(PT){
   try{ PT.publish({ tool:"lattice", label:"Lattice",
-    outputs:{ out:{ type:"image", get:() => cv }, points:{ type:"points", label:"points", get:() => OUT } },
+    outputs:{ out:{ type:"image", get:() => cv }, points:{ type:"points", label:"points", get:() => OUT },
+      mask:{ type:"mask", label:"outline mask", get:() => (XG.live ? MASK_OUT : null) },
+      history:{ type:"mask", label:"motion history", get:() => (XG.mhLive ? HIST_OUT : null) } },
     inputs:{ points:{ type:"points", label:"points", set:setRackPoints }, image:{ type:"image", label:"image", set:setRackImage } } }); }
   catch(e){ console.warn("[lattice] ports", e); }
 }

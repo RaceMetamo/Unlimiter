@@ -126,7 +126,10 @@ also hosted here). Patch an **image** into it and it tracks that picture as if i
 patch **points** in and it draws those (a Manifold's 3D points are linked in 3D). Its own
 **points** output carries what it tracked with real velocity — tangent is the direction of
 travel, size grows with speed, and every point has a stable `ids` entry — so Lattice can feed
-Ouroboros's brushes or Flow Weave's emitters with tracked, velocity-coloured points.
+Ouroboros's brushes or Flow Weave's emitters with tracked, velocity-coloured points. Its **mask**
+(the silhouette its contours trace) and **history** (the motion history image — a fading trail of
+everything that moved) outputs are ordinary masks: patch history into Melted World or Sediment and
+only recent motion melts or deposits.
 
 ## Signals — the old Control Surface, inside the graph
 

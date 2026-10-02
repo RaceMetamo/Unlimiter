@@ -17,7 +17,7 @@ internally, which until now never left its iframe except as a picture of itself.
 | time-cube | `out` image · `image` source in | a Rack image stands in for the camera, filling the time volume |
 | melted-world | `mask` in · `field` in | the mask feeds the same texture as the mask image (lit = melts); the field pushes each pixel's lookup, scaled by that mask |
 | sediment | `field` in · `mask` in | the field replaces the noise drift where it speaks; the mask gates where particles deposit |
-| lattice | `points` in, `image` in; `points` out (+ canvas) | tracks whatever it is given and draws streaks, plexus links, Delaunay/Voronoi and flow hair from it. Points out carry velocity: tangent = direction of travel, size = 1 + speed, colour = the palette colour, `ids` = stable identity. A cable arriving switches its source to that cable |
+| lattice | `points` in, `image` in; `points`, `mask`, `history` out (+ canvas) | tracks whatever it is given and draws streaks, plexus links, Delaunay/Voronoi, flow hair, contours (hull, defects, echoes) and motion history from it. `mask` is the silhouette its contours trace; `history` is the motion history image (bright = just moved, fading over its memory) — both 192×108, and null while that effect is off. Points out carry velocity: tangent = direction of travel, size = 1 + speed, colour = the palette colour, `ids` = stable identity. A cable arriving switches its source to that cable |
 | ouroboros | `brushes` points in | every point is a stamped brush held down — a GL point-sprite pass into the loop's destination, same gaussian as the mouse brush, up to 1024 |
 | anchor, phylo | — | next; ARCHITECTURE.md lists the seam in each |
 
