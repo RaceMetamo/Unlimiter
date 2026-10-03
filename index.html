@@ -190,6 +190,9 @@ const TOOLS = [
   { file:"worldseed.html", name:"Worldseed", motif:"planet",
     desc:"Procedural 3D planets — terrain, atmosphere and seas generated from a seed, turned in real time.",
     tags:["3d","procedural"] },
+  { file:"galaxy.html", name:"Starfold", motif:"galaxy",
+    desc:"A galaxy grown from a seed \u2014 spiral, barred, elliptical, ring or irregular \u2014 rendered on the Volume engine as gaussian splats for stars, gas and dust, with raymarched haze between them. Worldseed systems fly in and out of it, so you can zoom from the whole disc down to a single planet.",
+    tags:["3d","procedural","volumetric","webgpu","drive"] },
   { file:"tbg-facade.html", name:"TBG Facade", motif:"facade",
     desc:"Generative AV built on The Bridge Gallery's folded-panel identity, for the wall it came from.",
     tags:["brand","av"] }
@@ -398,6 +401,22 @@ const MOTIF = {
     grd.addColorStop(1,"rgba(0,0,0,0.72)");
     g.fillStyle=grd;
     g.beginPath(); g.arc(cx,cy,R,0,TAU); g.fill();
+  },
+  galaxy(g,w,h,t){
+    // a two-armed log spiral of dots, turning slowly, with a warm core
+    const cx=w/2, cy=h/2, R=Math.min(w,h)*0.42;
+    const core=g.createRadialGradient(cx,cy,0,cx,cy,R*0.35);
+    core.addColorStop(0,"rgba(255,214,150,0.85)"); core.addColorStop(1,"rgba(255,214,150,0)");
+    g.fillStyle=core; g.beginPath(); g.arc(cx,cy,R*0.35,0,TAU); g.fill();
+    for(let i=0;i<700;i++){
+      const arm=i%2, r=Math.pow(hash(i,3),0.7)*R, off=(hash(i,7)-0.5)*0.9*(0.4+r/R);
+      const a=arm*Math.PI+1.7*Math.log(1+r/(R*0.08))+off+t*0.25;
+      const x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r*0.62;
+      const young=Math.abs(off)<0.18;
+      g.fillStyle=young?`rgba(170,200,255,${0.5+hash(i,9)*0.5})`:`rgba(255,226,184,${0.25+hash(i,9)*0.45})`;
+      const sz=young&&hash(i,11)>0.9?2:1.2;
+      g.fillRect(x,y,sz,sz);
+    }
   },
   facade(g,w,h,t){
     const cols=7, rows=3;

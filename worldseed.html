@@ -3021,7 +3021,49 @@ function buildSystemUI(){
   const bExp=el('button',null,'Export system');
   bExp.onclick=()=>downloadJSON({library,system:{stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))}},'worldseed-system.json');
   b5.appendChild(bExp);
+  const bGal=el('button',null,'Send to Galaxy');
+  bGal.title='Place this system in a Starfold galaxy (opens galaxy.html)';
+  bGal.onclick=sendToGalaxy;
+  b5.appendChild(bGal);
   vb.appendChild(b5);
+}
+
+/* ── hand-off to Starfold (galaxy.html) ───────────────────────
+   Same-origin localStorage carries the system; a BroadcastChannel
+   nudges a Starfold tab that is already open. */
+function systemPayload(){
+  return {stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))};
+}
+function sendToGalaxy(){
+  if(!bodies.length){ hud('Add at least one body to the system first.'); return; }
+  const msg={name:(stars[0]&&stars[0].name)||'Worldseed system',system:systemPayload(),sentAt:Date.now()};
+  try{ localStorage.setItem('unlimiter.galaxy.inbox',JSON.stringify(msg)); }
+  catch(e){ hud('Could not hand the system over (storage is blocked).'); return; }
+  // if a Starfold tab is already open it answers and takes the system; otherwise open one
+  let answered=false, bc=null;
+  try{ bc=new BroadcastChannel('unlimiter-galaxy'); bc.onmessage=ev=>{ if(ev.data&&ev.data.type==='took') answered=true; }; bc.postMessage({type:'inbox'}); }catch(e){}
+  setTimeout(()=>{
+    if(bc) bc.close();
+    if(!answered) window.open('galaxy.html#inbox','unlimiter-galaxy');
+    hud(answered?'Sent “'+msg.name+'” to the open galaxy.':'Sent “'+msg.name+'” — opening the galaxy.');
+  },350);
+}
+/* Starfold's “Open in Worldseed” arrives here as worldseed.html#from-galaxy */
+function receiveFromGalaxy(){
+  if(location.hash!=='#from-galaxy') return;
+  history.replaceState(null,'',location.pathname+location.search);
+  let m=null; try{ m=JSON.parse(localStorage.getItem('unlimiter.galaxy.outbox')||'null'); }catch(e){}
+  if(!m||!m.system) return;
+  const replace=!bodies.length||confirm('Load “'+(m.name||'system')+'” from the galaxy? Your current system is kept as a backup in this browser (worldseed.system.backup).');
+  if(!replace) return;
+  try{ localStorage.setItem('worldseed.system.backup',localStorage.getItem('worldseed.system')||''); }catch(e){}
+  loadStars(m.system);
+  if(m.system.sky) Object.assign(sky,m.system.sky);
+  belts=Array.isArray(m.system.belts)?m.system.belts:[];
+  bodies=(m.system.bodies||[]).map(b=>{ const nb={...b,accum:null,parent:(b.parent===undefined?-1:b.parent)}; migrate(nb.world); return nb; });
+  focusIdx=-1; selIdx=-1; linkIdx=-1;
+  saveSystem(); setMode('system');
+  hud('Loaded “'+(m.name||'system')+'” from the galaxy.');
 }
 
 function setMode(m){
@@ -3054,6 +3096,7 @@ buildAccum(S.accumSize);
 loadPersisted();
 resize();
 buildUI();
+receiveFromGalaxy();
 requestAnimationFrame(loop);
 </script>
 </body>

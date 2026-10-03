@@ -22,6 +22,7 @@ tenth tool works like the first.
 | flow-field-plotter | — | carries an **inlined** copy of `modulation.js` v1.1 (`P`/`E`) — port with the adapter shim |
 | time-cube | — | still on `modulation.js` — port with the adapter shim |
 | worldseed | — | its own inline 3-slot modulation system (`applyMods` → `MP`), not `modulation.js` |
+| galaxy (Starfold) | yes | only `live` schema entries are registered; shape, counts and seeds rebuild the galaxy and stay out |
 | phylo-lsystem | — | no modulation; its own mic envelope; script is one IIFE, so a host can't reach it |
 | tbg-facade | — | no modulation; its own mic envelope; script is one IIFE |
 
