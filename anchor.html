@@ -299,6 +299,10 @@ const DEFAULTS = {
   // type
   text:"VISION", font:"Georgia, serif", weight:700, fontSize:200, leading:1.0,
   tracking:0, wordSpace:0, align:"center", autoFit:true,
+  // name cycle — step through a list of names with a glitching transition
+  cycleOn:false, cycleWords:"ANCHOR\nTHE UNLIMITER\nMETAMO", cycleMode:"scramble", cycleOrder:"sequence",
+  cycleSet:"letters", cycleHold:2.5, cycleTrans:1.2, cycleRate:18, cycleSweep:0.7, cycleSlice:0.25,
+  cycleFitAll:true, cycleBeat:false, cycleBeats:4,
   // sampling
   contourOn:true, spacing:7, smooth:2, fillOn:false, fillCount:900, minDist:9,
   invertMask:false, threshold:128,
@@ -378,7 +382,7 @@ const Drive = (window.UnlimiterDrive)
                             getOutputCanvas:()=>work })
   : null;
 // parameters that rebuild the point geometry are too expensive to modulate per frame
-const NO_MOD = new Set(["text","font","weight","fontSize","leading","tracking","wordSpace",
+const NO_MOD = new Set(["text","cycleBeats","font","weight","fontSize","leading","tracking","wordSpace",
   "align","autoFit","contourOn","spacing","smooth","fillOn","fillCount","minDist",
   "invertMask","threshold","seed","cloudType","cloudCount","cloudPaths","cloudLen",
   "cloudStep","cloudFreq","cloudThresh","aspect","animSpeed",
@@ -646,6 +650,27 @@ slider(elText,"tracking","Tracking",-40,120,1,"");
 slider(elText,"wordSpace","Word space",-40,200,1,"");
 select(elText,"align","Align",[["left","Left"],["center","Centre"],["right","Right"]]);
 check(elText,"autoFit","Fit to canvas");
+GRP="Name cycle";
+subhead(elText,"Name cycle");
+check(elText,"cycleOn","Cycle through names");
+textArea(elText,"cycleWords","Names");
+select(elText,"cycleMode","Transition",[["scramble","Scramble — letters decode"],["morph","Morph — anchors travel"],["cut","Cut"]]);
+select(elText,"cycleSet","Glitch glyphs",[["letters","Letters & digits"],["name","Letters from the names"],["symbols","Symbols"],
+  ["blocks","Blocks"],["binary","Binary"],["katakana","Katakana"]]);
+select(elText,"cycleOrder","Order",[["sequence","In order"],["shuffle","Shuffled"]]);
+slider(elText,"cycleHold","Hold",0,20,0.05," s");
+slider(elText,"cycleTrans","Transition",0.1,8,0.05," s");
+slider(elText,"cycleRate","Glitch rate",1,60,1," /s");
+slider(elText,"cycleSweep","Sweep",0,1,0.01,"");
+slider(elText,"cycleSlice","Slice glitch",0,1,0.01,"");
+check(elText,"cycleFitAll","Same size for every name");
+check(elText,"cycleBeat","Advance on the beat");
+slider(elText,"cycleBeats","Beats per name",0.25,32,0.25,"");
+const cycBtnRow=document.createElement("div"); cycBtnRow.className="btnrow";
+const bCycNext=document.createElement("button"); bCycNext.textContent="Next name (N)";
+cycBtnRow.appendChild(bCycNext); elText.appendChild(cycBtnRow);
+bCycNext.addEventListener("click",()=>cycleNext());
+const cycNote=note(elText,"One name per line; a | inside a name breaks it onto two lines. Scramble runs each letter through glitch glyphs and settles it on the next name, sweeping left to right (Sweep 0 settles them in random order); letters two names share in the same place hold still. Morph moves the anchors themselves from one name into the next. Slice glitch shoves bands sideways during the change. Every name and in-between is built once and cached, so the first pass through a list is the slow one. With the beat on, the Drive clock sets the pace and Hold / Transition only set the proportion.");
 
 GRP="Cloud";
 // --- cloud
@@ -941,6 +966,14 @@ function vis(){
    "mWanderFreq","mWobble","mSpin","mShimmer","mTravel"].forEach(k=>show(k,P.anim));
   show("mWanderFreq",P.anim&&P.mWander>0);
   show("mSwayAxis",P.anim&&P.mSway>0);
+  const cy=!!P.cycleOn;
+  ["cycleWords","cycleMode","cycleSet","cycleOrder","cycleHold","cycleTrans","cycleRate","cycleSweep","cycleSlice",
+   "cycleFitAll","cycleBeat","cycleBeats"].forEach(k=>show(k,cy));
+  show("cycleSet",cy&&P.cycleMode==="scramble");
+  show("cycleRate",cy&&(P.cycleMode==="scramble"||P.cycleSlice>0));
+  show("cycleBeats",cy&&P.cycleBeat);
+  show("text",!cy);
+  cycBtnRow.classList.toggle("hidden",!cy||P.cycleBeat); cycNote.classList.toggle("hidden",!cy);
   document.querySelectorAll("#srcTabs button").forEach(b=>b.classList.toggle("on",b.dataset.src===P.src));
 }
 document.querySelectorAll("#srcTabs button").forEach(b=>{
@@ -995,7 +1028,7 @@ function drawTextMask(){
   mctx.setTransform(1,0,0,1,0,0);
   mctx.clearRect(0,0,mw,mh);
   mctx.fillStyle="#fff"; mctx.textBaseline="alphabetic";
-  const lines=(P.text||"").split("\n");
+  const lines=(TEXT_OVR!=null ? TEXT_OVR : (P.text||"")).split("\n");
   let fs=P.fontSize*s;
   const tr=P.tracking*s, ws=P.wordSpace*s;
   const unit = (P.fontSize*s)||1;
@@ -1008,9 +1041,11 @@ function drawTextMask(){
   };
   if(P.autoFit){
     const pad=0.86;
-    let widest=0;
+    let widest=0, nLines=lines.length;
     lines.forEach(l=>{ widest=Math.max(widest,measure(l,fs)); });
-    const totalH=fs*P.leading*lines.length;
+    // cycling names: size every name to the longest, so the size holds still between them
+    if(FIT_OVR) FIT_OVR.forEach(nm=>{ const ls=nm.split("\n"); nLines=Math.max(nLines,ls.length); ls.forEach(l=>{ widest=Math.max(widest,measure(l,fs)); }); });
+    const totalH=fs*P.leading*nLines;
     const kx = widest>0 ? (mw*pad)/widest : 1;
     const ky = totalH>0 ? (mh*pad)/totalH : 1;
     fs = fs*Math.min(kx,ky);
@@ -1412,7 +1447,179 @@ function buildGhostPaths(){
   return out;
 }
 
+/* ============================ name cycle ============================
+   The Type source can hold a list of names and step through them. Each
+   name (and every in-between string a scramble passes through) is turned
+   into anchors once and cached, so the transition is just a lookup.
+
+     scramble  letters decode: each slot runs through glyphs and settles on
+               the new letter, sweeping left to right; letters the two
+               names share at a slot never change
+     morph     the anchors themselves travel from one name to the next,
+               in reading order, in a wave across the line
+     cut       a straight swap at the midpoint
+
+   Slice glitch shoves horizontal bands of anchors sideways while a
+   transition runs — on any mode.
+   ==================================================================== */
+let TEXT_OVR=null, FIT_OVR=null;         // drawTextMask reads these while the cycle builds
+const CYC={ k:0, inTrans:false, t0:0, cache:new Map(), sig:"", shown:"", label:"", morph:null };
+const GLITCH_SETS={
+  letters:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+  symbols:"#%&*+=/<>?!@$§¥±¶",
+  blocks:"░▒▓█▀▄▌▐■▪",
+  binary:"01",
+  katakana:"アカサタナハマヤラワイキシチニヒミリウクスツヌフムユル"
+};
+function cycleNames(){
+  return (P.cycleWords||"").split("\n").map(s=>s.trim()).filter(Boolean).map(s=>s.replace(/\s*\|\s*/g,"\n"));
+}
+function cycleActive(){ return !!P.cycleOn && P.src==="text" && cycleNames().length>0; }
+function h01(a,b,c){                     // a small deterministic hash → 0..1
+  let n=(a|0)*374761393+(b|0)*668265263+(c|0)*2147483647;
+  n=(n^(n>>>13))*1274126177; n=n^(n>>>16);
+  return (n>>>0)/4294967296;
+}
+function cycleIndex(k,n){
+  if(P.cycleOrder!=="shuffle" || n<3) return ((k%n)+n)%n;
+  // a fresh shuffle every round, seeded by the round, so beat-sync stays deterministic
+  const r=Math.floor(k/n), ord=Array.from({length:n},(_,i)=>i);
+  for(let i=n-1;i>0;i--){ const j=Math.floor(h01(r,i,P.seed)*(i+1)); [ord[i],ord[j]]=[ord[j],ord[i]]; }
+  return ord[((k%n)+n)%n];
+}
+/* anchors (and outline) for one string, built through the normal pipeline */
+function cycleGeometry(str, names){
+  let g=CYC.cache.get(str);
+  if(g){ CYC.cache.delete(str); CYC.cache.set(str,g); return g; }   // keep it fresh in the LRU
+  TEXT_OVR=str; FIT_OVR = P.cycleFitAll ? names : null;
+  try{
+    const paths=buildFromMask();
+    // reading order, so a morph moves letters into letters rather than raster scan order
+    paths.forEach(fp=>{ let m=1e9; for(const p of fp.pts) if(p.x<m) m=p.x; fp._minx=m; });
+    paths.sort((a,b)=>a._minx-b._minx);
+    g={ paths, ghost:buildGhostPaths(), count:paths.reduce((a,p)=>a+p.pts.length,0) };
+  } finally { TEXT_OVR=null; FIT_OVR=null; }
+  CYC.cache.set(str,g);
+  if(CYC.cache.size>360) CYC.cache.delete(CYC.cache.keys().next().value);
+  return g;
+}
+function caseLike(ch,ref){
+  if(!ref || ref.toLowerCase()===ref.toUpperCase()) return ch;
+  return ref===ref.toLowerCase() ? ch.toLowerCase() : ch.toUpperCase();
+}
+/* the in-between string of a scramble at progress p */
+function scrambleText(A,B,p,tid,now){
+  const L=Math.max(A.length,B.length), w=Math.max(0,Math.min(1,Q.cycleSweep));
+  let set=GLITCH_SETS[P.cycleSet]||GLITCH_SETS.letters;
+  if(P.cycleSet==="name"){ set=(A+B).replace(/[\s\n]/g,"")||GLITCH_SETS.letters; }
+  const step=Math.floor(now/1000*Math.max(1,Q.cycleRate));
+  let out="";
+  for(let i=0;i<L;i++){
+    const a=A[i]||"", b=B[i]||"";
+    if(a===b){ out+=a; continue; }
+    if(a==="\n"||b==="\n"){ out+= p<0.5 ? a : b; continue; }
+    const o = L>1 ? i/(L-1) : 0;
+    const s = 0.45*(w*o + (1-w)*h01(i,tid,7));            // when this slot starts to scramble
+    const r = 0.35 + 0.65*(w*o + (1-w)*h01(i,tid,13));    // when it settles
+    if(p<s){ out+=a; continue; }
+    if(p>=Math.max(r,s+0.05)){ out+=b; continue; }
+    const g=set[Math.floor(h01(i,step,tid)*set.length)];
+    out+=caseLike(g, b.trim()?b:a);
+  }
+  return out;
+}
+/* anchors of A travelling to anchors of B */
+function morphPaths(GA,GB,p){
+  const flatA=[]; for(const fp of GA.paths) for(const q of fp.pts) flatA.push(q);
+  const nA=flatA.length, nB=GB.count;
+  if(!nA || !nB) return p<0.5 ? GA.paths : GB.paths;
+  const {w}=dims(), sw=Math.max(0,Math.min(0.9,Q.cycleSweep*0.6));
+  const out=[]; let j=0;
+  for(const fp of GB.paths){
+    const pts=new Array(fp.pts.length);
+    for(let k=0;k<fp.pts.length;k++,j++){
+      const b=fp.pts[k], a=flatA[Math.min(nA-1,Math.floor(j*nA/nB))];
+      const d=Math.max(0,Math.min(1,b.x/w));
+      let q=(p-d*sw)/(1-sw); q=q<0?0:q>1?1:q; q=q*q*(3-2*q);
+      const c=Object.assign({},b);
+      c.x=a.x+(b.x-a.x)*q; c.y=a.y+(b.y-a.y)*q; c.z=a.z+(b.z-a.z)*q;
+      const tx=a.tx+(b.tx-a.tx)*q, ty=a.ty+(b.ty-a.ty)*q, L=Math.hypot(tx,ty)||1;
+      c.tx=tx/L; c.ty=ty/L; c.nx=c.ty; c.ny=-c.tx;
+      pts[k]=c;
+    }
+    out.push({pts,closed:fp.closed});
+  }
+  return out;
+}
+/* bands of anchors shoved sideways — the slice glitch */
+function sliceGlitch(paths, ghost, amt, tid, now){
+  if(!(amt>0.001)) return {paths,ghost};
+  const {w,h}=dims(), step=Math.floor(now/1000*Math.max(1,Q.cycleRate)*0.5);
+  const bands=[];
+  const nb=2+Math.floor(h01(step,tid,3)*5);
+  for(let b=0;b<nb;b++){
+    const y0=h01(step,b,tid+11)*h, hh=h*(0.015+0.09*h01(step,b,tid+17));
+    bands.push([y0,y0+hh,(h01(step,b,tid+23)-0.5)*2*amt*w*0.12]);
+  }
+  const shift=y=>{ for(const B of bands) if(y>=B[0]&&y<B[1]) return B[2]; return 0; };
+  const mp=paths.map(fp=>({closed:fp.closed, pts:fp.pts.map(q=>{ const s=shift(q.y); if(!s) return q; const c=Object.assign({},q); c.x+=s; return c; })}));
+  const mg=ghost.map(g=>({closed:g.closed, pts:g.pts.map(q=>{ const s=shift(q.y); return s?{x:q.x+s,y:q.y,z:q.z}:q; })}));
+  return {paths:mp, ghost:mg};
+}
+function cycleSigNow(names){ return geoSig()+"|"+P.cycleFitAll+"|"+names.join("\u0001"); }
+/* advance the clock and put the right anchors into PATHS / GHOST */
+function cycleApply(now){
+  const names=cycleNames(); if(!names.length) return;
+  const n=names.length, sig=cycleSigNow(names);
+  if(sig!==CYC.sig){ CYC.cache.clear(); CYC.sig=sig; }
+  const hold=Math.max(0,Q.cycleHold), trans=Math.max(0.05,Q.cycleTrans);
+  let kFrom, p=-1;
+  const beat = P.cycleBeat && Drive && Drive.state && Drive.state.clock;
+  if(beat){
+    const per=Math.max(0.25,Q.cycleBeats), pos=Drive.state.clock.beats/per, k=Math.floor(pos), f=pos-k;
+    const tf=Math.min(0.95,trans/(hold+trans));
+    kFrom=k; p = f<1-tf ? -1 : (f-(1-tf))/tf;
+    CYC.k=k;
+  } else {
+    if(!CYC.t0) CYC.t0=now;
+    if(!CYC.inTrans && now-CYC.t0>=hold*1000){ CYC.inTrans=true; CYC.t0=now; }
+    if(CYC.inTrans){
+      p=(now-CYC.t0)/(trans*1000);
+      if(p>=1){ CYC.k++; CYC.inTrans=false; CYC.t0=now; p=-1; }
+    }
+    kFrom=CYC.k;
+  }
+  const A=names[cycleIndex(kFrom,n)], B=names[cycleIndex(kFrom+1,n)];
+  const tid=((kFrom%997)+997)%997+1;
+  let paths, ghost, label;
+  if(p<0 || n<2){
+    const g=cycleGeometry(A,names); paths=g.paths; ghost=g.ghost; label=A;
+  } else if(P.cycleMode==="morph"){
+    const GA=cycleGeometry(A,names), GB=cycleGeometry(B,names);
+    paths=morphPaths(GA,GB,p); ghost=p<0.5?GA.ghost:GB.ghost; label=p<0.5?A:B;
+  } else if(P.cycleMode==="cut"){
+    const g=cycleGeometry(p<0.5?A:B,names); paths=g.paths; ghost=g.ghost; label=p<0.5?A:B;
+  } else {
+    const s=scrambleText(A,B,p,tid,now);
+    const g=cycleGeometry(s,names); paths=g.paths; ghost=g.ghost; label=s;
+  }
+  if(p>=0 && Q.cycleSlice>0){
+    const r=sliceGlitch(paths,ghost,Q.cycleSlice*Math.sin(Math.PI*Math.min(1,p)),tid,now);
+    paths=r.paths; ghost=r.ghost;
+  }
+  PATHS=paths; GHOST=ghost;
+  const cnt=PATHS.reduce((a,q)=>a+q.pts.length,0);
+  if(cnt!==POINT_COUNT || label!==CYC.label){ POINT_COUNT=cnt; CYC.label=label; updateStats(); }
+}
+function cycleNext(){
+  if(P.cycleBeat) return;
+  const now=performance.now();
+  if(CYC.inTrans){ CYC.k++; }
+  CYC.inTrans=true; CYC.t0=now;
+}
+
 function buildSource(force){
+  if(cycleActive()){ if(force) CYC.cache.clear(); cycleApply(performance.now()); geoKey=""; return; }
   const k=geoSig();
   if(!force && k===geoKey && PATHS.length){ return; }   // camera-only change
   geoKey=k;
@@ -2023,7 +2230,7 @@ function startRender(){
   if(work.width!==w||work.height!==h){ work.width=w; work.height=h; }
   if(view.width!==w||view.height!==h){ view.width=w; view.height=h; }
   noiseInst=new Simplex(mulberry32(P.seed*7919+5));
-  const driven = (Drive && Drive.isLive()) || (P.dim3 && Math.abs(P.camAuto)>0.01);
+  const driven = (Drive && Drive.isLive()) || (P.dim3 && Math.abs(P.camAuto)>0.01) || cycleActive();
   if(P.anim || driven){
     animT0=performance.now()-curT*1000/Math.max(0.001,P.animSpeed);
     fpsN=0; fpsT0=performance.now();
@@ -2062,16 +2269,18 @@ function tick(){
 function animFrame(now){
   animRAF=0;
   const spin = P.dim3 && Math.abs(P.camAuto)>0.01;
-  if(!P.anim && !spin && !(Drive && Drive.isLive())) return;
+  const cyc = cycleActive();
+  if(!P.anim && !spin && !cyc && !(Drive && Drive.isLive())) return;
   const dt=Math.min(0.1,(now-(animLast||now))/1000); animLast=now;
   curT = (((now-animT0)/1000*P.animSpeed)%1+1)%1;
   Q = Drive ? Drive.resolve(P) : P;
   if(spin) camAutoYaw = (camAutoYaw + Q.camAuto*dt) % 360;
+  if(cyc) cycleApply(now);
   renderAll(wctx,1,curT,noiseInst);
   blit();
   fpsN++;
   if(now-fpsT0>500){ fps=Math.round(fpsN*1000/(now-fpsT0)); fpsN=0; fpsT0=now; }
-  statusText.textContent=(P.anim?"playing":spin?"orbiting":"driven")+` · ${fps} fps`
+  statusText.textContent=(P.anim?"playing":spin?"orbiting":cyc?"cycling":"driven")+` · ${fps} fps`
     + (Drive && Drive.state.midi.clockOk ? ` · ${Drive.bpm.toFixed(0)} bpm` : "");
   barFill.style.width=(curT*100).toFixed(1)+"%";
   animRAF=requestAnimationFrame(animFrame);
@@ -2302,10 +2511,12 @@ function syncUI(){
   Object.keys(bound).forEach(k=>bound[k]&&bound[k]());
   vis();
 }
+// the name list is content, not style: presets and Random keep it
+function cycleKeep(){ const o={}; for(const k in P) if(k.indexOf("cycle")===0) o[k]=P[k]; return o; }
 function randomise(){
   const r=Math.random, pick=a=>a[Math.floor(r()*a.length)];
   const keepText=P.text, keepSrc=P.src;
-  P=Object.assign({},DEFAULTS,{
+  P=Object.assign({},DEFAULTS,cycleKeep(),{
     src:keepSrc, text:keepText, seed:Math.floor(r()*10000), aspect:P.aspect,
     passes:1+Math.floor(r()*70),
     shape:pick(SHAPES.concat(["mixed"])), sides:3+Math.floor(r()*9),
@@ -2332,7 +2543,7 @@ function randomise(){
 function applyPreset(name){
   if(name==="*Random values") randomise();
   else if(name==="*User preset"){ if(userSlot) P=Object.assign({},DEFAULTS,userSlot); }
-  else P=Object.assign({},DEFAULTS,PRESETS[name]||{});
+  else P=Object.assign({},DEFAULTS,cycleKeep(),PRESETS[name]||{});
   syncUI(); startRender();
 }
 presetSel.addEventListener("change",()=>applyPreset(presetSel.value));
@@ -2401,6 +2612,7 @@ window.addEventListener("drop",e=>{
 window.addEventListener("keydown",e=>{
   if(e.target.matches("input,select,textarea")) return;
   if(e.code==="Space"){ e.preventDefault(); startRender(); }
+  if((e.key==="n"||e.key==="N") && cycleActive()){ cycleNext(); return; }
   if(e.key==="r"||e.key==="R"){ P.seed=Math.floor(Math.random()*10000); bound.seed(); startRender(); }
 });
 
