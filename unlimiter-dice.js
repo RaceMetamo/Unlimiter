@@ -129,7 +129,12 @@ function create(opt){
   // a list, or a function returning one (for panels that rebuild their controls)
   const swList = typeof opt.switches === "function" ? opt.switches : () => (opt.switches || []);
   let switches = swList();
-  const offDefault = new Set(opt.off || []);
+  // keys or simple globs ("L*.lOffX") that start unticked, and safe ranges a roll stays inside
+  const globRe = g => new RegExp("^" + String(g).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+  const offList = (opt.off || []).map(globRe);
+  const rangeList = Object.entries(opt.ranges || {}).map(([g, r]) => [globRe(g), r]);
+  const offDefault = { has: k => offList.some(re => re.test(k)) };
+  const safeRange = p => { for(const [re, r] of rangeList) if(re.test(p.key)) return [Math.max(Math.min(p.min, p.max), r[0]), Math.min(Math.max(p.min, p.max), r[1])]; return [p.min, p.max]; };
   const drive = opt.drive || null;
   const refreshMs = opt.refreshMs || 90;
   const changeMs = opt.changeMs || 0;
@@ -139,6 +144,8 @@ function create(opt){
     amount:0.35, count:0, glide:3, evolve:false, every:12, onBeat:false, beats:16,
     glideShare:0.8, home:null, useHome:true, towards:"random", sel:{}, swSel:{}, slots:[null,null,null,null,null,null]
   }, load());
+  // a reload never restarts evolve on its own: a show resumes when someone presses Evolve
+  const wasEvolving = !!S.evolve; S.evolve = false;
   function load(){ try{ return JSON.parse(localStorage.getItem(LS + tool) || "{}"); }catch(e){ return {}; } }
   function save(){ try{ localStorage.setItem(LS + tool, JSON.stringify(S)); }catch(e){} }
 
@@ -218,7 +225,7 @@ function create(opt){
     pickKeys().forEach(k => {
       const p = pByKey(k), cur = Number(get(k));
       const b = base && base.v && isFinite(base.v[k]) ? base.v[k] : cur;
-      const r = p.min + Math.random() * (p.max - p.min);
+      const sr = safeRange(p), r = sr[0] + Math.random() * (sr[1] - sr[0]);
       targets[k] = quant(b + (r - b) * amt, p);
     });
     // switches flip with a chance that grows with the amount
@@ -324,7 +331,7 @@ function create(opt){
   }
 
   /* ============================ panel ============================ */
-  let ui = null;
+  let ui = null, evolvedOnce = false;
   function mountPanel(host){
     injectStyle();
     params();
@@ -360,7 +367,9 @@ function create(opt){
     bEvolve.title = "Keep rolling on a timer or on the beat"; bHome.title = "Evolve rolls are drawn around this look";
     evRow.append(bEvolve, bHome); root.appendChild(evRow);
     const bar = h("div", "ud-bar"), barI = h("i"); bar.appendChild(barI); root.appendChild(bar);
-    bEvolve.addEventListener("click", () => setEvolve(!S.evolve));
+    const evNote = h("div", "ud-note", "Evolve was running when this page last closed. It stays off after a reload — press Evolve to carry on.");
+    root.appendChild(evNote);
+    bEvolve.addEventListener("click", () => { evolvedOnce = true; setEvolve(!S.evolve); });
     bHome.addEventListener("click", () => setHome());
     const sEvery = sliderRow("Every", 1, 180, 0.5, "every", v => v.toFixed(v < 10 ? 1 : 0) + " s", () => { nextAt = 0; });
     const beatRow = h("div", "ud-row"), beatChk = h("input"); beatChk.type = "checkbox"; beatChk.checked = !!S.onBeat;
@@ -444,6 +453,7 @@ function create(opt){
 
     ui = {
       sync(){
+        evNote.classList.toggle("ud-hidden", !(wasEvolving && !S.evolve && !evolvedOnce));
         bEvolve.classList.toggle("ud-on", !!S.evolve); bEvolve.textContent = S.evolve ? "Evolving" : "Evolve";
         bHome.classList.toggle("ud-on", !!S.home);
         bUndo.disabled = !undo.length; bRedo.disabled = !redo.length;

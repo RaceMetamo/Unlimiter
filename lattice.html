@@ -1909,7 +1909,8 @@ if(window.UnlimiterDice){
     params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
     refresh:k=>{ if(bound[k]) bound[k](); },
     switches:[["palette","Palette"],["lkColour","Link colour"],["mesh","Mesh"],["meshFill","Mesh fill"],["fhColour","Hair colour"],["mhMode","Motion history"],["formA","Form A"],["formB","Form B"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
-    drive:Drive, off:["velMax","gate","quality","mindist","motion","spawn","life","inertia","follow"]
+    drive:Drive, off:["velMax","gate","quality","mindist","motion","spawn","life","inertia","follow"],
+    ranges:{ exposure:[0.7,2], persist:[0,0.85] }
   });
   dice.mountPanel(document.getElementById("g-dice"));
   window.__dice=dice;

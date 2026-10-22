@@ -1683,6 +1683,7 @@ if(window.UnlimiterDice){
     tool:"melted-world", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
     params:UnlimiterDice.fromDrive(Drive, k=>el(RID[k])),
     off:["fldAmt"],
+    ranges:{ ev:[-1,1], con:[0.6,1.6], sat:[0.3,1.8] },
     drive:Drive
   });
   dice.mountPanel(document.getElementById("diceMount"));

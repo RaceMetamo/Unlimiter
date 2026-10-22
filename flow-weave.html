@@ -1656,7 +1656,11 @@ if(window.UnlimiterDice){
   const dice = UnlimiterDice.create({
     tool:"flow-weave", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
     params:UnlimiterDice.fromDrive(Drive, k=>el(MOD_RID[k])),
-    off:["fldAmt","emForce","emDye","emPaint","emR","emBack"],
+    off:["fldAmt","emForce","emDye","emPaint","emR","emBack","post"],
+    // the fluid runs away (to white, or to a smear) outside these: rolls stay inside them
+    ranges:{ dt:[0.5,1.4], vort:[0,3], vdis:[0.003,0.03], ddis:[0.002,0.015], inj:[0.02,0.25], buoy:[-2,3], cool:[0.01,0.08],
+      bHeat:[-6,6], cHeat:[-6,6], splat:[0.2,1.5], dripRate:[0.1,0.8], sprayF:[0.5,5], con:[0.7,1.6], sat:[0.5,1.8],
+      spec:[0,1.4], relief:[0,3], pInt:[0.1,1.2], curl:[0,4], pFade:[0.01,0.15] },
     drive:Drive
   });
   dice.mountPanel(document.getElementById("diceMount"));

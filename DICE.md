@@ -34,7 +34,9 @@ the tool's preset save keeps whatever you land on, and any Drive modulation stil
   listed under *Switches*, start unticked, and flip with a chance that grows with Amount.
 
 Settings, ticks, home and favourites persist per tool in this browser (`localStorage`, key `unlimiter.dice.<tool>`).
-Evolve also resumes after a reload, so a show survives a refresh.
+Evolve does not restart by itself after a reload; the panel says it was running, and pressing Evolve carries on.
+
+A tool can also give `ranges: { key or glob: [min, max] }`: rolls then draw their random values inside that range instead of the slider's whole travel (Flow Weave uses this for the settings that make the fluid run away to white), and `off` accepts globs such as `"L*.lOffX"`.
 
 ## Wiring a tool
 

@@ -1259,7 +1259,8 @@ if(window.UnlimiterDice){
     params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
     refresh:k=>{ if(bound[k]) bound[k](); },
     switches:[["mirrorMode","Mirror mode"],["inMode","Input blend"],["edgeMode","Frame edges"],["abMode","Auto brush motion"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
-    drive:Drive, off:["rkStr","rkSize","rkColour","rkMax"]
+    drive:Drive, off:["rkStr","rkSize","rkColour","rkMax"],
+    ranges:{ decay:[0.96,1.0], exposure:[0.6,1.8], gamma:[0.7,1.5], zoom:[0.985,1.03] }
   });
   dice.mountPanel(document.getElementById("g-dice"));
   window.__dice=dice;
