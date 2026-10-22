@@ -211,6 +211,16 @@ UI during *Edit in stage* and the rack adopts that as its new base instead of
 overwriting it next frame. A tool that loads a preset replaces its `P` object;
 the rack notices within a quarter second and adopts the new values.
 
+## Tools as sources
+
+A fresh rack starts with the core set (Flow Weave, Melted World, Sediment, Anchor,
+Ouroboros, TBG Facade, Flow Field Plotter, Time Cube). **+ Tool ▾** adds any other
+suite tool — Lattice, the full Manifold, Relief, Worldseed, Galaxy, Phylo L-system —
+or brings back one you removed. A tool loads only while its node is in the graph:
+adding it opens its frame and cables it into OUTPUT, and deleting its node (select
+it, Delete) unloads it again, so a long list costs nothing until something is
+used. The saved layout remembers what you removed.
+
 ## How capture works
 
 - **ports** — a tool that publishes an `out` image port through
@@ -224,6 +234,11 @@ the rack notices within a quarter second and adopts the new values.
   end of their render for the output window, so the rack wraps that method on
   the tool's own drive instance and copies the frame as it passes. Melted World,
   Ouroboros.
+- **pump** — for tools that have neither (WebGPU like Galaxy, or a WebGL canvas
+  without `preserveDrawingBuffer` and no frame hand-off, like Phylo L-system and
+  Relief), the rack takes over the tool's clock: its `requestAnimationFrame`
+  callbacks are queued, and the rack runs them and copies the canvas straight
+  after, in the same task.
 
 Every layer is captured to a 640×360 canvas, so sources are stretched to 16:9.
 

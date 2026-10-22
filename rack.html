@@ -28,6 +28,7 @@ button:hover{ border-color:var(--dim); }
 button:focus-visible,input:focus-visible,select:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
 button.on{ border-color:var(--accent); color:var(--accent); }
 button.sm{ padding:1px 6px; font-size:.7rem; }
+header select#bAddTool{ width:auto; background:var(--panel); padding:4px 6px; cursor:pointer; }
 select,input[type=text],input[type=search]{
   background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:3px 6px; width:100%;
 }
@@ -177,6 +178,7 @@ main{ display:grid; grid-template-columns:minmax(300px,1.05fr) minmax(360px,1.35
     <button id="bStartAll">Wake all</button>
     <button id="bOutput">Output window</button>
     <button id="bReset">Reset layout</button>
+    <select id="bAddTool" title="Add a suite tool as a source. It loads when added and unloads when its node is deleted."></select>
     <button id="bAddGen" title="Manifold: a procedural point source — unlimiter-points.js running inside the rack, with morph between two forms">+ Manifold</button>
     <button id="bAddVision" title="Vision: finds motion, edges, foreground or trackable corners in any picture and gives them out as a field, a mask and points">+ Vision</button>
     <button id="bAddSig" title="Signals: audio, clock, LFO and MIDI sources, utilities, and parameter nodes that take them">+ Signal ▾</button>
@@ -276,7 +278,24 @@ const TOOLS = [
     prefer:["lkDist","persist","velMax","stWidth"],   boot:[],             accepts:null,       init:"" },
   { id:"tc", file:"time-cube.html",    label:"Time Cube",    sel:"#gl",   capture:"pull", color:"#ff7a59",
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"mf", file:"manifold.html",     label:"Manifold tool", sel:"#gl",   capture:"push", color:"#7fd1c0",
+    prefer:["bloom","persist","exposure"],            boot:[],             accepts:null,       init:"" },
+  { id:"re", file:"relief.html",       label:"Relief",       sel:"#gl",   capture:"pump", color:"#a8c94f",
+    prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"ws", file:"worldseed.html",    label:"Worldseed",    sel:"#c",    capture:"pull", color:"#5fa8ff",
+    prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"gx", file:"galaxy.html",       label:"Galaxy",       sel:"#gpu",  capture:"pump", color:"#d7a6ff",
+    prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"ph", file:"phylo-lsystem.html",label:"Phylo L-system", sel:"#stage", capture:"pump", color:"#7bd389",
+    prefer:[],                                        boot:[],             accepts:null,       init:"" },
 ];
+/* The tools a fresh rack starts with. Everything else in TOOLS comes in from
+   "+ Tool" — and only a tool that is in the graph is loaded at all, so a big
+   registry costs nothing until something is added. */
+const CORE = new Set(["fw","mw","se","an","ou","fa","ff","tc"]);
+/* how a newly added tool lands in the mix */
+const ADD_MIX = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"], fa:[0.6,"screen"],
+  ff:[0.6,"screen"], tc:[0.5,"screen"], la:[0.7,"screen"], mf:[0.75,"screen"], re:[0.7,"screen"], ws:[0.8,"screen"], gx:[0.8,"screen"], ph:[0.7,"screen"] };
 const BLENDS = ["source-over","screen","lighter","multiply","overlay","difference","soft-light","hard-light"];
 const LS_KEY_V1 = "unlimiter.rack.graph.v1";   // untyped cables — read once, then migrated
 const LS_KEY    = "unlimiter.rack.graph.v2";   // typed {node, port} cables + generator nodes
@@ -342,12 +361,12 @@ function dataConn(from, fromPort, to, toPort, type){
 }
 function defaultGraph(){
   G.nodes = []; G.conns = [];
-  TOOLS.forEach((t, i) => G.nodes.push({ id:"n_"+t.id, kind:"tool", toolId:t.id, x:16, y:14 + i * 120 }));
+  TOOLS.filter(t => CORE.has(t.id)).forEach((t, i) => G.nodes.push({ id:"n_"+t.id, kind:"tool", toolId:t.id, x:16, y:14 + i * 120 }));
   G.nodes.push({ id:"n_out", kind:"output", x:236, y:196 });
   G.nodes.push({ id:"n_vol", kind:"volume", x:236, y:392 });
   const defs = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"], fa:[0.6,"screen"], ff:[0.6,"screen"], tc:[0.5,"screen"], la:[0.6,"screen"] };
   TOOLS.forEach((t, i) => {
-    if(!defs[t.id] || t.id === "la") return;      // Lattice arrives uncabled — patch it when you want it
+    if(!defs[t.id] || !CORE.has(t.id)) return;
     const [op, blend] = defs[t.id];
     G.conns.push(imgConn("n_"+t.id, "n_out", op, blend, i));
   });
@@ -625,6 +644,7 @@ function saveGraph(){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify({
       version: 2,
+      known: TOOLS.map(t => t.id),
       nodes: G.nodes.map(n => {
         const o = { id:n.id, kind:n.kind, toolId:n.toolId, x:Math.round(n.x), y:Math.round(n.y) };
         if(n.bypass) o.bypass = true;
@@ -655,8 +675,13 @@ function loadGraph(){
     G.nodes = G.nodes.filter(n => n.kind !== "vision" || (UV && PT));
     G.nodes.forEach(n => { if(n.kind === "vision"){ if(UV.MODES.indexOf(n.mode) < 0) n.mode = "flow"; n.source = n.source === "camera" ? "camera" : "cable"; n.P = Object.assign(visionDefaults(n.mode), n.P || {}); n.label = n.label || "Vision"; } });
     G.nodes = G.nodes.filter(n => n.kind !== "util" || UTIL[n.util]);
-    // tools added to the rack since this layout was saved arrive uncabled, below the others
+    // core tools new since this layout was saved arrive uncabled, below the others; a tool the
+    // layout already knew about and doesn't have was deleted on purpose, and stays deleted
+    const known = s.known ? new Set(s.known) : null;
+    G.nodes = G.nodes.filter(n => n.kind !== "tool" || TOOLS.some(t => t.id === n.toolId));
     TOOLS.forEach(t => {
+      if(!CORE.has(t.id)) return;                    // the rest of the suite only comes in through + Tool
+      if(known && known.has(t.id)) return;
       if(G.nodes.some(n => n.kind === "tool" && n.toolId === t.id)) return;
       const ys = G.nodes.filter(n => n.kind === "tool").map(n => n.y);
       G.nodes.push({ id:"n_" + t.id, kind:"tool", toolId:t.id, x:16, y:(ys.length ? Math.max(...ys) : -106) + 120 });
@@ -676,9 +701,25 @@ let mixGain = 1, mixBg = "#000000";
 /* ============================================================
    Tool frames — load, reach in, capture
    ============================================================ */
-function initLayers(){
+function initLayers(){ syncLayers(); }
+/* load a frame for every tool node in the graph, and drop frames whose node is gone */
+function syncLayers(){
+  const want = new Set(G.nodes.filter(n => n.kind === "tool").map(n => n.toolId));
+  [...layers.keys()].forEach(id => { if(!want.has(id)) unloadLayer(id); });
+  want.forEach(id => ensureLayer(id));
+}
+function unloadLayer(id){
+  const L = layers.get(id); if(!L) return;
+  RACK_TARGETS.filter(t => t.key.indexOf(id + ".") === 0).map(t => t.key).forEach(unregisterTarget);
+  try{ L.frame.remove(); }catch(e){}
+  layers.delete(id);
+  if(Drive) Drive.rebuildMatrix();
+}
+function ensureLayer(id){
+  if(layers.has(id)) return;
+  const tool = TOOLS.find(t => t.id === id); if(!tool) return;
   const farm = document.getElementById("farm");
-  TOOLS.forEach(tool => {
+  [tool].forEach(tool => {
     const cv = document.createElement("canvas");
     cv.width = LAYER_W; cv.height = LAYER_H;
     const L = {
@@ -714,6 +755,7 @@ function attach(L){
     L.drive = peek(win, "Drive") || null;
     L.P = peek(win, "P") || null;
 
+    if(L.tool.capture === "pump") bridgeFrames(L);
     if(L.tool.capture === "push" && L.drive && typeof L.drive.pushFrame === "function"){
       const orig = L.drive.pushFrame.bind(L.drive);
       L.drive.pushFrame = (src) => {
@@ -750,6 +792,28 @@ function attach(L){
     if(/origin|same-origin/i.test(L.error)) document.getElementById("banner").style.display = "grid";
     console.warn("[rack]", L.tool.label, err);
   }
+}
+/* Tools with no frame hand-off and a canvas that clears after it is shown
+   (WebGPU, or WebGL without preserveDrawingBuffer) read back blank if the rack
+   copies them at an arbitrary moment. For those the rack takes over the tool's
+   clock: its requestAnimationFrame callbacks are queued, and the rack runs them
+   and copies the canvas straight after, in the same task. */
+function bridgeFrames(L){
+  const w = L.win; if(!w || w.__rackBridge) return;
+  const q = []; let seq = 1;
+  w.__rackQ = q;
+  w.requestAnimationFrame = cb => { const h = seq++; q.push([h, cb]); return h; };
+  w.cancelAnimationFrame = h => { for(let i = q.length - 1; i >= 0; i--) if(q[i][0] === h) q.splice(i, 1); };
+  w.__rackBridge = true;
+}
+function pumpAndCapture(L){
+  const q = L.win && L.win.__rackQ;
+  if(q && q.length){
+    const batch = q.splice(0, q.length); let now = performance.now();
+    try{ now = L.win.performance.now(); }catch(e){}
+    batch.forEach(e => { try{ e[1](now); }catch(err){ console.warn("[rack]", L.tool.label, err); } });
+  }
+  try{ if(L.toolCanvas && L.toolCanvas.width) L.ctx.drawImage(L.toolCanvas, 0, 0, LAYER_W, LAYER_H); }catch(e){}
 }
 /* Seed content and start motion. `init` is an expression, not a click, so this
    stays idempotent — clicking a Play *toggle* twice would stop the tool again. */
@@ -796,6 +860,35 @@ function addToolTarget(L, k){
     t.release = () => { try{ L.drive.clearOverride(k); }catch(e){} };
   }
   return t;
+}
+
+/* ============================================================
+   Adding and removing tools
+   ============================================================ */
+function fillToolMenu(){
+  const m = document.getElementById("bAddTool"); if(!m) return;
+  const have = new Set(G.nodes.filter(n => n.kind === "tool").map(n => n.toolId));
+  m.innerHTML = "";
+  const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "+ Tool \u25BE"; m.appendChild(o0);
+  TOOLS.forEach(t => { const o = document.createElement("option"); o.value = t.id; o.textContent = (have.has(t.id) ? "\u2713 " : "") + t.label; o.disabled = have.has(t.id); m.appendChild(o); });
+}
+function addToolNode(id){
+  const t = TOOLS.find(t => t.id === id); if(!t || G.nodes.some(n => n.kind === "tool" && n.toolId === id)) return;
+  const ys = G.nodes.filter(n => n.kind === "tool").map(n => n.y);
+  const n = { id:"n_" + id, kind:"tool", toolId:id, x:16, y:(ys.length ? Math.max(...ys) : -106) + 120 };
+  G.nodes.push(n);
+  const [op, blend] = ADD_MIX[id] || [0.7, "screen"];
+  G.conns.push(imgConn(n.id, "n_out", op, blend, outConns().length));
+  ensureLayer(id);
+  GraphView.build(); select({ kind:"node", id:n.id }); fillToolMenu(); saveGraph();
+}
+function removeToolNode(nodeId){
+  const n = nodeById(nodeId); if(!n || n.kind !== "tool") return;
+  G.conns.filter(c => c.from === nodeId || c.to === nodeId).forEach(c => { if(c.to === nodeId) liveInputs.forEach(k => { if(k.indexOf(nodeId + ":") === 0) liveInputs.delete(k); }); });
+  G.conns = G.conns.filter(c => c.from !== nodeId && c.to !== nodeId);
+  G.nodes = G.nodes.filter(x => x.id !== nodeId);
+  unloadLayer(n.toolId);
+  select(null); GraphView.build(); fillToolMenu(); saveGraph();
 }
 
 /* ============================================================
@@ -1219,7 +1312,9 @@ function deliverData(){
    ============================================================ */
 function captureAndMix(){
   layers.forEach(L => {
-    if(!L.ready || L.tool.capture !== "pull") return;
+    if(!L.ready) return;
+    if(L.tool.capture === "pump"){ pumpAndCapture(L); return; }
+    if(L.tool.capture !== "pull") return;
     try{ if(L.toolCanvas && L.toolCanvas.width) L.ctx.drawImage(L.toolCanvas, 0, 0, LAYER_W, LAYER_H); }catch(e){}
   });
 
@@ -1513,7 +1608,9 @@ const GraphView = (() => {
       G.conns = G.conns.filter(c => c.id !== selected.id);
       select(null); drawCables(); saveGraph();
     } else if(selected.kind === "node" && (nodeById(selected.id) || {}).kind === "gen"){
-      removeGen(selected.id);        // generators are yours to delete; tools, OUTPUT and Volume are fixed
+      removeGen(selected.id);        // generators and tools are yours to delete; OUTPUT and Volume are fixed
+    } else if(selected.kind === "node" && (nodeById(selected.id) || {}).kind === "tool"){
+      removeToolNode(selected.id);
     } else if(selected.kind === "node" && (nodeById(selected.id) || {}).kind === "vision"){
       removeVision(selected.id);
     } else if(selected.kind === "node" && isSig(nodeById(selected.id))){
@@ -2226,10 +2323,14 @@ function boot(){
       RACK_TARGETS.filter(t => t.key.indexOf(n.id + ".") === 0).map(t => t.key).forEach(unregisterTarget));
     gens.clear();
     defaultGraph();
+    syncLayers(); fillToolMenu();
     G.nodes.forEach(n => { if(n.kind === "gen") preRegisterGen(n); });
     if(Drive) Drive.rebuildMatrix();
     GraphView.build(); select({ kind:"node", id:"n_out" }); saveGraph();
   });
+  const bAddTool = document.getElementById("bAddTool");
+  fillToolMenu();
+  bAddTool.addEventListener("change", () => { const id = bAddTool.value; bAddTool.value = ""; if(id) addToolNode(id); });
   const bAddVision = document.getElementById("bAddVision");
   if(UV && PT) bAddVision.addEventListener("click", addVision);
   else { bAddVision.disabled = true; bAddVision.title = "unlimiter-vision.js and unlimiter-ports.js must sit next to rack.html"; }
