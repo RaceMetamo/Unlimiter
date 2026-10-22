@@ -437,6 +437,14 @@
     <div class="note">Bloom is applied after the Kuwahara so the glow smears along the structure directions. Wash fades it toward the paper colour.</div>
   </details>
 
+  <details class="sec sec-dice">
+
+    <summary>Dice — roll &amp; evolve</summary>
+
+    <div id="diceMount"></div>
+
+  </details>
+
   <details class="sec sec-mod">
     <summary>Audio &amp; modulation</summary>
     <div id="audioMount"></div>
@@ -1047,6 +1055,7 @@ global.Modulation = Modulation;
 /* ===== END modulation.js ===== */
 </script>
 <script src="unlimiter-ports.js"></script>
+<script src="unlimiter-dice.js"></script>
 <script>
 /* ============================================================================
    Flow Field Plotter v0.1
@@ -2829,6 +2838,19 @@ for(const l of document.querySelectorAll('label.file'))
     l.querySelector('input').click(); } });
 
 setSize(1200, 800);
+
+/* ---------------- dice ----------------
+   Roll, blend and evolve the parameters (unlimiter-dice.js). It writes P as
+   the sliders do, so presets keep what it lands on. */
+if(window.UnlimiterDice){
+  const dice = UnlimiterDice.create({
+    tool:"flow-field-plotter", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromTargets(MOD_TARGETS, k=>el(MOD_RID[k])),
+    drive:null
+  });
+  dice.mountPanel(document.getElementById("diceMount"));
+  window.__dice = dice;
+}
 </script>
 </body>
 </html>

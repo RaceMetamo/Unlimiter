@@ -143,6 +143,11 @@
       <div class="body" id="g-disp"></div>
     </details>
     <details class="group">
+      <summary>Dice — roll &amp; evolve<span class="chev"></span></summary>
+      <div class="body" id="g-dice"></div>
+    </details>
+
+    <details class="group">
       <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
       <div class="body" id="g-drive"></div>
     </details>
@@ -160,6 +165,7 @@
 <input type="file" id="fPreset" accept="application/json,.json" class="hidden">
 
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script src="unlimiter-points.js"></script>
 <script src="unlimiter-vision.js"></script>
@@ -1891,6 +1897,23 @@ vis();
 sizeCanvas();
 if(P.source === "camera") startCamera();
 requestAnimationFrame(frame);
+
+/* ============================ dice ============================
+   Roll, blend and evolve the parameters over a show (unlimiter-dice.js).
+   It writes P exactly as the sliders do, so presets keep what it lands on
+   and Drive modulation still rides on top. */
+if(window.UnlimiterDice){
+  const diceEl=(k,sel)=>rows[k] ? rows[k].querySelector(sel) : null;
+  const dice=UnlimiterDice.create({
+    tool:"lattice", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
+    refresh:k=>{ if(bound[k]) bound[k](); },
+    switches:[["palette","Palette"],["lkColour","Link colour"],["mesh","Mesh"],["meshFill","Mesh fill"],["fhColour","Hair colour"],["mhMode","Motion history"],["formA","Form A"],["formB","Form B"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
+    drive:Drive, off:["velMax","gate","quality","mindist","motion","spawn","life","inertia","follow"]
+  });
+  dice.mountPanel(document.getElementById("g-dice"));
+  window.__dice=dice;
+}
 </script>
 </body>
 </html>

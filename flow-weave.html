@@ -313,6 +313,14 @@
     <div class="note">Height from dye luminance, differentiated into a normal and lit — the FluidNinja surface trick, applied to a real fluid.</div>
   </details>
 
+  <details class="sec sec-dice">
+
+    <summary>Dice — roll &amp; evolve</summary>
+
+    <div id="diceMount"></div>
+
+  </details>
+
   <details class="sec sec-mod">
     <summary>Drive — audio, MIDI, modulation</summary>
     <div id="audioMount"></div>
@@ -339,6 +347,7 @@
 </div>
 
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script>
 const el = id => document.getElementById(id);
@@ -1639,6 +1648,20 @@ el('bRec').addEventListener('click',()=>{
     rec=null; el('bRec').textContent='● Record'; el('vRec').textContent='Saved.'; };
   rec.start(); el('bRec').textContent='■ Stop'; el('vRec').textContent='Recording…';
 });
+
+/* ---------------- dice ----------------
+   Roll, blend and evolve the parameters (unlimiter-dice.js). It writes P as
+   the sliders do, so presets keep what it lands on. */
+if(window.UnlimiterDice){
+  const dice = UnlimiterDice.create({
+    tool:"flow-weave", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromDrive(Drive, k=>el(MOD_RID[k])),
+    off:["fldAmt","emForce","emDye","emPaint","emR","emBack"],
+    drive:Drive
+  });
+  dice.mountPanel(document.getElementById("diceMount"));
+  window.__dice = dice;
+}
 </script>
 </body>
 </html>

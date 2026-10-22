@@ -410,6 +410,14 @@
     <div class="note"><em id="vLib">No images loaded</em> · Frame size follows the first image; later images are fitted to it.</div>
   </details>
 
+  <details class="sec sec-dice">
+
+    <summary>Dice — roll &amp; evolve</summary>
+
+    <div id="diceMount"></div>
+
+  </details>
+
   <details class="sec sec-audio" open>
     <summary>Drive — audio, MIDI, modulation</summary>
     <div id="audioMount"></div>
@@ -460,6 +468,7 @@
      To update: replace everything between the BEGIN and END markers below.
      =========================================================================== -->
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script>
 const cv = document.getElementById('gl');
@@ -1664,6 +1673,20 @@ if(window.UnlimiterPorts){
   try{ UnlimiterPorts.publish({ tool:'melted-world', label:'Melted World',
     inputs:{ mask:{ type:'mask', label:'mask', set:setRackMask }, field:{ type:'field', label:'field', set:setRackField } } }); }
   catch(e){ console.warn('[melted-world] ports', e); }
+}
+
+/* ---------------- dice ----------------
+   Roll, blend and evolve the parameters (unlimiter-dice.js). It writes P as
+   the sliders do, so presets keep what it lands on. */
+if(window.UnlimiterDice){
+  const dice = UnlimiterDice.create({
+    tool:"melted-world", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromDrive(Drive, k=>el(RID[k])),
+    off:["fldAmt"],
+    drive:Drive
+  });
+  dice.mountPanel(document.getElementById("diceMount"));
+  window.__dice = dice;
 }
 </script>
 </body>

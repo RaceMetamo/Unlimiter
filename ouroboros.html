@@ -142,6 +142,15 @@
       <div class="body" id="g-display"></div>
     </details>
 
+    <details class="group">
+
+      <summary>Dice — roll &amp; evolve<span class="chev"></span></summary>
+
+      <div class="body" id="g-dice"></div>
+
+    </details>
+
+
     <details class="group" open>
       <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
       <div class="body" id="g-drive"></div>
@@ -161,6 +170,7 @@
 <input type="file" id="fPreset" accept="application/json,.json" class="hidden">
 
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script>
 "use strict";
@@ -1236,6 +1246,23 @@ if(window.UnlimiterPorts){
   try{ UnlimiterPorts.publish({ tool:'ouroboros', label:'Ouroboros',
     inputs:{ brushes:{ type:'points', label:'brushes', set:setRackBrushes } } }); }
   catch(e){ console.warn('[ouroboros] ports', e); }
+}
+
+/* ============================ dice ============================
+   Roll, blend and evolve the parameters over a show (unlimiter-dice.js).
+   It writes P exactly as the sliders do, so presets keep what it lands on
+   and Drive modulation still rides on top. */
+if(window.UnlimiterDice){
+  const diceEl=(k,sel)=>rows[k] ? rows[k].querySelector(sel) : null;
+  const dice=UnlimiterDice.create({
+    tool:"ouroboros", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
+    refresh:k=>{ if(bound[k]) bound[k](); },
+    switches:[["mirrorMode","Mirror mode"],["inMode","Input blend"],["edgeMode","Frame edges"],["abMode","Auto brush motion"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
+    drive:Drive, off:["rkStr","rkSize","rkColour","rkMax"]
+  });
+  dice.mountPanel(document.getElementById("g-dice"));
+  window.__dice=dice;
 }
 </script>
 </body>

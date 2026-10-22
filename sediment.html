@@ -251,6 +251,15 @@
       <div class="body" id="g-post"></div>
     </details>
 
+    <details class="group">
+
+      <summary>Dice — roll &amp; evolve<span class="chev"></span></summary>
+
+      <div class="body" id="g-dice"></div>
+
+    </details>
+
+
     <details class="group" open>
       <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
       <div class="body" id="g-drive"></div>
@@ -283,6 +292,7 @@
 <input type="file" id="filePreset" accept="application/json,.json" class="hidden">
 
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script>
 "use strict";
@@ -514,6 +524,7 @@ const PRESETS = {
    DOM helpers for building controls
    ========================================================================= */
 const bound = {};       // key -> update fn
+const SLIDER_EL = {};   // key -> its range input (the dice reads min/max/step from it)
 function row(parent, label, ctlNodes){
   const r = document.createElement("div"); r.className="row";
   const l = document.createElement("label"); l.textContent = label;
@@ -541,6 +552,7 @@ function slider(parent, key, label, min, max, step, suffix, structural=true){
   show();
   inp.addEventListener("input", ()=>{ P[key]=Number(inp.value); show(); changed(structural); });
   bound[key] = ()=>{ inp.value=P[key]; show(); };
+  SLIDER_EL[key] = inp;
   registerMod(key,label,min,max);
   row(parent, label, [inp, val]);
   return inp;
@@ -556,6 +568,7 @@ function dual(parent, keyA, keyB, label, min, max, step, structural=true){
   b.addEventListener("input",()=>{P[keyB]=Number(b.value);show();changed(structural);});
   bound[keyA]=()=>{a.value=P[keyA];show();};
   bound[keyB]=()=>{b.value=P[keyB];show();};
+  SLIDER_EL[keyA]=a; SLIDER_EL[keyB]=b;
   registerMod(keyA,label+" min",min,max); registerMod(keyB,label+" max",min,max);
   row(parent,label,[a,b,val]);
 }
@@ -1434,6 +1447,24 @@ if(window.UnlimiterPorts){
     inputs:{ field:{ type:'field', label:'field', set:f=>{ RACK.fld=f||null; rackNoteS(); } },
              mask:{ type:'mask', label:'mask', set:m=>{ RACK.mask=m||null; rackNoteS(); } } } }); }
   catch(e){ console.warn('[sediment] ports', e); }
+}
+
+/* ============================ dice ============================
+   Roll, blend and evolve the parameters (unlimiter-dice.js). A finished
+   painting is restarted when the dice moves something, so an evolving show
+   keeps laying down new layers. */
+if(window.UnlimiterDice){
+  const dice=UnlimiterDice.create({
+    tool:"sediment", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromDrive(Drive, k=>SLIDER_EL[k]||null),
+    refresh:k=>{ if(bound[k]) bound[k](); },
+    switches:[["colorMode","Colour from"],["blend","Layer blending"],["contentType","Draw"],["shape","Shape"],["rotMode","Rotation"]]
+      .map(([k,l])=>{ const e=[...document.querySelectorAll("#panelScroll .row")].find(r=>r.querySelector("label").textContent===l); return {key:k,label:l,el:e?e.querySelector("select"):null}; }).filter(w=>w.el),
+    drive:Drive, off:["frames","fldAmt","fldOver"],
+    onChange:()=>{ if(!running) restart(); }, changeMs:1500
+  });
+  dice.mountPanel(document.getElementById("g-dice"));
+  window.__dice=dice;
 }
 </script>
 </body>

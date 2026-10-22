@@ -120,6 +120,15 @@
     </details>
 
     <details class="group">
+
+      <summary>Dice — roll &amp; evolve<span class="chev"></span></summary>
+
+      <div class="body" id="g-dice"></div>
+
+    </details>
+
+
+    <details class="group">
       <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
       <div class="body" id="g-drive"></div>
     </details>
@@ -135,6 +144,7 @@
 </div>
 
 <script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
 <script src="unlimiter-depth.js"></script>
 <script>
 "use strict";
@@ -703,6 +713,23 @@ const gdr=document.getElementById("g-drive");
 if(Drive){ Drive.mountPanel(gdr); }
 else gdr.innerHTML='<div class="note">unlimiter-drive.js not found.</div>';
 vis();
+
+/* ============================ dice ============================
+   Roll, blend and evolve the parameters over a show (unlimiter-dice.js).
+   It writes P exactly as the sliders do, so presets keep what it lands on
+   and Drive modulation still rides on top. */
+if(window.UnlimiterDice){
+  const diceEl=(k,sel)=>rows[k] ? rows[k].querySelector(sel) : null;
+  const dice=UnlimiterDice.create({
+    tool:"relief", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
+    refresh:k=>{ if(bound[k]) bound[k](); },
+    switches:[["mode","Draw as"],["colorMode","Colour from"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
+    drive:Drive, off:[]
+  });
+  dice.mountPanel(document.getElementById("g-dice"));
+  window.__dice=dice;
+}
 </script>
 </body>
 </html>
