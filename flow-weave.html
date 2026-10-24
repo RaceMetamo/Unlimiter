@@ -346,6 +346,7 @@
   </details>
 </div>
 
+<script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
@@ -1666,6 +1667,9 @@ if(window.UnlimiterDice){
   dice.mountPanel(document.getElementById("diceMount"));
   window.__dice = dice;
 }
+
+/* which camera: one choice for the whole suite (unlimiter-camera.js) */
+if(window.UnlimiterCamera) UnlimiterCamera.mount(document.getElementById("bCam").parentNode);
 </script>
 </body>
 </html>

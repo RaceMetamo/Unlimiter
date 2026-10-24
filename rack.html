@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Unlimiter — Rack</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+<script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-points.js"></script>
 <script src="unlimiter-vision.js"></script>
@@ -2088,6 +2089,14 @@ const Inspector = (() => {
       visionParamRows(n).map(spec => genRow(n, spec, modded)).join("") +
       `<div class="row2" style="margin-top:12px;grid-template-columns:1fr 1fr 1fr"><button id="vReset" title="Forget the background and tracks">reset</button><button id="gByp" class="${n.bypass ? "on" : ""}">${n.bypass ? "Bypassed" : "Bypass (B)"}</button><button id="gDel" style="color:var(--danger)">delete</button></div>` + driveSection();
     root.innerHTML = body;
+    if(n.source === "camera" && window.UnlimiterCamera){
+      const srcSel = root.querySelector("#vSrc"), wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:6px";
+      const lb = document.createElement("span"); lb.textContent = "camera"; lb.style.cssText = "color:var(--dim);font-size:.72rem;min-width:52px";
+      wrap.appendChild(lb);
+      if(srcSel && srcSel.parentNode) srcSel.parentNode.appendChild(wrap);
+      UnlimiterCamera.mount(wrap);
+    }
     const persist = () => saveGraph();
     root.querySelector("#vMode").addEventListener("change", e => { setVisionMode(n, e.target.value); GraphView.build(); persist(); render(); });
     root.querySelector("#vSrc").addEventListener("change", e => {

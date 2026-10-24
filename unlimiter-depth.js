@@ -448,6 +448,8 @@ function create(opts){
     ui.bCam=el("button",null,"Webcam instead");
     ui.bCam.addEventListener("click",()=>{ if(S.source==="webcam"){ stopWebcam(); S.source="none"; S.status="idle"; refresh(); } else useWebcam(); });
     row1.append(ui.bConnect,ui.bCam); host.appendChild(row1);
+    // which webcam stands in (unlimiter-camera.js, when the page loads it)
+    if(typeof window!=="undefined" && window.UnlimiterCamera) window.UnlimiterCamera.mount(row1);
     ui.status=note(host,"");
     note(host,"Run kinect-bridge.py on this machine. With nothing plugged in, the webcam stands in — brightness becomes depth, so every tool still does something.");
 

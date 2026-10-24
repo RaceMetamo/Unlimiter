@@ -468,6 +468,7 @@
   </details>
 </div>
 
+<script src="unlimiter-camera.js"></script>
 <script>
 /* ===== BEGIN modulation.js v1.1 (shared across the suite) ===== */
 /* =============================================================================
@@ -2851,6 +2852,9 @@ if(window.UnlimiterDice){
   dice.mountPanel(document.getElementById("diceMount"));
   window.__dice = dice;
 }
+
+/* which camera: one choice for the whole suite (unlimiter-camera.js) */
+if(window.UnlimiterCamera) UnlimiterCamera.mount(document.getElementById("bCam").parentNode);
 </script>
 </body>
 </html>

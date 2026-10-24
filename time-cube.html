@@ -312,6 +312,7 @@ input[type=color]{width:28px;height:24px;padding:0;border:1px solid var(--rule);
   <button id="start">Start camera</button>
 </div>
 
+<script src="unlimiter-camera.js"></script>
 <script src="modulation.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script>
@@ -1086,6 +1087,9 @@ addEventListener('keydown', e => {
 });
 addEventListener('resize', resize);
 markModulated();
+
+/* which camera: one choice for the whole suite (unlimiter-camera.js) */
+if(window.UnlimiterCamera) UnlimiterCamera.mount(document.getElementById("useCam").parentNode);
 </script>
 </body>
 </html>

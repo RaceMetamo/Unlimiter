@@ -169,6 +169,7 @@
 <input type="file" id="fMedia" accept="image/*,video/*" class="hidden">
 <input type="file" id="fPreset" accept="application/json,.json" class="hidden">
 
+<script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
@@ -1265,6 +1266,9 @@ if(window.UnlimiterDice){
   dice.mountPanel(document.getElementById("g-dice"));
   window.__dice=dice;
 }
+
+/* which camera: one choice for the whole suite (unlimiter-camera.js) */
+if(window.UnlimiterCamera) UnlimiterCamera.mount(srcRow);
 </script>
 </body>
 </html>
