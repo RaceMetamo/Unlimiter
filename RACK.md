@@ -131,7 +131,7 @@ Ouroboros's brushes or Flow Weave's emitters with tracked, velocity-coloured poi
 everything that moved) outputs are ordinary masks: patch history into Melted World or Sediment and
 only recent motion melts or deposits.
 
-**Rewind** (`rewind.html`, + Tool) is the datamosh end of it. It takes all four data types:
+**Rewind** (`rewind.html`, + Tool) is the datamosh-and-ink end of it. It takes all four data types:
 **image** becomes its tape's source; **points** draw its lattice and push its flow along their
 direction of travel (tangents if they carry them, otherwise how far they moved); **field** replaces
 or adds to the motion vectors it moshes with (*Flow from*); **mask** says where the mosh is allowed
