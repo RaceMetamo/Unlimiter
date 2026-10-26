@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rewind — chrome, tape and sigils</title>
+<title>Rewind — tape, flow and datamosh</title>
 <style>
   :root{
     --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
@@ -24,7 +24,7 @@
     background:linear-gradient(90deg,#bff3ff 0%,#3cb6ea 30%,#2b5aa8 52%,#1a1a1a 70%,#39ff6a 100%);opacity:.9}
   #mMeter i{position:absolute;top:-3px;width:3px;height:14px;background:#fff;border-radius:2px;left:0;
     box-shadow:0 0 0 1px #000}
-  #mMeter b{position:absolute;top:-3px;height:14px;left:0;width:0;border:1px solid rgba(255,255,255,.35);border-radius:3px}
+  #mMeter b{position:absolute;top:-3px;height:14px;left:0;width:10px;border:1px solid rgba(255,255,255,.35);border-radius:3px}
   #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto;text-align:right}
   #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px;position:relative}
   #gl{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#000}
@@ -64,10 +64,8 @@
   .morphrow input[type=range]::-moz-range-track{height:6px;border-radius:6px;
     background:linear-gradient(90deg,#bff3ff 0%,#3cb6ea 30%,#2b5aa8 52%,#1a1a1a 70%,#39ff6a 100%)}
   .morphrow input[type=range]::-webkit-slider-thumb{width:14px;height:14px;margin-top:-4px;background:#fff;box-shadow:0 0 0 1px #000}
-  select,input[type=text]{width:100%;background:var(--panel-2);color:var(--text);
+  select{width:100%;background:var(--panel-2);color:var(--text);
     border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-size:12px;font-family:inherit}
-  input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:var(--radius);
-    background:var(--panel-2);cursor:pointer;flex:none}
   input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);
     background:var(--panel-2);cursor:pointer;flex:none;position:relative}
   input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
@@ -84,6 +82,8 @@
   .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
   .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
     border-top:1px solid var(--line);margin-top:8px}
+  .ports{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.6;padding:4px 0}
+  .ports b{color:var(--accent);font-weight:500}
   #footer{border-top:1px solid var(--line);padding:12px 16px}
   .hidden{display:none !important}
 </style>
@@ -92,8 +92,8 @@
 
 <div id="stage">
   <div id="stageBar">
-    <h1>Rewind <span>— chrome, tape and sigils</span></h1>
-    <div id="mMeter" title="Where the look sits right now, aero (left) to sigil (right). The box is the morph slider; the white tick is the morph after Evolve and storms."><b></b><i></i></div>
+    <h1>Rewind <span>— tape, flow and datamosh</span></h1>
+    <div id="mMeter" title="Where the look sits right now, round (left) to sharp (right). The box is the morph slider; the white tick is the morph after Evolve and storms."><b></b><i></i></div>
     <div id="status">starting</div>
   </div>
   <div id="canvasWrap"><canvas id="gl"></canvas><div id="srcNote"></div></div>
@@ -106,7 +106,7 @@
       <div class="body" id="g-src"></div>
     </details>
     <details class="group" open>
-      <summary>Morph — aero ↔ sigil<span class="chev"></span></summary>
+      <summary>Morph — round ↔ sigil<span class="chev"></span></summary>
       <div class="body" id="g-morph"></div>
     </details>
     <details class="group" open>
@@ -114,10 +114,18 @@
       <div class="body" id="g-look"></div>
     </details>
     <details class="group" open>
+      <summary>Datamosh<span class="chev"></span></summary>
+      <div class="body" id="g-mosh"></div>
+    </details>
+    <details class="group" open>
+      <summary>Optical flow<span class="chev"></span></summary>
+      <div class="body" id="g-flow"></div>
+    </details>
+    <details class="group">
       <summary>Evolve — drift &amp; storms<span class="chev"></span></summary>
       <div class="body" id="g-ev"></div>
     </details>
-    <details class="group" open>
+    <details class="group">
       <summary>Tape — loop, stutter, rewind<span class="chev"></span></summary>
       <div class="body" id="g-tape"></div>
     </details>
@@ -138,16 +146,16 @@
       <div class="body" id="g-sig"></div>
     </details>
     <details class="group">
-      <summary>Skins — player windows &amp; OSD<span class="chev"></span></summary>
-      <div class="body" id="g-gui"></div>
-    </details>
-    <details class="group">
       <summary>Lattice — orbs to runes<span class="chev"></span></summary>
       <div class="body" id="g-lat"></div>
     </details>
     <details class="group">
       <summary>Glow &amp; tube<span class="chev"></span></summary>
       <div class="body" id="g-post"></div>
+    </details>
+    <details class="group">
+      <summary>Rack ports<span class="chev"></span></summary>
+      <div class="body" id="g-ports"></div>
     </details>
     <details class="group">
       <summary>Display<span class="chev"></span></summary>
@@ -183,33 +191,38 @@
 "use strict";
 /* ============================================================
    REWIND
-   A late-90s / early-2000s signal chain, built on Lattice's base.
+   A tape machine that datamoshes, built on Lattice's base.
 
-   source → TAPE → one big pass → glow & tube → screen
-     TAPE    a ring of up to 120 low-res frames. The play head reads it
-             live, loops a stretch of it, stutters, pauses, rewinds and
-             fast-forwards back to live. In Loop the head can overdub
-             the processed picture back onto the tape, so the loop
-             wears down a generation every pass.
-     PASS    tracking wobble, head switching, slice tears, block
-             glitches, domain-warped liquid, RGB split, chroma bleed,
-             ghosting, datamosh holds, chrome reflection, palette map,
-             edges, glyph rain, the overlay, tape age, noise, dropouts,
-             crush and dither.
-     OVERLAY player skins, installer dialogs, a VCR OSD and a lattice
-             of tracked points (Lattice's tracker, run on what the
-             tape is actually playing) — drawn in 2D, then glitched
-             with everything else.
+   source → TAPE → (flow) → MOSH → one big pass → glow & tube → screen
 
-   One axis runs through all of it: MORPH. At 0 everything is round,
-   glossy and clean — bubbles, capsules, soft chrome, sky palettes.
-   At 1 it is sharp — slivers, chamfers, stepped warp, banded chrome,
-   hard edges and runes. Evolve moves that axis (and the direction the
-   glitches travel) over time; storms push everything at once.
+     TAPE   a ring of up to 120 low-res frames. The play head reads it
+            live, loops a stretch of it, stutters, pauses, rewinds and
+            fast-forwards back to live. In Loop the head can overdub
+            the processed picture back onto the tape.
+     FLOW   dense pyramidal Lucas–Kanade (unlimiter-vision.js, the same
+            engine as Lattice and the Rack's Vision node) run on the
+            frames the tape actually plays — so a loop's seam or a
+            stutter's jump is a burst of motion, as in a real codec.
+            Rack fields and points can be added to it or replace it.
+     MOSH   the datamosh state: last frame's picture pushed along the
+            flow (P-frames with no I-frame), with only some macroblocks
+            refreshed from the tape. Bloom freezes the vectors and keeps
+            applying them; Smear stops all refresh; a keyframe cleans up.
+     PASS   tracking, tears, block glitches, liquid warp, flow warp,
+            motion smear, RGB split, chroma bleed, ghosting, block hold,
+            chrome, palette, flow colour, edges, glyph rain, the lattice
+            and flow-line overlay, tape age, snow, dropouts, crush.
+
+   One axis runs through all of it: MORPH. At 0 everything is round
+   and glossy — bubble lenses, ripples, smooth liquid, soft chrome,
+   curved flow lines and orbs. At 1 it is sharp — slivers, slice tears,
+   stepped warp, hard macroblocks, banded chrome, edges, runes. Evolve
+   moves that axis and the direction the glitches travel over time.
    ============================================================ */
 
 const PT = window.UnlimiterPorts || null;
 const UV = window.UnlimiterVision || null;
+const IN_RACK = (() => { try{ return window.top !== window; }catch(e){ return true; } })();
 
 /* ============================ palettes ============================ */
 const PAL_A = {
@@ -235,23 +248,26 @@ const DEFAULTS = {
   source:"demo", mirror:1, fit:"cover",
   // morph
   morph:0, palA:"Frutiger sky", palB:"Matrix", palMix:0.25,
+  // datamosh
+  mosh:0.4, moshGain:1.5, blocky:0.6, refresh:1, still:0.3, stillTh:0.04, leak:0, keyEvery:0,
+  synth:0, synthScale:1.5, moshMask:"off", evBloom:1, evSmear:1,
+  // optical flow
+  flowSrc:"tape", flowGain:1, flowThresh:0.3, flowSmooth:0.45, ptPush:0.6, ptRadius:2,
+  flowWarp:0, smear:0, flowCol:0, gate:0, flowLines:0, flowLineLen:1, flowLineAlpha:0.6,
   // evolve
   morphMode:"off", morphPeriod:24, morphDepth:1, stormRate:3, stormLen:2.5, stormDepth:1.2, stormMorph:0.3,
-  drift:0, travel:0.05,
+  drift:0, travel:0.05, seed:7,
   // tape
   tapeMode:"live", tapeLen:48, tapeFps:30, tapeRes:480, chaos:1.5, evLen:1.6,
   evStutter:1, evRewind:1, evPause:1, evSlow:1, stutLen:4, speed:1, overdub:0, reRec:0, blendF:0.5,
   // vhs
-  track:0.2, head:0.6, bleed:0.45, ghost:0.2, noise:0.2, drop:0.3, age:0.2,
+  track:0.2, head:0.6, bleed:0.45, ghost:0.2, noise:0.2, drop:0.3, age:0.2, osd:0,
   // liquid & chrome
   warp:0.2, warpScale:1.2, warpSpeed:0.15, chrome:0, soft:2.5, melt:0.3, relief:1, gloss:24, bands:7,
   // glitch
-  block:0.1, blockSize:0.12, rate:6, split:0.3, tear:0.12, mosh:0.03, trails:0, crush:0, dither:0.6,
+  block:0.1, blockSize:0.12, rate:6, split:0.3, tear:0.12, hold:0.03, trails:0, crush:0, dither:0.6,
   // sigils
   edge:0.15, edgeTh:0.12, glyph:0.6, glyphPx:16, rain:0.6, glyphImg:0.5, glyphDim:0.5,
-  // skins
-  guiOn:1, guiCount:3, guiScale:1, guiAlpha:0.92, guiWander:0.35, guiTrail:0, osd:1, guiSeed:7,
-  marquee:"UNLIMITER ★ REWIND ★ CHROME DREAMS ★ BE KIND REWIND ★ ",
   // lattice
   latOn:0, latSrc:"tracked", latN:90, latReach:0.16, latK:3, latWidth:1.4, latAlpha:0.8, latNode:5, latRunes:0.35,
   // glow & tube
@@ -262,24 +278,30 @@ const DEFAULTS = {
 let P = Object.assign({}, DEFAULTS);
 let Q = P;
 
-const SOURCE_KEYS = new Set(["source","mirror","fit","res","marquee","tapeRes","guiSeed"]);
+/* looks leave these alone: what is plugged in and where it comes from */
+const SOURCE_KEYS = new Set(["source","mirror","fit","res","tapeRes","seed","flowSrc","latSrc","moshMask"]);
 const LOOKS = {
   "Aero dream": {},
   "Liquid chrome": { chrome:1, soft:3, melt:0.55, relief:1.4, gloss:30, palA:"Chrome", palMix:0.15, warp:0.45, warpSpeed:0.2,
-                     block:0.05, bloom:0.35, guiCount:1, edge:0.05 },
+                     block:0.05, bloom:0.35, edge:0.05, mosh:0.6, refresh:0.4, still:0.15, flowWarp:0.3 },
+  "Datamosh": { mosh:1, moshGain:1.6, blocky:0.95, refresh:0.05, still:0.05, keyEvery:8, hold:0.12, block:0.12, morph:0.7,
+                split:0.4, rate:3, palMix:0.1, glyph:0, chaos:2, evStutter:1, evRewind:0, edge:0.1 },
+  "Melt mosh": { mosh:1, moshGain:2.6, blocky:0.15, refresh:0.02, still:0.1, synth:0.6, flowWarp:0.35, smear:0.5,
+                 palA:"Bubblegum", palMix:0.3, warp:0.35, morph:0.2, bloom:0.4 },
+  "Flow paint": { flowCol:0.85, smear:0.7, mosh:0.6, refresh:0.3, still:0.2, flowLines:1, flowLineAlpha:0.45, morph:0.15,
+                  palMix:0.1, trails:0.55, block:0.04 },
+  "Motion only": { gate:1, block:0.55, tear:0.6, split:1.2, mosh:0.7, still:1, stillTh:0.06, morph:0.85, edge:0.6,
+                   glyph:0.3, palMix:0.5, crush:0.35 },
   "Tape loop": { tapeMode:"loop", tapeLen:60, overdub:0.25, chaos:1, track:0.45, bleed:0.7, ghost:0.35, age:0.55,
-                 noise:0.35, drop:0.6, curve:0.25, scan:0.4, palMix:0.1 },
-  "Warez cascade": { guiCount:6, guiTrail:14, guiWander:0.6, morph:0.45, palA:"Bubblegum", palB:"Acid", palMix:0.3,
-                     block:0.15, crush:0.25, dither:0.8, osd:0 },
+                 noise:0.35, drop:0.6, curve:0.25, scan:0.4, palMix:0.1, mosh:0.5, refresh:0.3 },
   "Cyber sigil": { morph:1, palB:"Matrix", palMix:0.7, glyph:0.85, glyphImg:0.7, glyphDim:0.6, edge:0.9, edgeTh:0.1,
-                   crush:0.55, dither:0.8, block:0.18, tear:0.35, latOn:1, guiCount:2, bloom:0.35, warp:0.15 },
-  "Blood rune": { morph:0.9, palB:"Blood rune", palMix:0.8, glyph:0.4, edge:1, tear:0.5, split:0.6, mosh:0.1,
-                  latOn:1, latRunes:0.7, crush:0.4 },
+                   crush:0.55, dither:0.8, block:0.18, tear:0.35, latOn:1, bloom:0.35, warp:0.15, flowLines:1 },
+  "Blood rune": { morph:0.9, palB:"Blood rune", palMix:0.8, glyph:0.4, edge:1, tear:0.5, split:0.6, hold:0.1,
+                  latOn:1, latRunes:0.7, crush:0.4, mosh:0.8, refresh:0.2 },
   "Morph cycle": { morphMode:"sine", morphPeriod:20, morphDepth:1, stormRate:6, stormMorph:0.4, drift:8, latOn:1,
-                   guiCount:3, glyph:0.6, edge:0.5, chrome:0.35, palMix:0.4 },
-  "Rewind storm": { chaos:6, evLen:2, stormRate:12, stormDepth:2, drift:20, travel:0.2, track:0.5, mosh:0.12, block:0.2,
-                    morphMode:"storm", morphDepth:0.8 },
-  "Datamosh": { mosh:0.35, trails:0.6, block:0.25, blockSize:0.08, morph:0.7, split:0.5, rate:3, palMix:0.1, glyph:0, guiCount:0, osd:0 }
+                   glyph:0.6, edge:0.5, chrome:0.35, palMix:0.4, flowLines:1, mosh:0.6 },
+  "Rewind storm": { chaos:6, evLen:2, stormRate:12, stormDepth:2, drift:20, travel:0.2, track:0.5, hold:0.12, block:0.2,
+                    morphMode:"storm", morphDepth:0.8, mosh:0.7 }
 };
 
 /* ============================ drive ============================ */
@@ -287,7 +309,7 @@ const cv = document.getElementById("gl");
 const Drive = (window.UnlimiterDrive)
   ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
   : null;
-const NO_MOD = new Set(["tapeLen","tapeFps","tapeRes","guiCount","latN","latK","guiTrail","stutLen","reRec","guiSeed"]);
+const NO_MOD = new Set(["tapeLen","tapeFps","tapeRes","latN","latK","stutLen","reRec","seed","keyEvery"]);
 let GRP = "";
 function registerMod(key,label,min,max){
   if(!Drive || NO_MOD.has(key)) return;
@@ -337,12 +359,6 @@ function check(parent,key,label){
   bound[key]=()=>{c.checked=!!P[key];};
   return row(parent,label,[c],key);
 }
-function textIn(parent,key,label){
-  const i=document.createElement("input"); i.type="text"; i.value=P[key]; i.spellcheck=false;
-  i.addEventListener("input",()=>{P[key]=i.value;});
-  bound[key]=()=>{i.value=P[key];};
-  return row(parent,label,[i],key);
-}
 function buttons(parent,list){
   const d=document.createElement("div"); d.className="btnrow";
   list.forEach(([id,t])=>{const b=document.createElement("button");b.id=id;b.textContent=t;d.appendChild(b);});
@@ -351,30 +367,66 @@ function buttons(parent,list){
 function syncUI(){ for(const k in bound) bound[k](); vis(); }
 
 /* ============================ panel ============================ */
-const IMAGE_SOURCES = new Set(["camera","video","image","demo","rack-image"]);
 GRP="Source";
 const gS=document.getElementById("g-src");
-select(gS,"source","Source",[["demo","Demo — chrome sky"],["camera","Camera"],["video","Video file"],["image","Image file"],
+select(gS,"source","Source",[["demo","Demo — glass sky"],["camera","Camera"],["video","Video file"],["image","Image file"],
   ["rack-image","Rack: image cable"]],()=>{ if(P.source==="camera") startCamera(); });
 const camBtns=buttons(gS,[["bCam","Start camera"],["bMedia","Load video / image…"]]);
 check(gS,"mirror","Mirror camera");
 select(gS,"fit","Fit",[["cover","Fill the frame (crop)"],["contain","Whole picture (bars)"],["stretch","Stretch"]]);
-note(gS,"Everything goes onto the tape first, so the source can be anything — the tape is what gets looped, stuttered and rewound. Drop a file anywhere to load it.");
+note(gS,"Everything goes onto the tape first, so the source can be anything — the tape is what gets looped, stuttered, rewound and moshed. Drop a file anywhere to load it. In the Rack an image cable replaces the source.");
 
 GRP="Morph";
 const gMo=document.getElementById("g-morph");
 slider(gMo,"morph","Morph",0,1,0.001,"").classList.add("morphrow");
-select(gMo,"palA","Aero palette",Object.keys(PAL_A).map(n=>[n,n]));
+select(gMo,"palA","Round palette",Object.keys(PAL_A).map(n=>[n,n]));
 select(gMo,"palB","Sigil palette",Object.keys(PAL_B).map(n=>[n,n]));
 slider(gMo,"palMix","Palette map",0,1,0.01,"");
-note(gMo,"One axis under every effect. At 0 the glitches are round — bubble lenses, ripples, smooth liquid, soft chrome, capsule windows, glowing orbs. At 1 the same glitches are sharp — slivers, slice tears, stepped warp, banded chrome, hard edges, chamfered windows, 45° runes and glyph rain. Palette map recolours the picture by brightness through a blend of the two palettes.");
+note(gMo,"One axis under every effect. At 0 the damage is round — bubble lenses, ripples, smooth liquid, soft motion vectors, soft chrome, curved flow lines, glowing orbs. At 1 the same damage is sharp — slivers, slice tears, stepped warp, hard macroblocks, banded chrome, hard edges, 45° traces, runes and glyph rain. Palette map recolours by brightness through a blend of the two palettes.");
 
 GRP="Looks";
 const gL=document.getElementById("g-look");
 P.look="Aero dream";
 select(gL,"look","Look",Object.keys(LOOKS).map(n=>[n,n]),()=>applyLook(P.look));
 buttons(gL,[["bExport","Export preset"],["bImport","Import preset"]]);
-note(gL,"A look sets how things are drawn and how the tape behaves. It leaves the source, fit, resolution and your marquee text alone.");
+note(gL,"A look sets how things are drawn, moshed and played. It leaves the source, what is plugged in from the Rack, and the resolution alone.");
+
+GRP="Datamosh";
+const gMs=document.getElementById("g-mosh");
+slider(gMs,"mosh","Datamosh",0,1,0.01,"");
+slider(gMs,"moshGain","Push",0,6,0.01,"×");
+slider(gMs,"blocky","Macroblocks",0,1,0.01,"");
+slider(gMs,"refresh","Block refresh",0,12,0.01," /s");
+slider(gMs,"still","Clean still areas",0,1,0.01,"");
+slider(gMs,"stillTh","Still below",0.005,0.3,0.001,"");
+slider(gMs,"leak","Leak",0,0.25,0.001,"");
+slider(gMs,"keyEvery","Keyframe every",0,30,0.5," s");
+select(gMs,"moshMask","Mask",[["off","Off"],["inside","Mosh inside the mask"],["outside","Mosh outside the mask"]]);
+buttons(gMs,[["bKey","Keyframe"],["bBloom","Bloom"],["bSmear","Smear"]]);
+check(gMs,"evBloom","Bloom events");
+check(gMs,"evSmear","Smear events");
+subhead(gMs,"Synthetic flow");
+slider(gMs,"synth","Swirl",0,3,0.01,"");
+slider(gMs,"synthScale","Swirl scale",0.2,6,0.01,"");
+note(gMs,"Like a video with its keyframes deleted: each frame, the last picture is pushed along the motion vectors instead of being replaced, so the old image is dragged by whatever moves through it. Only some macroblocks are refreshed from the tape — at random (Block refresh) and where nothing moves (Clean still areas). Macroblocks makes each block move as one, like a codec; at 0 the smear is smooth and liquid. Bloom freezes the vectors and keeps applying them until the picture blossoms; Smear stops every refresh. Keyframe cleans it all at once. Swirl adds a curl-noise flow, so a still image moshes too. The mask (the Rack's mask cable, or this tool's own motion) chooses where the mosh is allowed.");
+
+GRP="Flow";
+const gF=document.getElementById("g-flow");
+select(gF,"flowSrc","Flow from",[["tape","Tape — motion in what is playing"],["rack","Rack: field cable"],["both","Both, added"]]);
+slider(gF,"flowGain","Flow gain",0,4,0.01,"×");
+slider(gF,"flowThresh","Motion threshold",0.02,2,0.01,"");
+slider(gF,"flowSmooth","Smoothing",0,0.95,0.01,"");
+slider(gF,"ptPush","Point push",0,4,0.01,"");
+slider(gF,"ptRadius","Push radius",0.5,8,0.05," cells");
+subhead(gF,"Draw with the flow");
+slider(gF,"flowWarp","Push picture",0,2,0.01,"");
+slider(gF,"smear","Motion smear",0,2,0.01,"");
+slider(gF,"flowCol","Flow colour",0,1,0.01,"");
+slider(gF,"gate","Glitch where it moves",0,1,0.01,"");
+check(gF,"flowLines","Flow lines");
+slider(gF,"flowLineLen","Line length",0.1,4,0.01,"");
+slider(gF,"flowLineAlpha","Line opacity",0,1,0.01,"");
+note(gF,"Dense pyramidal Lucas–Kanade — the Rack's Vision node and Lattice use the same engine — run on the frames the tape is actually playing, on a 48 × 27 grid of motion vectors. Cuts, loop seams and stutters register as sudden motion, which is exactly what makes a mosh bloom. A Rack field cable can replace or add to it, and Rack points push the field along their direction of travel (Point push), so Manifold or Lattice points can stir the mosh. Push picture displaces the image along its motion, Motion smear blurs it along the vectors, Flow colour paints direction as hue (round) or speed through the sigil palette (sharp), and Glitch where it moves confines blocks, tears and splits to moving areas.");
 
 GRP="Evolve";
 const gE=document.getElementById("g-ev");
@@ -387,11 +439,11 @@ slider(gE,"stormRate","Storms",0,30,0.1," /min");
 slider(gE,"stormLen","Storm length",0.2,10,0.05," s");
 slider(gE,"stormDepth","Storm force",0,3,0.01,"");
 slider(gE,"stormMorph","Storm sharpens",0,1,0.01,"");
-buttons(gE,[["bStorm","Storm now"]]);
+buttons(gE,[["bStorm","Storm now"],["bSeed","Reseed"]]);
 subhead(gE,"Travel");
 slider(gE,"drift","Turn",-90,90,0.5,"°/s");
 slider(gE,"travel","Travel",0,1,0.005,"");
-note(gE,"Auto morph moves the look between the slider and the other end over time. Storms arrive at random — the rate is an average — and push the glitches, the warp, the tracking and the tape events all at once, and can tip the look toward sigil while they last. Turn rotates the direction the tears, splits, slivers and bubbles run in; Travel slides the whole glitch pattern along that direction, so the damage moves across the picture instead of flickering in place.");
+note(gE,"Auto morph moves the look between the slider and the other end over time. Storms arrive at random — the rate is an average — and push the glitches, warp, tracking, mosh and tape events at once, and can tip the look toward sigil while they last. Turn rotates the direction the tears, splits, slivers and bubbles run in; Travel slides the glitch pattern along it, so damage moves across the picture instead of flickering in place.");
 
 GRP="Tape";
 const gT=document.getElementById("g-tape");
@@ -413,7 +465,7 @@ check(gT,"evPause","Pause jitter");
 check(gT,"evSlow","Slow motion");
 slider(gT,"blendF","Frame blend",0,1,0.01,"");
 select(gT,"tapeRes","Tape resolution",[[360,"360 — worn"],[480,"480 — VHS"],[640,"640 — S-VHS"]],()=>tapeAlloc());
-note(gT,"The tape holds the last 120 frames at the tape rate. Catch loop grabs the last stretch you just saw and loops it; Re-record tapes a fresh stretch. Overdub writes the processed picture back onto the loop each pass, so the glitches, chrome and colour build up generation on generation — the loop wears and mutates. Loop speed can run backwards. Events happen at random in both modes; after a rewind, pause or slow-mo in Live the head fast-forwards back to now.");
+note(gT,"The tape holds the last 120 frames at the tape rate. Catch loop grabs the last stretch you just saw and loops it; Re-record tapes a fresh stretch. Overdub writes the processed picture back onto the loop each pass, so the mosh, chrome and colour build up generation on generation. Loop speed can run backwards. Events (including Bloom and Smear from the Datamosh group) happen at random in both modes. Keys: space stutter, R rewind, P pause, L catch loop, B bloom, K keyframe, S storm.");
 
 GRP="VHS";
 const gV=document.getElementById("g-vhs");
@@ -424,7 +476,8 @@ slider(gV,"ghost","Ghosting",0,1,0.01,"");
 slider(gV,"noise","Snow",0,1.5,0.01,"");
 slider(gV,"drop","Dropouts",0,3,0.01,"");
 slider(gV,"age","Tape age",0,1,0.01,"");
-note(gV,"Tracking wobbles and tears the picture line by line, with a rolling band. Head switching is the ragged strip along the bottom of every real VHS frame. Chroma bleed smears colour sideways while brightness stays sharp, exactly as the format stored it.");
+check(gV,"osd","On-screen display");
+note(gV,"Tracking wobbles and tears the picture line by line, with a rolling band. Head switching is the ragged strip along the bottom of a VHS frame. Chroma bleed smears colour sideways while brightness stays sharp. The on-screen display shows the transport state and tape counter.");
 
 GRP="Liquid";
 const gQ=document.getElementById("g-liq");
@@ -438,7 +491,7 @@ slider(gQ,"melt","Mercury",0,1,0.01,"");
 slider(gQ,"relief","Relief",0,4,0.01,"");
 slider(gQ,"gloss","Gloss",2,120,1,"");
 slider(gQ,"bands","Chrome bands",2,24,1,"");
-note(gQ,"Chrome treats the picture's brightness as a height field, takes its slope as a surface, and reflects a sky. Softness melts that surface into blobs before reflecting; Mercury pushes it toward pooled liquid metal. Aero reflects a soft sky with a grassy ground; halfway the horizon goes hard like 90s chrome lettering; sigil reflects hard bands.");
+note(gQ,"Chrome treats brightness as a height field, takes its slope as a surface and reflects a sky. Softness melts that surface into blobs before reflecting; Mercury pushes it toward pooled liquid metal. Round reflects a soft sky; halfway the horizon goes hard; sharp reflects bands.");
 
 GRP="Glitch";
 const gG=document.getElementById("g-gl");
@@ -447,11 +500,11 @@ slider(gG,"blockSize","Block size",0.02,0.5,0.005,"");
 slider(gG,"rate","Glitch rate",0.5,30,0.1," Hz");
 slider(gG,"split","RGB split",0,2,0.01,"");
 slider(gG,"tear","Tears",0,1,0.01,"");
-slider(gG,"mosh","Datamosh",0,1,0.005,"");
+slider(gG,"hold","Block hold",0,1,0.005,"");
 slider(gG,"trails","Trails",0,0.97,0.005,"");
 slider(gG,"crush","Bit crush",0,1,0.01,"");
 slider(gG,"dither","Dither",0,1.5,0.01,"");
-note(gG,"Blocks become magnifying bubbles on the aero side and displaced slivers on the sigil side. Tears are ripples that turn into hard slice offsets. RGB split runs out from the centre like a lens when round and along the travel direction when sharp. Datamosh holds blocks of the previous frame and lets them smear.");
+note(gG,"Blocks become magnifying bubbles on the round side and displaced slivers on the sharp side. Tears are ripples that turn into hard slice offsets. RGB split runs out from the centre like a lens when round and along the travel direction when sharp. Block hold freezes blocks of the finished frame for a beat.");
 
 GRP="Sigils";
 const gSg=document.getElementById("g-sig");
@@ -463,20 +516,7 @@ slider(gSg,"glyphPx","Glyph size",6,64,1," px");
 slider(gSg,"rain","Rain speed",0,3,0.01,"");
 slider(gSg,"glyphImg","Follow picture",0,1,0.01,"");
 slider(gSg,"glyphDim","Darken behind",0,1,0.01,"");
-note(gSg,"Edges glow soft and white when round and turn to hard lines in the sigil colour when sharp. Glyphs only appear as the morph goes past about a third — each one is a rune built from a 3×3 grid of strokes, mostly mirrored, so they read as sigils rather than letters. Follow picture lets the image decide where they light up.");
-
-GRP="Skins";
-const gU=document.getElementById("g-gui");
-check(gU,"guiOn","Show windows");
-slider(gU,"guiCount","Windows",0,8,1,"");
-slider(gU,"guiScale","Size",0.5,2.5,0.01,"×");
-slider(gU,"guiAlpha","Opacity",0,1,0.01,"");
-slider(gU,"guiWander","Wander",0,1.5,0.01,"");
-slider(gU,"guiTrail","Window trails",0,24,1,"");
-textIn(gU,"marquee","Marquee text");
-buttons(gU,[["bShuffle","Shuffle windows"]]);
-check(gU,"osd","VCR on-screen display");
-note(gU,"A player with a scrolling marquee, an equaliser, an installer progress bar, a hex dump, a scope and a dialog. They morph with everything else — glossy capsules with soft shadows and rounded buttons at one end, chamfered black panels with bracketed corners and runic titles at the other. They sit under the glitches, so they tear and bleed with the picture. Window trails leave the stuck-drag cascade behind them. The spectrum and scope follow Drive's audio when it is on.");
+note(gSg,"Edges glow soft and white when round and turn to hard lines in the sigil colour when sharp. Glyphs appear as the morph passes about a third — each is a rune built from a 3×3 grid of strokes, mostly mirrored.");
 
 GRP="Lattice";
 const gLt=document.getElementById("g-lat");
@@ -489,7 +529,7 @@ slider(gLt,"latWidth","Width",0.3,6,0.05," px");
 slider(gLt,"latAlpha","Opacity",0,1,0.01,"");
 slider(gLt,"latNode","Node size",0,20,0.1," px");
 slider(gLt,"latRunes","Runes",0,1,0.01,"");
-note(gLt,"Lattice's tracker runs on the frame the tape is playing, so loops and stutters drag the points with them. Round, the links bow into curves and every point is a glossy orb; sharp, the links fold into 45° circuit traces and the points become diamonds — and some of them runes.");
+note(gLt,"Lattice's tracker runs on the frame the tape is playing, so loops and stutters drag the points with them. Round, links bow into curves and points are glossy orbs; sharp, links fold into 45° traces and points become diamonds and runes. Rack points draw here too.");
 
 GRP="Glow";
 const gP=document.getElementById("g-post");
@@ -500,10 +540,14 @@ slider(gP,"scan","Scanlines",0,1,0.01,"");
 slider(gP,"curve","Tube curve",0,1,0.01,"");
 slider(gP,"vig","Vignette",0,1,0.01,"");
 
+const gPo=document.getElementById("g-ports");
+const portsEl=document.createElement("div"); portsEl.className="ports"; gPo.appendChild(portsEl);
+note(gPo,"In: image → the tape's source. points → the lattice, and pushes the flow (Point push). field → motion vectors for the mosh and every flow effect (Flow from). mask → where the mosh is allowed, and where glitches land with Glitch where it moves. Out: the picture; the lattice's points; the flow field it is moshing with (uv per second, 48 × 27) and its motion mask — so another tool can follow the same motion. Cut a cable and Rewind goes back to what it was using before.");
+
 GRP="Display";
 const gD=document.getElementById("g-disp");
 select(gD,"res","Resolution",[["1280x720","1280 × 720"],["1920x1080","1920 × 1080"],["1080x1080","1080 × 1080"],["1080x1920","1080 × 1920 (vertical)"],["720x480","720 × 480 (NTSC)"]]);
-buttons(gD,[["bWipe","Clear trails"]]);
+buttons(gD,[["bWipe","Clear trails & mosh"]]);
 
 const drivePanel=document.getElementById("g-drive");
 if(Drive){ Drive.mountPanel(drivePanel); }
@@ -515,14 +559,15 @@ function vis(){
   camBtns.classList.toggle("hidden",!(src==="camera"||src==="video"||src==="image"));
   show("mirror",src==="camera");
   const auto=P.morphMode!=="off";
-  ["morphPeriod","morphDepth"].forEach(k=>show(k,auto));
+  show("morphDepth",auto);
   show("morphPeriod",auto&&P.morphMode!=="storm");
   const loop=P.tapeMode==="loop";
   ["speed","overdub","reRec"].forEach(k=>show(k,loop));
   document.getElementById("bReRec").classList.toggle("hidden",!loop);
   ["latSrc","latN","latReach","latK","latWidth","latAlpha","latNode","latRunes"].forEach(k=>show(k,!!P.latOn));
-  ["guiCount","guiScale","guiAlpha","guiWander","guiTrail","marquee"].forEach(k=>show(k,!!P.guiOn));
-  document.getElementById("bShuffle").parentNode.classList.toggle("hidden",!P.guiOn);
+  ["flowLineLen","flowLineAlpha"].forEach(k=>show(k,!!P.flowLines));
+  show("synthScale",P.synth>0);
+  ["flowThresh","flowSmooth"].forEach(k=>show(k,P.flowSrc!=="rack"));
 }
 
 /* ============================ small maths ============================ */
@@ -530,7 +575,6 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 const fract=x=>x-Math.floor(x);
 const hash1=x=>fract(Math.sin(x*127.1+311.7)*43758.5453);
-function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 function noise1(x){ const i=Math.floor(x), f=x-i, u=f*f*(3-2*f); return lerp(hash1(i),hash1(i+1),u); }
 const mixC=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
 const css=(c,a)=>`rgba(${Math.round(clamp(c[0],0,1)*255)},${Math.round(clamp(c[1],0,1)*255)},${Math.round(clamp(c[2],0,1)*255)},${a===undefined?1:clamp(a,0,1)})`;
@@ -565,7 +609,7 @@ function loadMediaFile(file){
   }
 }
 
-/* the demo: a Frutiger Aero desktop — sky, hills, bubbles, a glass orb, a chrome swoosh */
+/* the demo: a glass sky — hills, bubbles, a glass orb, a swoosh, plenty that moves */
 const demo = document.createElement("canvas"); demo.width = 640; demo.height = 360;
 const dg = demo.getContext("2d");
 const BUBS = Array.from({length:14}, (_, i) => ({ x:hash1(i*3.1), s:0.04 + hash1(i*7.7)*0.11, v:0.03 + hash1(i*5.3)*0.07, p:hash1(i*9.9), w:hash1(i*1.3)*6 }));
@@ -574,15 +618,12 @@ function drawDemo(t){
   let gr = g.createLinearGradient(0, 0, 0, H);
   gr.addColorStop(0, "#0c4fb8"); gr.addColorStop(0.45, "#4fb6f0"); gr.addColorStop(0.72, "#e6fbff"); gr.addColorStop(1, "#e6fbff");
   g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  // sun glow
   gr = g.createRadialGradient(500, 60, 4, 500, 60, 220);
   gr.addColorStop(0, "rgba(255,255,255,0.95)"); gr.addColorStop(0.2, "rgba(255,255,240,0.45)"); gr.addColorStop(1, "rgba(255,255,255,0)");
   g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  // light rays
   g.save(); g.translate(500, 60); g.rotate(t * 0.05);
   for(let k = 0; k < 12; k++){ g.rotate(Math.PI / 6); g.fillStyle = "rgba(255,255,255,0.06)"; g.beginPath(); g.moveTo(0, 0); g.lineTo(520, -40); g.lineTo(520, 40); g.fill(); }
   g.restore();
-  // hills
   const hill = (base, amp, f, ph, c1, c2) => {
     g.beginPath(); g.moveTo(0, H);
     for(let x = 0; x <= W; x += 8) g.lineTo(x, base + Math.sin(x * f + ph) * amp + Math.sin(x * f * 2.3 + ph * 1.7) * amp * 0.3);
@@ -593,8 +634,6 @@ function drawDemo(t){
   };
   hill(255, 22, 0.008, t * 0.15, "#9be35a", "#2f8f2a");
   hill(300, 16, 0.012, 2 + t * 0.22, "#6fd043", "#1d6b1d");
-  // chrome swoosh
-  g.save(); g.globalCompositeOperation = "source-over";
   for(let k = 0; k < 3; k++){
     g.beginPath();
     for(let x = -20; x <= W + 20; x += 10){
@@ -605,15 +644,12 @@ function drawDemo(t){
     sg.addColorStop(0, "rgba(255,255,255,0.9)"); sg.addColorStop(0.5, "rgba(160,200,235,0.7)"); sg.addColorStop(1, "rgba(30,80,160,0.6)");
     g.strokeStyle = sg; g.lineWidth = 14 - k * 4; g.lineCap = "round"; g.stroke();
   }
-  g.restore();
-  // glass orb
   const ox = 200 + Math.sin(t * 0.7) * 90, oy = 150 + Math.abs(Math.sin(t * 1.4)) * -50 + 40, orr = 58;
   gr = g.createRadialGradient(ox - 15, oy - 20, 4, ox, oy, orr);
   gr.addColorStop(0, "#d9fbff"); gr.addColorStop(0.35, "#38c7ef"); gr.addColorStop(0.85, "#0a4aa8"); gr.addColorStop(1, "#06296a");
   g.fillStyle = gr; g.beginPath(); g.arc(ox, oy, orr, 0, Math.PI * 2); g.fill();
   g.fillStyle = "rgba(255,255,255,0.75)"; g.beginPath(); g.ellipse(ox - 8, oy - orr * 0.55, orr * 0.6, orr * 0.28, 0, 0, Math.PI * 2); g.fill();
   g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 2; g.beginPath(); g.arc(ox, oy, orr - 1, 0, Math.PI * 2); g.stroke();
-  // bubbles
   BUBS.forEach(b => {
     const y = H + 40 - fract(t * b.v + b.p) * (H + 80), x = b.x * W + Math.sin(t + b.w) * 18, r = b.s * H * 0.5;
     const bg = g.createRadialGradient(x, y, r * 0.2, x, y, r);
@@ -621,7 +657,6 @@ function drawDemo(t){
     g.fillStyle = bg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
     g.fillStyle = "rgba(255,255,255,0.8)"; g.beginPath(); g.ellipse(x - r * 0.35, y - r * 0.4, r * 0.28, r * 0.14, -0.6, 0, Math.PI * 2); g.fill();
   });
-  // sparkles
   for(let k = 0; k < 10; k++){
     const a = fract(t * 0.3 + hash1(k * 4.4)), x = hash1(k * 2.2) * W, y = hash1(k * 6.6) * H * 0.7, s = Math.sin(a * Math.PI) * 9;
     g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = 1.5;
@@ -629,7 +664,8 @@ function drawDemo(t){
   }
 }
 
-let rackImage = null, rackPts = null, prevSource = null;
+let rackImage = null, rackPts = null, rackField = null, rackMask = null;
+let prevSource = null, prevLatSrc = null, prevFlowSrc = null, prevMoshMask = null;
 function currentSource(){
   const s = P.source;
   if(s === "camera"){
@@ -649,7 +685,7 @@ function currentSource(){
     if(c && (c.width || c.videoWidth)) return { el:c, w:c.videoWidth || c.width, h:c.videoHeight || c.height, mirror:false, label:"rack image" };
     return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo (no image cable)" };
   }
-  return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo — chrome sky" };
+  return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo — glass sky" };
 }
 /* dest uv → source uv: scale and offset for the chosen fit */
 function fitOf(srcAsp, dstAsp, mode){
@@ -677,11 +713,9 @@ function stepEvolve(dt){
   if(Q.stormRate <= 0 && !EV.stormOn) EV.nextStorm = EV.t + 1;
   const target = EV.stormOn ? 1 : 0;
   EV.storm += (target - EV.storm) * (1 - Math.exp(-dt * (target > EV.storm ? 12 : 1.8)));
-  // the glitch frame turns and travels; a storm gives it a shove
   EV.angle += (Q.drift * Math.PI / 180 + EV.kick * EV.storm * 1.2) * dt;
   const sp = Q.travel * (1 + EV.storm * 3);
   EV.tx += Math.cos(EV.angle) * sp * dt; EV.ty += Math.sin(EV.angle) * sp * dt;
-  // auto morph
   let wave = Q.morph;
   const per = Math.max(0.5, Q.morphPeriod);
   switch(P.morphMode){
@@ -737,37 +771,84 @@ precision highp float;
 in vec2 vUv; out vec4 o; uniform sampler2D uS;
 void main(){ o = vec4(texture(uS, vUv).rgb, 1.0); }`;
 
-/* the big pass: everything between the tape and the glow */
-const PROC_FS = `#version 300 es
-precision highp float;
-in vec2 vUv; out vec4 o;
-uniform sampler2D uA, uB, uPrev, uOv;
-uniform vec2 uRes, uTape, uDir, uTravel;
-uniform float uT, uM, uSeed, uStorm, uRew, uPause, uFrameMix, uHasOv;
-uniform float uWarp, uWarpScale, uWarpSpeed;
-uniform float uBlock, uBlockSize, uRate, uSplit, uTear, uMosh, uTrails, uCrush, uDither;
-uniform float uTrack, uHead, uBleed, uGhost, uNoise, uDrop, uAge;
-uniform float uChrome, uSoft, uMelt, uRelief, uGloss, uBands;
-uniform float uPal; uniform vec3 uRA[5]; uniform vec3 uRB[5];
-uniform float uEdge, uEdgeTh, uGlyph, uGlyphPx, uRain, uGlyphImg, uGlyphDim;
-#define PI 3.14159265
-
+const NOISE_GLSL = `
 float h11(float p){ p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
 float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec2 h22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
   return mix(mix(h12(i), h12(i + vec2(1, 0)), u.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), u.x), u.y); }
 float fbm(vec2 p){ float s = 0.0, a = 0.5; for(int i = 0; i < 4; i++){ s += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
+`;
+
+/* the datamosh: last frame pushed along the vectors, some macroblocks refreshed from the tape */
+const MOSH_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uFresh, uFreshB, uOld, uFlow, uMask;
+uniform vec2 uGrid;
+uniform float uMix, uDt, uGain, uBlocky, uRefresh, uStill, uStillTh, uLeak, uKey, uFreeze;
+uniform float uMaskOn, uMaskInv, uSynth, uSynthScale, uT, uSeed;
+${NOISE_GLSL}
+void main(){
+  vec2 fuv = vec2(vUv.x, 1.0 - vUv.y);                  // fields and masks are stored v-down
+  vec2 cell = (floor(fuv * uGrid) + 0.5) / uGrid;
+  vec2 fBlock = texture(uFlow, cell).xy;
+  vec2 f = mix(texture(uFlow, fuv).xy, fBlock, uBlocky);
+  f.y = -f.y; fBlock.y = -fBlock.y;
+  if(uSynth > 0.0){
+    vec2 p = vUv * uSynthScale * 3.0 + uSeed * 10.0;
+    float e = 0.07, tt = uT * 0.12;
+    float nx = vnoise(p + vec2(0.0, e) + tt) - vnoise(p - vec2(0.0, e) + tt);
+    float ny = vnoise(p + vec2(e, 0.0) - tt) - vnoise(p - vec2(e, 0.0) - tt);
+    vec2 curl = vec2(nx, -ny) / (2.0 * e) * uSynth * 0.06;
+    f += curl; fBlock += curl;
+  }
+  vec3 old = texture(uOld, vUv - f * uDt * uGain).rgb;
+  vec3 fresh = mix(texture(uFresh, vUv).rgb, texture(uFreshB, vUv).rgb, uMix);
+  vec2 bid = floor(fuv * uGrid);
+  float fq = floor(uT * 30.0);
+  float ref = step(h12(bid * 1.37 + fq * 7.1 + uSeed * 31.0), uRefresh * uDt);
+  float stillB = step(length(fBlock), uStillTh);
+  ref = max(ref, stillB * step(h12(bid * 2.11 + fq * 3.3 + 5.0), uStill));
+  if(uMaskOn > 0.5){
+    float mk = texture(uMask, fuv).r;
+    if(uMaskInv > 0.5) mk = 1.0 - mk;
+    ref = max(ref * step(0.5, mk), 1.0 - smoothstep(0.3, 0.6, mk));
+  }
+  ref *= 1.0 - uFreeze;
+  ref = max(ref, uKey);
+  vec3 c = mix(old, fresh, ref);
+  c = mix(c, fresh, uLeak * (1.0 - uFreeze));
+  o = vec4(c, 1.0);
+}`;
+
+/* the big pass: everything between the tape and the glow */
+const PROC_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uA, uB, uPrev, uOv, uFlow, uMask;
+uniform vec2 uRes, uTape, uDir, uTravel;
+uniform float uT, uM, uSeed, uStorm, uRew, uPause, uFrameMix, uHasOv, uHasMask;
+uniform float uWarp, uWarpScale, uWarpSpeed;
+uniform float uBlock, uBlockSize, uRate, uSplit, uTear, uHold, uTrails, uCrush, uDither;
+uniform float uFlowWarp, uSmear, uFlowCol, uGate;
+uniform float uTrack, uHead, uBleed, uGhost, uNoise, uDrop, uAge;
+uniform float uChrome, uSoft, uMelt, uRelief, uGloss, uBands;
+uniform float uPal; uniform vec3 uRA[5]; uniform vec3 uRB[5];
+uniform float uEdge, uEdgeTh, uGlyph, uGlyphPx, uRain, uGlyphImg, uGlyphDim;
+#define PI 3.14159265
+${NOISE_GLSL}
 float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
 vec3 rampA(float t){ t = clamp(t, 0.0, 1.0) * 4.0; int i = int(min(floor(t), 3.0)); return mix(uRA[i], uRA[i + 1], t - float(i)); }
 vec3 rampB(float t){ t = clamp(t, 0.0, 1.0) * 4.0; int i = int(min(floor(t), 3.0)); return mix(uRB[i], uRB[i + 1], t - float(i)); }
 vec3 tape(vec2 uv){ return mix(texture(uA, uv).rgb, texture(uB, uv).rgb, uFrameMix); }
+vec3 hue(float h){ return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
+vec2 flowAt(vec2 uv){ vec2 f = texture(uFlow, vec2(uv.x, 1.0 - uv.y)).xy; return vec2(f.x, -f.y); }
 float bayer4(vec2 p){
   ivec2 i = ivec2(mod(p, 4.0));
   const float B[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
   return (B[i.x + i.y * 4] + 0.5) / 16.0;
 }
-/* runes: strokes between the nodes of a 3×3 grid */
 const vec4 SG[20] = vec4[20](
   vec4(0,0,1,0), vec4(1,0,2,0), vec4(0,1,1,1), vec4(1,1,2,1), vec4(0,2,1,2), vec4(1,2,2,2),
   vec4(0,0,0,1), vec4(0,1,0,2), vec4(1,0,1,1), vec4(1,1,1,2), vec4(2,0,2,1), vec4(2,1,2,2),
@@ -800,6 +881,11 @@ void main(){
   float asp = uRes.x / uRes.y, m = uM, st = uStorm;
   float tq = floor(uT * uRate);
 
+  /* --- motion here: the vectors, and how much is moving --- */
+  vec2 fl = flowAt(vUv);
+  float mot = uHasMask > 0.5 ? texture(uMask, vec2(vUv.x, 1.0 - vUv.y)).r : clamp(length(fl) * 4.0, 0.0, 1.0);
+  float gate = mix(1.0, mot, uGate);
+
   /* --- tracking: line wobble, a rolling tear band, head switching --- */
   float ln = floor(uv.y * uRes.y * 0.5);
   float trk = uTrack * (1.0 + st) + uRew * 2.5 + uPause * 0.6;
@@ -816,13 +902,11 @@ void main(){
   vec2 p = (uv - 0.5) * vec2(asp, 1.0);
   vec2 q = vec2(dot(p, D), dot(p, Pp)) + uTravel;
   vec2 off = vec2(0.0);
-  float G = clamp(uBlock * (1.0 + 1.5 * st), 0.0, 1.0);
-  // sharp: slivers that jump in quantised steps
+  float G = clamp(uBlock * (1.0 + 1.5 * st) * gate, 0.0, 1.0);
   vec2 cs = vec2(uBlockSize * mix(1.5, 4.0, h11(tq + 3.0)), uBlockSize * 0.35);
   vec2 cid = floor(q / cs);
   float bOn = step(1.0 - G, h12(cid * 1.13 + tq * 7.31 + uSeed * 13.0));
   vec2 dS = floor((h22(cid + tq * 3.1) - 0.5) * vec2(0.35, 0.06) * 20.0) / 20.0 * bOn;
-  // round: bubbles drifting up the frame, each a magnifying lens
   float bs = uBlockSize * 1.6;
   vec2 bq = q / bs + vec2(0.0, uT * 0.25);
   vec2 bi = floor(bq), bf = fract(bq) - 0.5;
@@ -833,14 +917,12 @@ void main(){
   float lens = bHas * smoothstep(br, br - 0.04, dd);
   vec2 dR = -bd * bs * lens * 0.55;
   off += mix(dR, dS, m);
-  // tears: soft ripples → hard slice offsets
-  float T = uTear * (1.0 + 1.5 * st);
+  float T = uTear * (1.0 + 1.5 * st) * gate;
   float sn = floor(q.y * mix(14.0, 70.0, h11(tq * 1.7 + 1.0)));
   float sOn = step(1.0 - T * 0.35, h12(vec2(sn, tq + 11.0)));
   float sAmt = (h12(vec2(sn, tq + 2.0)) - 0.5) * 0.25;
   float ripple = sin(q.y * 30.0 + uT * 3.0) * 0.01 * T;
   off.x += mix(ripple, sAmt * sOn, m);
-  // liquid: a domain-warped flow, smooth → stepped and snapped to 45°
   vec2 wq = q * uWarpScale * 2.0 + uTravel * 0.7;
   wq = mix(wq, floor(wq * 5.0) / 5.0, m * m);
   float ws = uT * uWarpSpeed;
@@ -851,13 +933,23 @@ void main(){
   w = mix(w, wS, m);
   off += w * uWarp * 0.25 * (1.0 + st);
   vec2 offUV = (D * off.x + Pp * off.y) / vec2(asp, 1.0);
-  vec2 uv2 = uv + offUV;
+  // flow warp: the picture pushed along its own motion
+  vec2 flq = mix(fl, floor(fl * 24.0 + 0.5) / 24.0, m);
+  vec2 uv2 = uv + offUV - flq * uFlowWarp * 0.12;
 
-  /* --- reading the tape: RGB split, chroma bleed, ghost --- */
+  /* --- reading the (moshed) tape: RGB split, motion smear, chroma bleed, ghost --- */
   vec2 rad = (uv2 - 0.5) * uSplit * 0.03;
   vec2 dsp = (D / vec2(asp, 1.0)) * uSplit * 0.012;
-  vec2 so = mix(rad, dsp, m) * (1.0 + 2.0 * st);
+  vec2 so = mix(rad, dsp, m) * (1.0 + 2.0 * st) * gate;
   vec3 c = vec3(tape(uv2 + so).r, tape(uv2).g, tape(uv2 - so).b);
+  if(uSmear > 0.001){
+    vec3 acc = c; float wsum = 1.0;
+    for(int i = 1; i <= 7; i++){
+      float k = float(i) / 7.0, wt = 1.0 - k * 0.7;
+      acc += tape(uv2 - flq * uSmear * 0.06 * k) * wt; wsum += wt;
+    }
+    c = acc / wsum;
+  }
   if(uBleed > 0.001){
     vec3 acc = vec3(0.0);
     for(int i = 1; i <= 4; i++) acc += texture(uA, uv2 - vec2(float(i) * uBleed * 2.5 / uTape.x, 0.0)).rgb;
@@ -870,11 +962,11 @@ void main(){
   }
   if(uGhost > 0.001) c = mix(c, texture(uA, uv2 - vec2(0.016, 0.0)).rgb, uGhost * 0.28);
 
-  /* --- datamosh holds and trails from the previous frame --- */
-  vec3 pv = texture(uPrev, vUv + offUV * 0.5 + w * 0.004).rgb;
+  /* --- block hold and trails from the previous finished frame --- */
+  vec3 pv = texture(uPrev, vUv + offUV * 0.5 + w * 0.004 - fl * 0.01).rgb;
   float mq = floor(uT * mix(1.5, 6.0, m));
   vec2 mid = floor(q / (vec2(uBlockSize * 2.0, uBlockSize * 0.9)));
-  float mOn = step(1.0 - uMosh * (1.0 + st), h12(mid * 0.37 + mq * 5.1 + 3.0));
+  float mOn = step(1.0 - uHold * (1.0 + st) * gate, h12(mid * 0.37 + mq * 5.1 + 3.0));
   c = mix(c, pv, mOn * 0.96);
   c = max(c, pv * uTrails);
 
@@ -895,6 +987,14 @@ void main(){
   /* --- palette map --- */
   float L = lum(c);
   c = mix(c, mix(rampA(L), rampB(L), m), uPal);
+
+  /* --- flow colour: direction as hue when round, speed through the sigil palette when sharp --- */
+  if(uFlowCol > 0.001){
+    float mg = clamp(length(fl) * 3.0, 0.0, 1.0);
+    vec3 hc = mix(hue(atan(fl.y, fl.x) / (2.0 * PI) + 0.5), vec3(1.0), 0.25);
+    vec3 fc = mix(hc, rampB(0.35 + mg * 0.65), m);
+    c = mix(c, fc * (0.35 + 0.9 * lum(c)), uFlowCol * mg);
+  }
 
   /* --- edges: soft white glow → hard lines in the sigil colour --- */
   if(uEdge > 0.001){
@@ -923,14 +1023,14 @@ void main(){
     c += gy * I * GA * mix(uRB[3], uRB[4], step(ph, 0.04)) * 1.3;
   }
 
-  /* --- bubble gloss: the rim and the window-light highlight --- */
+  /* --- bubble gloss --- */
   if(m < 0.999 && G > 0.0){
     float rim = bHas * smoothstep(br - 0.07, br - 0.01, dd) * smoothstep(br + 0.01, br - 0.01, dd);
     float hl = bHas * step(dd, br) * smoothstep(br * 0.38, 0.0, length(bd - vec2(-0.35, 0.4) * br));
     c += (rim * 0.45 + hl * 0.85) * (1.0 - m) * mix(vec3(1.0), uRA[3], 0.25);
   }
 
-  /* --- skins, OSD and lattice: under the tape damage, so they glitch too --- */
+  /* --- lattice, flow lines, OSD: under the tape damage, so they glitch too --- */
   if(uHasOv > 0.5){
     vec4 ov = texture(uOv, vUv + offUV * 0.6 + vec2(wob * 0.7, 0.0));
     c = c * (1.0 - ov.a) + ov.rgb;
@@ -994,7 +1094,7 @@ void main(){
   o = vec4(clamp(col * uExp, 0.0, 1.0) * inside, 1.0);
 }`;
 
-const PCAP = prog(FULL_VS, CAP_FS), PCOPY = prog(FULL_VS, COPY_FS), PPROC = prog(FULL_VS, PROC_FS);
+const PCAP = prog(FULL_VS, CAP_FS), PCOPY = prog(FULL_VS, COPY_FS), PPROC = prog(FULL_VS, PROC_FS), PMOSH = prog(FULL_VS, MOSH_FS);
 const PBRI = prog(FULL_VS, BRIGHT_FS), PBLUR = prog(FULL_VS, BLUR_FS), PFIN = prog(FULL_VS, FINAL_FS);
 const fullVAO = gl.createVertexArray();
 
@@ -1015,28 +1115,34 @@ function target(w, h, mip){
   return { t, f, w, h };
 }
 function freeTarget(r){ if(r){ gl.deleteTexture(r.t); gl.deleteFramebuffer(r.f); } }
+const BOUND = [null, null, null, null, null, null];
+function bindTex(unit, t){ gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); BOUND[unit] = t; }
 function draw(prog, rt, w, h){
   // never leave the target bound for sampling: that is a feedback loop
-  if(rt) for(let k = 0; k < 4; k++) if(BOUND[k] === rt.t) bindTex(k, null);
+  if(rt) for(let k = 0; k < BOUND.length; k++) if(BOUND[k] === rt.t) bindTex(k, null);
   gl.bindFramebuffer(gl.FRAMEBUFFER, rt ? rt.f : null); gl.viewport(0, 0, w, h);
   gl.useProgram(prog.p); gl.bindVertexArray(fullVAO); gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
-const BOUND = [null, null, null, null];
-function bindTex(unit, t){ gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); BOUND[unit] = t; }
-
-const srcTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, srcTex);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+function plainTex(filter){
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+const srcTex = plainTex(gl.LINEAR);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-const blackTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, blackTex);
+const blackTex = plainTex(gl.NEAREST);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-const ovTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ovTex);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+const ovTex = plainTex(gl.LINEAR);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+const flowTex = plainTex(gl.LINEAR);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, 1, 1, 0, gl.RG, gl.FLOAT, new Float32Array([0, 0]));
+const maskTex = plainTex(gl.LINEAR);
+gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([0]));
 
 let proc = [null, null], pcur = 0, bl = [null, null], outW = 0, outH = 0;
+let moshRT = [null, null], mcur = 0;
 function sizeCanvas(){
   const [w, h] = String(P.res).split("x").map(Number);
   if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
@@ -1053,7 +1159,7 @@ function sizeCanvas(){
 
 /* ============================ the tape ============================ */
 const TCAP = 120;
-const TAPE = { slots:new Array(TCAP).fill(null), ana:new Array(TCAP).fill(null), w:0, h:0, res:0,
+const TAPE = { slots:new Array(TCAP).fill(null), ana:new Array(TCAP).fill(null), w:0, h:0,
   written:0, head:0, base:"live", ev:null, catchup:false, recLeft:0, loopA:0, loopLen:0, capAcc:0,
   rew:0, pause:0, wraps:0, lastOD:-1, jit:0, jitAt:0, fA:-1, fB:-1, mix:0 };
 function tapeAlloc(){
@@ -1063,6 +1169,7 @@ function tapeAlloc(){
   TAPE.slots.forEach(freeTarget); TAPE.slots.fill(null); TAPE.ana.fill(null);
   TAPE.w = w; TAPE.h = h; TAPE.written = 0; TAPE.head = 0; TAPE.ev = null; TAPE.catchup = false;
   if(TAPE.base === "loop") TAPE.recLeft = Math.round(Q.tapeLen);
+  moshRT.forEach(freeTarget); moshRT = [target(w, h, true), target(w, h, true)]; MOSH.key = true;
 }
 const slotOf = f => ((f % TCAP) + TCAP) % TCAP;
 const latest = () => TAPE.written - 1;
@@ -1072,11 +1179,16 @@ function slotTarget(f){
   if(!TAPE.slots[k]) TAPE.slots[k] = target(TAPE.w, TAPE.h, true);
   return TAPE.slots[k];
 }
-/* the analysis copy for the lattice tracker, kept beside each tape frame */
+/* the analysis copy for flow and tracking, kept beside each tape frame */
 const ana = document.createElement("canvas");
 const AW = UV ? UV.W : 192, AH = UV ? UV.H : 108;
 ana.width = AW; ana.height = AH;
 const ag = ana.getContext("2d", { willReadFrequently:true });
+function flowWanted(){
+  return P.flowSrc !== "rack" && (Q.mosh > 0.001 || Q.flowWarp > 0.001 || Q.smear > 0.001 || Q.flowCol > 0.001 ||
+    Q.gate > 0.001 || !!P.flowLines || IN_RACK);
+}
+function needAna(){ return !!UV && ((P.latOn && P.latSrc === "tracked") || flowWanted()); }
 
 function capture(src){
   const f = TAPE.written, rt = slotTarget(f);
@@ -1091,21 +1203,22 @@ function capture(src){
   gl.uniform1i(PCAP.u.uS, 0); gl.uniform4f(PCAP.u.uFit, fit[0], fit[1], fit[2], fit[3]); gl.uniform1f(PCAP.u.uMirror, src.mirror ? 1 : 0);
   draw(PCAP, rt, rt.w, rt.h);
   bindTex(0, rt.t); gl.generateMipmap(gl.TEXTURE_2D);
-  // the tracker's copy, cropped the same way (canvas y runs down, the crop is centred so it matches)
-  if(P.latOn && P.latSrc === "tracked" && UV){
+  // the analysis copy, cropped the same way (canvas y runs down; the crop is centred so it matches)
+  const k = slotOf(f);
+  if(needAna()){
     try{
       ag.fillStyle = "#000"; ag.fillRect(0, 0, AW, AH);
       ag.save();
       if(src.mirror){ ag.translate(AW, 0); ag.scale(-1, 1); }
       const sx = fit[2] * src.w, sy = fit[3] * src.h, sw = fit[0] * src.w, shh = fit[1] * src.h;
-      if(sw <= src.w && shh <= src.h) ag.drawImage(src.el, sx, sy, sw, shh, 0, 0, AW, AH);
+      if(sw <= src.w + 0.5 && shh <= src.h + 0.5) ag.drawImage(src.el, sx, sy, sw, shh, 0, 0, AW, AH);
       else { const dw = AW * src.w / sw, dh = AH * src.h / shh; ag.drawImage(src.el, (AW - dw) / 2, (AH - dh) / 2, dw, dh); }
       ag.restore();
-      const k = slotOf(f), d = ag.getImageData(0, 0, AW, AH).data;
+      const d = ag.getImageData(0, 0, AW, AH).data;
       if(!TAPE.ana[k] || TAPE.ana[k].length !== d.length) TAPE.ana[k] = new Uint8ClampedArray(d.length);
       TAPE.ana[k].set(d);
-    }catch(e){ TAPE.ana[slotOf(f)] = null; }
-  } else TAPE.ana[slotOf(f)] = null;
+    }catch(e){ TAPE.ana[k] = null; }
+  } else TAPE.ana[k] = null;
   TAPE.written++;
   return true;
 }
@@ -1115,7 +1228,6 @@ function setBase(mode){
   if(mode === "loop") catchLoop();
   else { TAPE.recLeft = 0; TAPE.head = latest(); }
 }
-/* loop the last stretch already on the tape — or record one if there isn't enough */
 function catchLoop(){
   const L = Math.round(Q.tapeLen);
   TAPE.ev = null; TAPE.catchup = false;
@@ -1148,7 +1260,10 @@ function randomEvent(){
   if(P.evRewind) pool.push("rewind");
   if(P.evPause) pool.push("pause");
   if(P.evSlow) pool.push("slow");
-  if(pool.length) startEvent(pool[(Math.random() * pool.length) | 0], false);
+  if(Q.mosh > 0.001){ if(P.evBloom) pool.push("bloom", "bloom"); if(P.evSmear) pool.push("smear"); }
+  if(!pool.length) return;
+  const k = pool[(Math.random() * pool.length) | 0];
+  if(k === "bloom" || k === "smear") startMoshEvent(k, false); else startEvent(k, false);
 }
 function endEvent(){
   const ev = TAPE.ev; TAPE.ev = null;
@@ -1159,7 +1274,6 @@ function tapeStep(dt, src){
   if(P.tapeMode !== TAPE.base) setBase(P.tapeMode);
   const fps = Math.max(1, Q.tapeFps);
   const inLoop = TAPE.base === "loop" && TAPE.recLeft === 0;
-  // record
   const recording = TAPE.base === "live" || TAPE.recLeft > 0;
   if(recording && src){
     TAPE.capAcc += dt;
@@ -1172,11 +1286,9 @@ function tapeStep(dt, src){
     }
   }
   if(TAPE.written === 0) return;
-  // random events
-  if(!TAPE.ev && !TAPE.catchup && Q.chaos > 0 && TAPE.recLeft === 0 && TAPE.written > 8){
+  if(!TAPE.ev && !TAPE.catchup && !MOSH.ev && Q.chaos > 0 && TAPE.recLeft === 0 && TAPE.written > 8){
     if(Math.random() < Q.chaos / 10 * dt * (1 + 3 * EV.storm)) randomEvent();
   }
-  // move the head
   TAPE.rew *= Math.exp(-dt * 6); TAPE.pause *= Math.exp(-dt * 8);
   const ev = TAPE.ev;
   if(ev){
@@ -1197,7 +1309,6 @@ function tapeStep(dt, src){
     if(TAPE.wraps !== before && Q.reRec >= 1 && TAPE.wraps >= Q.reRec){ TAPE.wraps = 0; reRecord(); }
   }
   TAPE.head = clamp(TAPE.head, oldest(), latest());
-  // which two frames, and how much of the second
   const fA = Math.floor(TAPE.head);
   let fB = fA + 1, mix = (TAPE.head - fA) * Q.blendF;
   if(inLoop && fB >= TAPE.loopA + loopSpan()) fB = TAPE.loopA;
@@ -1216,16 +1327,145 @@ function tapeState(){
   return TAPE.base === "loop" ? (Q.speed < 0 ? "rev" : "loop") : "play";
 }
 
+/* ============================ optical flow ============================
+   The tape's own motion (dense LK on the played frames), a Rack field,
+   and Rack points pushing along their direction of travel — summed onto
+   one 48×27 grid in uv per second, v down (the ports' convention). */
+const FGW = UV ? UV.FW : 48, FGH = UV ? UV.FH : 27;
+const FLOW = { w:FGW, h:FGH, data:new Float32Array(FGW * FGH * 2), own:null, ownMask:null, lastFrame:-1, ts:0, ms:0, activity:0 };
+let visT = null, visF = null;
+if(UV && PT){ try{ visT = UV.create(PT); visF = UV.create(PT); }catch(e){ console.warn("[rewind] vision", e); } }
+let FIELD_OUT = PT ? PT.makeField(FGW, FGH) : { type:"field", w:FGW, h:FGH, space:"uv", version:0, data:new Float32Array(FGW * FGH * 2) };
+const PV = { ver:-1, n:0, x:new Float32Array(1024), y:new Float32Array(1024), vx:new Float32Array(1024), vy:new Float32Array(1024), t:0 };
+function rackXY(f, i, out){
+  const x = f.positions[i * 3], y = f.positions[i * 3 + 1];
+  if(f.space === "3d"){ const asp = outW / outH; out[0] = 0.5 + x * 0.4 / asp; out[1] = 0.5 - y * 0.4; }
+  else { out[0] = x; out[1] = y; }
+  return out;
+}
+const tmpXY = [0, 0];
+/* velocities of the rack's points: their tangents if they carry them, else how far they moved */
+function pointVelocities(){
+  const f = rackPts; if(!f || !f.count) { PV.n = 0; return; }
+  if(f.version === PV.ver) return;
+  const now = EV.t, dtv = Math.max(1 / 120, now - PV.t), n = Math.min(1024, f.count);
+  const sameSet = PV.n === n;
+  for(let i = 0; i < n; i++){
+    rackXY(f, i, tmpXY);
+    let vx = 0, vy = 0;
+    if(f.tangents){
+      const s = f.sizes ? Math.max(0.3, f.sizes[i]) : 1, three = f.space === "3d";
+      vx = f.tangents[i * 3] * 0.12 * s; vy = (three ? -f.tangents[i * 3 + 1] : f.tangents[i * 3 + 1]) * 0.12 * s;
+    } else if(sameSet && PV.ver !== -1){
+      vx = clamp((tmpXY[0] - PV.x[i]) / dtv, -2, 2); vy = clamp((tmpXY[1] - PV.y[i]) / dtv, -2, 2);
+    }
+    PV.x[i] = tmpXY[0]; PV.y[i] = tmpXY[1]; PV.vx[i] = vx; PV.vy[i] = vy;
+  }
+  PV.n = n; PV.ver = f.version; PV.t = now;
+}
+function flowStep(){
+  if(MOSH.ev && MOSH.ev.type === "bloom") return false;       // frozen vectors
+  const own = P.flowSrc !== "rack", rk = P.flowSrc !== "tape";
+  if(own && flowWanted() && visF){
+    const f = TAPE.fA, d = f >= 0 ? TAPE.ana[slotOf(f)] : null;
+    if(d && f !== FLOW.lastFrame){
+      FLOW.lastFrame = f; FLOW.ts += 1 / Math.max(1, Q.tapeFps);
+      const t0 = performance.now();
+      try{
+        const out = visF.step(d, outW / outH, FLOW.ts, "flow", { fps:60, points:64, gain:1, thresh:Q.flowThresh, smooth:Q.flowSmooth });
+        FLOW.own = out.field; FLOW.ownMask = out.mask; FLOW.activity = out.stats ? out.stats.activity : 0;
+      }catch(e){ FLOW.own = null; }
+      FLOW.ms = FLOW.ms * 0.85 + (performance.now() - t0) * 0.15;
+    }
+  }
+  const D = FLOW.data, W = FLOW.w, H = FLOW.h, g = Q.flowGain;
+  D.fill(0);
+  if(own && FLOW.own && FLOW.own.w === W && FLOW.own.h === H){ const s = FLOW.own.data; for(let i = 0; i < D.length; i++) D[i] = s[i] * g; }
+  if(rk && rackField && rackField.data){
+    const rf = rackField, rw = rf.w, rh = rf.h, rd = rf.data;
+    for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+      const fx = clamp((x + 0.5) / W * rw - 0.5, 0, rw - 1.001), fy = clamp((y + 0.5) / H * rh - 0.5, 0, rh - 1.001);
+      const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0;
+      const i00 = (y0 * rw + x0) * 2, i10 = i00 + 2, i01 = i00 + rw * 2, i11 = i01 + 2, o = (y * W + x) * 2;
+      for(let c = 0; c < 2; c++)
+        D[o + c] += ((rd[i00 + c] * (1 - ax) + rd[i10 + c] * ax) * (1 - ay) + (rd[i01 + c] * (1 - ax) + rd[i11 + c] * ax) * ay) * g;
+    }
+  }
+  if(Q.ptPush > 0.001 && rackPts && rackPts.count){
+    pointVelocities();
+    const R = Math.max(0.5, Q.ptRadius), rr = Math.ceil(R * 2), inv = 1 / (R * R), k = Q.ptPush;
+    for(let i = 0; i < PV.n; i++){
+      const vx = PV.vx[i], vy = PV.vy[i]; if(vx === 0 && vy === 0) continue;
+      const cx = PV.x[i] * W - 0.5, cy = PV.y[i] * H - 0.5, ix = Math.round(cx), iy = Math.round(cy);
+      for(let y = Math.max(0, iy - rr); y <= Math.min(H - 1, iy + rr); y++)
+        for(let x = Math.max(0, ix - rr); x <= Math.min(W - 1, ix + rr); x++){
+          const dx = x - cx, dy = y - cy, wgt = Math.exp(-(dx * dx + dy * dy) * inv) * k, o = (y * W + x) * 2;
+          D[o] += vx * wgt; D[o + 1] += vy * wgt;
+        }
+    }
+  }
+  // the outgoing field
+  if(FIELD_OUT.data.length !== D.length) FIELD_OUT = PT ? PT.makeField(W, H) : FIELD_OUT;
+  FIELD_OUT.data.set(D);
+  if(PT) PT.bump(FIELD_OUT); else FIELD_OUT.version++;
+  return true;
+}
+function currentMask(){ return rackMask && rackMask.data ? rackMask : FLOW.ownMask; }
+let maskUp = { obj:null, ver:-1 };
+function uploadFlow(){
+  bindTex(4, flowTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, FLOW.w, FLOW.h, 0, gl.RG, gl.FLOAT, FLOW.data);
+  const mk = currentMask();
+  bindTex(5, maskTex);
+  if(mk && (mk !== maskUp.obj || mk.version !== maskUp.ver)){
+    maskUp.obj = mk; maskUp.ver = mk.version;
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, mk.w, mk.h, 0, gl.RED, gl.UNSIGNED_BYTE, mk.data);
+  }
+  return !!mk;
+}
+
+/* ============================ datamosh state ============================ */
+const MOSH = { ev:null, key:true, wasOn:false, keyAt:0 };
+function startMoshEvent(type, manual){
+  if(Q.mosh <= 0.001 && !manual) return;
+  MOSH.ev = { type, t:0, dur:Q.evLen * (manual ? 1.5 : 0.8 + Math.random() * 1.2) };
+}
+function keyframe(){ MOSH.key = true; MOSH.ev = null; }
+function moshStep(dt, A, B, mix, t){
+  if(Q.mosh <= 0.001 || !A){ MOSH.wasOn = false; return null; }
+  let key = !MOSH.wasOn || MOSH.key; MOSH.wasOn = true; MOSH.key = false;
+  if(Q.keyEvery > 0 && EV.t >= MOSH.keyAt){ if(MOSH.keyAt > 0 && !MOSH.ev) key = true; MOSH.keyAt = EV.t + Q.keyEvery; }
+  const ev = MOSH.ev;
+  if(ev){ ev.t += dt; if(ev.t >= ev.dur) MOSH.ev = null; }
+  const prev = mcur; mcur ^= 1;
+  const rt = moshRT[mcur], u = PMOSH.u;
+  bindTex(0, A.t); bindTex(1, B ? B.t : A.t); bindTex(2, moshRT[prev].t);
+  const mk = currentMask();
+  gl.useProgram(PMOSH.p);
+  gl.uniform1i(u.uFresh, 0); gl.uniform1i(u.uFreshB, 1); gl.uniform1i(u.uOld, 2); gl.uniform1i(u.uFlow, 4); gl.uniform1i(u.uMask, 5);
+  gl.uniform2f(u.uGrid, FLOW.w, FLOW.h);
+  gl.uniform1f(u.uMix, clamp(mix, 0, 1)); gl.uniform1f(u.uDt, Math.min(dt, 1 / 20)); gl.uniform1f(u.uGain, Q.moshGain * (1 + EV.storm * 0.5));
+  gl.uniform1f(u.uBlocky, clamp(Q.blocky + EV.morph * 0.3, 0, 1));
+  gl.uniform1f(u.uRefresh, Q.refresh); gl.uniform1f(u.uStill, Q.still); gl.uniform1f(u.uStillTh, Q.stillTh);
+  gl.uniform1f(u.uLeak, Q.leak); gl.uniform1f(u.uKey, key ? 1 : 0); gl.uniform1f(u.uFreeze, ev ? 1 : 0);
+  gl.uniform1f(u.uMaskOn, mk && P.moshMask !== "off" ? 1 : 0); gl.uniform1f(u.uMaskInv, P.moshMask === "outside" ? 1 : 0);
+  gl.uniform1f(u.uSynth, Q.synth); gl.uniform1f(u.uSynthScale, Q.synthScale); gl.uniform1f(u.uT, t);
+  gl.uniform1f(u.uSeed, fract(P.seed * 0.1373));
+  draw(PMOSH, rt, rt.w, rt.h);
+  bindTex(0, rt.t); gl.generateMipmap(gl.TEXTURE_2D);
+  return rt;
+}
+
 /* ============================ the lattice layer ============================ */
 const LMAX = 400;
 const LP = { n:0, x:new Float32Array(LMAX), y:new Float32Array(LMAX), id:new Float64Array(LMAX) };
-let visT = null, lastAnaFrame = -1, anaTs = 0, anaMs = 0;
-if(UV && PT){ try{ visT = UV.create(PT); }catch(e){ console.warn("[rewind] vision", e); } }
-function latticeStep(dt){
+let lastAnaFrame = -1, anaTs = 0, anaMs = 0;
+function latticeStep(){
   if(!P.latOn){ LP.n = 0; return; }
   const n = Math.min(LMAX, Math.round(Q.latN));
   if(P.latSrc === "tracked" && visT){
-    const f = TAPE.fA, k = slotOf(f), d = f >= 0 ? TAPE.ana[k] : null;
+    const f = TAPE.fA, d = f >= 0 ? TAPE.ana[slotOf(f)] : null;
     if(d && f !== lastAnaFrame){
       lastAnaFrame = f; anaTs += 1 / 30;
       const t0 = performance.now();
@@ -1239,17 +1479,17 @@ function latticeStep(dt){
     }
     if(d) return;
   }
-  if(P.latSrc === "rack" && rackPts && rackPts.count){
-    const f = rackPts, c = Math.min(n, f.count, LMAX), is3 = f.space === "3d", asp = outW / outH;
+  if(P.latSrc === "rack"){
     LP.n = 0;
+    const f = rackPts; if(!f || !f.count) return;
+    const c = Math.min(n, f.count, LMAX);
     for(let i = 0; i < c; i++){
       if(f.presence && f.presence[i] < 0.05) continue;
-      const x = f.positions[i * 3], y = f.positions[i * 3 + 1];
-      LP.x[LP.n] = is3 ? 0.5 + x * 0.4 / asp : x; LP.y[LP.n] = is3 ? 0.5 - y * 0.4 : y; LP.id[LP.n] = f.ids ? f.ids[i] : i; LP.n++;
+      rackXY(f, i, tmpXY);
+      LP.x[LP.n] = tmpXY[0]; LP.y[LP.n] = tmpXY[1]; LP.id[LP.n] = f.ids ? f.ids[i] : i; LP.n++;
     }
     return;
   }
-  // drifting: each point on its own slow Lissajous, seeded
   const t = EV.t;
   LP.n = n;
   for(let i = 0; i < n; i++){
@@ -1260,46 +1500,10 @@ function latticeStep(dt){
   }
 }
 
-/* ============================ overlay: skins, OSD, lattice ============================ */
+/* ============================ overlay: lattice, flow lines, OSD ============================ */
 const ov = document.createElement("canvas"); ov.width = 1280; ov.height = 720;
 const og = ov.getContext("2d");
-let SC = 1;                       // overlay scale: 1 at 720 lines
-let TH = null;                    // theme for this frame
-
-function theme(m){
-  const A = palA(), B = palB();
-  const mono = m > 0.5;
-  return {
-    m, A, B, mono,
-    fillTop: mixC([1, 1, 1], B[0], m), fillTopA: lerp(0.86, 0.82, m),
-    fillBot: mixC(mixC(A[2], [1, 1, 1], 0.35), B[0], m), fillBotA: lerp(0.62, 0.88, m),
-    barTop: mixC(mixC(A[2], [1, 1, 1], 0.75), B[3], m), barMid: mixC(A[2], B[3], m), barBot: mixC(A[1], B[2], m),
-    barText: mixC([1, 1, 1], [0, 0, 0], m),
-    border: mixC([1, 1, 1], B[3], m),
-    fg: mixC([0.04, 0.16, 0.32], B[3], m), dim: mixC([0.3, 0.45, 0.6], B[2], m),
-    lcdBg: mixC([0.02, 0.09, 0.17], [0, 0, 0], m), lcdFg: mixC(mixC(A[2], [1, 1, 1], 0.45), B[3], m),
-    accent: mixC(A[2], B[3], m), light: mixC([1, 1, 1], B[4], m),
-    font: (px, w) => mono ? `${w || 400} ${px}px ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace`
-                         : `${w || 600} ${px}px "Segoe UI","Trebuchet MS",Tahoma,Verdana,sans-serif`
-  };
-}
-/* round → chamfered: each corner is a quadratic whose control slides from the
-   corner itself (a rounded corner) to the middle of the chord (a straight cut) */
-function shapePath(g, x, y, w, h, r, m, asym){
-  const k0 = Math.max(0.01, Math.min(r, w / 2, h / 2));
-  const kk = asym ? [k0, k0 * (1 - 0.85 * m), k0, k0 * (1 - 0.85 * m)] : [k0, k0, k0, k0];
-  const c = (cx, cy, ax, ay, bx, by) => {
-    const mx = (ax + bx) / 2, my = (ay + by) / 2;
-    g.quadraticCurveTo(lerp(cx, mx, m), lerp(cy, my, m), bx, by);
-  };
-  g.beginPath();
-  g.moveTo(x + kk[0], y);
-  g.lineTo(x + w - kk[1], y); c(x + w, y, x + w - kk[1], y, x + w, y + kk[1]);
-  g.lineTo(x + w, y + h - kk[2]); c(x + w, y + h, x + w, y + h - kk[2], x + w - kk[2], y + h);
-  g.lineTo(x + kk[3], y + h); c(x, y + h, x + kk[3], y + h, x, y + h - kk[3]);
-  g.lineTo(x, y + kk[0]); c(x, y, x, y + kk[0], x + kk[0], y);
-  g.closePath();
-}
+let SC = 1, TH = { m:0, A:PAL_A["Frutiger sky"], B:PAL_B["Matrix"] };
 const SIGMAP = { A:"Λ", E:"Ξ", O:"Ø", I:"ǀ", U:"Ʊ", S:"§", T:"†", N:"И", R:"Я", C:"¢", X:"╳", L:"Ł", K:"Ҝ", D:"Ð", W:"Ш", Y:"¥", B:"ß", P:"Þ", F:"ƒ", V:"√", H:"Ħ", M:"₼", G:"₲" };
 function sigilize(s, m, seed){
   if(m < 0.45) return s;
@@ -1307,18 +1511,17 @@ function sigilize(s, m, seed){
   let o = "";
   for(let i = 0; i < s.length; i++){
     const ch = s[i], up = ch.toUpperCase(), r = hash1(i * 13.1 + seed * 7.7 + q);
-    o += (r < p && SIGMAP[up]) ? SIGMAP[up] : (m > 0.7 ? up : ch);
+    o += (r < p && SIGMAP[up]) ? SIGMAP[up] : up;
   }
   return o;
 }
-/* a rune from the same 3×3 stroke grid the shader uses */
 const RSEG = [[0,0,1,0],[1,0,2,0],[0,1,1,1],[1,1,2,1],[0,2,1,2],[1,2,2,2],[0,0,0,1],[0,1,0,2],[1,0,1,1],[1,1,1,2],[2,0,2,1],[2,1,2,2],
   [0,0,1,1],[1,0,0,1],[1,0,2,1],[2,0,1,1],[0,1,1,2],[1,1,0,2],[1,1,2,2],[2,1,1,2]];
 function rune(g, cx, cy, s, h){
   g.beginPath();
   for(let i = 0; i < RSEG.length; i++){
     const sg = RSEG[i];
-    if(sg[0] > 1 || sg[2] > 1) continue;                 // left half, mirrored
+    if(sg[0] > 1 || sg[2] > 1) continue;
     if(hash1(h * 97.31 + i * 7.13) >= 0.45) continue;
     for(const mir of [1, -1]){
       const x1 = (sg[0] - 1) * mir, x2 = (sg[2] - 1) * mir;
@@ -1327,336 +1530,9 @@ function rune(g, cx, cy, s, h){
   }
   g.stroke();
 }
-
-/* audio for the spectrum and scope: Drive's analyser if it is running */
-const SPEC = new Float32Array(16), WAVE = new Float32Array(128);
-let fBins = null, tBins = null;
-function readAudio(t){
-  const an = Drive && Drive.analyserNode ? Drive.analyserNode() : null;
-  const live = an && Drive.audio && Drive.audio.level > 0.0005;
-  if(an && live){
-    if(!fBins || fBins.length !== an.frequencyBinCount){ fBins = new Uint8Array(an.frequencyBinCount); tBins = new Uint8Array(an.fftSize); }
-    an.getByteFrequencyData(fBins); an.getByteTimeDomainData(tBins);
-    const N = fBins.length;
-    for(let i = 0; i < 16; i++){
-      const a = Math.floor(Math.pow(N, i / 16)), b = Math.max(a + 1, Math.floor(Math.pow(N, (i + 1) / 16)));
-      let s = 0; for(let k = a; k < b; k++) s += fBins[k];
-      SPEC[i] = SPEC[i] * 0.6 + (s / (b - a) / 255) * 0.4;
-    }
-    const step = tBins.length / 128;
-    for(let i = 0; i < 128; i++) WAVE[i] = (tBins[Math.floor(i * step)] - 128) / 128;
-    return;
-  }
-  for(let i = 0; i < 16; i++){
-    const v = noise1(t * (1.5 + i * 0.13) + i * 7) * (1 - i / 22) * 0.9 + EV.storm * 0.3 * hash1(i + Math.floor(t * 12));
-    SPEC[i] = SPEC[i] * 0.7 + v * 0.3;
-  }
-  for(let i = 0; i < 128; i++){ const x = i / 128; WAVE[i] = Math.sin(x * 18 + t * 5) * 0.4 * noise1(t * 2) + Math.sin(x * 47 - t * 9) * 0.2 + (hash1(i + Math.floor(t * 30)) - 0.5) * 0.25 * EV.storm; }
-}
-
-/* windows */
-const WIN_SPECS = {
-  player:   { w:310, h:136, title:"tape.deck" },
-  progress: { w:300, h:100, title:"unpack.exe" },
-  eq:       { w:240, h:150, title:"eq // 10 band" },
-  viz:      { w:260, h:120, title:"scope.vis" },
-  hex:      { w:236, h:160, title:"0xC0DE.bin" },
-  dialog:   { w:250, h:112, title:"system" }
-};
-const WIN_ORDER = ["player","progress","eq","viz","hex","dialog","player","progress"];
-let WINS = [];
-function buildWindows(){
-  const r = mulberry(Math.round(P.guiSeed) * 7919 + 13);
-  const order = WIN_ORDER.slice();
-  for(let i = order.length - 1; i > 0; i--){ const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-  if(order[0] !== "player"){ const k = order.indexOf("player"); [order[0], order[k]] = [order[k], order[0]]; }
-  WINS = order.map((type, i) => ({ type, ax:r(), ay:r(), fx:0.05 + r() * 0.12, fy:0.05 + r() * 0.12, p1:r() * 6.28, p2:r() * 6.28, seed:r() * 100, hist:[], z:i }));
-}
-buildWindows();
-
-function drawIcon(g, kind, cx, cy, s){
-  g.beginPath();
-  const tri = (x, y, d) => { g.moveTo(x, y - s); g.lineTo(x + d * s * 1.1, y); g.lineTo(x, y + s); g.closePath(); };
-  switch(kind){
-    case "play": tri(cx - s * 0.4, cy, 1); break;
-    case "pause": g.rect(cx - s * 0.75, cy - s, s * 0.5, s * 2); g.rect(cx + s * 0.25, cy - s, s * 0.5, s * 2); break;
-    case "stop": g.rect(cx - s * 0.8, cy - s * 0.8, s * 1.6, s * 1.6); break;
-    case "rew": tri(cx, cy, -1); tri(cx + s * 1.0, cy, -1); break;
-    case "ff": tri(cx - s * 1.0, cy, 1); tri(cx, cy, 1); break;
-  }
-  g.fill();
-}
-function bar(g, x, y, w, h, v, t){
-  const T = TH, m = T.m, S = SC;
-  shapePath(g, x, y, w, h, h / 2 * (1 - m) + 1, m);
-  g.fillStyle = css(T.lcdBg, 0.55); g.fill();
-  g.lineWidth = 1; g.strokeStyle = css(T.border, 0.6); g.stroke();
-  if(m < 1){
-    g.save(); g.globalAlpha *= 1 - m;
-    shapePath(g, x + 1, y + 1, Math.max(h, (w - 2) * v), h - 2, (h - 2) / 2, 0); g.clip();
-    const gg = g.createLinearGradient(0, y, 0, y + h);
-    gg.addColorStop(0, css(mixC(T.accent, [1, 1, 1], 0.7))); gg.addColorStop(0.5, css(T.accent)); gg.addColorStop(1, css(mixC(T.accent, [0, 0.1, 0.3], 0.4)));
-    g.fillStyle = gg; g.fillRect(x, y, w, h);
-    g.fillStyle = "rgba(255,255,255,0.25)";
-    const st = 12 * S, o = (t * 30 * S) % (st * 2);
-    for(let k = x - st * 2 + o; k < x + w; k += st * 2){ g.beginPath(); g.moveTo(k, y + h); g.lineTo(k + st, y); g.lineTo(k + st * 2, y); g.lineTo(k + st, y + h); g.fill(); }
-    g.restore();
-  }
-  if(m > 0){
-    g.save(); g.globalAlpha *= m;
-    const sw = 7 * S, n = Math.max(1, Math.floor((w - 4) / sw)), on = Math.floor(v * n);
-    g.fillStyle = css(T.accent);
-    for(let k = 0; k < on; k++) g.fillRect(x + 2 + k * sw, y + 2, sw - 2 * S, h - 4);
-    g.restore();
-  }
-}
-const FILES = ["SIGIL_07.DAT","AERO_SKIN.WSZ","CHROME.DLL","DREAM.MP3","BUBBLE.SCR","LIQUID.VIS","TAPE_02.AVI","MATRIX.NFO","Y2K_FIX.EXE","ORB.ICO"];
-function winContent(W, x, y, w, h, t){
-  const g = og, T = TH, m = T.m, S = SC, al = g.globalAlpha;
-  g.textBaseline = "middle";
-  switch(W.type){
-    case "player": {
-      const lw = w * 0.64, lh = h * 0.5;
-      shapePath(g, x, y, lw, lh, 7 * S * (1 - m) + 2, m);
-      g.fillStyle = css(T.lcdBg, 0.92); g.fill(); g.strokeStyle = css(T.border, 0.5); g.lineWidth = 1; g.stroke();
-      const secs = Math.max(0, TAPE.head / Math.max(1, Q.tapeFps));
-      const mm = String(Math.floor(secs / 60)).padStart(2, "0"), ss = String(Math.floor(secs % 60)).padStart(2, "0");
-      g.fillStyle = css(T.lcdFg); g.font = T.font(22 * S, 700);
-      g.fillText((m > 0.5 && EV.storm > 0.4 && hash1(Math.floor(t * 8)) > 0.5) ? "--:--" : mm + ":" + ss, x + 8 * S, y + lh * 0.36);
-      // marquee
-      g.save(); g.beginPath(); g.rect(x + 4 * S, y + lh * 0.58, lw - 8 * S, lh * 0.38); g.clip();
-      g.font = T.font(11 * S, 500);
-      const txt = sigilize(String(P.marquee || " "), m, 3), tw = Math.max(20, g.measureText(txt).width);
-      const off = (t * 45 * S) % tw;
-      for(let k = -off; k < lw; k += tw) g.fillText(txt, x + 6 * S + k, y + lh * 0.78);
-      g.restore();
-      // spectrum
-      const sx = x + lw + 6 * S, sw = w - lw - 6 * S, nb = 10, bw = sw / nb;
-      for(let i = 0; i < nb; i++){
-        const v = clamp(SPEC[i + 1] * 1.3, 0, 1), bh = v * lh;
-        if(m < 0.5){
-          const gg = g.createLinearGradient(0, y + lh, 0, y);
-          gg.addColorStop(0, css(T.accent, 0.95)); gg.addColorStop(1, css([1, 1, 1], 0.95));
-          g.fillStyle = gg; shapePath(g, sx + i * bw + 1, y + lh - bh, bw - 2, Math.max(2, bh), (bw - 2) / 2, 0); g.fill();
-        } else {
-          g.fillStyle = css(T.accent);
-          const segs = Math.floor(bh / (4 * S));
-          for(let k = 0; k < segs; k++) g.fillRect(sx + i * bw + 1, y + lh - (k + 1) * 4 * S, bw - 2, 3 * S);
-        }
-      }
-      // seek
-      const loopPos = TAPE.base === "loop" && TAPE.recLeft === 0 ? (TAPE.head - TAPE.loopA) / loopSpan() : fract(secs / 30);
-      bar(g, x, y + lh + 8 * S, w, 9 * S, clamp(loopPos, 0, 1), t);
-      // transport
-      const st = tapeState(), kinds = ["rew","play","pause","stop","ff"], by = y + lh + 34 * S, bwid = w / 5;
-      const act = st === "rewind" || st === "rev" ? "rew" : st === "pause" ? "pause" : st === "ff" ? "ff" : st === "rec" ? "stop" : "play";
-      kinds.forEach((k, i) => {
-        const bx = x + i * bwid + 3 * S, bww = bwid - 6 * S, bh = 20 * S, on = k === act;
-        shapePath(g, bx, by - bh / 2, bww, bh, bh / 2 * (1 - m) + 1, m, true);
-        if(m < 0.6){
-          const gg = g.createLinearGradient(0, by - bh / 2, 0, by + bh / 2);
-          gg.addColorStop(0, css([1, 1, 1], 0.95)); gg.addColorStop(0.5, css(on ? T.accent : mixC(T.accent, [1, 1, 1], 0.7), 0.95)); gg.addColorStop(1, css(on ? T.barBot : mixC(T.accent, [1, 1, 1], 0.4), 0.95));
-          g.fillStyle = gg;
-        } else g.fillStyle = on ? css(T.accent) : css([0, 0, 0], 0.8);
-        g.fill(); g.strokeStyle = css(T.border, 0.7); g.stroke();
-        g.fillStyle = m < 0.6 ? css(on ? [1, 1, 1] : T.fg) : css(on ? [0, 0, 0] : T.accent);
-        drawIcon(g, k, bx + bww / 2, by, 4.5 * S);
-      });
-      break;
-    }
-    case "progress": {
-      const k = Math.floor(t / 1.6 + W.seed) % FILES.length, v = fract(t / 1.6 + W.seed);
-      g.fillStyle = css(T.fg); g.font = T.font(12 * S, 500);
-      g.fillText(sigilize((m > 0.5 ? "> extracting " : "Unpacking ") + FILES[k] + (m > 0.5 ? "" : "…"), m, W.seed), x + 2 * S, y + 10 * S);
-      bar(g, x, y + 24 * S, w, 16 * S, v, t);
-      g.font = T.font(11 * S, 400); g.fillStyle = css(T.dim);
-      g.fillText(Math.floor(v * 100) + "%   " + (180 + Math.floor(noise1(t * 3) * 400)) + " kb/s", x + 2 * S, y + 52 * S);
-      if(m > 0.5){ g.textAlign = "right"; g.fillText("[" + "▓".repeat(Math.floor(v * 6)) + "░".repeat(6 - Math.floor(v * 6)) + "]", x + w, y + 52 * S); g.textAlign = "left"; }
-      break;
-    }
-    case "eq": {
-      const n = 10, cw = w / n, ty = y + 4 * S, bh = h - 26 * S;
-      const labels = ["60","170","310","600","1K","3K","6K","12K","14K","16K"];
-      for(let i = 0; i < n; i++){
-        const cx = x + cw * (i + 0.5), v = clamp(SPEC[i + 2] * 1.2, 0, 1), ky = ty + bh * (1 - v);
-        g.strokeStyle = css(T.dim, 0.8); g.lineWidth = 2 * S;
-        g.beginPath(); g.moveTo(cx, ty); g.lineTo(cx, ty + bh); g.stroke();
-        const kw = 14 * S, kh = 8 * S;
-        if(m < 0.5){
-          const gg = g.createLinearGradient(0, ky - kh, 0, ky + kh);
-          gg.addColorStop(0, "#fff"); gg.addColorStop(1, css(T.accent));
-          g.fillStyle = gg; shapePath(g, cx - kw / 2, ky - kh / 2, kw, kh, kh / 2, 0); g.fill();
-          g.strokeStyle = css(T.barBot, 0.7); g.lineWidth = 1; g.stroke();
-        } else {
-          g.fillStyle = css(T.accent); g.fillRect(cx - kw / 2, ky - kh / 2, kw, kh);
-          g.fillStyle = "#000"; g.fillRect(cx - kw / 2, ky - 0.5 * S, kw, S);
-        }
-        g.fillStyle = css(T.dim); g.font = T.font(8.5 * S, 500); g.textAlign = "center";
-        g.fillText(labels[i], cx, y + h - 8 * S); g.textAlign = "left";
-      }
-      break;
-    }
-    case "viz": {
-      shapePath(g, x, y, w, h, 6 * S * (1 - m) + 1, m);
-      g.fillStyle = css(T.lcdBg, 0.9); g.fill();
-      g.save(); g.clip();
-      g.strokeStyle = css(T.dim, 0.3); g.lineWidth = 1;
-      for(let k = 1; k < 4; k++){ g.beginPath(); g.moveTo(x, y + h * k / 4); g.lineTo(x + w, y + h * k / 4); g.stroke(); }
-      const stepQ = Math.max(1, Math.round(1 + m * 7));
-      const path = () => {
-        g.beginPath();
-        for(let i = 0; i < 128; i++){
-          const ii = Math.floor(i / stepQ) * stepQ, px = x + i / 127 * w, py = y + h / 2 - WAVE[ii] * h * 0.42;
-          if(i === 0) g.moveTo(px, py); else if(m > 0.5){ const prevY = y + h / 2 - WAVE[Math.max(0, ii - (ii === i ? stepQ : 0))] * h * 0.42; g.lineTo(px, prevY); g.lineTo(px, py); } else g.lineTo(px, py);
-        }
-      };
-      if(m < 0.7){ path(); g.strokeStyle = css(T.lcdFg, 0.25 * (1 - m)); g.lineWidth = 6 * S; g.lineJoin = "round"; g.stroke(); }
-      path(); g.strokeStyle = css(T.lcdFg); g.lineWidth = 1.6 * S; g.lineJoin = m > 0.5 ? "miter" : "round"; g.stroke();
-      g.restore();
-      break;
-    }
-    case "hex": {
-      g.font = `${10.5 * S}px ui-monospace,Consolas,"Courier New",monospace`;
-      const lh = 13 * S, rowsN = Math.floor(h / lh), scroll = Math.floor(t * 4), sub = fract(t * 4) * lh * (m > 0.5 ? 0 : 1);
-      g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
-      for(let r = 0; r < rowsN + 1; r++){
-        const rr = r + scroll, yy = y + r * lh - sub + lh / 2;
-        g.fillStyle = css(T.dim);
-        g.fillText((rr * 8).toString(16).toUpperCase().padStart(4, "0"), x, yy);
-        for(let c = 0; c < 6; c++){
-          const v = Math.floor(hash1(rr * 31 + c * 7 + W.seed + (EV.storm > 0.3 ? Math.floor(t * 20) : 0)) * 256);
-          const hot = hash1(rr * 3 + c + Math.floor(t * 2)) > 0.93;
-          if(hot){ g.fillStyle = css(T.accent, 0.9); g.fillRect(x + (40 + c * 22) * S - 2 * S, yy - lh / 2 + 1, 19 * S, lh - 2); }
-          g.fillStyle = hot ? css(m > 0.5 ? [0, 0, 0] : [1, 1, 1]) : css(T.fg);
-          g.fillText(v.toString(16).toUpperCase().padStart(2, "0"), x + (40 + c * 22) * S, yy);
-        }
-      }
-      g.restore();
-      break;
-    }
-    case "dialog": {
-      const ix = x + 26 * S, iy = y + 26 * S, r = 17 * S;
-      if(m < 0.5){
-        const gg = g.createRadialGradient(ix - r * 0.3, iy - r * 0.4, 1, ix, iy, r);
-        gg.addColorStop(0, "#fff"); gg.addColorStop(0.5, css(T.accent)); gg.addColorStop(1, css(T.barBot));
-        g.fillStyle = gg; g.beginPath(); g.arc(ix, iy, r, 0, Math.PI * 2); g.fill();
-        g.fillStyle = "#fff"; g.font = `700 ${20 * S}px Georgia,serif`; g.textAlign = "center"; g.fillText("i", ix, iy + 1); g.textAlign = "left";
-      } else {
-        g.strokeStyle = css(T.accent); g.lineWidth = 2 * S;
-        g.beginPath(); g.moveTo(ix, iy - r); g.lineTo(ix + r, iy + r * 0.8); g.lineTo(ix - r, iy + r * 0.8); g.closePath(); g.stroke();
-        g.fillStyle = css(T.accent); g.font = T.font(16 * S, 700); g.textAlign = "center"; g.fillText("!", ix, iy + 3 * S); g.textAlign = "left";
-      }
-      g.fillStyle = css(T.fg); g.font = T.font(12 * S, 500);
-      const lines = m < 0.5 ? ["Your tape is ready.", "Enjoy the show!"] : ["SIGNAL CORRUPT", "0x" + Math.floor(hash1(Math.floor(t * 2) + W.seed) * 0xFFFFFF).toString(16).toUpperCase().padStart(6, "0") + " // RETRY?"];
-      lines.forEach((l, i) => g.fillText(sigilize(l, m, W.seed + i), x + 54 * S, y + (16 + i * 18) * S));
-      const bw = 70 * S, bh = 22 * S, bx = x + w - bw - 4 * S, byy = y + h - bh - 2 * S;
-      shapePath(g, bx, byy, bw, bh, bh / 2 * (1 - m) + 1, m, true);
-      if(m < 0.6){ const gg = g.createLinearGradient(0, byy, 0, byy + bh); gg.addColorStop(0, "#fff"); gg.addColorStop(0.5, css(mixC(T.accent, [1, 1, 1], 0.5))); gg.addColorStop(1, css(T.accent)); g.fillStyle = gg; }
-      else g.fillStyle = css([0, 0, 0], 0.85);
-      g.fill(); g.strokeStyle = css(T.border, 0.8); g.lineWidth = 1; g.stroke();
-      g.fillStyle = m < 0.6 ? css(T.fg) : css(T.accent); g.font = T.font(12 * S, 600); g.textAlign = "center";
-      g.fillText(m > 0.5 ? "[ OK ]" : "OK", bx + bw / 2, byy + bh / 2 + 1); g.textAlign = "left";
-      break;
-    }
-  }
-  g.globalAlpha = al;
-}
-function drawWindow(W, x, y, w, h, full, t){
-  const g = og, T = TH, m = T.m, S = SC;
-  const R = 14 * S * (1 - m) + 10 * S * m, tb = 22 * S;
-  g.save();
-  if(m < 0.95){ g.shadowColor = `rgba(0,30,70,${0.38 * (1 - m)})`; g.shadowBlur = 18 * S * (1 - m); g.shadowOffsetY = 6 * S * (1 - m); }
-  shapePath(g, x, y, w, h, R, m, true);
-  const fg = g.createLinearGradient(0, y, 0, y + h);
-  fg.addColorStop(0, css(T.fillTop, T.fillTopA)); fg.addColorStop(1, css(T.fillBot, T.fillBotA));
-  g.fillStyle = fg; g.fill();
-  g.restore();
-  g.save();
-  shapePath(g, x, y, w, h, R, m, true); g.clip();
-  const tg = g.createLinearGradient(0, y, 0, y + tb);
-  tg.addColorStop(0, css(T.barTop, 0.96)); tg.addColorStop(0.48, css(mixC(T.barMid, [1, 1, 1], 0.25 * (1 - m)), 0.96));
-  tg.addColorStop(0.52, css(T.barBot, 0.96)); tg.addColorStop(1, css(T.barMid, 0.96));
-  g.fillStyle = tg; g.fillRect(x, y, w, tb);
-  if(m < 1){
-    const shn = g.createLinearGradient(0, y + tb, 0, y + tb + h * 0.45);
-    shn.addColorStop(0, `rgba(255,255,255,${0.4 * (1 - m)})`); shn.addColorStop(1, "rgba(255,255,255,0)");
-    g.fillStyle = shn; g.fillRect(x, y + tb, w, h * 0.45);
-  }
-  if(m > 0.05){
-    g.strokeStyle = css([0, 0, 0], 0.4 * m); g.lineWidth = 1.2 * S;
-    for(let k = x + w * 0.5; k < x + w - 64 * S; k += 5 * S){ g.beginPath(); g.moveTo(k, y + tb - 5 * S); g.lineTo(k + 5 * S, y + 5 * S); g.stroke(); }
-  }
-  g.restore();
-  shapePath(g, x, y, w, h, R, m, true);
-  g.lineWidth = Math.max(1, S * (1 + 0.4 * m)); g.strokeStyle = css(T.border, 0.92); g.stroke();
-  if(m > 0.3){
-    const a = (m - 0.3) / 0.7, L = 12 * S, o = 5 * S;
-    g.strokeStyle = css(T.accent, a); g.lineWidth = 1.5 * S;
-    g.beginPath();
-    g.moveTo(x - o, y - o + L); g.lineTo(x - o, y - o); g.lineTo(x - o + L, y - o);
-    g.moveTo(x + w + o - L, y + h + o); g.lineTo(x + w + o, y + h + o); g.lineTo(x + w + o, y + h + o - L);
-    g.stroke();
-  }
-  // title
-  g.textBaseline = "middle";
-  g.font = TH.font(12 * S, 600);
-  g.fillStyle = css(T.barText, 0.96);
-  if(m < 0.5){ g.shadowColor = "rgba(0,40,90,0.65)"; g.shadowBlur = 3 * S; }
-  const title = m > 0.6 ? "~" + WIN_SPECS[W.type].title.toUpperCase().replace(/\s/g, "_") : WIN_SPECS[W.type].title;
-  g.fillText(sigilize(title, m, W.seed), x + 11 * S, y + tb / 2 + 1);
-  g.shadowBlur = 0; g.shadowColor = "transparent";
-  // title buttons: glossy orbs → boxed crosses
-  for(let k = 0; k < 3; k++){
-    const bx = x + w - (15 + k * 19) * S, by = y + tb / 2, r = 6 * S;
-    if(m < 1){
-      g.save(); g.globalAlpha *= 1 - m;
-      const gg = g.createRadialGradient(bx - r * 0.3, by - r * 0.4, 0.5, bx, by, r);
-      gg.addColorStop(0, "#fff"); gg.addColorStop(0.6, css(k === 0 ? [1, 0.45, 0.4] : T.accent)); gg.addColorStop(1, css(k === 0 ? [0.6, 0.1, 0.1] : T.barBot));
-      g.fillStyle = gg; g.beginPath(); g.arc(bx, by, r, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 1; g.stroke();
-      g.restore();
-    }
-    if(m > 0){
-      g.save(); g.globalAlpha *= m;
-      g.strokeStyle = "#000"; g.lineWidth = 1.4 * S; g.strokeRect(bx - r, by - r, r * 2, r * 2);
-      g.beginPath();
-      if(k === 0){ g.moveTo(bx - r * 0.55, by - r * 0.55); g.lineTo(bx + r * 0.55, by + r * 0.55); g.moveTo(bx + r * 0.55, by - r * 0.55); g.lineTo(bx - r * 0.55, by + r * 0.55); }
-      else if(k === 1){ g.rect(bx - r * 0.5, by - r * 0.5, r, r); }
-      else { g.moveTo(bx - r * 0.5, by + r * 0.4); g.lineTo(bx + r * 0.5, by + r * 0.4); }
-      g.stroke(); g.restore();
-    }
-  }
-  if(full) winContent(W, x + 9 * S, y + tb + 7 * S, w - 18 * S, h - tb - 14 * S, t);
-}
-function drawSkins(t){
-  const g = og, Wd = ov.width, Hd = ov.height, S = SC, m = TH.m;
-  const n = Math.min(WINS.length, Math.round(Q.guiCount));
-  const trail = Math.round(Q.guiTrail);
-  const jq = Math.floor(t * Math.max(1, Q.rate));
-  g.globalAlpha = clamp(Q.guiAlpha, 0, 1);
-  for(let i = 0; i < n; i++){
-    const W = WINS[i], sp = WIN_SPECS[W.type];
-    SC = S * Q.guiScale;
-    const w = sp.w * SC, h = sp.h * SC;
-    let cx = (0.14 + 0.72 * W.ax) * Wd + Math.sin(t * W.fx + W.p1) * Q.guiWander * Wd * 0.14;
-    let cy = (0.16 + 0.68 * W.ay) * Hd + Math.sin(t * W.fy + W.p2) * Q.guiWander * Hd * 0.14;
-    if(EV.storm > 0.2){ cx += (hash1(jq + i * 9) - 0.5) * 60 * S * EV.storm; cy += (hash1(jq + i * 13 + 4) - 0.5) * 24 * S * EV.storm; }
-    let x = cx - w / 2, y = cy - h / 2;
-    if(m > 0.6){ const q = 8 * S; x = Math.round(x / q) * q; y = Math.round(y / q) * q; }
-    W.hist.push(x, y);
-    const keep = trail * 2 * 3;
-    while(W.hist.length > Math.max(2, keep + 2)) W.hist.splice(0, 2);
-    if(trail > 0){
-      for(let k = 0; k < W.hist.length - 2; k += 6) drawWindow(W, W.hist[k], W.hist[k + 1], w, h, false, t);
-    }
-    drawWindow(W, x, y, w, h, true, t);
-  }
-  SC = S;
-  g.globalAlpha = 1;
-}
 const OSD_TXT = { play:"PLAY ▶", loop:"LOOP ▶", rev:"REV ◀", rec:"● REC", rewind:"◀◀ REW", ff:"▶▶ FF", pause:"❚❚ PAUSE", slow:"▶ SLOW", stutter:"▶ PLAY" };
 function drawOSD(t){
-  const g = og, S = SC, Wd = ov.width, Hd = ov.height, m = TH.m;
+  const g = og, S = SC, Hd = ov.height, m = TH.m;
   const st = tapeState();
   const col = mixC([1, 1, 1], TH.B[3], m);
   g.font = `700 ${28 * S}px ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace`;
@@ -1667,19 +1543,49 @@ function drawOSD(t){
     g.fillStyle = css(col); g.fillText(s, x, y);
   };
   const blink = st === "pause" || st === "rec" ? (fract(t * 1.6) < 0.6) : true;
-  if(blink) out(sigilize(OSD_TXT[st] || "PLAY ▶", m, 1), 48 * S, 40 * S);
+  let label = OSD_TXT[st] || "PLAY ▶";
+  if(MOSH.ev) label = MOSH.ev.type === "bloom" ? "✺ BLOOM" : "≋ SMEAR";
+  if(blink) out(sigilize(label, m, 1), 48 * S, 40 * S);
   const secs = Math.max(0, TAPE.head / Math.max(1, Q.tapeFps));
   const hh = Math.floor(secs / 3600), mm = Math.floor(secs / 60) % 60, ss = Math.floor(secs) % 60;
   out("SP  " + hh + ":" + String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0"), 48 * S, Hd - 76 * S);
-  // the camcorder date stamp: the minute before the millennium, then over it
-  const base = Date.UTC(1999, 11, 31, 23, 59, 0) + EV.t * 1000;
-  const d = new Date(base), MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  const ds = MON[d.getUTCMonth()] + "." + String(d.getUTCDate()).padStart(2, "0") + " " + d.getUTCFullYear();
-  const ts = String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + ":" + String(d.getUTCSeconds()).padStart(2, "0");
-  g.font = `700 ${22 * S}px ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace`;
-  out(ts, Wd - 48 * S, Hd - 104 * S, "right");
-  out(ds, Wd - 48 * S, Hd - 76 * S, "right");
   g.textAlign = "left";
+}
+function drawFlowLines(){
+  const g = og, Wd = ov.width, Hd = ov.height, S = SC, m = TH.m;
+  const D = FLOW.data, W = FLOW.w, H = FLOW.h, k = Q.flowLineLen * 0.12;
+  const col = mixC(mixC(TH.A[2], [1, 1, 1], 0.45), TH.B[3], m);
+  g.lineCap = m > 0.5 ? "butt" : "round"; g.lineJoin = m > 0.5 ? "miter" : "round";
+  const q = 6 * S;
+  for(let pass = 0; pass < 2; pass++){
+    if(pass === 0 && m > 0.6) continue;
+    g.beginPath();
+    for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+      const i = (y * W + x) * 2, vx = D[i], vy = D[i + 1], mag = Math.hypot(vx, vy);
+      if(mag < 0.03) continue;
+      const px = (x + 0.5) / W * Wd, py = (y + 0.5) / H * Hd;
+      let dx = vx * Wd * k, dy = vy * Hd * k;
+      const len = Math.min(Hd * 0.25, Math.hypot(dx, dy)), a = Math.atan2(dy, dx);
+      if(m > 0.5){
+        const sa = Math.round(a / (Math.PI / 4)) * (Math.PI / 4), sl = Math.max(q, Math.round(len / q) * q);
+        dx = Math.cos(sa) * sl; dy = Math.sin(sa) * sl;
+        g.moveTo(px, py); g.lineTo(px + dx, py + dy);
+        const nx = -Math.sin(sa) * q * 0.5, ny = Math.cos(sa) * q * 0.5;
+        g.moveTo(px + dx - nx, py + dy - ny); g.lineTo(px + dx + nx, py + dy + ny);
+      } else {
+        dx = Math.cos(a) * len; dy = Math.sin(a) * len;
+        // bend toward the neighbour's direction, so the strokes read as currents
+        const j = (y * W + Math.min(W - 1, x + 1)) * 2, j2 = (Math.min(H - 1, y + 1) * W + x) * 2;
+        const curl = (D[j + 1] - vy) - (D[j2] - vx);
+        const bend = clamp(curl * 2, -0.6, 0.6) * len;
+        const cx = px + dx * 0.5 - Math.sin(a) * bend, cy = py + dy * 0.5 + Math.cos(a) * bend;
+        g.moveTo(px, py); g.quadraticCurveTo(cx, cy, px + dx, py + dy);
+      }
+    }
+    if(pass === 0){ g.strokeStyle = css(col, Q.flowLineAlpha * 0.2 * (1 - m)); g.lineWidth = 5 * S; }
+    else { g.strokeStyle = css(col, Q.flowLineAlpha); g.lineWidth = Math.max(1, S * (1.6 - 0.5 * m)); }
+    g.stroke();
+  }
 }
 function drawLattice(t){
   const g = og, Wd = ov.width, Hd = ov.height, S = SC, m = TH.m, n = LP.n;
@@ -1707,7 +1613,6 @@ function drawLattice(t){
       for(let q = 0; q < c; q++){
         const j = best[q]; if(j < i) continue;
         const ax = X[i], ay = Y[i], bx = X[j], by = Y[j], dx = bx - ax, dy = by - ay;
-        // circuit elbow: run straight, then 45° into the target
         let ex, ey;
         if(Math.abs(dx) > Math.abs(dy)){ ex = bx - Math.sign(dx) * Math.abs(dy); ey = ay; }
         else { ex = ax; ey = by - Math.sign(dy) * Math.abs(dx); }
@@ -1748,12 +1653,12 @@ function drawLattice(t){
   g.globalAlpha = 1;
 }
 function drawOverlay(t){
-  const want = (P.guiOn && Q.guiCount >= 1) || P.osd || (P.latOn && LP.n);
+  const want = P.osd || (P.latOn && LP.n) || P.flowLines;
   if(!want) return false;
   og.clearRect(0, 0, ov.width, ov.height);
   SC = ov.height / 720;
+  if(P.flowLines) drawFlowLines();
   if(P.latOn) drawLattice(t);
-  if(P.guiOn && Q.guiCount >= 1) drawSkins(t);
   if(P.osd) drawOSD(t);
   return true;
 }
@@ -1764,32 +1669,37 @@ function setPalUniforms(pr){
   gl.uniform3fv(pr.u.uRA, new Float32Array([].concat(...A)));
   gl.uniform3fv(pr.u.uRB, new Float32Array([].concat(...B)));
 }
-let hasOv = false, ovFresh = false;
-function render(t){
+let hasOv = false;
+function render(t, dt){
   const w = outW, h = outH, m = EV.morph, st = EV.storm * Q.stormDepth;
-  if(ovFresh){
+  if(hasOv){
     bindTex(3, ovTex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ov);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   }
+  const hasMask = uploadFlow();
   const has = TAPE.written > 0 && TAPE.fA >= 0;
   const A = has ? TAPE.slots[slotOf(TAPE.fA)] : null, B = has ? TAPE.slots[slotOf(TAPE.fB)] : null;
+  // the mosh reads the tape and becomes the tape the rest of the chain sees
+  const M = moshStep(dt, A, B, TAPE.mix, t);
+  let tA = A ? A.t : blackTex, tB = B ? B.t : tA, fmix = clamp(TAPE.mix, 0, 1);
+  if(M){ tA = M.t; tB = A.t; fmix = 1 - clamp(Q.mosh, 0, 1); }
   const prev = pcur; pcur ^= 1;
-  bindTex(0, A ? A.t : blackTex); bindTex(1, B ? B.t : (A ? A.t : blackTex)); bindTex(2, proc[prev].t);
-  if(!hasOv) bindTex(3, ovTex);
+  bindTex(0, tA); bindTex(1, tB); bindTex(2, proc[prev].t); bindTex(3, ovTex); bindTex(4, flowTex); bindTex(5, maskTex);
   const pr = PPROC, u = pr.u;
   gl.useProgram(pr.p);
-  gl.uniform1i(u.uA, 0); gl.uniform1i(u.uB, 1); gl.uniform1i(u.uPrev, 2); gl.uniform1i(u.uOv, 3);
+  gl.uniform1i(u.uA, 0); gl.uniform1i(u.uB, 1); gl.uniform1i(u.uPrev, 2); gl.uniform1i(u.uOv, 3); gl.uniform1i(u.uFlow, 4); gl.uniform1i(u.uMask, 5);
   gl.uniform2f(u.uRes, w, h); gl.uniform2f(u.uTape, TAPE.w || 1, TAPE.h || 1);
   gl.uniform2f(u.uDir, Math.cos(EV.angle), Math.sin(EV.angle)); gl.uniform2f(u.uTravel, EV.tx, EV.ty);
-  gl.uniform1f(u.uT, t); gl.uniform1f(u.uM, m); gl.uniform1f(u.uSeed, (Math.round(P.guiSeed) * 0.1373) % 1);
+  gl.uniform1f(u.uT, t); gl.uniform1f(u.uM, m); gl.uniform1f(u.uSeed, fract(P.seed * 0.1373));
   gl.uniform1f(u.uStorm, st); gl.uniform1f(u.uRew, TAPE.rew); gl.uniform1f(u.uPause, TAPE.pause);
-  gl.uniform1f(u.uFrameMix, clamp(TAPE.mix, 0, 1)); gl.uniform1f(u.uHasOv, hasOv ? 1 : 0);
+  gl.uniform1f(u.uFrameMix, fmix); gl.uniform1f(u.uHasOv, hasOv ? 1 : 0); gl.uniform1f(u.uHasMask, hasMask ? 1 : 0);
   gl.uniform1f(u.uWarp, Q.warp); gl.uniform1f(u.uWarpScale, Q.warpScale); gl.uniform1f(u.uWarpSpeed, Q.warpSpeed);
   gl.uniform1f(u.uBlock, Q.block); gl.uniform1f(u.uBlockSize, Math.max(0.01, Q.blockSize)); gl.uniform1f(u.uRate, Q.rate * (1 + st));
-  gl.uniform1f(u.uSplit, Q.split); gl.uniform1f(u.uTear, Q.tear); gl.uniform1f(u.uMosh, Q.mosh); gl.uniform1f(u.uTrails, Q.trails);
+  gl.uniform1f(u.uSplit, Q.split); gl.uniform1f(u.uTear, Q.tear); gl.uniform1f(u.uHold, Q.hold); gl.uniform1f(u.uTrails, Q.trails);
   gl.uniform1f(u.uCrush, Q.crush); gl.uniform1f(u.uDither, Q.dither);
+  gl.uniform1f(u.uFlowWarp, Q.flowWarp); gl.uniform1f(u.uSmear, Q.smear); gl.uniform1f(u.uFlowCol, Q.flowCol); gl.uniform1f(u.uGate, Q.gate);
   gl.uniform1f(u.uTrack, Q.track); gl.uniform1f(u.uHead, Q.head); gl.uniform1f(u.uBleed, Q.bleed); gl.uniform1f(u.uGhost, Q.ghost);
   gl.uniform1f(u.uNoise, Q.noise); gl.uniform1f(u.uDrop, Q.drop); gl.uniform1f(u.uAge, Q.age);
   gl.uniform1f(u.uChrome, Q.chrome); gl.uniform1f(u.uSoft, Q.soft); gl.uniform1f(u.uMelt, Q.melt); gl.uniform1f(u.uRelief, Q.relief);
@@ -1818,7 +1728,6 @@ function render(t){
     bindTex(0, bl[0].t); gl.uniform2f(PBLUR.u.uStep, 1.6 / bw, 0); draw(PBLUR, bl[1], bw, bh);
     bindTex(0, bl[1].t); gl.uniform2f(PBLUR.u.uStep, 0, 1.6 / bh); draw(PBLUR, bl[0], bw, bh);
   }
-  // to the screen
   bindTex(0, proc[pcur].t); bindTex(1, bl[0].t);
   const f = PFIN.u; gl.useProgram(PFIN.p);
   gl.uniform1i(f.uS, 0); gl.uniform1i(f.uBloom, 1); gl.uniform2f(f.uRes, w, h);
@@ -1827,9 +1736,9 @@ function render(t){
   draw(PFIN, null, w, h);
 }
 function wipeTrails(){
-  proc.forEach(r => { gl.bindFramebuffer(gl.FRAMEBUFFER, r.f); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); });
+  proc.concat(moshRT).forEach(r => { if(!r) return; gl.bindFramebuffer(gl.FRAMEBUFFER, r.f); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); });
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  WINS.forEach(W => W.hist.length = 0);
+  MOSH.key = true;
 }
 
 /* ============================ the outgoing points (for the rack) ============================ */
@@ -1839,22 +1748,26 @@ function publishPoints(){
   const n = LP.n;
   OUT = PT.ensurePoints(OUT, n, "uv");
   if(!OUT.ids || OUT.ids.length < OUT.capacity) OUT.ids = new Uint32Array(OUT.capacity);
+  if(!OUT.tangents || OUT.tangents.length < OUT.capacity * 3) OUT.tangents = new Float32Array(OUT.capacity * 3);
   OUT.aspect = outW / outH;
-  const c = TH ? mixC(TH.A[2], TH.B[3], EV.morph) : [1, 1, 1];
+  const c = mixC(TH.A[2], TH.B[3], EV.morph), D = FLOW.data, W = FLOW.w, H = FLOW.h;
   for(let i = 0; i < n; i++){
     const i3 = i * 3;
     OUT.positions[i3] = LP.x[i]; OUT.positions[i3 + 1] = LP.y[i]; OUT.positions[i3 + 2] = 1;
     OUT.colors[i3] = c[0]; OUT.colors[i3 + 1] = c[1]; OUT.colors[i3 + 2] = c[2];
-    OUT.sizes[i] = 1; OUT.presence[i] = 1; OUT.ids[i] = LP.id[i] >>> 0;
+    // heading from the flow under the point, so receivers can follow the motion
+    const fx = clamp(Math.floor(LP.x[i] * W), 0, W - 1), fy = clamp(Math.floor(LP.y[i] * H), 0, H - 1), j = (fy * W + fx) * 2;
+    const vx = D[j], vy = D[j + 1], s = Math.hypot(vx, vy);
+    OUT.tangents[i3] = s > 1e-4 ? vx / s : 0; OUT.tangents[i3 + 1] = s > 1e-4 ? vy / s : 0; OUT.tangents[i3 + 2] = 0;
+    OUT.sizes[i] = 1 + Math.min(3, s * 6); OUT.presence[i] = 1; OUT.ids[i] = LP.id[i] >>> 0;
   }
-  if(OUT.count !== undefined) OUT.count = n;
   PT.bump(OUT);
 }
 
 /* ============================ loop ============================ */
 const statusEl = document.getElementById("status"), srcNote = document.getElementById("srcNote");
 const meterTick = document.querySelector("#mMeter i"), meterBox = document.querySelector("#mMeter b");
-let lastT = performance.now(), fpsEma = 60, statusAt = 0;
+let lastT = performance.now(), fpsEma = 60, statusAt = 0, meterAt = 0;
 function frame(now){
   requestAnimationFrame(frame);
   const dt = Math.max(1 / 240, Math.min(0.1, (now - lastT) / 1000)); lastT = now;
@@ -1865,26 +1778,33 @@ function frame(now){
   const src = currentSource();
   if(src.demo) drawDemo(t);
   tapeStep(dt, src);
-  latticeStep(dt);
-  TH = theme(EV.morph);
-  readAudio(t);
-  hasOv = drawOverlay(t); ovFresh = hasOv;
-  render(t);
+  flowStep();
+  latticeStep();
+  TH = { m:EV.morph, A:palA(), B:palB() };
+  hasOv = drawOverlay(t);
+  render(t, dt);
   publishPoints();
   if(Drive) Drive.pushFrame(cv);
 
   fpsEma = fpsEma * 0.92 + (1 / dt) * 0.08;
-  if(now - statusAt > 120){
+  if(now - meterAt > 100){
+    meterAt = now;
     meterTick.style.left = (EV.morph * 147) + "px";
-    const mb = clamp(Q.morph, 0, 1); meterBox.style.left = (mb * 140) + "px"; meterBox.style.width = "10px";
+    meterBox.style.left = (clamp(Q.morph, 0, 1) * 140) + "px";
   }
   if(now - statusAt > 400){
     statusAt = now;
     const st = tapeState(), span = TAPE.base === "loop" && TAPE.recLeft === 0 ? ` ${Math.round(TAPE.head - TAPE.loopA)}/${loopSpan()}` : "";
     statusEl.textContent = `tape ${st}${span}` + (TAPE.recLeft > 0 ? ` · recording ${TAPE.recLeft}` : "") +
+      (Q.mosh > 0.001 ? ` · mosh${MOSH.ev ? " " + MOSH.ev.type : ""}` : "") +
+      (FLOW.own && P.flowSrc !== "rack" ? ` · flow ${FLOW.ms.toFixed(1)} ms` : "") +
       ` · morph ${EV.morph.toFixed(2)}` + (EV.storm > 0.05 ? ` · storm ${(EV.storm * 100).toFixed(0)}%` : "") +
       (P.latOn ? ` · ${LP.n} pts` : "") + ` · ${fpsEma.toFixed(0)} fps`;
     srcNote.textContent = src.label;
+    portsEl.innerHTML =
+      `image <b>${rackImage ? "patched" : "—"}</b> · points <b>${rackPts ? (rackPts.count || 0) : "—"}</b> · ` +
+      `field <b>${rackField ? rackField.w + "×" + rackField.h : "—"}</b> · mask <b>${rackMask ? "patched" : "—"}</b>` +
+      (IN_RACK ? "<br>running inside the Rack" : "");
   }
 }
 
@@ -1902,7 +1822,7 @@ function download(blob, name){
 const stamp = () => new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const $ = id => document.getElementById(id);
 $("bExport").addEventListener("click", () => {
-  const out = Object.assign({ tool:"rewind", version:1 }, P);
+  const out = Object.assign({ tool:"rewind", version:2 }, P);
   if(Drive) out._drive = Drive.serialize();
   download(new Blob([JSON.stringify(out, null, 2)], { type:"application/json" }), "rewind-" + stamp() + ".json");
 });
@@ -1911,14 +1831,16 @@ $("fPreset").addEventListener("change", e => {
   const f = e.target.files[0]; if(!f) return;
   f.text().then(t => { const j = JSON.parse(t);
     for(const k in DEFAULTS) if(j[k] !== undefined) P[k] = j[k];
+    if(j.mosh !== undefined && j.version === 1){ P.hold = j.mosh; P.mosh = DEFAULTS.mosh; }   // v1 "mosh" was block hold
     if(Drive && j._drive) Drive.load(j._drive);
-    buildWindows(); tapeAlloc(); syncUI(); }).catch(err => console.warn("[rewind] preset", err));
+    tapeAlloc(); syncUI(); }).catch(err => console.warn("[rewind] preset", err));
   e.target.value = "";
 });
 $("bCam").addEventListener("click", () => { P.source = "camera"; camState = camState === "failed" ? "off" : camState; startCamera(); syncUI(); });
 $("bMedia").addEventListener("click", () => $("fMedia").click());
 $("fMedia").addEventListener("change", e => { loadMediaFile(e.target.files[0]); e.target.value = ""; });
 $("bStorm").addEventListener("click", () => startStorm());
+$("bSeed").addEventListener("click", () => { P.seed = (Math.round(P.seed) + 1) % 9973; });
 $("bCatch").addEventListener("click", () => { if(P.tapeMode !== "loop"){ P.tapeMode = "loop"; TAPE.base = "loop"; syncUI(); } catchLoop(); });
 $("bReRec").addEventListener("click", () => reRecord());
 $("bLive").addEventListener("click", () => { P.tapeMode = "live"; setBase("live"); syncUI(); });
@@ -1926,7 +1848,9 @@ $("bStut").addEventListener("click", () => startEvent("stutter", true));
 $("bRew").addEventListener("click", () => startEvent("rewind", true));
 $("bPause").addEventListener("click", () => startEvent("pause", true));
 $("bSlow").addEventListener("click", () => startEvent("slow", true));
-$("bShuffle").addEventListener("click", () => { P.guiSeed = (Math.round(P.guiSeed) + 1) % 9973; buildWindows(); });
+$("bKey").addEventListener("click", () => keyframe());
+$("bBloom").addEventListener("click", () => startMoshEvent("bloom", true));
+$("bSmear").addEventListener("click", () => startMoshEvent("smear", true));
 $("bWipe").addEventListener("click", () => wipeTrails());
 $("bPNG").addEventListener("click", () => cv.toBlob(b => b && download(b, "rewind-" + stamp() + ".png")));
 let rec = null, recChunks = [];
@@ -1944,7 +1868,6 @@ $("bRec").addEventListener("click", e => {
 ["dragenter", "dragover"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); document.body.classList.add("dragging"); }));
 ["dragleave", "drop"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if(t === "drop" || e.target === $("dropHint")) document.body.classList.remove("dragging"); }));
 document.addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if(f) loadMediaFile(f); });
-// keys: space = stutter, R = rewind, P = pause, L = catch loop, S = storm
 document.addEventListener("keydown", e => {
   if(e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
   const k = e.key.toLowerCase();
@@ -1952,34 +1875,57 @@ document.addEventListener("keydown", e => {
   else if(k === "r") startEvent("rewind", true);
   else if(k === "p") startEvent("pause", true);
   else if(k === "l") $("bCatch").click();
+  else if(k === "b") startMoshEvent("bloom", true);
+  else if(k === "k") keyframe();
   else if(k === "s") startStorm();
 });
 
 /* ============================ ports ============================
-   in:  image (goes onto the tape like a camera) and points (the lattice).
-   out: the canvas, and the lattice's points in canvas uv, coloured by the
-        current morph. An image cable arriving switches the source to it;
-        releasing it puts back whatever was chosen before.
+   in:  image  → the tape's source, as if it were a camera
+        points → the lattice (Points from: Rack) and a push on the flow
+        field  → motion vectors for the mosh and the flow effects
+        mask   → where the mosh is allowed; where gated glitches land
+   out: out (the picture), points (the lattice, heading = local flow),
+        field (the flow being moshed with, uv/s, 48×27), mask (motion)
+   A cable arriving switches the matching setting to it; releasing it
+   puts back whatever was chosen before.
    ============================================================== */
-function setRackPoints(v){
-  rackPts = v || null;
-  if(rackPts && P.latSrc !== "rack"){ P.latSrc = "rack"; if(!P.latOn) P.latOn = 1; syncUI(); }
-}
 function setRackImage(v){
   rackImage = v || null;
   if(rackImage && P.source !== "rack-image"){ prevSource = P.source; P.source = "rack-image"; syncUI(); }
-  else if(!rackImage && P.source === "rack-image" && prevSource){ P.source = prevSource; prevSource = null; syncUI(); }
+  else if(!rackImage && P.source === "rack-image"){ P.source = prevSource || "demo"; prevSource = null; syncUI(); }
+}
+function setRackPoints(v){
+  rackPts = v || null; PV.ver = -1;
+  if(rackPts && P.latSrc !== "rack"){ prevLatSrc = P.latSrc; P.latSrc = "rack"; syncUI(); }
+  else if(!rackPts && P.latSrc === "rack" && prevLatSrc){ P.latSrc = prevLatSrc; prevLatSrc = null; syncUI(); }
+}
+function setRackField(v){
+  rackField = v && v.data ? v : null;
+  if(rackField && P.flowSrc === "tape"){ prevFlowSrc = P.flowSrc; P.flowSrc = "rack"; syncUI(); }
+  else if(!rackField && prevFlowSrc){ P.flowSrc = prevFlowSrc; prevFlowSrc = null; syncUI(); }
+}
+function setRackMask(v){
+  rackMask = v && v.data ? v : null;
+  if(rackMask && P.moshMask === "off"){ prevMoshMask = "off"; P.moshMask = "inside"; syncUI(); }
+  else if(!rackMask && prevMoshMask){ P.moshMask = prevMoshMask; prevMoshMask = null; syncUI(); }
 }
 if(PT){
   try{ PT.publish({ tool:"rewind", label:"Rewind",
-    outputs:{ out:{ type:"image", get:() => cv }, points:{ type:"points", label:"lattice points", get:() => OUT } },
-    inputs:{ image:{ type:"image", label:"image", set:setRackImage }, points:{ type:"points", label:"points", set:setRackPoints } } }); }
+    outputs:{ out:{ type:"image", get:() => cv },
+      points:{ type:"points", label:"lattice points", get:() => OUT },
+      field:{ type:"field", label:"flow", get:() => FIELD_OUT },
+      mask:{ type:"mask", label:"motion", get:() => FLOW.ownMask || null } },
+    inputs:{ image:{ type:"image", label:"image", set:setRackImage },
+      points:{ type:"points", label:"points", set:setRackPoints },
+      field:{ type:"field", label:"flow", set:setRackField },
+      mask:{ type:"mask", label:"mask", set:setRackMask } } }); }
   catch(e){ console.warn("[rewind] ports", e); }
 }
-// storms and morph as modulation sources, so the rest of a patch can follow them
 if(Drive && Drive.registerSource){
   Drive.registerSource("rewind.storm", "Rewind — storm", () => EV.storm);
   Drive.registerSource("rewind.morph", "Rewind — morph", () => EV.morph);
+  Drive.registerSource("rewind.motion", "Rewind — motion", () => clamp(FLOW.activity * 3, 0, 1));
 }
 
 /* ============================ boot ============================ */
@@ -1989,19 +1935,17 @@ scheduleStorm();
 if(P.source === "camera") startCamera();
 requestAnimationFrame(frame);
 
-/* ============================ dice ============================
-   Roll, blend and evolve the parameters over a show (unlimiter-dice.js).
-   It writes P exactly as the sliders do, so presets keep what it lands on
-   and Drive modulation still rides on top. */
+/* ============================ dice ============================ */
 if(window.UnlimiterDice){
   const diceEl=(k,sel)=>rows[k] ? rows[k].querySelector(sel) : null;
   const dice=UnlimiterDice.create({
     tool:"rewind", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
     params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
     refresh:k=>{ if(bound[k]) bound[k](); },
-    switches:[["palA","Aero palette"],["palB","Sigil palette"],["morphMode","Auto morph"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
-    drive:Drive, off:["exposure","tapeFps","edgeTh","bloomTh","guiAlpha","latAlpha"],
-    ranges:{ morph:[0,1], crush:[0,0.6], noise:[0,0.6], drop:[0,1.2], warp:[0,0.8], split:[0,0.8], mosh:[0,0.25], trails:[0,0.7] }
+    switches:[["palA","Round palette"],["palB","Sigil palette"],["morphMode","Auto morph"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
+    drive:Drive, off:["exposure","tapeFps","edgeTh","bloomTh","latAlpha","flowThresh","flowSmooth","stillTh"],
+    ranges:{ morph:[0,1], crush:[0,0.6], noise:[0,0.6], drop:[0,1.2], warp:[0,0.8], split:[0,0.8], hold:[0,0.25], trails:[0,0.7],
+      moshGain:[0.5,3], refresh:[0,3], leak:[0,0.05] }
   });
   dice.mountPanel(document.getElementById("g-dice"));
   window.__dice=dice;

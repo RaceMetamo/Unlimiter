@@ -277,6 +277,8 @@ const TOOLS = [
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
   { id:"la", file:"lattice.html",      label:"Lattice",      sel:"#gl",   capture:"pull", color:"#c9a2ff",
     prefer:["lkDist","persist","velMax","stWidth"],   boot:[],             accepts:null,       init:"" },
+  { id:"rw", file:"rewind.html",       label:"Rewind",       sel:"#gl",   capture:"pull", color:"#5fe0ff",
+    prefer:["mosh","morph","moshGain","block"],     boot:[],             accepts:null,       init:"" },
   { id:"tc", file:"time-cube.html",    label:"Time Cube",    sel:"#gl",   capture:"pull", color:"#ff7a59",
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
   { id:"mf", file:"manifold.html",     label:"Manifold tool", sel:"#gl",   capture:"push", color:"#7fd1c0",
@@ -296,7 +298,7 @@ const TOOLS = [
 const CORE = new Set(["fw","mw","se","an","ou","fa","ff","tc"]);
 /* how a newly added tool lands in the mix */
 const ADD_MIX = { fw:[1.0,"source-over"], mw:[0.65,"screen"], se:[0.55,"screen"], an:[0.5,"lighter"], ou:[0.6,"screen"], fa:[0.6,"screen"],
-  ff:[0.6,"screen"], tc:[0.5,"screen"], la:[0.7,"screen"], mf:[0.75,"screen"], re:[0.7,"screen"], ws:[0.8,"screen"], gx:[0.8,"screen"], ph:[0.7,"screen"] };
+  ff:[0.6,"screen"], tc:[0.5,"screen"], la:[0.7,"screen"], rw:[0.85,"source-over"], mf:[0.75,"screen"], re:[0.7,"screen"], ws:[0.8,"screen"], gx:[0.8,"screen"], ph:[0.7,"screen"] };
 const BLENDS = ["source-over","screen","lighter","multiply","overlay","difference","soft-light","hard-light"];
 const LS_KEY_V1 = "unlimiter.rack.graph.v1";   // untyped cables — read once, then migrated
 const LS_KEY    = "unlimiter.rack.graph.v2";   // typed {node, port} cables + generator nodes

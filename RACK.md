@@ -131,6 +131,17 @@ Ouroboros's brushes or Flow Weave's emitters with tracked, velocity-coloured poi
 everything that moved) outputs are ordinary masks: patch history into Melted World or Sediment and
 only recent motion melts or deposits.
 
+**Rewind** (`rewind.html`, + Tool) is the datamosh end of it. It takes all four data types:
+**image** becomes its tape's source; **points** draw its lattice and push its flow along their
+direction of travel (tangents if they carry them, otherwise how far they moved); **field** replaces
+or adds to the motion vectors it moshes with (*Flow from*); **mask** says where the mosh is allowed
+(*Mosh inside/outside the mask*) and where gated glitches land. It gives back its picture, its
+lattice points (heading = the local flow), the **field** it is actually moshing with (its own dense
+LK on the frames its tape plays, plus anything patched in — uv per second, 48 × 27) and its motion
+**mask**. So a Vision node's field can drive the mosh, and Rewind's field can steer the Plotter or
+push Flow Weave with the same motion. Every cable switches the matching setting when it arrives and
+puts the old one back when it goes.
+
 ## Signals — the old Control Surface, inside the graph
 
 There is one graph. **+ Signal ▾** adds three kinds of node, all wired with
