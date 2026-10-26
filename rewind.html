@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rewind — chrome, tape and sigils</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0;white-space:nowrap}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #mMeter{position:relative;width:150px;height:8px;border-radius:8px;flex:none;
+    background:linear-gradient(90deg,#bff3ff 0%,#3cb6ea 30%,#2b5aa8 52%,#1a1a1a 70%,#39ff6a 100%);opacity:.9}
+  #mMeter i{position:absolute;top:-3px;width:3px;height:14px;background:#fff;border-radius:2px;left:0;
+    box-shadow:0 0 0 1px #000}
+  #mMeter b{position:absolute;top:-3px;height:14px;left:0;width:0;border:1px solid rgba(255,255,255,.35);border-radius:3px}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto;text-align:right}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px;position:relative}
+  #gl{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#000}
+  #srcNote{position:absolute;left:34px;bottom:30px;font-family:var(--mono);font-size:11px;color:var(--dim);
+    background:rgba(16,18,20,.75);padding:4px 8px;border-radius:var(--radius);pointer-events:none}
+  #srcNote:empty{display:none}
+  #dropHint{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(20,22,24,.86);z-index:50;font-size:16px;color:var(--accent);border:2px dashed var(--accent)}
+  body.dragging #dropHint{display:flex}
+
+  #panel{width:352px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  .group{border-bottom:1px solid var(--line)}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:28px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:56px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--accent);margin-top:-4.5px;border:none}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:none}
+  .morphrow input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:6px;
+    background:linear-gradient(90deg,#bff3ff 0%,#3cb6ea 30%,#2b5aa8 52%,#1a1a1a 70%,#39ff6a 100%)}
+  .morphrow input[type=range]::-moz-range-track{height:6px;border-radius:6px;
+    background:linear-gradient(90deg,#bff3ff 0%,#3cb6ea 30%,#2b5aa8 52%,#1a1a1a 70%,#39ff6a 100%)}
+  .morphrow input[type=range]::-webkit-slider-thumb{width:14px;height:14px;margin-top:-4px;background:#fff;box-shadow:0 0 0 1px #000}
+  select,input[type=text]{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-size:12px;font-family:inherit}
+  input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.on{border-color:var(--accent);color:var(--accent)}
+  .btnrow{display:flex;gap:6px;padding:6px 0;flex-wrap:wrap}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
+    border-top:1px solid var(--line);margin-top:8px}
+  #footer{border-top:1px solid var(--line);padding:12px 16px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Rewind <span>— chrome, tape and sigils</span></h1>
+    <div id="mMeter" title="Where the look sits right now, aero (left) to sigil (right). The box is the morph slider; the white tick is the morph after Evolve and storms."><b></b><i></i></div>
+    <div id="status">starting</div>
+  </div>
+  <div id="canvasWrap"><canvas id="gl"></canvas><div id="srcNote"></div></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+    <details class="group" open>
+      <summary>Source<span class="chev"></span></summary>
+      <div class="body" id="g-src"></div>
+    </details>
+    <details class="group" open>
+      <summary>Morph — aero ↔ sigil<span class="chev"></span></summary>
+      <div class="body" id="g-morph"></div>
+    </details>
+    <details class="group" open>
+      <summary>Looks<span class="chev"></span></summary>
+      <div class="body" id="g-look"></div>
+    </details>
+    <details class="group" open>
+      <summary>Evolve — drift &amp; storms<span class="chev"></span></summary>
+      <div class="body" id="g-ev"></div>
+    </details>
+    <details class="group" open>
+      <summary>Tape — loop, stutter, rewind<span class="chev"></span></summary>
+      <div class="body" id="g-tape"></div>
+    </details>
+    <details class="group">
+      <summary>VHS signal<span class="chev"></span></summary>
+      <div class="body" id="g-vhs"></div>
+    </details>
+    <details class="group">
+      <summary>Liquid &amp; chrome<span class="chev"></span></summary>
+      <div class="body" id="g-liq"></div>
+    </details>
+    <details class="group">
+      <summary>Glitch<span class="chev"></span></summary>
+      <div class="body" id="g-gl"></div>
+    </details>
+    <details class="group">
+      <summary>Sigils — edges &amp; glyph rain<span class="chev"></span></summary>
+      <div class="body" id="g-sig"></div>
+    </details>
+    <details class="group">
+      <summary>Skins — player windows &amp; OSD<span class="chev"></span></summary>
+      <div class="body" id="g-gui"></div>
+    </details>
+    <details class="group">
+      <summary>Lattice — orbs to runes<span class="chev"></span></summary>
+      <div class="body" id="g-lat"></div>
+    </details>
+    <details class="group">
+      <summary>Glow &amp; tube<span class="chev"></span></summary>
+      <div class="body" id="g-post"></div>
+    </details>
+    <details class="group">
+      <summary>Display<span class="chev"></span></summary>
+      <div class="body" id="g-disp"></div>
+    </details>
+    <details class="group">
+      <summary>Dice — roll &amp; evolve<span class="chev"></span></summary>
+      <div class="body" id="g-dice"></div>
+    </details>
+    <details class="group">
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+  </div>
+  <div id="footer">
+    <div class="btnrow">
+      <button class="primary" id="bPNG">PNG</button>
+      <button class="primary" id="bRec">● Record</button>
+    </div>
+  </div>
+</div>
+
+<div id="dropHint">Drop a video or image</div>
+<input type="file" id="fMedia" accept="video/*,image/*" class="hidden">
+<input type="file" id="fPreset" accept="application/json,.json" class="hidden">
+
+<script src="unlimiter-camera.js"></script>
+<script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
+<script src="unlimiter-ports.js"></script>
+<script src="unlimiter-vision.js"></script>
+<script>
+"use strict";
+/* ============================================================
+   REWIND
+   A late-90s / early-2000s signal chain, built on Lattice's base.
+
+   source → TAPE → one big pass → glow & tube → screen
+     TAPE    a ring of up to 120 low-res frames. The play head reads it
+             live, loops a stretch of it, stutters, pauses, rewinds and
+             fast-forwards back to live. In Loop the head can overdub
+             the processed picture back onto the tape, so the loop
+             wears down a generation every pass.
+     PASS    tracking wobble, head switching, slice tears, block
+             glitches, domain-warped liquid, RGB split, chroma bleed,
+             ghosting, datamosh holds, chrome reflection, palette map,
+             edges, glyph rain, the overlay, tape age, noise, dropouts,
+             crush and dither.
+     OVERLAY player skins, installer dialogs, a VCR OSD and a lattice
+             of tracked points (Lattice's tracker, run on what the
+             tape is actually playing) — drawn in 2D, then glitched
+             with everything else.
+
+   One axis runs through all of it: MORPH. At 0 everything is round,
+   glossy and clean — bubbles, capsules, soft chrome, sky palettes.
+   At 1 it is sharp — slivers, chamfers, stepped warp, banded chrome,
+   hard edges and runes. Evolve moves that axis (and the direction the
+   glitches travel) over time; storms push everything at once.
+   ============================================================ */
+
+const PT = window.UnlimiterPorts || null;
+const UV = window.UnlimiterVision || null;
+
+/* ============================ palettes ============================ */
+const PAL_A = {
+  "Frutiger sky": [[0.02,0.12,0.35],[0.00,0.42,0.85],[0.25,0.74,0.96],[0.55,0.88,0.45],[0.97,1.00,1.00]],
+  "Aqua glass":   [[0.00,0.09,0.18],[0.00,0.38,0.55],[0.10,0.74,0.82],[0.62,0.95,0.95],[1.00,1.00,1.00]],
+  "Bubblegum":    [[0.15,0.05,0.30],[0.55,0.30,0.90],[1.00,0.45,0.75],[0.60,0.90,1.00],[1.00,1.00,1.00]],
+  "Chrome":       [[0.04,0.05,0.09],[0.33,0.36,0.44],[0.78,0.82,0.90],[0.50,0.58,0.72],[1.00,1.00,1.00]],
+  "Lime OS":      [[0.02,0.18,0.05],[0.18,0.55,0.10],[0.60,0.88,0.20],[0.85,1.00,0.60],[1.00,1.00,1.00]],
+  "Sunset CD":    [[0.10,0.02,0.20],[0.55,0.10,0.45],[1.00,0.50,0.30],[1.00,0.85,0.45],[1.00,1.00,0.95]]
+};
+const PAL_B = {
+  "Matrix":        [[0.00,0.00,0.00],[0.00,0.14,0.03],[0.00,0.55,0.15],[0.30,1.00,0.40],[0.85,1.00,0.85]],
+  "Blood rune":    [[0.00,0.00,0.00],[0.25,0.00,0.02],[0.75,0.00,0.08],[1.00,0.28,0.20],[1.00,0.90,0.85]],
+  "Acid":          [[0.00,0.00,0.00],[0.10,0.00,0.20],[0.90,0.00,0.60],[0.70,1.00,0.00],[1.00,1.00,1.00]],
+  "UV":            [[0.00,0.00,0.02],[0.15,0.00,0.35],[0.40,0.10,1.00],[0.00,0.90,1.00],[1.00,1.00,1.00]],
+  "Amber terminal":[[0.00,0.00,0.00],[0.20,0.08,0.00],[0.80,0.40,0.00],[1.00,0.75,0.20],[1.00,0.95,0.80]],
+  "Ice wire":      [[0.00,0.00,0.00],[0.05,0.08,0.12],[0.35,0.45,0.55],[0.85,0.95,1.00],[1.00,1.00,1.00]]
+};
+
+/* ============================ parameters ============================ */
+const DEFAULTS = {
+  // source
+  source:"demo", mirror:1, fit:"cover",
+  // morph
+  morph:0, palA:"Frutiger sky", palB:"Matrix", palMix:0.25,
+  // evolve
+  morphMode:"off", morphPeriod:24, morphDepth:1, stormRate:3, stormLen:2.5, stormDepth:1.2, stormMorph:0.3,
+  drift:0, travel:0.05,
+  // tape
+  tapeMode:"live", tapeLen:48, tapeFps:30, tapeRes:480, chaos:1.5, evLen:1.6,
+  evStutter:1, evRewind:1, evPause:1, evSlow:1, stutLen:4, speed:1, overdub:0, reRec:0, blendF:0.5,
+  // vhs
+  track:0.2, head:0.6, bleed:0.45, ghost:0.2, noise:0.2, drop:0.3, age:0.2,
+  // liquid & chrome
+  warp:0.2, warpScale:1.2, warpSpeed:0.15, chrome:0, soft:2.5, melt:0.3, relief:1, gloss:24, bands:7,
+  // glitch
+  block:0.1, blockSize:0.12, rate:6, split:0.3, tear:0.12, mosh:0.03, trails:0, crush:0, dither:0.6,
+  // sigils
+  edge:0.15, edgeTh:0.12, glyph:0.6, glyphPx:16, rain:0.6, glyphImg:0.5, glyphDim:0.5,
+  // skins
+  guiOn:1, guiCount:3, guiScale:1, guiAlpha:0.92, guiWander:0.35, guiTrail:0, osd:1, guiSeed:7,
+  marquee:"UNLIMITER ★ REWIND ★ CHROME DREAMS ★ BE KIND REWIND ★ ",
+  // lattice
+  latOn:0, latSrc:"tracked", latN:90, latReach:0.16, latK:3, latWidth:1.4, latAlpha:0.8, latNode:5, latRunes:0.35,
+  // glow & tube
+  bloom:0.3, bloomTh:0.72, exposure:1, scan:0.2, curve:0.12, vig:0.3,
+  // display
+  res:"1280x720"
+};
+let P = Object.assign({}, DEFAULTS);
+let Q = P;
+
+const SOURCE_KEYS = new Set(["source","mirror","fit","res","marquee","tapeRes","guiSeed"]);
+const LOOKS = {
+  "Aero dream": {},
+  "Liquid chrome": { chrome:1, soft:3, melt:0.55, relief:1.4, gloss:30, palA:"Chrome", palMix:0.15, warp:0.45, warpSpeed:0.2,
+                     block:0.05, bloom:0.35, guiCount:1, edge:0.05 },
+  "Tape loop": { tapeMode:"loop", tapeLen:60, overdub:0.25, chaos:1, track:0.45, bleed:0.7, ghost:0.35, age:0.55,
+                 noise:0.35, drop:0.6, curve:0.25, scan:0.4, palMix:0.1 },
+  "Warez cascade": { guiCount:6, guiTrail:14, guiWander:0.6, morph:0.45, palA:"Bubblegum", palB:"Acid", palMix:0.3,
+                     block:0.15, crush:0.25, dither:0.8, osd:0 },
+  "Cyber sigil": { morph:1, palB:"Matrix", palMix:0.7, glyph:0.85, glyphImg:0.7, glyphDim:0.6, edge:0.9, edgeTh:0.1,
+                   crush:0.55, dither:0.8, block:0.18, tear:0.35, latOn:1, guiCount:2, bloom:0.35, warp:0.15 },
+  "Blood rune": { morph:0.9, palB:"Blood rune", palMix:0.8, glyph:0.4, edge:1, tear:0.5, split:0.6, mosh:0.1,
+                  latOn:1, latRunes:0.7, crush:0.4 },
+  "Morph cycle": { morphMode:"sine", morphPeriod:20, morphDepth:1, stormRate:6, stormMorph:0.4, drift:8, latOn:1,
+                   guiCount:3, glyph:0.6, edge:0.5, chrome:0.35, palMix:0.4 },
+  "Rewind storm": { chaos:6, evLen:2, stormRate:12, stormDepth:2, drift:20, travel:0.2, track:0.5, mosh:0.12, block:0.2,
+                    morphMode:"storm", morphDepth:0.8 },
+  "Datamosh": { mosh:0.35, trails:0.6, block:0.25, blockSize:0.08, morph:0.7, split:0.5, rate:3, palMix:0.1, glyph:0, guiCount:0, osd:0 }
+};
+
+/* ============================ drive ============================ */
+const cv = document.getElementById("gl");
+const Drive = (window.UnlimiterDrive)
+  ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
+  : null;
+const NO_MOD = new Set(["tapeLen","tapeFps","tapeRes","guiCount","latN","latK","guiTrail","stutLen","reRec","guiSeed"]);
+let GRP = "";
+function registerMod(key,label,min,max){
+  if(!Drive || NO_MOD.has(key)) return;
+  Drive.registerTarget(key, GRP ? GRP+" — "+label : label, min, max);
+}
+
+/* ============================ control builders ============================ */
+const bound = {}, rows = {};
+function row(parent,label,nodes,key){
+  const r=document.createElement("div"); r.className="row";
+  const l=document.createElement("label"); l.textContent=label;
+  const c=document.createElement("div"); c.className="ctl";
+  nodes.forEach(n=>c.appendChild(n));
+  r.appendChild(l); r.appendChild(c); parent.appendChild(r);
+  if(key) rows[key]=r;
+  return r;
+}
+function note(p,t,id){const d=document.createElement("div");d.className="note";d.textContent=t;if(id)d.id=id;p.appendChild(d);return d;}
+function subhead(p,t){const d=document.createElement("div");d.className="subhead";d.textContent=t;p.appendChild(d);return d;}
+function fmt(v,step){
+  if(step>=1) return String(Math.round(v));
+  const dec=Math.max(0,Math.round(-Math.log10(step)));
+  return v.toFixed(Math.min(dec,4));
+}
+function slider(parent,key,label,min,max,step,suffix){
+  const i=document.createElement("input");
+  i.type="range"; i.min=min; i.max=max; i.step=step; i.value=P[key];
+  const v=document.createElement("span"); v.className="val";
+  const show=()=>v.textContent=fmt(Number(P[key]),step)+(suffix||"");
+  show();
+  i.addEventListener("input",()=>{P[key]=Number(i.value);show();});
+  bound[key]=()=>{i.value=P[key];show();};
+  registerMod(key,label,min,max);
+  return row(parent,label,[i,v],key);
+}
+function select(parent,key,label,opts,onChange){
+  const s=document.createElement("select");
+  opts.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;s.appendChild(o);});
+  s.value=P[key];
+  s.addEventListener("change",()=>{P[key]=isNaN(+s.value)?s.value:+s.value;if(onChange)onChange();vis();});
+  bound[key]=()=>{s.value=P[key];};
+  return row(parent,label,[s],key);
+}
+function check(parent,key,label){
+  const c=document.createElement("input"); c.type="checkbox"; c.checked=!!P[key];
+  c.addEventListener("change",()=>{P[key]=c.checked?1:0;vis();});
+  bound[key]=()=>{c.checked=!!P[key];};
+  return row(parent,label,[c],key);
+}
+function textIn(parent,key,label){
+  const i=document.createElement("input"); i.type="text"; i.value=P[key]; i.spellcheck=false;
+  i.addEventListener("input",()=>{P[key]=i.value;});
+  bound[key]=()=>{i.value=P[key];};
+  return row(parent,label,[i],key);
+}
+function buttons(parent,list){
+  const d=document.createElement("div"); d.className="btnrow";
+  list.forEach(([id,t])=>{const b=document.createElement("button");b.id=id;b.textContent=t;d.appendChild(b);});
+  parent.appendChild(d); return d;
+}
+function syncUI(){ for(const k in bound) bound[k](); vis(); }
+
+/* ============================ panel ============================ */
+const IMAGE_SOURCES = new Set(["camera","video","image","demo","rack-image"]);
+GRP="Source";
+const gS=document.getElementById("g-src");
+select(gS,"source","Source",[["demo","Demo — chrome sky"],["camera","Camera"],["video","Video file"],["image","Image file"],
+  ["rack-image","Rack: image cable"]],()=>{ if(P.source==="camera") startCamera(); });
+const camBtns=buttons(gS,[["bCam","Start camera"],["bMedia","Load video / image…"]]);
+check(gS,"mirror","Mirror camera");
+select(gS,"fit","Fit",[["cover","Fill the frame (crop)"],["contain","Whole picture (bars)"],["stretch","Stretch"]]);
+note(gS,"Everything goes onto the tape first, so the source can be anything — the tape is what gets looped, stuttered and rewound. Drop a file anywhere to load it.");
+
+GRP="Morph";
+const gMo=document.getElementById("g-morph");
+slider(gMo,"morph","Morph",0,1,0.001,"").classList.add("morphrow");
+select(gMo,"palA","Aero palette",Object.keys(PAL_A).map(n=>[n,n]));
+select(gMo,"palB","Sigil palette",Object.keys(PAL_B).map(n=>[n,n]));
+slider(gMo,"palMix","Palette map",0,1,0.01,"");
+note(gMo,"One axis under every effect. At 0 the glitches are round — bubble lenses, ripples, smooth liquid, soft chrome, capsule windows, glowing orbs. At 1 the same glitches are sharp — slivers, slice tears, stepped warp, banded chrome, hard edges, chamfered windows, 45° runes and glyph rain. Palette map recolours the picture by brightness through a blend of the two palettes.");
+
+GRP="Looks";
+const gL=document.getElementById("g-look");
+P.look="Aero dream";
+select(gL,"look","Look",Object.keys(LOOKS).map(n=>[n,n]),()=>applyLook(P.look));
+buttons(gL,[["bExport","Export preset"],["bImport","Import preset"]]);
+note(gL,"A look sets how things are drawn and how the tape behaves. It leaves the source, fit, resolution and your marquee text alone.");
+
+GRP="Evolve";
+const gE=document.getElementById("g-ev");
+select(gE,"morphMode","Auto morph",[["off","Off — slider only"],["sine","Sine — slow breathe"],["drift","Drift — wandering"],
+  ["steps","Steps — hold, then snap"],["storm","Storms — sharpen on each storm"]]);
+slider(gE,"morphPeriod","Period",2,120,0.5," s");
+slider(gE,"morphDepth","Depth",0,1,0.01,"");
+subhead(gE,"Storms");
+slider(gE,"stormRate","Storms",0,30,0.1," /min");
+slider(gE,"stormLen","Storm length",0.2,10,0.05," s");
+slider(gE,"stormDepth","Storm force",0,3,0.01,"");
+slider(gE,"stormMorph","Storm sharpens",0,1,0.01,"");
+buttons(gE,[["bStorm","Storm now"]]);
+subhead(gE,"Travel");
+slider(gE,"drift","Turn",-90,90,0.5,"°/s");
+slider(gE,"travel","Travel",0,1,0.005,"");
+note(gE,"Auto morph moves the look between the slider and the other end over time. Storms arrive at random — the rate is an average — and push the glitches, the warp, the tracking and the tape events all at once, and can tip the look toward sigil while they last. Turn rotates the direction the tears, splits, slivers and bubbles run in; Travel slides the whole glitch pattern along that direction, so the damage moves across the picture instead of flickering in place.");
+
+GRP="Tape";
+const gT=document.getElementById("g-tape");
+select(gT,"tapeMode","Mode",[["live","Live — with tape events"],["loop","Loop — play a stretch over and over"]]);
+buttons(gT,[["bCatch","Catch loop"],["bReRec","Re-record"],["bLive","Back to live"]]);
+buttons(gT,[["bStut","Stutter"],["bRew","Rewind"],["bPause","Pause"],["bSlow","Slow"]]);
+slider(gT,"tapeLen","Loop length",4,118,1," frames");
+slider(gT,"tapeFps","Tape rate",6,60,1," fps");
+slider(gT,"speed","Loop speed",-3,3,0.01,"×");
+slider(gT,"overdub","Overdub",0,0.9,0.01,"");
+slider(gT,"reRec","Re-record every",0,32,1," loops");
+subhead(gT,"Events");
+slider(gT,"chaos","Events",0,12,0.05," /10s");
+slider(gT,"evLen","Event length",0.2,5,0.05," s");
+slider(gT,"stutLen","Stutter frames",2,16,1,"");
+check(gT,"evStutter","Stutter");
+check(gT,"evRewind","Rewind");
+check(gT,"evPause","Pause jitter");
+check(gT,"evSlow","Slow motion");
+slider(gT,"blendF","Frame blend",0,1,0.01,"");
+select(gT,"tapeRes","Tape resolution",[[360,"360 — worn"],[480,"480 — VHS"],[640,"640 — S-VHS"]],()=>tapeAlloc());
+note(gT,"The tape holds the last 120 frames at the tape rate. Catch loop grabs the last stretch you just saw and loops it; Re-record tapes a fresh stretch. Overdub writes the processed picture back onto the loop each pass, so the glitches, chrome and colour build up generation on generation — the loop wears and mutates. Loop speed can run backwards. Events happen at random in both modes; after a rewind, pause or slow-mo in Live the head fast-forwards back to now.");
+
+GRP="VHS";
+const gV=document.getElementById("g-vhs");
+slider(gV,"track","Tracking",0,2,0.01,"");
+slider(gV,"head","Head switching",0,2,0.01,"");
+slider(gV,"bleed","Chroma bleed",0,1,0.01,"");
+slider(gV,"ghost","Ghosting",0,1,0.01,"");
+slider(gV,"noise","Snow",0,1.5,0.01,"");
+slider(gV,"drop","Dropouts",0,3,0.01,"");
+slider(gV,"age","Tape age",0,1,0.01,"");
+note(gV,"Tracking wobbles and tears the picture line by line, with a rolling band. Head switching is the ragged strip along the bottom of every real VHS frame. Chroma bleed smears colour sideways while brightness stays sharp, exactly as the format stored it.");
+
+GRP="Liquid";
+const gQ=document.getElementById("g-liq");
+slider(gQ,"warp","Liquid warp",0,2,0.01,"");
+slider(gQ,"warpScale","Warp scale",0.1,5,0.01,"");
+slider(gQ,"warpSpeed","Warp flow",0,2,0.01,"");
+subhead(gQ,"Chrome");
+slider(gQ,"chrome","Chrome",0,1,0.01,"");
+slider(gQ,"soft","Melt softness",0,5,0.05,"");
+slider(gQ,"melt","Mercury",0,1,0.01,"");
+slider(gQ,"relief","Relief",0,4,0.01,"");
+slider(gQ,"gloss","Gloss",2,120,1,"");
+slider(gQ,"bands","Chrome bands",2,24,1,"");
+note(gQ,"Chrome treats the picture's brightness as a height field, takes its slope as a surface, and reflects a sky. Softness melts that surface into blobs before reflecting; Mercury pushes it toward pooled liquid metal. Aero reflects a soft sky with a grassy ground; halfway the horizon goes hard like 90s chrome lettering; sigil reflects hard bands.");
+
+GRP="Glitch";
+const gG=document.getElementById("g-gl");
+slider(gG,"block","Blocks",0,1,0.005,"");
+slider(gG,"blockSize","Block size",0.02,0.5,0.005,"");
+slider(gG,"rate","Glitch rate",0.5,30,0.1," Hz");
+slider(gG,"split","RGB split",0,2,0.01,"");
+slider(gG,"tear","Tears",0,1,0.01,"");
+slider(gG,"mosh","Datamosh",0,1,0.005,"");
+slider(gG,"trails","Trails",0,0.97,0.005,"");
+slider(gG,"crush","Bit crush",0,1,0.01,"");
+slider(gG,"dither","Dither",0,1.5,0.01,"");
+note(gG,"Blocks become magnifying bubbles on the aero side and displaced slivers on the sigil side. Tears are ripples that turn into hard slice offsets. RGB split runs out from the centre like a lens when round and along the travel direction when sharp. Datamosh holds blocks of the previous frame and lets them smear.");
+
+GRP="Sigils";
+const gSg=document.getElementById("g-sig");
+slider(gSg,"edge","Edges",0,1.5,0.01,"");
+slider(gSg,"edgeTh","Edge threshold",0.01,0.6,0.005,"");
+subhead(gSg,"Glyph rain");
+slider(gSg,"glyph","Glyphs",0,1,0.01,"");
+slider(gSg,"glyphPx","Glyph size",6,64,1," px");
+slider(gSg,"rain","Rain speed",0,3,0.01,"");
+slider(gSg,"glyphImg","Follow picture",0,1,0.01,"");
+slider(gSg,"glyphDim","Darken behind",0,1,0.01,"");
+note(gSg,"Edges glow soft and white when round and turn to hard lines in the sigil colour when sharp. Glyphs only appear as the morph goes past about a third — each one is a rune built from a 3×3 grid of strokes, mostly mirrored, so they read as sigils rather than letters. Follow picture lets the image decide where they light up.");
+
+GRP="Skins";
+const gU=document.getElementById("g-gui");
+check(gU,"guiOn","Show windows");
+slider(gU,"guiCount","Windows",0,8,1,"");
+slider(gU,"guiScale","Size",0.5,2.5,0.01,"×");
+slider(gU,"guiAlpha","Opacity",0,1,0.01,"");
+slider(gU,"guiWander","Wander",0,1.5,0.01,"");
+slider(gU,"guiTrail","Window trails",0,24,1,"");
+textIn(gU,"marquee","Marquee text");
+buttons(gU,[["bShuffle","Shuffle windows"]]);
+check(gU,"osd","VCR on-screen display");
+note(gU,"A player with a scrolling marquee, an equaliser, an installer progress bar, a hex dump, a scope and a dialog. They morph with everything else — glossy capsules with soft shadows and rounded buttons at one end, chamfered black panels with bracketed corners and runic titles at the other. They sit under the glitches, so they tear and bleed with the picture. Window trails leave the stuck-drag cascade behind them. The spectrum and scope follow Drive's audio when it is on.");
+
+GRP="Lattice";
+const gLt=document.getElementById("g-lat");
+check(gLt,"latOn","Draw lattice");
+select(gLt,"latSrc","Points from",[["tracked","Tracked — what the tape is playing"],["drift","Drifting"],["rack","Rack: points cable"]]);
+slider(gLt,"latN","Points",10,300,1,"");
+slider(gLt,"latReach","Reach",0.02,0.5,0.005,"");
+slider(gLt,"latK","Links per point",1,8,1,"");
+slider(gLt,"latWidth","Width",0.3,6,0.05," px");
+slider(gLt,"latAlpha","Opacity",0,1,0.01,"");
+slider(gLt,"latNode","Node size",0,20,0.1," px");
+slider(gLt,"latRunes","Runes",0,1,0.01,"");
+note(gLt,"Lattice's tracker runs on the frame the tape is playing, so loops and stutters drag the points with them. Round, the links bow into curves and every point is a glossy orb; sharp, the links fold into 45° circuit traces and the points become diamonds — and some of them runes.");
+
+GRP="Glow";
+const gP=document.getElementById("g-post");
+slider(gP,"bloom","Bloom",0,2,0.01,"");
+slider(gP,"bloomTh","Bloom threshold",0,1,0.01,"");
+slider(gP,"exposure","Exposure",0.3,2.5,0.01,"");
+slider(gP,"scan","Scanlines",0,1,0.01,"");
+slider(gP,"curve","Tube curve",0,1,0.01,"");
+slider(gP,"vig","Vignette",0,1,0.01,"");
+
+GRP="Display";
+const gD=document.getElementById("g-disp");
+select(gD,"res","Resolution",[["1280x720","1280 × 720"],["1920x1080","1920 × 1080"],["1080x1080","1080 × 1080"],["1080x1920","1080 × 1920 (vertical)"],["720x480","720 × 480 (NTSC)"]]);
+buttons(gD,[["bWipe","Clear trails"]]);
+
+const drivePanel=document.getElementById("g-drive");
+if(Drive){ Drive.mountPanel(drivePanel); }
+else drivePanel.innerHTML='<div class="note">unlimiter-drive.js was not found. It must sit in the same folder, served over http://localhost or https.</div>';
+
+function vis(){
+  const src=P.source;
+  const show=(k,on)=>{ if(rows[k]) rows[k].classList.toggle("hidden",!on); };
+  camBtns.classList.toggle("hidden",!(src==="camera"||src==="video"||src==="image"));
+  show("mirror",src==="camera");
+  const auto=P.morphMode!=="off";
+  ["morphPeriod","morphDepth"].forEach(k=>show(k,auto));
+  show("morphPeriod",auto&&P.morphMode!=="storm");
+  const loop=P.tapeMode==="loop";
+  ["speed","overdub","reRec"].forEach(k=>show(k,loop));
+  document.getElementById("bReRec").classList.toggle("hidden",!loop);
+  ["latSrc","latN","latReach","latK","latWidth","latAlpha","latNode","latRunes"].forEach(k=>show(k,!!P.latOn));
+  ["guiCount","guiScale","guiAlpha","guiWander","guiTrail","marquee"].forEach(k=>show(k,!!P.guiOn));
+  document.getElementById("bShuffle").parentNode.classList.toggle("hidden",!P.guiOn);
+}
+
+/* ============================ small maths ============================ */
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const fract=x=>x-Math.floor(x);
+const hash1=x=>fract(Math.sin(x*127.1+311.7)*43758.5453);
+function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function noise1(x){ const i=Math.floor(x), f=x-i, u=f*f*(3-2*f); return lerp(hash1(i),hash1(i+1),u); }
+const mixC=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
+const css=(c,a)=>`rgba(${Math.round(clamp(c[0],0,1)*255)},${Math.round(clamp(c[1],0,1)*255)},${Math.round(clamp(c[2],0,1)*255)},${a===undefined?1:clamp(a,0,1)})`;
+const palA=()=>PAL_A[Q.palA]||PAL_A["Frutiger sky"];
+const palB=()=>PAL_B[Q.palB]||PAL_B["Matrix"];
+
+/* ============================ sources ============================ */
+const camVideo = document.createElement("video"); camVideo.muted = true; camVideo.playsInline = true;
+const fileVideo = document.createElement("video"); fileVideo.muted = true; fileVideo.playsInline = true; fileVideo.loop = true;
+let fileImage = null;
+let camState = "off", camErr = "";
+function startCamera(){
+  if(camState === "live" || camState === "asking") return;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camState = "failed"; camErr = "no camera API here"; return; }
+  camState = "asking";
+  navigator.mediaDevices.getUserMedia({ video:{ width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false })
+    .then(s => { camVideo.srcObject = s; return camVideo.play(); })
+    .then(() => { camState = "live"; })
+    .catch(e => { camState = "failed"; camErr = (e && e.name) || "blocked"; });
+}
+function loadMediaFile(file){
+  if(!file) return;
+  if(/^video\//.test(file.type)){
+    try{ if(fileVideo.src) URL.revokeObjectURL(fileVideo.src); }catch(e){}
+    fileVideo.src = URL.createObjectURL(file);
+    fileVideo.play().catch(()=>{});
+    P.source = "video"; syncUI();
+  } else if(/^image\//.test(file.type)){
+    const img = new Image();
+    img.onload = () => { fileImage = img; P.source = "image"; syncUI(); };
+    img.src = URL.createObjectURL(file);
+  }
+}
+
+/* the demo: a Frutiger Aero desktop — sky, hills, bubbles, a glass orb, a chrome swoosh */
+const demo = document.createElement("canvas"); demo.width = 640; demo.height = 360;
+const dg = demo.getContext("2d");
+const BUBS = Array.from({length:14}, (_, i) => ({ x:hash1(i*3.1), s:0.04 + hash1(i*7.7)*0.11, v:0.03 + hash1(i*5.3)*0.07, p:hash1(i*9.9), w:hash1(i*1.3)*6 }));
+function drawDemo(t){
+  const W = 640, H = 360, g = dg;
+  let gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, "#0c4fb8"); gr.addColorStop(0.45, "#4fb6f0"); gr.addColorStop(0.72, "#e6fbff"); gr.addColorStop(1, "#e6fbff");
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  // sun glow
+  gr = g.createRadialGradient(500, 60, 4, 500, 60, 220);
+  gr.addColorStop(0, "rgba(255,255,255,0.95)"); gr.addColorStop(0.2, "rgba(255,255,240,0.45)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  // light rays
+  g.save(); g.translate(500, 60); g.rotate(t * 0.05);
+  for(let k = 0; k < 12; k++){ g.rotate(Math.PI / 6); g.fillStyle = "rgba(255,255,255,0.06)"; g.beginPath(); g.moveTo(0, 0); g.lineTo(520, -40); g.lineTo(520, 40); g.fill(); }
+  g.restore();
+  // hills
+  const hill = (base, amp, f, ph, c1, c2) => {
+    g.beginPath(); g.moveTo(0, H);
+    for(let x = 0; x <= W; x += 8) g.lineTo(x, base + Math.sin(x * f + ph) * amp + Math.sin(x * f * 2.3 + ph * 1.7) * amp * 0.3);
+    g.lineTo(W, H); g.closePath();
+    const hg = g.createLinearGradient(0, base - amp, 0, H); hg.addColorStop(0, c1); hg.addColorStop(1, c2);
+    g.fillStyle = hg; g.fill();
+    g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 2; g.stroke();
+  };
+  hill(255, 22, 0.008, t * 0.15, "#9be35a", "#2f8f2a");
+  hill(300, 16, 0.012, 2 + t * 0.22, "#6fd043", "#1d6b1d");
+  // chrome swoosh
+  g.save(); g.globalCompositeOperation = "source-over";
+  for(let k = 0; k < 3; k++){
+    g.beginPath();
+    for(let x = -20; x <= W + 20; x += 10){
+      const y = 170 + Math.sin(x * 0.011 + t * 0.9 + k * 0.5) * 55 + k * 10;
+      if(x === -20) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    const sg = g.createLinearGradient(0, 110, 0, 240);
+    sg.addColorStop(0, "rgba(255,255,255,0.9)"); sg.addColorStop(0.5, "rgba(160,200,235,0.7)"); sg.addColorStop(1, "rgba(30,80,160,0.6)");
+    g.strokeStyle = sg; g.lineWidth = 14 - k * 4; g.lineCap = "round"; g.stroke();
+  }
+  g.restore();
+  // glass orb
+  const ox = 200 + Math.sin(t * 0.7) * 90, oy = 150 + Math.abs(Math.sin(t * 1.4)) * -50 + 40, orr = 58;
+  gr = g.createRadialGradient(ox - 15, oy - 20, 4, ox, oy, orr);
+  gr.addColorStop(0, "#d9fbff"); gr.addColorStop(0.35, "#38c7ef"); gr.addColorStop(0.85, "#0a4aa8"); gr.addColorStop(1, "#06296a");
+  g.fillStyle = gr; g.beginPath(); g.arc(ox, oy, orr, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "rgba(255,255,255,0.75)"; g.beginPath(); g.ellipse(ox - 8, oy - orr * 0.55, orr * 0.6, orr * 0.28, 0, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 2; g.beginPath(); g.arc(ox, oy, orr - 1, 0, Math.PI * 2); g.stroke();
+  // bubbles
+  BUBS.forEach(b => {
+    const y = H + 40 - fract(t * b.v + b.p) * (H + 80), x = b.x * W + Math.sin(t + b.w) * 18, r = b.s * H * 0.5;
+    const bg = g.createRadialGradient(x, y, r * 0.2, x, y, r);
+    bg.addColorStop(0, "rgba(255,255,255,0.02)"); bg.addColorStop(0.8, "rgba(170,240,255,0.25)"); bg.addColorStop(1, "rgba(255,255,255,0.75)");
+    g.fillStyle = bg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(255,255,255,0.8)"; g.beginPath(); g.ellipse(x - r * 0.35, y - r * 0.4, r * 0.28, r * 0.14, -0.6, 0, Math.PI * 2); g.fill();
+  });
+  // sparkles
+  for(let k = 0; k < 10; k++){
+    const a = fract(t * 0.3 + hash1(k * 4.4)), x = hash1(k * 2.2) * W, y = hash1(k * 6.6) * H * 0.7, s = Math.sin(a * Math.PI) * 9;
+    g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(x - s, y); g.lineTo(x + s, y); g.moveTo(x, y - s); g.lineTo(x, y + s); g.stroke();
+  }
+}
+
+let rackImage = null, rackPts = null, prevSource = null;
+function currentSource(){
+  const s = P.source;
+  if(s === "camera"){
+    if(camState === "live" && camVideo.readyState >= 2 && camVideo.videoWidth) return { el:camVideo, w:camVideo.videoWidth, h:camVideo.videoHeight, mirror:!!P.mirror, label:"camera" };
+    return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo (camera " + (camState === "asking" ? "waiting for permission" : camState === "failed" ? "unavailable: " + camErr : "off") + ")" };
+  }
+  if(s === "video"){
+    if(fileVideo.readyState >= 2 && fileVideo.videoWidth) return { el:fileVideo, w:fileVideo.videoWidth, h:fileVideo.videoHeight, mirror:false, label:"video file" };
+    return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo (no video loaded)" };
+  }
+  if(s === "image"){
+    if(fileImage && fileImage.naturalWidth) return { el:fileImage, w:fileImage.naturalWidth, h:fileImage.naturalHeight, mirror:false, label:"image file" };
+    return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo (no image loaded)" };
+  }
+  if(s === "rack-image"){
+    const c = rackImage;
+    if(c && (c.width || c.videoWidth)) return { el:c, w:c.videoWidth || c.width, h:c.videoHeight || c.height, mirror:false, label:"rack image" };
+    return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo (no image cable)" };
+  }
+  return { el:demo, w:640, h:360, mirror:false, demo:true, label:"demo — chrome sky" };
+}
+/* dest uv → source uv: scale and offset for the chosen fit */
+function fitOf(srcAsp, dstAsp, mode){
+  const k = srcAsp / dstAsp; let sx = 1, sy = 1;
+  if(mode === "cover"){ if(k > 1) sx = 1 / k; else sy = k; }
+  else if(mode === "contain"){ if(k > 1) sy = k; else sx = 1 / k; }
+  return [sx, sy, 0.5 - 0.5 * sx, 0.5 - 0.5 * sy];
+}
+
+/* ============================ evolve: morph, storms, travel ============================ */
+const EV = { t:0, storm:0, stormOn:false, stormEnd:0, nextStorm:4, angle:0, tx:0, ty:0, stepV:0, stepTarget:0, stepAt:0, morph:0, kick:0 };
+function scheduleStorm(){
+  const mean = 60 / Math.max(0.01, Q.stormRate);
+  EV.nextStorm = EV.t + Math.max(0.5, -Math.log(1 - Math.random() * 0.98) * mean);
+}
+function startStorm(){
+  EV.stormOn = true; EV.stormEnd = EV.t + Q.stormLen * (0.5 + Math.random());
+  EV.kick = (Math.random() - 0.5) * 2;
+  if(Q.chaos > 0 && Math.random() < 0.6) randomEvent();
+}
+function stepEvolve(dt){
+  EV.t += dt;
+  if(EV.stormOn && EV.t > EV.stormEnd){ EV.stormOn = false; scheduleStorm(); }
+  if(!EV.stormOn && Q.stormRate > 0 && EV.t >= EV.nextStorm) startStorm();
+  if(Q.stormRate <= 0 && !EV.stormOn) EV.nextStorm = EV.t + 1;
+  const target = EV.stormOn ? 1 : 0;
+  EV.storm += (target - EV.storm) * (1 - Math.exp(-dt * (target > EV.storm ? 12 : 1.8)));
+  // the glitch frame turns and travels; a storm gives it a shove
+  EV.angle += (Q.drift * Math.PI / 180 + EV.kick * EV.storm * 1.2) * dt;
+  const sp = Q.travel * (1 + EV.storm * 3);
+  EV.tx += Math.cos(EV.angle) * sp * dt; EV.ty += Math.sin(EV.angle) * sp * dt;
+  // auto morph
+  let wave = Q.morph;
+  const per = Math.max(0.5, Q.morphPeriod);
+  switch(P.morphMode){
+    case "sine": wave = 0.5 - 0.5 * Math.cos(EV.t / per * Math.PI * 2); break;
+    case "drift": wave = clamp((noise1(EV.t / per * 3) - 0.5) * 1.6 + 0.5 + (noise1(EV.t / per * 9 + 40) - 0.5) * 0.4, 0, 1); break;
+    case "steps":
+      if(EV.t >= EV.stepAt){ EV.stepTarget = Math.random() < 0.5 ? Math.random() * 0.25 : 0.65 + Math.random() * 0.35; EV.stepAt = EV.t + per / 4 * (0.5 + Math.random()); }
+      EV.stepV += (EV.stepTarget - EV.stepV) * (1 - Math.exp(-dt * 14)); wave = EV.stepV; break;
+    case "storm": wave = EV.storm; break;
+  }
+  let m = P.morphMode === "off" ? Q.morph : lerp(Q.morph, wave, Q.morphDepth);
+  m += Q.stormMorph * EV.storm;
+  EV.morph = clamp(m, 0, 1);
+}
+
+/* ============================ GL ============================ */
+const gl = cv.getContext("webgl2", { antialias:false, premultipliedAlpha:false, preserveDrawingBuffer:true });
+if(!gl){ document.getElementById("status").textContent = "WebGL2 is not available"; throw new Error("no webgl2"); }
+
+function sh(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + "\n" + src.split("\n").map((l, i) => (i + 1) + ": " + l).join("\n"));
+  return s;
+}
+function prog(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for(let i = 0; i < n; i++){ const inf = gl.getActiveUniform(p, i); u[inf.name.replace(/\[0\]$/, "")] = gl.getUniformLocation(p, inf.name); }
+  return { p, u };
+}
+
+const FULL_VS = `#version 300 es
+out vec2 vUv;
+void main(){ vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+
+const CAP_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uS; uniform vec4 uFit; uniform float uMirror;
+void main(){
+  vec2 s = vUv * uFit.xy + uFit.zw;
+  if(uMirror > 0.5) s.x = 1.0 - s.x;
+  vec3 c = texture(uS, clamp(s, 0.0, 1.0)).rgb;
+  float in_ = step(0.0, s.x) * step(s.x, 1.0) * step(0.0, s.y) * step(s.y, 1.0);
+  o = vec4(c * in_, 1.0);
+}`;
+
+const COPY_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o; uniform sampler2D uS;
+void main(){ o = vec4(texture(uS, vUv).rgb, 1.0); }`;
+
+/* the big pass: everything between the tape and the glow */
+const PROC_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uA, uB, uPrev, uOv;
+uniform vec2 uRes, uTape, uDir, uTravel;
+uniform float uT, uM, uSeed, uStorm, uRew, uPause, uFrameMix, uHasOv;
+uniform float uWarp, uWarpScale, uWarpSpeed;
+uniform float uBlock, uBlockSize, uRate, uSplit, uTear, uMosh, uTrails, uCrush, uDither;
+uniform float uTrack, uHead, uBleed, uGhost, uNoise, uDrop, uAge;
+uniform float uChrome, uSoft, uMelt, uRelief, uGloss, uBands;
+uniform float uPal; uniform vec3 uRA[5]; uniform vec3 uRB[5];
+uniform float uEdge, uEdgeTh, uGlyph, uGlyphPx, uRain, uGlyphImg, uGlyphDim;
+#define PI 3.14159265
+
+float h11(float p){ p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
+float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+vec2 h22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h12(i), h12(i + vec2(1, 0)), u.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), u.x), u.y); }
+float fbm(vec2 p){ float s = 0.0, a = 0.5; for(int i = 0; i < 4; i++){ s += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
+float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
+vec3 rampA(float t){ t = clamp(t, 0.0, 1.0) * 4.0; int i = int(min(floor(t), 3.0)); return mix(uRA[i], uRA[i + 1], t - float(i)); }
+vec3 rampB(float t){ t = clamp(t, 0.0, 1.0) * 4.0; int i = int(min(floor(t), 3.0)); return mix(uRB[i], uRB[i + 1], t - float(i)); }
+vec3 tape(vec2 uv){ return mix(texture(uA, uv).rgb, texture(uB, uv).rgb, uFrameMix); }
+float bayer4(vec2 p){
+  ivec2 i = ivec2(mod(p, 4.0));
+  const float B[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+  return (B[i.x + i.y * 4] + 0.5) / 16.0;
+}
+/* runes: strokes between the nodes of a 3×3 grid */
+const vec4 SG[20] = vec4[20](
+  vec4(0,0,1,0), vec4(1,0,2,0), vec4(0,1,1,1), vec4(1,1,2,1), vec4(0,2,1,2), vec4(1,2,2,2),
+  vec4(0,0,0,1), vec4(0,1,0,2), vec4(1,0,1,1), vec4(1,1,1,2), vec4(2,0,2,1), vec4(2,1,2,2),
+  vec4(0,0,1,1), vec4(1,0,0,1), vec4(1,0,2,1), vec4(2,0,1,1), vec4(0,1,1,2), vec4(1,1,0,2), vec4(1,1,2,2), vec4(2,1,1,2));
+float sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
+float glyph(vec2 f, float h){
+  vec2 p = (f - 0.5) * 2.7 + 1.0;
+  if(h > 0.22) p.x = 1.0 - abs(p.x - 1.0);
+  float d = 9.0;
+  for(int i = 0; i < 20; i++) if(h11(h * 97.31 + float(i) * 7.13) < 0.4) d = min(d, sdSeg(p, SG[i].xy, SG[i].zw));
+  return smoothstep(0.2, 0.13, d);
+}
+vec3 env(vec3 r, float m, float y){
+  float t = clamp(r.y * 1.3 + (y - 0.5) * 0.9 + r.x * 0.15, -1.0, 1.0);
+  float hw = mix(0.12, 0.006, smoothstep(0.0, 0.6, m));
+  vec3 sky = mix(uRA[4], uRA[1], smoothstep(0.0, 0.9, t));
+  vec3 gnd = mix(uRA[0] * 0.55, mix(uRA[3], uRA[2], 0.5) * 0.75, smoothstep(-0.25, -1.0, t));
+  vec3 aero = mix(gnd, sky, smoothstep(-hw, hw, t));
+  aero += smoothstep(hw * 0.6 + 0.015, 0.0, abs(t)) * 0.4;
+  float bt = (t * 0.5 + 0.5) * uBands;
+  float bnd = floor(bt);
+  vec3 sig = mod(bnd, 2.0) < 0.5 ? uRB[0] + uRB[1] * 0.5 : mix(uRB[2], uRB[3], fract(bnd * 0.37));
+  sig += uRB[4] * smoothstep(0.08, 0.0, fract(bt)) * 0.6;
+  return mix(aero, sig, smoothstep(0.55, 0.95, m));
+}
+float mlt(float l){ return mix(l, smoothstep(0.38, 0.62, l), uMelt); }
+
+void main(){
+  vec2 uv = vUv;
+  float asp = uRes.x / uRes.y, m = uM, st = uStorm;
+  float tq = floor(uT * uRate);
+
+  /* --- tracking: line wobble, a rolling tear band, head switching --- */
+  float ln = floor(uv.y * uRes.y * 0.5);
+  float trk = uTrack * (1.0 + st) + uRew * 2.5 + uPause * 0.6;
+  float wob = (vnoise(vec2(uv.y * 6.0, uT * 1.7)) - 0.5) * 0.012 * trk + sin(uv.y * 55.0 + uT * 4.0) * 0.0015 * trk;
+  float band = fract(-uT * (0.06 + 0.3 * uRew) + uSeed);
+  float tearB = smoothstep(0.05 + 0.1 * uRew, 0.0, abs(uv.y - band));
+  wob += tearB * (h12(vec2(ln, floor(uT * 30.0))) - 0.35) * 0.06 * trk;
+  float hsw = uHead > 0.0 ? smoothstep(0.035 * uHead + 0.001, 0.0, uv.y) : 0.0;
+  wob += hsw * (0.02 + 0.06 * h12(vec2(ln, floor(uT * 50.0))));
+  uv.x += wob;
+
+  /* --- the glitch frame: rotated to the travel direction, sliding along it --- */
+  vec2 D = uDir, Pp = vec2(-D.y, D.x);
+  vec2 p = (uv - 0.5) * vec2(asp, 1.0);
+  vec2 q = vec2(dot(p, D), dot(p, Pp)) + uTravel;
+  vec2 off = vec2(0.0);
+  float G = clamp(uBlock * (1.0 + 1.5 * st), 0.0, 1.0);
+  // sharp: slivers that jump in quantised steps
+  vec2 cs = vec2(uBlockSize * mix(1.5, 4.0, h11(tq + 3.0)), uBlockSize * 0.35);
+  vec2 cid = floor(q / cs);
+  float bOn = step(1.0 - G, h12(cid * 1.13 + tq * 7.31 + uSeed * 13.0));
+  vec2 dS = floor((h22(cid + tq * 3.1) - 0.5) * vec2(0.35, 0.06) * 20.0) / 20.0 * bOn;
+  // round: bubbles drifting up the frame, each a magnifying lens
+  float bs = uBlockSize * 1.6;
+  vec2 bq = q / bs + vec2(0.0, uT * 0.25);
+  vec2 bi = floor(bq), bf = fract(bq) - 0.5;
+  vec2 bj = (h22(bi + uSeed) - 0.5) * 0.35;
+  float br = 0.22 + 0.2 * h12(bi + 5.3);
+  float bHas = step(1.0 - G * 0.8, h12(bi * 0.71 + floor(uT * 0.15 + h12(bi)) * 1.7));
+  vec2 bd = bf - bj; float dd = length(bd);
+  float lens = bHas * smoothstep(br, br - 0.04, dd);
+  vec2 dR = -bd * bs * lens * 0.55;
+  off += mix(dR, dS, m);
+  // tears: soft ripples → hard slice offsets
+  float T = uTear * (1.0 + 1.5 * st);
+  float sn = floor(q.y * mix(14.0, 70.0, h11(tq * 1.7 + 1.0)));
+  float sOn = step(1.0 - T * 0.35, h12(vec2(sn, tq + 11.0)));
+  float sAmt = (h12(vec2(sn, tq + 2.0)) - 0.5) * 0.25;
+  float ripple = sin(q.y * 30.0 + uT * 3.0) * 0.01 * T;
+  off.x += mix(ripple, sAmt * sOn, m);
+  // liquid: a domain-warped flow, smooth → stepped and snapped to 45°
+  vec2 wq = q * uWarpScale * 2.0 + uTravel * 0.7;
+  wq = mix(wq, floor(wq * 5.0) / 5.0, m * m);
+  float ws = uT * uWarpSpeed;
+  vec2 w = vec2(fbm(wq + vec2(0.0, ws)), fbm(wq + vec2(5.2, 1.3 - ws)));
+  w = vec2(fbm(wq + 3.0 * w + vec2(1.7, 9.2) + ws * 0.5), fbm(wq + 3.0 * w + vec2(8.3, 2.8) - ws * 0.4)) - 0.5;
+  float qa = floor(atan(w.y, w.x) / (PI * 0.25) + 0.5) * (PI * 0.25);
+  vec2 wS = vec2(cos(qa), sin(qa)) * floor(length(w) * 8.0) / 8.0;
+  w = mix(w, wS, m);
+  off += w * uWarp * 0.25 * (1.0 + st);
+  vec2 offUV = (D * off.x + Pp * off.y) / vec2(asp, 1.0);
+  vec2 uv2 = uv + offUV;
+
+  /* --- reading the tape: RGB split, chroma bleed, ghost --- */
+  vec2 rad = (uv2 - 0.5) * uSplit * 0.03;
+  vec2 dsp = (D / vec2(asp, 1.0)) * uSplit * 0.012;
+  vec2 so = mix(rad, dsp, m) * (1.0 + 2.0 * st);
+  vec3 c = vec3(tape(uv2 + so).r, tape(uv2).g, tape(uv2 - so).b);
+  if(uBleed > 0.001){
+    vec3 acc = vec3(0.0);
+    for(int i = 1; i <= 4; i++) acc += texture(uA, uv2 - vec2(float(i) * uBleed * 2.5 / uTape.x, 0.0)).rgb;
+    acc *= 0.25;
+    mat3 toY = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
+    mat3 frY = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
+    vec3 y1 = toY * c, y2 = toY * acc;
+    y1.yz = mix(y1.yz, y2.yz, clamp(uBleed, 0.0, 1.0));
+    c = frY * y1;
+  }
+  if(uGhost > 0.001) c = mix(c, texture(uA, uv2 - vec2(0.016, 0.0)).rgb, uGhost * 0.28);
+
+  /* --- datamosh holds and trails from the previous frame --- */
+  vec3 pv = texture(uPrev, vUv + offUV * 0.5 + w * 0.004).rgb;
+  float mq = floor(uT * mix(1.5, 6.0, m));
+  vec2 mid = floor(q / (vec2(uBlockSize * 2.0, uBlockSize * 0.9)));
+  float mOn = step(1.0 - uMosh * (1.0 + st), h12(mid * 0.37 + mq * 5.1 + 3.0));
+  c = mix(c, pv, mOn * 0.96);
+  c = max(c, pv * uTrails);
+
+  /* --- chrome: brightness as a surface, reflecting a sky --- */
+  if(uChrome > 0.001){
+    float lod = uSoft;
+    vec2 px = exp2(lod) * 1.25 / uTape;
+    float lx1 = mlt(lum(textureLod(uA, uv2 + vec2(px.x, 0.0), lod).rgb)), lx0 = mlt(lum(textureLod(uA, uv2 - vec2(px.x, 0.0), lod).rgb));
+    float ly1 = mlt(lum(textureLod(uA, uv2 + vec2(0.0, px.y), lod).rgb)), ly0 = mlt(lum(textureLod(uA, uv2 - vec2(0.0, px.y), lod).rgb));
+    vec3 n = normalize(vec3(-vec2(lx1 - lx0, ly1 - ly0) * uRelief * 6.0, 1.0));
+    vec3 r = reflect(vec3(0.0, 0.0, -1.0), n);
+    vec3 e = env(r, m, uv2.y);
+    float sp = pow(max(0.0, dot(n, normalize(vec3(-0.35, 0.55, 1.0)))), uGloss);
+    vec3 ch = e * (0.8 + 0.35 * lum(c)) + sp * mix(vec3(1.0), uRB[4], m) * 0.9;
+    c = mix(c, ch, uChrome);
+  }
+
+  /* --- palette map --- */
+  float L = lum(c);
+  c = mix(c, mix(rampA(L), rampB(L), m), uPal);
+
+  /* --- edges: soft white glow → hard lines in the sigil colour --- */
+  if(uEdge > 0.001){
+    vec2 e1 = 1.5 / uTape;
+    float a1 = lum(texture(uA, uv2 + vec2(e1.x, 0.0)).rgb), a2 = lum(texture(uA, uv2 - vec2(e1.x, 0.0)).rgb);
+    float a3 = lum(texture(uA, uv2 + vec2(0.0, e1.y)).rgb), a4 = lum(texture(uA, uv2 - vec2(0.0, e1.y)).rgb);
+    float eg = length(vec2(a1 - a2, a3 - a4));
+    float E = mix(smoothstep(0.0, uEdgeTh * 2.0 + 0.01, eg), step(uEdgeTh, eg), m) * uEdge;
+    c = c * (1.0 - 0.5 * m * uEdge) + mix(vec3(1.0), uRB[3], m) * E;
+  }
+
+  /* --- glyph rain --- */
+  float GA = uGlyph * smoothstep(0.3, 0.85, m);
+  if(GA > 0.001){
+    float cell = uGlyphPx / uRes.y;
+    vec2 gq = vec2((uv2.x - 0.5) * asp, uv2.y) / cell;
+    float ci = floor(gq.x);
+    float tl = 6.0 + 18.0 * h11(ci + 9.0);
+    float ph = fract(gq.y / tl + uT * (0.3 + h11(ci * 1.7 + uSeed)) * uRain * 6.0 / tl + h11(ci * 3.0));
+    vec2 cl = vec2(ci, floor(gq.y));
+    float gh = h12(cl * 0.913 + floor(uT * 3.0 * h11(ci + cl.y) + 0.5) * 0.17 + uSeed);
+    float gy = glyph(fract(gq), gh);
+    float rain = pow(1.0 - ph, 3.0);
+    float I = mix(rain, smoothstep(0.15, 0.75, lum(c)) * (0.35 + 0.65 * rain), uGlyphImg);
+    c *= 1.0 - GA * uGlyphDim * 0.85;
+    c += gy * I * GA * mix(uRB[3], uRB[4], step(ph, 0.04)) * 1.3;
+  }
+
+  /* --- bubble gloss: the rim and the window-light highlight --- */
+  if(m < 0.999 && G > 0.0){
+    float rim = bHas * smoothstep(br - 0.07, br - 0.01, dd) * smoothstep(br + 0.01, br - 0.01, dd);
+    float hl = bHas * step(dd, br) * smoothstep(br * 0.38, 0.0, length(bd - vec2(-0.35, 0.4) * br));
+    c += (rim * 0.45 + hl * 0.85) * (1.0 - m) * mix(vec3(1.0), uRA[3], 0.25);
+  }
+
+  /* --- skins, OSD and lattice: under the tape damage, so they glitch too --- */
+  if(uHasOv > 0.5){
+    vec4 ov = texture(uOv, vUv + offUV * 0.6 + vec2(wob * 0.7, 0.0));
+    c = c * (1.0 - ov.a) + ov.rgb;
+  }
+
+  /* --- tape age, snow, dropouts, rewind bars --- */
+  float L2 = lum(c);
+  c = mix(c, vec3(L2), uAge * 0.45 + uRew * 0.3);
+  c *= mix(vec3(1.0), vec3(1.06, 0.94, 1.04), uAge);
+  c += vec3(0.025, 0.0, 0.035) * uAge;
+  float nz = h12(vUv * uRes + fract(uT * 37.1) * 317.0) - 0.5;
+  c += nz * (uNoise * 0.22 + uRew * 0.25 + hsw * 0.5);
+  float dln = floor(vUv.y * uRes.y / 2.0), df = floor(uT * 20.0);
+  float dOn = step(1.0 - uDrop * 0.015 * (1.0 + st * 2.0), h12(vec2(dln, df)));
+  float dx0 = h12(vec2(dln, df + 1.0)), dw = 0.02 + 0.15 * h12(vec2(dln, df + 2.0));
+  c = mix(c, vec3(0.85 + 0.15 * nz), dOn * step(dx0, vUv.x) * step(vUv.x, dx0 + dw));
+  if(uRew > 0.01){
+    float rb = fract(vUv.y * 3.0 + uT * 4.0);
+    float bar = smoothstep(0.08, 0.0, abs(rb - 0.5)) * uRew;
+    c = mix(c, vec3(0.6 + 0.4 * h12(vec2(floor(vUv.x * uRes.x / 3.0), dln + df))), bar * 0.7);
+  }
+
+  /* --- crush & ordered dither --- */
+  if(uCrush > 0.001){
+    float lv = mix(48.0, 2.0, uCrush);
+    c = floor(c * lv + 0.5 + (bayer4(gl_FragCoord.xy) - 0.5) * uDither) / lv;
+  }
+  o = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
+const BRIGHT_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o; uniform sampler2D uS; uniform float uTh;
+void main(){ vec3 c = texture(uS, vUv).rgb; o = vec4(max(c - uTh, 0.0) / max(1e-3, 1.0 - uTh), 1.0); }`;
+const BLUR_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o; uniform sampler2D uS; uniform vec2 uStep;
+void main(){
+  vec3 c = texture(uS, vUv).rgb * 0.227;
+  c += (texture(uS, vUv + uStep * 1.38).rgb + texture(uS, vUv - uStep * 1.38).rgb) * 0.316;
+  c += (texture(uS, vUv + uStep * 3.23).rgb + texture(uS, vUv - uStep * 3.23).rgb) * 0.070;
+  o = vec4(c, 1.0);
+}`;
+const FINAL_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uS, uBloom; uniform vec2 uRes;
+uniform float uBloomAmt, uCurve, uScan, uVig, uExp;
+#define PI 3.14159265
+void main(){
+  vec2 c2 = vUv * 2.0 - 1.0;
+  c2 += c2 * dot(c2, c2) * uCurve * 0.08;
+  vec2 uv = c2 * 0.5 + 0.5;
+  vec2 e = smoothstep(vec2(0.0), vec2(0.004 + uCurve * 0.02), uv) * smoothstep(vec2(0.0), vec2(0.004 + uCurve * 0.02), 1.0 - uv);
+  float inside = uCurve > 0.001 ? e.x * e.y : 1.0;
+  vec3 col = texture(uS, uv).rgb + texture(uBloom, uv).rgb * uBloomAmt;
+  float lines = uRes.y / 3.0;
+  col *= 1.0 - uScan * 0.45 * (0.5 + 0.5 * cos(uv.y * lines * 2.0 * PI));
+  vec2 v = uv - 0.5;
+  col *= 1.0 - uVig * dot(v, v) * 1.6;
+  o = vec4(clamp(col * uExp, 0.0, 1.0) * inside, 1.0);
+}`;
+
+const PCAP = prog(FULL_VS, CAP_FS), PCOPY = prog(FULL_VS, COPY_FS), PPROC = prog(FULL_VS, PROC_FS);
+const PBRI = prog(FULL_VS, BRIGHT_FS), PBLUR = prog(FULL_VS, BLUR_FS), PFIN = prog(FULL_VS, FINAL_FS);
+const fullVAO = gl.createVertexArray();
+
+function tex(w, h, mip){
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  if(mip) gl.generateMipmap(gl.TEXTURE_2D);
+  return t;
+}
+function target(w, h, mip){
+  const t = tex(w, h, mip), f = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { t, f, w, h };
+}
+function freeTarget(r){ if(r){ gl.deleteTexture(r.t); gl.deleteFramebuffer(r.f); } }
+function draw(prog, rt, w, h){
+  // never leave the target bound for sampling: that is a feedback loop
+  if(rt) for(let k = 0; k < 4; k++) if(BOUND[k] === rt.t) bindTex(k, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, rt ? rt.f : null); gl.viewport(0, 0, w, h);
+  gl.useProgram(prog.p); gl.bindVertexArray(fullVAO); gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+const BOUND = [null, null, null, null];
+function bindTex(unit, t){ gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); BOUND[unit] = t; }
+
+const srcTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, srcTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+const blackTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, blackTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+const ovTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ovTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+
+let proc = [null, null], pcur = 0, bl = [null, null], outW = 0, outH = 0;
+function sizeCanvas(){
+  const [w, h] = String(P.res).split("x").map(Number);
+  if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+  if(outW !== w || outH !== h){
+    outW = w; outH = h;
+    proc.forEach(freeTarget); bl.forEach(freeTarget);
+    proc = [target(w, h), target(w, h)];
+    const bw = Math.max(1, w >> 2), bh = Math.max(1, h >> 2);
+    bl = [target(bw, bh), target(bw, bh)];
+    ov.width = w; ov.height = h;
+    tapeAlloc();
+  }
+}
+
+/* ============================ the tape ============================ */
+const TCAP = 120;
+const TAPE = { slots:new Array(TCAP).fill(null), ana:new Array(TCAP).fill(null), w:0, h:0, res:0,
+  written:0, head:0, base:"live", ev:null, catchup:false, recLeft:0, loopA:0, loopLen:0, capAcc:0,
+  rew:0, pause:0, wraps:0, lastOD:-1, jit:0, jitAt:0, fA:-1, fB:-1, mix:0 };
+function tapeAlloc(){
+  const want = Number(P.tapeRes) || 480, s = want / Math.max(outW, outH);
+  const w = Math.max(16, Math.round(outW * s)), h = Math.max(16, Math.round(outH * s));
+  if(TAPE.w === w && TAPE.h === h) return;
+  TAPE.slots.forEach(freeTarget); TAPE.slots.fill(null); TAPE.ana.fill(null);
+  TAPE.w = w; TAPE.h = h; TAPE.written = 0; TAPE.head = 0; TAPE.ev = null; TAPE.catchup = false;
+  if(TAPE.base === "loop") TAPE.recLeft = Math.round(Q.tapeLen);
+}
+const slotOf = f => ((f % TCAP) + TCAP) % TCAP;
+const latest = () => TAPE.written - 1;
+const oldest = () => Math.max(0, TAPE.written - TCAP + 2);
+function slotTarget(f){
+  const k = slotOf(f);
+  if(!TAPE.slots[k]) TAPE.slots[k] = target(TAPE.w, TAPE.h, true);
+  return TAPE.slots[k];
+}
+/* the analysis copy for the lattice tracker, kept beside each tape frame */
+const ana = document.createElement("canvas");
+const AW = UV ? UV.W : 192, AH = UV ? UV.H : 108;
+ana.width = AW; ana.height = AH;
+const ag = ana.getContext("2d", { willReadFrequently:true });
+
+function capture(src){
+  const f = TAPE.written, rt = slotTarget(f);
+  bindTex(0, srcTex);
+  try{
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src.el);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  }catch(e){ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); return false; }
+  const fit = fitOf(src.w / src.h, outW / outH, P.fit);
+  gl.useProgram(PCAP.p);
+  gl.uniform1i(PCAP.u.uS, 0); gl.uniform4f(PCAP.u.uFit, fit[0], fit[1], fit[2], fit[3]); gl.uniform1f(PCAP.u.uMirror, src.mirror ? 1 : 0);
+  draw(PCAP, rt, rt.w, rt.h);
+  bindTex(0, rt.t); gl.generateMipmap(gl.TEXTURE_2D);
+  // the tracker's copy, cropped the same way (canvas y runs down, the crop is centred so it matches)
+  if(P.latOn && P.latSrc === "tracked" && UV){
+    try{
+      ag.fillStyle = "#000"; ag.fillRect(0, 0, AW, AH);
+      ag.save();
+      if(src.mirror){ ag.translate(AW, 0); ag.scale(-1, 1); }
+      const sx = fit[2] * src.w, sy = fit[3] * src.h, sw = fit[0] * src.w, shh = fit[1] * src.h;
+      if(sw <= src.w && shh <= src.h) ag.drawImage(src.el, sx, sy, sw, shh, 0, 0, AW, AH);
+      else { const dw = AW * src.w / sw, dh = AH * src.h / shh; ag.drawImage(src.el, (AW - dw) / 2, (AH - dh) / 2, dw, dh); }
+      ag.restore();
+      const k = slotOf(f), d = ag.getImageData(0, 0, AW, AH).data;
+      if(!TAPE.ana[k] || TAPE.ana[k].length !== d.length) TAPE.ana[k] = new Uint8ClampedArray(d.length);
+      TAPE.ana[k].set(d);
+    }catch(e){ TAPE.ana[slotOf(f)] = null; }
+  } else TAPE.ana[slotOf(f)] = null;
+  TAPE.written++;
+  return true;
+}
+
+function setBase(mode){
+  TAPE.base = mode; TAPE.ev = null; TAPE.catchup = false;
+  if(mode === "loop") catchLoop();
+  else { TAPE.recLeft = 0; TAPE.head = latest(); }
+}
+/* loop the last stretch already on the tape — or record one if there isn't enough */
+function catchLoop(){
+  const L = Math.round(Q.tapeLen);
+  TAPE.ev = null; TAPE.catchup = false;
+  if(TAPE.written - oldest() >= L){ TAPE.recLeft = 0; TAPE.loopA = TAPE.written - L; TAPE.loopLen = L; TAPE.head = TAPE.loopA; TAPE.wraps = 0; }
+  else TAPE.recLeft = L;
+}
+function reRecord(){ TAPE.ev = null; TAPE.recLeft = Math.round(Q.tapeLen); }
+function loopSpan(){ return Math.max(2, Math.min(Math.round(Q.tapeLen), TAPE.loopLen || 2, TAPE.written - TAPE.loopA)); }
+function wrapLoop(h){
+  const A = TAPE.loopA, L = loopSpan();
+  let r = h - A;
+  if(r >= L || r < 0){ TAPE.wraps++; r = ((r % L) + L) % L; }
+  return A + r;
+}
+function startEvent(type, manual){
+  if(TAPE.written < 4) return;
+  const dur = Q.evLen * (manual ? 1 : 0.6 + Math.random() * 0.8);
+  const ev = { type, t:0, dur, a:Math.floor(TAPE.head), len:0, pos:0 };
+  if(type === "stutter"){
+    ev.len = Math.max(2, Math.round(Q.stutLen * (manual ? 1 : 0.5 + Math.random())));
+    ev.a = Math.max(oldest(), Math.floor(TAPE.head) - ev.len + 1);
+    if(TAPE.base === "loop" && TAPE.recLeft === 0) ev.a = Math.max(TAPE.loopA, ev.a);
+  }
+  if(type === "pause") ev.dur = Math.min(ev.dur, 2.5);
+  TAPE.ev = ev; TAPE.catchup = false;
+}
+function randomEvent(){
+  const pool = [];
+  if(P.evStutter) pool.push("stutter", "stutter");
+  if(P.evRewind) pool.push("rewind");
+  if(P.evPause) pool.push("pause");
+  if(P.evSlow) pool.push("slow");
+  if(pool.length) startEvent(pool[(Math.random() * pool.length) | 0], false);
+}
+function endEvent(){
+  const ev = TAPE.ev; TAPE.ev = null;
+  if(TAPE.base === "live" && ev && ev.type !== "stutter" && TAPE.head < latest() - 2) TAPE.catchup = true;
+  if(ev && ev.type === "stutter" && TAPE.base === "loop" && TAPE.recLeft === 0) TAPE.head = wrapLoop(ev.a + ev.len);
+}
+function tapeStep(dt, src){
+  if(P.tapeMode !== TAPE.base) setBase(P.tapeMode);
+  const fps = Math.max(1, Q.tapeFps);
+  const inLoop = TAPE.base === "loop" && TAPE.recLeft === 0;
+  // record
+  const recording = TAPE.base === "live" || TAPE.recLeft > 0;
+  if(recording && src){
+    TAPE.capAcc += dt;
+    if(TAPE.capAcc >= 1 / fps || TAPE.written === 0){
+      TAPE.capAcc = TAPE.capAcc >= 2 / fps ? 0 : Math.max(0, TAPE.capAcc - 1 / fps);
+      if(capture(src) && TAPE.recLeft > 0){
+        TAPE.recLeft--;
+        if(TAPE.recLeft === 0){ const L = Math.round(Q.tapeLen); TAPE.loopA = Math.max(oldest(), TAPE.written - L); TAPE.loopLen = TAPE.written - TAPE.loopA; TAPE.head = TAPE.loopA; TAPE.wraps = 0; }
+      }
+    }
+  }
+  if(TAPE.written === 0) return;
+  // random events
+  if(!TAPE.ev && !TAPE.catchup && Q.chaos > 0 && TAPE.recLeft === 0 && TAPE.written > 8){
+    if(Math.random() < Q.chaos / 10 * dt * (1 + 3 * EV.storm)) randomEvent();
+  }
+  // move the head
+  TAPE.rew *= Math.exp(-dt * 6); TAPE.pause *= Math.exp(-dt * 8);
+  const ev = TAPE.ev;
+  if(ev){
+    ev.t += dt;
+    switch(ev.type){
+      case "stutter": ev.pos = (ev.pos + dt * fps * 1.2) % ev.len; TAPE.head = ev.a + ev.pos; break;
+      case "pause": TAPE.head = ev.a; TAPE.pause = 1; break;
+      case "rewind": TAPE.head -= dt * fps * 4; TAPE.rew = 1; if(inLoop) TAPE.head = wrapLoop(TAPE.head); break;
+      case "slow": TAPE.head += dt * fps * 0.3; if(inLoop) TAPE.head = wrapLoop(TAPE.head); break;
+    }
+    if(ev.t >= ev.dur) endEvent();
+  } else if(TAPE.base === "live" || TAPE.recLeft > 0){
+    if(TAPE.catchup){ TAPE.head += dt * fps * 1.8; if(TAPE.head >= latest()){ TAPE.catchup = false; TAPE.head = latest(); } }
+    else TAPE.head = latest();
+  } else {
+    const before = TAPE.wraps;
+    TAPE.head = wrapLoop(TAPE.head + dt * fps * Q.speed);
+    if(TAPE.wraps !== before && Q.reRec >= 1 && TAPE.wraps >= Q.reRec){ TAPE.wraps = 0; reRecord(); }
+  }
+  TAPE.head = clamp(TAPE.head, oldest(), latest());
+  // which two frames, and how much of the second
+  const fA = Math.floor(TAPE.head);
+  let fB = fA + 1, mix = (TAPE.head - fA) * Q.blendF;
+  if(inLoop && fB >= TAPE.loopA + loopSpan()) fB = TAPE.loopA;
+  if(fB > latest()) fB = fA;
+  if(ev && ev.type === "pause"){
+    if(EV.t > TAPE.jitAt){ TAPE.jit = Math.random() < 0.5 ? 1 : 0; TAPE.jitAt = EV.t + 0.04 + Math.random() * 0.08; }
+    fB = Math.min(latest(), fA + 1); mix = TAPE.jit;
+  }
+  TAPE.fA = fA; TAPE.fB = fB; TAPE.mix = mix;
+}
+function tapeState(){
+  if(TAPE.recLeft > 0 && TAPE.base === "loop") return "rec";
+  const ev = TAPE.ev;
+  if(ev) return ev.type;
+  if(TAPE.catchup) return "ff";
+  return TAPE.base === "loop" ? (Q.speed < 0 ? "rev" : "loop") : "play";
+}
+
+/* ============================ the lattice layer ============================ */
+const LMAX = 400;
+const LP = { n:0, x:new Float32Array(LMAX), y:new Float32Array(LMAX), id:new Float64Array(LMAX) };
+let visT = null, lastAnaFrame = -1, anaTs = 0, anaMs = 0;
+if(UV && PT){ try{ visT = UV.create(PT); }catch(e){ console.warn("[rewind] vision", e); } }
+function latticeStep(dt){
+  if(!P.latOn){ LP.n = 0; return; }
+  const n = Math.min(LMAX, Math.round(Q.latN));
+  if(P.latSrc === "tracked" && visT){
+    const f = TAPE.fA, k = slotOf(f), d = f >= 0 ? TAPE.ana[k] : null;
+    if(d && f !== lastAnaFrame){
+      lastAnaFrame = f; anaTs += 1 / 30;
+      const t0 = performance.now();
+      try{
+        const out = visT.step(d, outW / outH, anaTs, "tracks", { fps:60, points:Math.min(400, n), gain:1, quality:0.02, mindist:6, maxage:600 });
+        const p = out && out.points;
+        LP.n = p ? Math.min(LMAX, p.count) : 0;
+        for(let i = 0; i < LP.n; i++){ LP.x[i] = p.positions[i * 3]; LP.y[i] = p.positions[i * 3 + 1]; LP.id[i] = p.ids ? p.ids[i] : i; }
+      }catch(e){ LP.n = 0; }
+      anaMs = anaMs * 0.9 + (performance.now() - t0) * 0.1;
+    }
+    if(d) return;
+  }
+  if(P.latSrc === "rack" && rackPts && rackPts.count){
+    const f = rackPts, c = Math.min(n, f.count, LMAX), is3 = f.space === "3d", asp = outW / outH;
+    LP.n = 0;
+    for(let i = 0; i < c; i++){
+      if(f.presence && f.presence[i] < 0.05) continue;
+      const x = f.positions[i * 3], y = f.positions[i * 3 + 1];
+      LP.x[LP.n] = is3 ? 0.5 + x * 0.4 / asp : x; LP.y[LP.n] = is3 ? 0.5 - y * 0.4 : y; LP.id[LP.n] = f.ids ? f.ids[i] : i; LP.n++;
+    }
+    return;
+  }
+  // drifting: each point on its own slow Lissajous, seeded
+  const t = EV.t;
+  LP.n = n;
+  for(let i = 0; i < n; i++){
+    const a = 0.05 + hash1(i * 1.7) * 0.18, b = 0.05 + hash1(i * 2.9) * 0.18, pa = hash1(i * 4.1) * 6.28, pb = hash1(i * 5.3) * 6.28;
+    LP.x[i] = 0.5 + 0.46 * Math.sin(t * a + pa + 0.7 * Math.sin(t * b * 0.7 + pb));
+    LP.y[i] = 0.5 + 0.44 * Math.sin(t * b + pb + 0.7 * Math.sin(t * a * 0.8 + pa));
+    LP.id[i] = i;
+  }
+}
+
+/* ============================ overlay: skins, OSD, lattice ============================ */
+const ov = document.createElement("canvas"); ov.width = 1280; ov.height = 720;
+const og = ov.getContext("2d");
+let SC = 1;                       // overlay scale: 1 at 720 lines
+let TH = null;                    // theme for this frame
+
+function theme(m){
+  const A = palA(), B = palB();
+  const mono = m > 0.5;
+  return {
+    m, A, B, mono,
+    fillTop: mixC([1, 1, 1], B[0], m), fillTopA: lerp(0.86, 0.82, m),
+    fillBot: mixC(mixC(A[2], [1, 1, 1], 0.35), B[0], m), fillBotA: lerp(0.62, 0.88, m),
+    barTop: mixC(mixC(A[2], [1, 1, 1], 0.75), B[3], m), barMid: mixC(A[2], B[3], m), barBot: mixC(A[1], B[2], m),
+    barText: mixC([1, 1, 1], [0, 0, 0], m),
+    border: mixC([1, 1, 1], B[3], m),
+    fg: mixC([0.04, 0.16, 0.32], B[3], m), dim: mixC([0.3, 0.45, 0.6], B[2], m),
+    lcdBg: mixC([0.02, 0.09, 0.17], [0, 0, 0], m), lcdFg: mixC(mixC(A[2], [1, 1, 1], 0.45), B[3], m),
+    accent: mixC(A[2], B[3], m), light: mixC([1, 1, 1], B[4], m),
+    font: (px, w) => mono ? `${w || 400} ${px}px ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace`
+                         : `${w || 600} ${px}px "Segoe UI","Trebuchet MS",Tahoma,Verdana,sans-serif`
+  };
+}
+/* round → chamfered: each corner is a quadratic whose control slides from the
+   corner itself (a rounded corner) to the middle of the chord (a straight cut) */
+function shapePath(g, x, y, w, h, r, m, asym){
+  const k0 = Math.max(0.01, Math.min(r, w / 2, h / 2));
+  const kk = asym ? [k0, k0 * (1 - 0.85 * m), k0, k0 * (1 - 0.85 * m)] : [k0, k0, k0, k0];
+  const c = (cx, cy, ax, ay, bx, by) => {
+    const mx = (ax + bx) / 2, my = (ay + by) / 2;
+    g.quadraticCurveTo(lerp(cx, mx, m), lerp(cy, my, m), bx, by);
+  };
+  g.beginPath();
+  g.moveTo(x + kk[0], y);
+  g.lineTo(x + w - kk[1], y); c(x + w, y, x + w - kk[1], y, x + w, y + kk[1]);
+  g.lineTo(x + w, y + h - kk[2]); c(x + w, y + h, x + w, y + h - kk[2], x + w - kk[2], y + h);
+  g.lineTo(x + kk[3], y + h); c(x, y + h, x + kk[3], y + h, x, y + h - kk[3]);
+  g.lineTo(x, y + kk[0]); c(x, y, x, y + kk[0], x + kk[0], y);
+  g.closePath();
+}
+const SIGMAP = { A:"Λ", E:"Ξ", O:"Ø", I:"ǀ", U:"Ʊ", S:"§", T:"†", N:"И", R:"Я", C:"¢", X:"╳", L:"Ł", K:"Ҝ", D:"Ð", W:"Ш", Y:"¥", B:"ß", P:"Þ", F:"ƒ", V:"√", H:"Ħ", M:"₼", G:"₲" };
+function sigilize(s, m, seed){
+  if(m < 0.45) return s;
+  const p = (m - 0.45) / 0.55, q = EV.storm > 0.3 ? Math.floor(EV.t * 6) : 0;
+  let o = "";
+  for(let i = 0; i < s.length; i++){
+    const ch = s[i], up = ch.toUpperCase(), r = hash1(i * 13.1 + seed * 7.7 + q);
+    o += (r < p && SIGMAP[up]) ? SIGMAP[up] : (m > 0.7 ? up : ch);
+  }
+  return o;
+}
+/* a rune from the same 3×3 stroke grid the shader uses */
+const RSEG = [[0,0,1,0],[1,0,2,0],[0,1,1,1],[1,1,2,1],[0,2,1,2],[1,2,2,2],[0,0,0,1],[0,1,0,2],[1,0,1,1],[1,1,1,2],[2,0,2,1],[2,1,2,2],
+  [0,0,1,1],[1,0,0,1],[1,0,2,1],[2,0,1,1],[0,1,1,2],[1,1,0,2],[1,1,2,2],[2,1,1,2]];
+function rune(g, cx, cy, s, h){
+  g.beginPath();
+  for(let i = 0; i < RSEG.length; i++){
+    const sg = RSEG[i];
+    if(sg[0] > 1 || sg[2] > 1) continue;                 // left half, mirrored
+    if(hash1(h * 97.31 + i * 7.13) >= 0.45) continue;
+    for(const mir of [1, -1]){
+      const x1 = (sg[0] - 1) * mir, x2 = (sg[2] - 1) * mir;
+      g.moveTo(cx + x1 * s, cy + (sg[1] - 1) * s); g.lineTo(cx + x2 * s, cy + (sg[3] - 1) * s);
+    }
+  }
+  g.stroke();
+}
+
+/* audio for the spectrum and scope: Drive's analyser if it is running */
+const SPEC = new Float32Array(16), WAVE = new Float32Array(128);
+let fBins = null, tBins = null;
+function readAudio(t){
+  const an = Drive && Drive.analyserNode ? Drive.analyserNode() : null;
+  const live = an && Drive.audio && Drive.audio.level > 0.0005;
+  if(an && live){
+    if(!fBins || fBins.length !== an.frequencyBinCount){ fBins = new Uint8Array(an.frequencyBinCount); tBins = new Uint8Array(an.fftSize); }
+    an.getByteFrequencyData(fBins); an.getByteTimeDomainData(tBins);
+    const N = fBins.length;
+    for(let i = 0; i < 16; i++){
+      const a = Math.floor(Math.pow(N, i / 16)), b = Math.max(a + 1, Math.floor(Math.pow(N, (i + 1) / 16)));
+      let s = 0; for(let k = a; k < b; k++) s += fBins[k];
+      SPEC[i] = SPEC[i] * 0.6 + (s / (b - a) / 255) * 0.4;
+    }
+    const step = tBins.length / 128;
+    for(let i = 0; i < 128; i++) WAVE[i] = (tBins[Math.floor(i * step)] - 128) / 128;
+    return;
+  }
+  for(let i = 0; i < 16; i++){
+    const v = noise1(t * (1.5 + i * 0.13) + i * 7) * (1 - i / 22) * 0.9 + EV.storm * 0.3 * hash1(i + Math.floor(t * 12));
+    SPEC[i] = SPEC[i] * 0.7 + v * 0.3;
+  }
+  for(let i = 0; i < 128; i++){ const x = i / 128; WAVE[i] = Math.sin(x * 18 + t * 5) * 0.4 * noise1(t * 2) + Math.sin(x * 47 - t * 9) * 0.2 + (hash1(i + Math.floor(t * 30)) - 0.5) * 0.25 * EV.storm; }
+}
+
+/* windows */
+const WIN_SPECS = {
+  player:   { w:310, h:136, title:"tape.deck" },
+  progress: { w:300, h:100, title:"unpack.exe" },
+  eq:       { w:240, h:150, title:"eq // 10 band" },
+  viz:      { w:260, h:120, title:"scope.vis" },
+  hex:      { w:236, h:160, title:"0xC0DE.bin" },
+  dialog:   { w:250, h:112, title:"system" }
+};
+const WIN_ORDER = ["player","progress","eq","viz","hex","dialog","player","progress"];
+let WINS = [];
+function buildWindows(){
+  const r = mulberry(Math.round(P.guiSeed) * 7919 + 13);
+  const order = WIN_ORDER.slice();
+  for(let i = order.length - 1; i > 0; i--){ const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  if(order[0] !== "player"){ const k = order.indexOf("player"); [order[0], order[k]] = [order[k], order[0]]; }
+  WINS = order.map((type, i) => ({ type, ax:r(), ay:r(), fx:0.05 + r() * 0.12, fy:0.05 + r() * 0.12, p1:r() * 6.28, p2:r() * 6.28, seed:r() * 100, hist:[], z:i }));
+}
+buildWindows();
+
+function drawIcon(g, kind, cx, cy, s){
+  g.beginPath();
+  const tri = (x, y, d) => { g.moveTo(x, y - s); g.lineTo(x + d * s * 1.1, y); g.lineTo(x, y + s); g.closePath(); };
+  switch(kind){
+    case "play": tri(cx - s * 0.4, cy, 1); break;
+    case "pause": g.rect(cx - s * 0.75, cy - s, s * 0.5, s * 2); g.rect(cx + s * 0.25, cy - s, s * 0.5, s * 2); break;
+    case "stop": g.rect(cx - s * 0.8, cy - s * 0.8, s * 1.6, s * 1.6); break;
+    case "rew": tri(cx, cy, -1); tri(cx + s * 1.0, cy, -1); break;
+    case "ff": tri(cx - s * 1.0, cy, 1); tri(cx, cy, 1); break;
+  }
+  g.fill();
+}
+function bar(g, x, y, w, h, v, t){
+  const T = TH, m = T.m, S = SC;
+  shapePath(g, x, y, w, h, h / 2 * (1 - m) + 1, m);
+  g.fillStyle = css(T.lcdBg, 0.55); g.fill();
+  g.lineWidth = 1; g.strokeStyle = css(T.border, 0.6); g.stroke();
+  if(m < 1){
+    g.save(); g.globalAlpha *= 1 - m;
+    shapePath(g, x + 1, y + 1, Math.max(h, (w - 2) * v), h - 2, (h - 2) / 2, 0); g.clip();
+    const gg = g.createLinearGradient(0, y, 0, y + h);
+    gg.addColorStop(0, css(mixC(T.accent, [1, 1, 1], 0.7))); gg.addColorStop(0.5, css(T.accent)); gg.addColorStop(1, css(mixC(T.accent, [0, 0.1, 0.3], 0.4)));
+    g.fillStyle = gg; g.fillRect(x, y, w, h);
+    g.fillStyle = "rgba(255,255,255,0.25)";
+    const st = 12 * S, o = (t * 30 * S) % (st * 2);
+    for(let k = x - st * 2 + o; k < x + w; k += st * 2){ g.beginPath(); g.moveTo(k, y + h); g.lineTo(k + st, y); g.lineTo(k + st * 2, y); g.lineTo(k + st, y + h); g.fill(); }
+    g.restore();
+  }
+  if(m > 0){
+    g.save(); g.globalAlpha *= m;
+    const sw = 7 * S, n = Math.max(1, Math.floor((w - 4) / sw)), on = Math.floor(v * n);
+    g.fillStyle = css(T.accent);
+    for(let k = 0; k < on; k++) g.fillRect(x + 2 + k * sw, y + 2, sw - 2 * S, h - 4);
+    g.restore();
+  }
+}
+const FILES = ["SIGIL_07.DAT","AERO_SKIN.WSZ","CHROME.DLL","DREAM.MP3","BUBBLE.SCR","LIQUID.VIS","TAPE_02.AVI","MATRIX.NFO","Y2K_FIX.EXE","ORB.ICO"];
+function winContent(W, x, y, w, h, t){
+  const g = og, T = TH, m = T.m, S = SC, al = g.globalAlpha;
+  g.textBaseline = "middle";
+  switch(W.type){
+    case "player": {
+      const lw = w * 0.64, lh = h * 0.5;
+      shapePath(g, x, y, lw, lh, 7 * S * (1 - m) + 2, m);
+      g.fillStyle = css(T.lcdBg, 0.92); g.fill(); g.strokeStyle = css(T.border, 0.5); g.lineWidth = 1; g.stroke();
+      const secs = Math.max(0, TAPE.head / Math.max(1, Q.tapeFps));
+      const mm = String(Math.floor(secs / 60)).padStart(2, "0"), ss = String(Math.floor(secs % 60)).padStart(2, "0");
+      g.fillStyle = css(T.lcdFg); g.font = T.font(22 * S, 700);
+      g.fillText((m > 0.5 && EV.storm > 0.4 && hash1(Math.floor(t * 8)) > 0.5) ? "--:--" : mm + ":" + ss, x + 8 * S, y + lh * 0.36);
+      // marquee
+      g.save(); g.beginPath(); g.rect(x + 4 * S, y + lh * 0.58, lw - 8 * S, lh * 0.38); g.clip();
+      g.font = T.font(11 * S, 500);
+      const txt = sigilize(String(P.marquee || " "), m, 3), tw = Math.max(20, g.measureText(txt).width);
+      const off = (t * 45 * S) % tw;
+      for(let k = -off; k < lw; k += tw) g.fillText(txt, x + 6 * S + k, y + lh * 0.78);
+      g.restore();
+      // spectrum
+      const sx = x + lw + 6 * S, sw = w - lw - 6 * S, nb = 10, bw = sw / nb;
+      for(let i = 0; i < nb; i++){
+        const v = clamp(SPEC[i + 1] * 1.3, 0, 1), bh = v * lh;
+        if(m < 0.5){
+          const gg = g.createLinearGradient(0, y + lh, 0, y);
+          gg.addColorStop(0, css(T.accent, 0.95)); gg.addColorStop(1, css([1, 1, 1], 0.95));
+          g.fillStyle = gg; shapePath(g, sx + i * bw + 1, y + lh - bh, bw - 2, Math.max(2, bh), (bw - 2) / 2, 0); g.fill();
+        } else {
+          g.fillStyle = css(T.accent);
+          const segs = Math.floor(bh / (4 * S));
+          for(let k = 0; k < segs; k++) g.fillRect(sx + i * bw + 1, y + lh - (k + 1) * 4 * S, bw - 2, 3 * S);
+        }
+      }
+      // seek
+      const loopPos = TAPE.base === "loop" && TAPE.recLeft === 0 ? (TAPE.head - TAPE.loopA) / loopSpan() : fract(secs / 30);
+      bar(g, x, y + lh + 8 * S, w, 9 * S, clamp(loopPos, 0, 1), t);
+      // transport
+      const st = tapeState(), kinds = ["rew","play","pause","stop","ff"], by = y + lh + 34 * S, bwid = w / 5;
+      const act = st === "rewind" || st === "rev" ? "rew" : st === "pause" ? "pause" : st === "ff" ? "ff" : st === "rec" ? "stop" : "play";
+      kinds.forEach((k, i) => {
+        const bx = x + i * bwid + 3 * S, bww = bwid - 6 * S, bh = 20 * S, on = k === act;
+        shapePath(g, bx, by - bh / 2, bww, bh, bh / 2 * (1 - m) + 1, m, true);
+        if(m < 0.6){
+          const gg = g.createLinearGradient(0, by - bh / 2, 0, by + bh / 2);
+          gg.addColorStop(0, css([1, 1, 1], 0.95)); gg.addColorStop(0.5, css(on ? T.accent : mixC(T.accent, [1, 1, 1], 0.7), 0.95)); gg.addColorStop(1, css(on ? T.barBot : mixC(T.accent, [1, 1, 1], 0.4), 0.95));
+          g.fillStyle = gg;
+        } else g.fillStyle = on ? css(T.accent) : css([0, 0, 0], 0.8);
+        g.fill(); g.strokeStyle = css(T.border, 0.7); g.stroke();
+        g.fillStyle = m < 0.6 ? css(on ? [1, 1, 1] : T.fg) : css(on ? [0, 0, 0] : T.accent);
+        drawIcon(g, k, bx + bww / 2, by, 4.5 * S);
+      });
+      break;
+    }
+    case "progress": {
+      const k = Math.floor(t / 1.6 + W.seed) % FILES.length, v = fract(t / 1.6 + W.seed);
+      g.fillStyle = css(T.fg); g.font = T.font(12 * S, 500);
+      g.fillText(sigilize((m > 0.5 ? "> extracting " : "Unpacking ") + FILES[k] + (m > 0.5 ? "" : "…"), m, W.seed), x + 2 * S, y + 10 * S);
+      bar(g, x, y + 24 * S, w, 16 * S, v, t);
+      g.font = T.font(11 * S, 400); g.fillStyle = css(T.dim);
+      g.fillText(Math.floor(v * 100) + "%   " + (180 + Math.floor(noise1(t * 3) * 400)) + " kb/s", x + 2 * S, y + 52 * S);
+      if(m > 0.5){ g.textAlign = "right"; g.fillText("[" + "▓".repeat(Math.floor(v * 6)) + "░".repeat(6 - Math.floor(v * 6)) + "]", x + w, y + 52 * S); g.textAlign = "left"; }
+      break;
+    }
+    case "eq": {
+      const n = 10, cw = w / n, ty = y + 4 * S, bh = h - 26 * S;
+      const labels = ["60","170","310","600","1K","3K","6K","12K","14K","16K"];
+      for(let i = 0; i < n; i++){
+        const cx = x + cw * (i + 0.5), v = clamp(SPEC[i + 2] * 1.2, 0, 1), ky = ty + bh * (1 - v);
+        g.strokeStyle = css(T.dim, 0.8); g.lineWidth = 2 * S;
+        g.beginPath(); g.moveTo(cx, ty); g.lineTo(cx, ty + bh); g.stroke();
+        const kw = 14 * S, kh = 8 * S;
+        if(m < 0.5){
+          const gg = g.createLinearGradient(0, ky - kh, 0, ky + kh);
+          gg.addColorStop(0, "#fff"); gg.addColorStop(1, css(T.accent));
+          g.fillStyle = gg; shapePath(g, cx - kw / 2, ky - kh / 2, kw, kh, kh / 2, 0); g.fill();
+          g.strokeStyle = css(T.barBot, 0.7); g.lineWidth = 1; g.stroke();
+        } else {
+          g.fillStyle = css(T.accent); g.fillRect(cx - kw / 2, ky - kh / 2, kw, kh);
+          g.fillStyle = "#000"; g.fillRect(cx - kw / 2, ky - 0.5 * S, kw, S);
+        }
+        g.fillStyle = css(T.dim); g.font = T.font(8.5 * S, 500); g.textAlign = "center";
+        g.fillText(labels[i], cx, y + h - 8 * S); g.textAlign = "left";
+      }
+      break;
+    }
+    case "viz": {
+      shapePath(g, x, y, w, h, 6 * S * (1 - m) + 1, m);
+      g.fillStyle = css(T.lcdBg, 0.9); g.fill();
+      g.save(); g.clip();
+      g.strokeStyle = css(T.dim, 0.3); g.lineWidth = 1;
+      for(let k = 1; k < 4; k++){ g.beginPath(); g.moveTo(x, y + h * k / 4); g.lineTo(x + w, y + h * k / 4); g.stroke(); }
+      const stepQ = Math.max(1, Math.round(1 + m * 7));
+      const path = () => {
+        g.beginPath();
+        for(let i = 0; i < 128; i++){
+          const ii = Math.floor(i / stepQ) * stepQ, px = x + i / 127 * w, py = y + h / 2 - WAVE[ii] * h * 0.42;
+          if(i === 0) g.moveTo(px, py); else if(m > 0.5){ const prevY = y + h / 2 - WAVE[Math.max(0, ii - (ii === i ? stepQ : 0))] * h * 0.42; g.lineTo(px, prevY); g.lineTo(px, py); } else g.lineTo(px, py);
+        }
+      };
+      if(m < 0.7){ path(); g.strokeStyle = css(T.lcdFg, 0.25 * (1 - m)); g.lineWidth = 6 * S; g.lineJoin = "round"; g.stroke(); }
+      path(); g.strokeStyle = css(T.lcdFg); g.lineWidth = 1.6 * S; g.lineJoin = m > 0.5 ? "miter" : "round"; g.stroke();
+      g.restore();
+      break;
+    }
+    case "hex": {
+      g.font = `${10.5 * S}px ui-monospace,Consolas,"Courier New",monospace`;
+      const lh = 13 * S, rowsN = Math.floor(h / lh), scroll = Math.floor(t * 4), sub = fract(t * 4) * lh * (m > 0.5 ? 0 : 1);
+      g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+      for(let r = 0; r < rowsN + 1; r++){
+        const rr = r + scroll, yy = y + r * lh - sub + lh / 2;
+        g.fillStyle = css(T.dim);
+        g.fillText((rr * 8).toString(16).toUpperCase().padStart(4, "0"), x, yy);
+        for(let c = 0; c < 6; c++){
+          const v = Math.floor(hash1(rr * 31 + c * 7 + W.seed + (EV.storm > 0.3 ? Math.floor(t * 20) : 0)) * 256);
+          const hot = hash1(rr * 3 + c + Math.floor(t * 2)) > 0.93;
+          if(hot){ g.fillStyle = css(T.accent, 0.9); g.fillRect(x + (40 + c * 22) * S - 2 * S, yy - lh / 2 + 1, 19 * S, lh - 2); }
+          g.fillStyle = hot ? css(m > 0.5 ? [0, 0, 0] : [1, 1, 1]) : css(T.fg);
+          g.fillText(v.toString(16).toUpperCase().padStart(2, "0"), x + (40 + c * 22) * S, yy);
+        }
+      }
+      g.restore();
+      break;
+    }
+    case "dialog": {
+      const ix = x + 26 * S, iy = y + 26 * S, r = 17 * S;
+      if(m < 0.5){
+        const gg = g.createRadialGradient(ix - r * 0.3, iy - r * 0.4, 1, ix, iy, r);
+        gg.addColorStop(0, "#fff"); gg.addColorStop(0.5, css(T.accent)); gg.addColorStop(1, css(T.barBot));
+        g.fillStyle = gg; g.beginPath(); g.arc(ix, iy, r, 0, Math.PI * 2); g.fill();
+        g.fillStyle = "#fff"; g.font = `700 ${20 * S}px Georgia,serif`; g.textAlign = "center"; g.fillText("i", ix, iy + 1); g.textAlign = "left";
+      } else {
+        g.strokeStyle = css(T.accent); g.lineWidth = 2 * S;
+        g.beginPath(); g.moveTo(ix, iy - r); g.lineTo(ix + r, iy + r * 0.8); g.lineTo(ix - r, iy + r * 0.8); g.closePath(); g.stroke();
+        g.fillStyle = css(T.accent); g.font = T.font(16 * S, 700); g.textAlign = "center"; g.fillText("!", ix, iy + 3 * S); g.textAlign = "left";
+      }
+      g.fillStyle = css(T.fg); g.font = T.font(12 * S, 500);
+      const lines = m < 0.5 ? ["Your tape is ready.", "Enjoy the show!"] : ["SIGNAL CORRUPT", "0x" + Math.floor(hash1(Math.floor(t * 2) + W.seed) * 0xFFFFFF).toString(16).toUpperCase().padStart(6, "0") + " // RETRY?"];
+      lines.forEach((l, i) => g.fillText(sigilize(l, m, W.seed + i), x + 54 * S, y + (16 + i * 18) * S));
+      const bw = 70 * S, bh = 22 * S, bx = x + w - bw - 4 * S, byy = y + h - bh - 2 * S;
+      shapePath(g, bx, byy, bw, bh, bh / 2 * (1 - m) + 1, m, true);
+      if(m < 0.6){ const gg = g.createLinearGradient(0, byy, 0, byy + bh); gg.addColorStop(0, "#fff"); gg.addColorStop(0.5, css(mixC(T.accent, [1, 1, 1], 0.5))); gg.addColorStop(1, css(T.accent)); g.fillStyle = gg; }
+      else g.fillStyle = css([0, 0, 0], 0.85);
+      g.fill(); g.strokeStyle = css(T.border, 0.8); g.lineWidth = 1; g.stroke();
+      g.fillStyle = m < 0.6 ? css(T.fg) : css(T.accent); g.font = T.font(12 * S, 600); g.textAlign = "center";
+      g.fillText(m > 0.5 ? "[ OK ]" : "OK", bx + bw / 2, byy + bh / 2 + 1); g.textAlign = "left";
+      break;
+    }
+  }
+  g.globalAlpha = al;
+}
+function drawWindow(W, x, y, w, h, full, t){
+  const g = og, T = TH, m = T.m, S = SC;
+  const R = 14 * S * (1 - m) + 10 * S * m, tb = 22 * S;
+  g.save();
+  if(m < 0.95){ g.shadowColor = `rgba(0,30,70,${0.38 * (1 - m)})`; g.shadowBlur = 18 * S * (1 - m); g.shadowOffsetY = 6 * S * (1 - m); }
+  shapePath(g, x, y, w, h, R, m, true);
+  const fg = g.createLinearGradient(0, y, 0, y + h);
+  fg.addColorStop(0, css(T.fillTop, T.fillTopA)); fg.addColorStop(1, css(T.fillBot, T.fillBotA));
+  g.fillStyle = fg; g.fill();
+  g.restore();
+  g.save();
+  shapePath(g, x, y, w, h, R, m, true); g.clip();
+  const tg = g.createLinearGradient(0, y, 0, y + tb);
+  tg.addColorStop(0, css(T.barTop, 0.96)); tg.addColorStop(0.48, css(mixC(T.barMid, [1, 1, 1], 0.25 * (1 - m)), 0.96));
+  tg.addColorStop(0.52, css(T.barBot, 0.96)); tg.addColorStop(1, css(T.barMid, 0.96));
+  g.fillStyle = tg; g.fillRect(x, y, w, tb);
+  if(m < 1){
+    const shn = g.createLinearGradient(0, y + tb, 0, y + tb + h * 0.45);
+    shn.addColorStop(0, `rgba(255,255,255,${0.4 * (1 - m)})`); shn.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = shn; g.fillRect(x, y + tb, w, h * 0.45);
+  }
+  if(m > 0.05){
+    g.strokeStyle = css([0, 0, 0], 0.4 * m); g.lineWidth = 1.2 * S;
+    for(let k = x + w * 0.5; k < x + w - 64 * S; k += 5 * S){ g.beginPath(); g.moveTo(k, y + tb - 5 * S); g.lineTo(k + 5 * S, y + 5 * S); g.stroke(); }
+  }
+  g.restore();
+  shapePath(g, x, y, w, h, R, m, true);
+  g.lineWidth = Math.max(1, S * (1 + 0.4 * m)); g.strokeStyle = css(T.border, 0.92); g.stroke();
+  if(m > 0.3){
+    const a = (m - 0.3) / 0.7, L = 12 * S, o = 5 * S;
+    g.strokeStyle = css(T.accent, a); g.lineWidth = 1.5 * S;
+    g.beginPath();
+    g.moveTo(x - o, y - o + L); g.lineTo(x - o, y - o); g.lineTo(x - o + L, y - o);
+    g.moveTo(x + w + o - L, y + h + o); g.lineTo(x + w + o, y + h + o); g.lineTo(x + w + o, y + h + o - L);
+    g.stroke();
+  }
+  // title
+  g.textBaseline = "middle";
+  g.font = TH.font(12 * S, 600);
+  g.fillStyle = css(T.barText, 0.96);
+  if(m < 0.5){ g.shadowColor = "rgba(0,40,90,0.65)"; g.shadowBlur = 3 * S; }
+  const title = m > 0.6 ? "~" + WIN_SPECS[W.type].title.toUpperCase().replace(/\s/g, "_") : WIN_SPECS[W.type].title;
+  g.fillText(sigilize(title, m, W.seed), x + 11 * S, y + tb / 2 + 1);
+  g.shadowBlur = 0; g.shadowColor = "transparent";
+  // title buttons: glossy orbs → boxed crosses
+  for(let k = 0; k < 3; k++){
+    const bx = x + w - (15 + k * 19) * S, by = y + tb / 2, r = 6 * S;
+    if(m < 1){
+      g.save(); g.globalAlpha *= 1 - m;
+      const gg = g.createRadialGradient(bx - r * 0.3, by - r * 0.4, 0.5, bx, by, r);
+      gg.addColorStop(0, "#fff"); gg.addColorStop(0.6, css(k === 0 ? [1, 0.45, 0.4] : T.accent)); gg.addColorStop(1, css(k === 0 ? [0.6, 0.1, 0.1] : T.barBot));
+      g.fillStyle = gg; g.beginPath(); g.arc(bx, by, r, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 1; g.stroke();
+      g.restore();
+    }
+    if(m > 0){
+      g.save(); g.globalAlpha *= m;
+      g.strokeStyle = "#000"; g.lineWidth = 1.4 * S; g.strokeRect(bx - r, by - r, r * 2, r * 2);
+      g.beginPath();
+      if(k === 0){ g.moveTo(bx - r * 0.55, by - r * 0.55); g.lineTo(bx + r * 0.55, by + r * 0.55); g.moveTo(bx + r * 0.55, by - r * 0.55); g.lineTo(bx - r * 0.55, by + r * 0.55); }
+      else if(k === 1){ g.rect(bx - r * 0.5, by - r * 0.5, r, r); }
+      else { g.moveTo(bx - r * 0.5, by + r * 0.4); g.lineTo(bx + r * 0.5, by + r * 0.4); }
+      g.stroke(); g.restore();
+    }
+  }
+  if(full) winContent(W, x + 9 * S, y + tb + 7 * S, w - 18 * S, h - tb - 14 * S, t);
+}
+function drawSkins(t){
+  const g = og, Wd = ov.width, Hd = ov.height, S = SC, m = TH.m;
+  const n = Math.min(WINS.length, Math.round(Q.guiCount));
+  const trail = Math.round(Q.guiTrail);
+  const jq = Math.floor(t * Math.max(1, Q.rate));
+  g.globalAlpha = clamp(Q.guiAlpha, 0, 1);
+  for(let i = 0; i < n; i++){
+    const W = WINS[i], sp = WIN_SPECS[W.type];
+    SC = S * Q.guiScale;
+    const w = sp.w * SC, h = sp.h * SC;
+    let cx = (0.14 + 0.72 * W.ax) * Wd + Math.sin(t * W.fx + W.p1) * Q.guiWander * Wd * 0.14;
+    let cy = (0.16 + 0.68 * W.ay) * Hd + Math.sin(t * W.fy + W.p2) * Q.guiWander * Hd * 0.14;
+    if(EV.storm > 0.2){ cx += (hash1(jq + i * 9) - 0.5) * 60 * S * EV.storm; cy += (hash1(jq + i * 13 + 4) - 0.5) * 24 * S * EV.storm; }
+    let x = cx - w / 2, y = cy - h / 2;
+    if(m > 0.6){ const q = 8 * S; x = Math.round(x / q) * q; y = Math.round(y / q) * q; }
+    W.hist.push(x, y);
+    const keep = trail * 2 * 3;
+    while(W.hist.length > Math.max(2, keep + 2)) W.hist.splice(0, 2);
+    if(trail > 0){
+      for(let k = 0; k < W.hist.length - 2; k += 6) drawWindow(W, W.hist[k], W.hist[k + 1], w, h, false, t);
+    }
+    drawWindow(W, x, y, w, h, true, t);
+  }
+  SC = S;
+  g.globalAlpha = 1;
+}
+const OSD_TXT = { play:"PLAY ▶", loop:"LOOP ▶", rev:"REV ◀", rec:"● REC", rewind:"◀◀ REW", ff:"▶▶ FF", pause:"❚❚ PAUSE", slow:"▶ SLOW", stutter:"▶ PLAY" };
+function drawOSD(t){
+  const g = og, S = SC, Wd = ov.width, Hd = ov.height, m = TH.m;
+  const st = tapeState();
+  const col = mixC([1, 1, 1], TH.B[3], m);
+  g.font = `700 ${28 * S}px ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace`;
+  g.textBaseline = "top"; g.lineJoin = "round";
+  const out = (s, x, y, align) => {
+    g.textAlign = align || "left";
+    g.lineWidth = 5 * S; g.strokeStyle = "rgba(0,0,0,0.85)"; g.strokeText(s, x, y);
+    g.fillStyle = css(col); g.fillText(s, x, y);
+  };
+  const blink = st === "pause" || st === "rec" ? (fract(t * 1.6) < 0.6) : true;
+  if(blink) out(sigilize(OSD_TXT[st] || "PLAY ▶", m, 1), 48 * S, 40 * S);
+  const secs = Math.max(0, TAPE.head / Math.max(1, Q.tapeFps));
+  const hh = Math.floor(secs / 3600), mm = Math.floor(secs / 60) % 60, ss = Math.floor(secs) % 60;
+  out("SP  " + hh + ":" + String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0"), 48 * S, Hd - 76 * S);
+  // the camcorder date stamp: the minute before the millennium, then over it
+  const base = Date.UTC(1999, 11, 31, 23, 59, 0) + EV.t * 1000;
+  const d = new Date(base), MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const ds = MON[d.getUTCMonth()] + "." + String(d.getUTCDate()).padStart(2, "0") + " " + d.getUTCFullYear();
+  const ts = String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + ":" + String(d.getUTCSeconds()).padStart(2, "0");
+  g.font = `700 ${22 * S}px ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace`;
+  out(ts, Wd - 48 * S, Hd - 104 * S, "right");
+  out(ds, Wd - 48 * S, Hd - 76 * S, "right");
+  g.textAlign = "left";
+}
+function drawLattice(t){
+  const g = og, Wd = ov.width, Hd = ov.height, S = SC, m = TH.m, n = LP.n;
+  if(!n) return;
+  const R = Q.latReach * Hd, R2 = R * R, K = Math.max(1, Math.round(Q.latK));
+  const X = new Float32Array(n), Y = new Float32Array(n);
+  for(let i = 0; i < n; i++){ X[i] = LP.x[i] * Wd; Y[i] = LP.y[i] * Hd; }
+  if(m > 0.6){ const q = 6 * S; for(let i = 0; i < n; i++){ X[i] = Math.round(X[i] / q) * q; Y[i] = Math.round(Y[i] / q) * q; } }
+  const lc = mixC(mixC(TH.A[2], [1, 1, 1], 0.5), TH.B[3], m);
+  const A = clamp(Q.latAlpha, 0, 1);
+  g.lineJoin = m > 0.5 ? "miter" : "round"; g.lineCap = m > 0.5 ? "butt" : "round";
+  const best = new Int32Array(K), bd = new Float32Array(K);
+  const passes = m < 0.6 ? 2 : 1;
+  for(let pass = 0; pass < passes; pass++){
+    g.beginPath();
+    for(let i = 0; i < n; i++){
+      let c = 0;
+      for(let j = 0; j < n; j++){
+        if(j === i) continue;
+        const dx = X[j] - X[i], dy = Y[j] - Y[i], d2 = dx * dx + dy * dy;
+        if(d2 > R2) continue;
+        if(c < K){ best[c] = j; bd[c] = d2; c++; }
+        else { let w = 0; for(let q = 1; q < K; q++) if(bd[q] > bd[w]) w = q; if(d2 < bd[w]){ best[w] = j; bd[w] = d2; } }
+      }
+      for(let q = 0; q < c; q++){
+        const j = best[q]; if(j < i) continue;
+        const ax = X[i], ay = Y[i], bx = X[j], by = Y[j], dx = bx - ax, dy = by - ay;
+        // circuit elbow: run straight, then 45° into the target
+        let ex, ey;
+        if(Math.abs(dx) > Math.abs(dy)){ ex = bx - Math.sign(dx) * Math.abs(dy); ey = ay; }
+        else { ex = ax; ey = by - Math.sign(dy) * Math.abs(dx); }
+        const len = Math.sqrt(dx * dx + dy * dy) || 1, bow = (hash1(LP.id[i] * 0.37 + LP.id[j] * 0.11) - 0.5) * 0.5 * len;
+        const wx = (ax + bx) / 2 - dy / len * bow, wy = (ay + by) / 2 + dx / len * bow;
+        const p1x = lerp(ax, ex, m), p1y = lerp(ay, ey, m), p2x = lerp(bx, ex, m), p2y = lerp(by, ey, m);
+        g.moveTo(ax, ay); g.lineTo(p1x, p1y);
+        g.quadraticCurveTo(lerp(wx, ex, m), lerp(wy, ey, m), p2x, p2y);
+        g.lineTo(bx, by);
+      }
+    }
+    if(pass === 0 && passes === 2){ g.strokeStyle = css(lc, A * 0.22 * (1 - m)); g.lineWidth = Q.latWidth * S * 5; }
+    else { g.strokeStyle = css(lc, A); g.lineWidth = Q.latWidth * S * (1.3 - 0.5 * m); }
+    g.stroke();
+  }
+  const ns = Q.latNode * S;
+  if(ns <= 0.1) return;
+  for(let i = 0; i < n; i++){
+    const x = X[i], y = Y[i], h = hash1(LP.id[i] * 1.618);
+    if(m < 1){
+      const r = ns * (1.4 - 0.6 * m);
+      g.globalAlpha = A * (1 - m);
+      const gg = g.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.05, x, y, r);
+      gg.addColorStop(0, "rgba(255,255,255,1)"); gg.addColorStop(0.45, css(TH.A[2], 0.9)); gg.addColorStop(1, css(TH.A[1], 0.15));
+      g.fillStyle = gg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    if(m > 0){
+      g.globalAlpha = A * m;
+      g.strokeStyle = css(TH.B[3]); g.lineWidth = 1.3 * S;
+      if(h < Q.latRunes){ g.lineWidth = 1.6 * S; rune(g, x, y, ns * 1.1, h * 1000 + Math.floor(t * 0.5)); }
+      else {
+        const r = ns * 0.9;
+        g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath(); g.stroke();
+        g.fillStyle = css(TH.B[4]); g.fillRect(x - S, y - S, 2 * S, 2 * S);
+      }
+    }
+  }
+  g.globalAlpha = 1;
+}
+function drawOverlay(t){
+  const want = (P.guiOn && Q.guiCount >= 1) || P.osd || (P.latOn && LP.n);
+  if(!want) return false;
+  og.clearRect(0, 0, ov.width, ov.height);
+  SC = ov.height / 720;
+  if(P.latOn) drawLattice(t);
+  if(P.guiOn && Q.guiCount >= 1) drawSkins(t);
+  if(P.osd) drawOSD(t);
+  return true;
+}
+
+/* ============================ render ============================ */
+function setPalUniforms(pr){
+  const A = palA(), B = palB();
+  gl.uniform3fv(pr.u.uRA, new Float32Array([].concat(...A)));
+  gl.uniform3fv(pr.u.uRB, new Float32Array([].concat(...B)));
+}
+let hasOv = false, ovFresh = false;
+function render(t){
+  const w = outW, h = outH, m = EV.morph, st = EV.storm * Q.stormDepth;
+  if(ovFresh){
+    bindTex(3, ovTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ov);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  }
+  const has = TAPE.written > 0 && TAPE.fA >= 0;
+  const A = has ? TAPE.slots[slotOf(TAPE.fA)] : null, B = has ? TAPE.slots[slotOf(TAPE.fB)] : null;
+  const prev = pcur; pcur ^= 1;
+  bindTex(0, A ? A.t : blackTex); bindTex(1, B ? B.t : (A ? A.t : blackTex)); bindTex(2, proc[prev].t);
+  if(!hasOv) bindTex(3, ovTex);
+  const pr = PPROC, u = pr.u;
+  gl.useProgram(pr.p);
+  gl.uniform1i(u.uA, 0); gl.uniform1i(u.uB, 1); gl.uniform1i(u.uPrev, 2); gl.uniform1i(u.uOv, 3);
+  gl.uniform2f(u.uRes, w, h); gl.uniform2f(u.uTape, TAPE.w || 1, TAPE.h || 1);
+  gl.uniform2f(u.uDir, Math.cos(EV.angle), Math.sin(EV.angle)); gl.uniform2f(u.uTravel, EV.tx, EV.ty);
+  gl.uniform1f(u.uT, t); gl.uniform1f(u.uM, m); gl.uniform1f(u.uSeed, (Math.round(P.guiSeed) * 0.1373) % 1);
+  gl.uniform1f(u.uStorm, st); gl.uniform1f(u.uRew, TAPE.rew); gl.uniform1f(u.uPause, TAPE.pause);
+  gl.uniform1f(u.uFrameMix, clamp(TAPE.mix, 0, 1)); gl.uniform1f(u.uHasOv, hasOv ? 1 : 0);
+  gl.uniform1f(u.uWarp, Q.warp); gl.uniform1f(u.uWarpScale, Q.warpScale); gl.uniform1f(u.uWarpSpeed, Q.warpSpeed);
+  gl.uniform1f(u.uBlock, Q.block); gl.uniform1f(u.uBlockSize, Math.max(0.01, Q.blockSize)); gl.uniform1f(u.uRate, Q.rate * (1 + st));
+  gl.uniform1f(u.uSplit, Q.split); gl.uniform1f(u.uTear, Q.tear); gl.uniform1f(u.uMosh, Q.mosh); gl.uniform1f(u.uTrails, Q.trails);
+  gl.uniform1f(u.uCrush, Q.crush); gl.uniform1f(u.uDither, Q.dither);
+  gl.uniform1f(u.uTrack, Q.track); gl.uniform1f(u.uHead, Q.head); gl.uniform1f(u.uBleed, Q.bleed); gl.uniform1f(u.uGhost, Q.ghost);
+  gl.uniform1f(u.uNoise, Q.noise); gl.uniform1f(u.uDrop, Q.drop); gl.uniform1f(u.uAge, Q.age);
+  gl.uniform1f(u.uChrome, Q.chrome); gl.uniform1f(u.uSoft, Q.soft); gl.uniform1f(u.uMelt, Q.melt); gl.uniform1f(u.uRelief, Q.relief);
+  gl.uniform1f(u.uGloss, Math.max(1, Q.gloss)); gl.uniform1f(u.uBands, Math.max(2, Q.bands));
+  gl.uniform1f(u.uPal, Q.palMix); setPalUniforms(pr);
+  gl.uniform1f(u.uEdge, Q.edge); gl.uniform1f(u.uEdgeTh, Q.edgeTh);
+  gl.uniform1f(u.uGlyph, Q.glyph); gl.uniform1f(u.uGlyphPx, Math.max(4, Q.glyphPx) * h / 720); gl.uniform1f(u.uRain, Q.rain);
+  gl.uniform1f(u.uGlyphImg, Q.glyphImg); gl.uniform1f(u.uGlyphDim, Q.glyphDim);
+  draw(pr, proc[pcur], w, h);
+  // overdub: the processed frame back onto the loop
+  const fA = TAPE.fA;
+  if(TAPE.base === "loop" && TAPE.recLeft === 0 && !TAPE.ev && Q.overdub > 0.001 && A && fA !== TAPE.lastOD){
+    TAPE.lastOD = fA;
+    gl.enable(gl.BLEND); gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, clamp(Q.overdub, 0, 1));
+    bindTex(0, proc[pcur].t); gl.useProgram(PCOPY.p); gl.uniform1i(PCOPY.u.uS, 0);
+    draw(PCOPY, A, A.w, A.h);
+    gl.disable(gl.BLEND);
+    bindTex(0, A.t); gl.generateMipmap(gl.TEXTURE_2D);
+  }
+  // glow
+  const bw = bl[0].w, bh = bl[0].h;
+  bindTex(0, proc[pcur].t); gl.useProgram(PBRI.p); gl.uniform1i(PBRI.u.uS, 0); gl.uniform1f(PBRI.u.uTh, Q.bloomTh);
+  draw(PBRI, bl[0], bw, bh);
+  gl.useProgram(PBLUR.p); gl.uniform1i(PBLUR.u.uS, 0);
+  for(let k = 0; k < 2; k++){
+    bindTex(0, bl[0].t); gl.uniform2f(PBLUR.u.uStep, 1.6 / bw, 0); draw(PBLUR, bl[1], bw, bh);
+    bindTex(0, bl[1].t); gl.uniform2f(PBLUR.u.uStep, 0, 1.6 / bh); draw(PBLUR, bl[0], bw, bh);
+  }
+  // to the screen
+  bindTex(0, proc[pcur].t); bindTex(1, bl[0].t);
+  const f = PFIN.u; gl.useProgram(PFIN.p);
+  gl.uniform1i(f.uS, 0); gl.uniform1i(f.uBloom, 1); gl.uniform2f(f.uRes, w, h);
+  gl.uniform1f(f.uBloomAmt, Q.bloom); gl.uniform1f(f.uCurve, Q.curve); gl.uniform1f(f.uScan, Q.scan);
+  gl.uniform1f(f.uVig, Q.vig); gl.uniform1f(f.uExp, Q.exposure);
+  draw(PFIN, null, w, h);
+}
+function wipeTrails(){
+  proc.forEach(r => { gl.bindFramebuffer(gl.FRAMEBUFFER, r.f); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); });
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  WINS.forEach(W => W.hist.length = 0);
+}
+
+/* ============================ the outgoing points (for the rack) ============================ */
+let OUT = PT ? PT.makePoints(64, "uv") : null;
+function publishPoints(){
+  if(!PT || !OUT) return;
+  const n = LP.n;
+  OUT = PT.ensurePoints(OUT, n, "uv");
+  if(!OUT.ids || OUT.ids.length < OUT.capacity) OUT.ids = new Uint32Array(OUT.capacity);
+  OUT.aspect = outW / outH;
+  const c = TH ? mixC(TH.A[2], TH.B[3], EV.morph) : [1, 1, 1];
+  for(let i = 0; i < n; i++){
+    const i3 = i * 3;
+    OUT.positions[i3] = LP.x[i]; OUT.positions[i3 + 1] = LP.y[i]; OUT.positions[i3 + 2] = 1;
+    OUT.colors[i3] = c[0]; OUT.colors[i3 + 1] = c[1]; OUT.colors[i3 + 2] = c[2];
+    OUT.sizes[i] = 1; OUT.presence[i] = 1; OUT.ids[i] = LP.id[i] >>> 0;
+  }
+  if(OUT.count !== undefined) OUT.count = n;
+  PT.bump(OUT);
+}
+
+/* ============================ loop ============================ */
+const statusEl = document.getElementById("status"), srcNote = document.getElementById("srcNote");
+const meterTick = document.querySelector("#mMeter i"), meterBox = document.querySelector("#mMeter b");
+let lastT = performance.now(), fpsEma = 60, statusAt = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.max(1 / 240, Math.min(0.1, (now - lastT) / 1000)); lastT = now;
+  Q = Drive ? Drive.resolve(P) : P;
+  sizeCanvas();
+  stepEvolve(dt);
+  const t = EV.t;
+  const src = currentSource();
+  if(src.demo) drawDemo(t);
+  tapeStep(dt, src);
+  latticeStep(dt);
+  TH = theme(EV.morph);
+  readAudio(t);
+  hasOv = drawOverlay(t); ovFresh = hasOv;
+  render(t);
+  publishPoints();
+  if(Drive) Drive.pushFrame(cv);
+
+  fpsEma = fpsEma * 0.92 + (1 / dt) * 0.08;
+  if(now - statusAt > 120){
+    meterTick.style.left = (EV.morph * 147) + "px";
+    const mb = clamp(Q.morph, 0, 1); meterBox.style.left = (mb * 140) + "px"; meterBox.style.width = "10px";
+  }
+  if(now - statusAt > 400){
+    statusAt = now;
+    const st = tapeState(), span = TAPE.base === "loop" && TAPE.recLeft === 0 ? ` ${Math.round(TAPE.head - TAPE.loopA)}/${loopSpan()}` : "";
+    statusEl.textContent = `tape ${st}${span}` + (TAPE.recLeft > 0 ? ` · recording ${TAPE.recLeft}` : "") +
+      ` · morph ${EV.morph.toFixed(2)}` + (EV.storm > 0.05 ? ` · storm ${(EV.storm * 100).toFixed(0)}%` : "") +
+      (P.latOn ? ` · ${LP.n} pts` : "") + ` · ${fpsEma.toFixed(0)} fps`;
+    srcNote.textContent = src.label;
+  }
+}
+
+/* ============================ presets, files, capture ============================ */
+function applyLook(name){
+  const L = LOOKS[name]; if(!L) return;
+  for(const k in DEFAULTS) if(!SOURCE_KEYS.has(k)) P[k] = DEFAULTS[k];
+  Object.assign(P, L); P.look = name;
+  syncUI();
+}
+function download(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const stamp = () => new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+const $ = id => document.getElementById(id);
+$("bExport").addEventListener("click", () => {
+  const out = Object.assign({ tool:"rewind", version:1 }, P);
+  if(Drive) out._drive = Drive.serialize();
+  download(new Blob([JSON.stringify(out, null, 2)], { type:"application/json" }), "rewind-" + stamp() + ".json");
+});
+$("bImport").addEventListener("click", () => $("fPreset").click());
+$("fPreset").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  f.text().then(t => { const j = JSON.parse(t);
+    for(const k in DEFAULTS) if(j[k] !== undefined) P[k] = j[k];
+    if(Drive && j._drive) Drive.load(j._drive);
+    buildWindows(); tapeAlloc(); syncUI(); }).catch(err => console.warn("[rewind] preset", err));
+  e.target.value = "";
+});
+$("bCam").addEventListener("click", () => { P.source = "camera"; camState = camState === "failed" ? "off" : camState; startCamera(); syncUI(); });
+$("bMedia").addEventListener("click", () => $("fMedia").click());
+$("fMedia").addEventListener("change", e => { loadMediaFile(e.target.files[0]); e.target.value = ""; });
+$("bStorm").addEventListener("click", () => startStorm());
+$("bCatch").addEventListener("click", () => { if(P.tapeMode !== "loop"){ P.tapeMode = "loop"; TAPE.base = "loop"; syncUI(); } catchLoop(); });
+$("bReRec").addEventListener("click", () => reRecord());
+$("bLive").addEventListener("click", () => { P.tapeMode = "live"; setBase("live"); syncUI(); });
+$("bStut").addEventListener("click", () => startEvent("stutter", true));
+$("bRew").addEventListener("click", () => startEvent("rewind", true));
+$("bPause").addEventListener("click", () => startEvent("pause", true));
+$("bSlow").addEventListener("click", () => startEvent("slow", true));
+$("bShuffle").addEventListener("click", () => { P.guiSeed = (Math.round(P.guiSeed) + 1) % 9973; buildWindows(); });
+$("bWipe").addEventListener("click", () => wipeTrails());
+$("bPNG").addEventListener("click", () => cv.toBlob(b => b && download(b, "rewind-" + stamp() + ".png")));
+let rec = null, recChunks = [];
+$("bRec").addEventListener("click", e => {
+  const b = e.currentTarget;
+  if(rec){ rec.stop(); return; }
+  if(!window.MediaRecorder){ b.textContent = "No recorder"; return; }
+  const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find(m => MediaRecorder.isTypeSupported(m)) || "";
+  rec = new MediaRecorder(cv.captureStream(60), mime ? { mimeType:mime, videoBitsPerSecond:16e6 } : undefined);
+  recChunks = [];
+  rec.ondataavailable = ev => { if(ev.data.size) recChunks.push(ev.data); };
+  rec.onstop = () => { download(new Blob(recChunks, { type:"video/webm" }), "rewind-" + stamp() + ".webm"); rec = null; b.textContent = "● Record"; b.classList.remove("on"); };
+  rec.start(250); b.textContent = "■ Stop"; b.classList.add("on");
+});
+["dragenter", "dragover"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); document.body.classList.add("dragging"); }));
+["dragleave", "drop"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if(t === "drop" || e.target === $("dropHint")) document.body.classList.remove("dragging"); }));
+document.addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if(f) loadMediaFile(f); });
+// keys: space = stutter, R = rewind, P = pause, L = catch loop, S = storm
+document.addEventListener("keydown", e => {
+  if(e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if(k === " "){ e.preventDefault(); startEvent("stutter", true); }
+  else if(k === "r") startEvent("rewind", true);
+  else if(k === "p") startEvent("pause", true);
+  else if(k === "l") $("bCatch").click();
+  else if(k === "s") startStorm();
+});
+
+/* ============================ ports ============================
+   in:  image (goes onto the tape like a camera) and points (the lattice).
+   out: the canvas, and the lattice's points in canvas uv, coloured by the
+        current morph. An image cable arriving switches the source to it;
+        releasing it puts back whatever was chosen before.
+   ============================================================== */
+function setRackPoints(v){
+  rackPts = v || null;
+  if(rackPts && P.latSrc !== "rack"){ P.latSrc = "rack"; if(!P.latOn) P.latOn = 1; syncUI(); }
+}
+function setRackImage(v){
+  rackImage = v || null;
+  if(rackImage && P.source !== "rack-image"){ prevSource = P.source; P.source = "rack-image"; syncUI(); }
+  else if(!rackImage && P.source === "rack-image" && prevSource){ P.source = prevSource; prevSource = null; syncUI(); }
+}
+if(PT){
+  try{ PT.publish({ tool:"rewind", label:"Rewind",
+    outputs:{ out:{ type:"image", get:() => cv }, points:{ type:"points", label:"lattice points", get:() => OUT } },
+    inputs:{ image:{ type:"image", label:"image", set:setRackImage }, points:{ type:"points", label:"points", set:setRackPoints } } }); }
+  catch(e){ console.warn("[rewind] ports", e); }
+}
+// storms and morph as modulation sources, so the rest of a patch can follow them
+if(Drive && Drive.registerSource){
+  Drive.registerSource("rewind.storm", "Rewind — storm", () => EV.storm);
+  Drive.registerSource("rewind.morph", "Rewind — morph", () => EV.morph);
+}
+
+/* ============================ boot ============================ */
+vis();
+sizeCanvas();
+scheduleStorm();
+if(P.source === "camera") startCamera();
+requestAnimationFrame(frame);
+
+/* ============================ dice ============================
+   Roll, blend and evolve the parameters over a show (unlimiter-dice.js).
+   It writes P exactly as the sliders do, so presets keep what it lands on
+   and Drive modulation still rides on top. */
+if(window.UnlimiterDice){
+  const diceEl=(k,sel)=>rows[k] ? rows[k].querySelector(sel) : null;
+  const dice=UnlimiterDice.create({
+    tool:"rewind", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
+    params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
+    refresh:k=>{ if(bound[k]) bound[k](); },
+    switches:[["palA","Aero palette"],["palB","Sigil palette"],["morphMode","Auto morph"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
+    drive:Drive, off:["exposure","tapeFps","edgeTh","bloomTh","guiAlpha","latAlpha"],
+    ranges:{ morph:[0,1], crush:[0,0.6], noise:[0,0.6], drop:[0,1.2], warp:[0,0.8], split:[0,0.8], mosh:[0,0.25], trails:[0,0.7] }
+  });
+  dice.mountPanel(document.getElementById("g-dice"));
+  window.__dice=dice;
+}
+
+/* which camera: one choice for the whole suite (unlimiter-camera.js) */
+if(window.UnlimiterCamera) UnlimiterCamera.mount(camBtns);
+</script>
+</body>
+</html>

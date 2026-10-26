@@ -169,6 +169,9 @@ const TOOLS = [
   { file:"lattice.html", name:"Lattice", motif:"lattice",
     desc:"Machine vision as drawing. Tracks features or flow particles from a camera or video \u2014 or takes Manifold's morphing forms \u2014 and draws each point's streak coloured by its speed, the plexus of links between neighbours, and Delaunay or Voronoi meshes over them.",
     tags:["webcam","tracking","optical flow","plexus","3d","drive"] },
+  { file:"rewind.html", name:"Rewind", motif:"rewind",
+    desc:"A late-90s signal chain. Everything goes onto a tape that loops, stutters, pauses and rewinds, then through liquid warp, chrome, block glitches, VHS bleed and player-skin windows \u2014 all on one morph from round, glossy aero to sharp cyber-sigil runes, drifting and storming over time.",
+    tags:["webcam","video","glitch","vhs","y2k","feedback","drive"] },
   { file:"anchor.html", name:"Anchor", motif:"anchor",
     desc:"Turns type, point clouds, images or your own drawn strokes into ordered anchor points, then stamps shapes — or characters — on every one. Anchors carry depth, so the whole thing can be orbited in 3D. Exports real vector.",
     tags:["typography","ascii","point clouds","3d","draw","svg","drive"] },
@@ -304,6 +307,35 @@ const MOTIF = {
       g.lineWidth=1; g.beginPath(); g.moveTo(pts[i][0],pts[i][1]); g.lineTo(pts[j][0],pts[j][1]); g.stroke();
     }
     pts.forEach(p=>{ g.fillStyle=`hsl(${20+p[2]*50},85%,${55+p[2]*30}%)`; g.beginPath(); g.arc(p[0],p[1],1.6,0,TAU); g.fill(); });
+  },
+  rewind(g,w,h,t){
+    // one glass orb, sliding from aero gloss to a wire sigil, with a tracking band rolling through
+    const m=0.5-0.5*Math.cos(t*0.7), cx=w/2, cy=h/2, R=h*0.32;
+    const sky=g.createLinearGradient(0,0,0,h);
+    sky.addColorStop(0,`rgba(20,110,220,${1-m})`); sky.addColorStop(0.7,`rgba(200,245,255,${1-m})`); sky.addColorStop(1,`rgba(90,190,70,${1-m})`);
+    g.fillStyle=sky; g.fillRect(0,0,w,h);
+    const band=(t*38)%(h+40)-20;
+    for(let y=0;y<h;y+=4){
+      const off=Math.abs(y-band)<10 ? (hash(y,Math.floor(t*20))-0.5)*24 : 0;
+      g.save(); g.beginPath(); g.rect(0,y,w,4); g.clip(); g.translate(off,0);
+      if(m<0.98){
+        const o=g.createRadialGradient(cx-R*0.3,cy-R*0.35,2,cx,cy,R);
+        o.addColorStop(0,`rgba(230,252,255,${1-m})`); o.addColorStop(0.4,`rgba(56,199,239,${1-m})`); o.addColorStop(1,`rgba(6,41,106,${1-m})`);
+        g.fillStyle=o; g.beginPath(); g.arc(cx,cy,R,0,TAU); g.fill();
+        g.fillStyle=`rgba(255,255,255,${0.7*(1-m)})`; g.beginPath(); g.ellipse(cx-R*0.1,cy-R*0.55,R*0.55,R*0.22,0,0,TAU); g.fill();
+      }
+      if(m>0.02){
+        g.strokeStyle=`rgba(80,255,110,${m})`; g.lineWidth=1.5; g.beginPath();
+        const s=R*0.45;
+        [[0,0,1,1],[1,0,1,1],[0,1,1,2],[1,1,1,2],[0,2,1,2],[0,0,0,1]].forEach(q=>{
+          for(const k of [1,-1]){ g.moveTo(cx+(q[0]-1)*k*s,cy+(q[1]-1)*s); g.lineTo(cx+(q[2]-1)*k*s,cy+(q[3]-1)*s); }
+        });
+        g.stroke();
+        g.beginPath(); g.moveTo(cx,cy-R); g.lineTo(cx+R,cy); g.lineTo(cx,cy+R); g.lineTo(cx-R,cy); g.closePath(); g.stroke();
+      }
+      g.restore();
+    }
+    g.fillStyle="rgba(0,0,0,0.18)"; for(let y=0;y<h;y+=3) g.fillRect(0,y,w,1);
   },
   ouro(g,w,h,t){
     const cx=w/2, cy=h/2;
