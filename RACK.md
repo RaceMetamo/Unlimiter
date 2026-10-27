@@ -139,7 +139,7 @@ or adds to the motion vectors it moshes with (*Flow from*); **mask** says where 
 lattice points (heading = the local flow), the **field** it is actually moshing with (its own dense
 LK on the frames its tape plays, plus anything patched in — uv per second, 48 × 27) and its motion
 **mask**. So a Vision node's field can drive the mosh, and Rewind's field can steer the Plotter or
-push Flow Weave with the same motion. Every cable switches the matching setting when it arrives and
+push Flow Weave with the same motion. A **depth** input takes any mask as a depth map (bright = near — a Kinect via Relief, or another tool's depth), and with *Depth from: AI* Rewind gives back its own Depth Anything map as a **depth** mask, so Melted World, Sediment or the Plotter can be masked by distance too. Every cable switches the matching setting when it arrives and
 puts the old one back when it goes.
 
 ## Signals — the old Control Surface, inside the graph

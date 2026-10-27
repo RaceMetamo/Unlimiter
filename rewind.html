@@ -120,6 +120,10 @@
       <div class="body" id="g-ink"></div>
     </details>
     <details class="group" open>
+      <summary>Depth — blend effects by distance<span class="chev"></span></summary>
+      <div class="body" id="g-depth"></div>
+    </details>
+    <details class="group" open>
       <summary>Datamosh<span class="chev"></span></summary>
       <div class="body" id="g-mosh"></div>
     </details>
@@ -193,6 +197,7 @@
 <script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script src="unlimiter-vision.js"></script>
+<script src="unlimiter-depthai.js"></script>
 <script>
 "use strict";
 /* ============================================================
@@ -258,6 +263,9 @@ const DEFAULTS = {
   kuwa:3, cel:0.8, bands:4, celSoft:0.15, line:0.85, lineW:1.2, lineTh:0.12, boil:0.5, wobble:0.4,
   tone:0.3, toneMode:"ink", tonePx:6, toneGamma:1.2, hatch:0, hatchPx:5, hatchFlow:0.5,
   wash:0, washBlur:4, inkMix:0, paper:0.3, offset:0.15, focus:0, inkCol:"#140a1e", paperCol:"#f2e8d5",
+  // depth
+  depthSrc:"off", depthQ:"mid", depthSmooth:0.5, dGamma:1, dInv:0, dSplit:0.5, dSoft:0.15, dShow:0,
+  dGlitch:0, dMosh:0, dLines:0, dTone:0, dWash:0, dPal:0, dSil:0.6, dWeight:0.5, fog:0, fogCol:"#e9d8c4", dof:0, dFocus:0.75,
   // datamosh
   mosh:0.35, moshGain:1.5, blocky:0.6, refresh:1, still:0.3, stillTh:0.04, leak:0, keyEvery:0,
   synth:0, synthScale:1.5, moshMask:"off", evBloom:1, evSmear:1,
@@ -268,10 +276,10 @@ const DEFAULTS = {
   morphMode:"off", morphPeriod:24, morphDepth:1, stormRate:3, stormLen:2.5, stormDepth:1.2, stormMorph:0.3,
   drift:0, travel:0.05, seed:7,
   // tape
-  tapeMode:"live", tapeLen:48, tapeFps:30, tapeRes:480, chaos:1.5, evLen:1.6,
-  evStutter:1, evRewind:1, evPause:1, evSlow:1, stutLen:4, speed:1, overdub:0, reRec:0, blendF:0.5,
+  tapeMode:"live", tapeLen:48, tapeFps:30, tapeRes:480, chaos:0.8, evLen:1.6,
+  evStutter:1, evRewind:0, evPause:1, evSlow:1, stutLen:4, speed:1, overdub:0, reRec:0, blendF:0.5,
   // vhs
-  track:0.2, head:0.6, bleed:0.45, ghost:0.2, noise:0.2, drop:0.3, age:0.2, osd:0,
+  track:0, head:0, bleed:0.2, ghost:0, noise:0, drop:0, age:0, osd:0,
   // liquid & chrome
   warp:0.2, warpScale:1.2, warpSpeed:0.15, chrome:0, soft:2.5, melt:0.3, relief:1, gloss:24, cbands:7,
   // glitch
@@ -281,7 +289,7 @@ const DEFAULTS = {
   // lattice
   latOn:0, latSrc:"tracked", latN:90, latReach:0.16, latK:3, latWidth:1.4, latAlpha:0.8, latNode:5, latRunes:0.35,
   // glow & tube
-  bloom:0.3, bloomTh:0.72, exposure:1, scan:0.2, curve:0.12, vig:0.3,
+  bloom:0.3, bloomTh:0.72, exposure:1, scan:0, curve:0, vig:0.2,
   // display
   res:"1280x720"
 };
@@ -289,7 +297,7 @@ let P = Object.assign({}, DEFAULTS);
 let Q = P;
 
 /* looks leave these alone: what is plugged in and where it comes from */
-const SOURCE_KEYS = new Set(["source","mirror","fit","res","tapeRes","seed","flowSrc","latSrc","moshMask"]);
+const SOURCE_KEYS = new Set(["source","mirror","fit","res","tapeRes","seed","flowSrc","latSrc","moshMask","depthSrc","depthQ","dShow"]);
 const LOOKS = {
   "Psyberpunk": {},
   "Cel anime": { kuwa:4, cel:1, bands:3, celSoft:0.06, line:1, lineW:1.5, lineTh:0.1, tone:0.15, focus:0.45, palMix:0.25,
@@ -304,6 +312,8 @@ const LOOKS = {
                    morph:0.6, mosh:0.4, paper:0.6 },
   "Neon sigil": { morph:1, palMix:0.7, glyph:0.7, glyphImg:0.7, edge:0.6, line:0.7, tone:0.35, toneMode:"color", crush:0.3,
                   block:0.18, tear:0.35, latOn:1, flowLines:1, inkCol:"#05000a" },
+  "Depth ink": { depthSrc:"ai", fog:0.5, dof:0.4, dLines:-0.3, dSil:1, dWeight:1, dTone:0.6, dGlitch:0.7, dMosh:0.5,
+                 line:1, lineW:1.6, tone:0.45, kuwa:4, cel:0.9, palMix:0.4 },
   "Datamosh": { mosh:1, moshGain:1.6, blocky:0.95, refresh:0.05, still:0.05, keyEvery:8, hold:0.12, block:0.12, morph:0.7,
                 split:0.4, rate:3, glyph:0, chaos:2, evStutter:1, evRewind:0, line:0.6, tone:0.2 },
   "Melt mosh": { mosh:1, moshGain:2.6, blocky:0.15, refresh:0.02, still:0.1, synth:0.6, flowWarp:0.35, smear:0.5,
@@ -312,13 +322,13 @@ const LOOKS = {
                   trails:0.55, block:0.04, hatch:0.4, hatchFlow:1 },
   "Motion only": { gate:1, block:0.55, tear:0.6, split:1.2, mosh:0.7, still:1, stillTh:0.06, morph:0.85, edge:0.6,
                    glyph:0.3, palMix:0.5, focus:0.6 },
-  "Tape loop": { tapeMode:"loop", tapeLen:60, overdub:0.25, chaos:1, track:0.45, bleed:0.7, ghost:0.35, age:0.55,
-                 noise:0.35, drop:0.6, curve:0.25, scan:0.4, mosh:0.5, refresh:0.3 },
+  "Tape loop": { tapeMode:"loop", evRewind:1, head:0.6, tapeLen:60, overdub:0.25, chaos:1, track:0.45, bleed:0.7, ghost:0.35, age:0.55,
+                 noise:0.35, drop:0.6, scan:0.4, mosh:0.5, refresh:0.3, tapeMode:"loop" },
   "Liquid chrome": { chrome:1, soft:3, melt:0.55, relief:1.4, gloss:30, palA:"Chrome", palMix:0.15, warp:0.45, warpSpeed:0.2,
                      block:0.05, bloom:0.35, mosh:0.6, refresh:0.4, still:0.15, flowWarp:0.3, line:1, tone:0.25 },
   "Morph cycle": { morphMode:"sine", morphPeriod:20, morphDepth:1, stormRate:6, stormMorph:0.4, drift:8, latOn:1,
                    glyph:0.6, edge:0.4, palMix:0.4, flowLines:1, mosh:0.6, focus:0.3 },
-  "Rewind storm": { chaos:6, evLen:2, stormRate:12, stormDepth:2, drift:20, travel:0.2, track:0.5, hold:0.12, block:0.2,
+  "Rewind storm": { evRewind:1, noise:0.3, drop:0.5, head:0.6, scan:0.25, age:0.3, chaos:6, evLen:2, stormRate:12, stormDepth:2, drift:20, travel:0.2, track:0.5, hold:0.12, block:0.2,
                     morphMode:"storm", morphDepth:0.8, mosh:0.7, focus:0.6 }
 };
 
@@ -327,7 +337,7 @@ const cv = document.getElementById("gl");
 const Drive = (window.UnlimiterDrive)
   ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
   : null;
-const NO_MOD = new Set(["tapeLen","tapeFps","tapeRes","latN","latK","stutLen","reRec","seed","keyEvery"]);
+const NO_MOD = new Set(["depthSmooth","tapeLen","tapeFps","tapeRes","latN","latK","stutLen","reRec","seed","keyEvery"]);
 let GRP = "";
 function registerMod(key,label,min,max){
   if(!Drive || NO_MOD.has(key)) return;
@@ -445,6 +455,33 @@ colorPick(gI,"inkCol","Ink");
 colorPick(gI,"paperCol","Paper colour");
 slider(gI,"focus","Speed lines",0,1,0.01,"");
 note(gI,"Drawn on top of everything the tape, mosh and glitches did. Paint flatten is a Kuwahara filter: it flattens the picture into painted shapes before the cel bands cut it into flat tones. Ink lines are traced from that flattened picture, so they follow shapes rather than noise; Hand wobble and Line boil make them shake and redraw like hand-inked animation, and Print offset slides the line plate off the colour plate like a misregistered woodblock or risograph. Halftone screens the tones as ink dots, coloured dots or a four-plate CMYK print; the dots go round → diamond → line screen along the morph. Hatching lays manga crosshatch into the shadows, and can turn to follow the motion. Ink wash bleeds the darks into sumi pools with darker rims and paper grain; Monochrome reduces the colour to ink on paper. Speed lines burst from the centre, harder with motion and storms.");
+
+GRP="Depth";
+const gDp=document.getElementById("g-depth");
+select(gDp,"depthSrc","Depth from",[["off","Off"],["ai","AI — Depth Anything V2 (GPU)"],["estimate","Estimate — position, colour, motion"],["rack","Rack: depth cable (mask)"]],()=>{ if(P.depthSrc==="ai") depthLoad(); });
+select(gDp,"depthQ","AI resolution",[["low","Low — fastest"],["mid","Medium"],["high","High — slowest"]],()=>{ if(DAI){ DAI.setSize(P.depthQ); DEPTH.slots.fill(null); } });
+const depthNote=note(gDp,"","depthState");
+slider(gDp,"depthSmooth","Steadiness",0,0.95,0.01,"");
+slider(gDp,"dGamma","Depth contrast",0.3,3,0.01,"");
+check(gDp,"dInv","Invert");
+slider(gDp,"dSplit","Near / far split",0,1,0.005,"");
+slider(gDp,"dSoft","Split softness",0.01,0.5,0.005,"");
+check(gDp,"dShow","Show depth map");
+subhead(gDp,"Where each effect lands  (− near · 0 everywhere · + far)");
+slider(gDp,"dGlitch","Glitch",-1,1,0.01,"");
+slider(gDp,"dMosh","Mosh",-1,1,0.01,"");
+slider(gDp,"dLines","Ink lines",-1,1,0.01,"");
+slider(gDp,"dTone","Halftone & hatch",-1,1,0.01,"");
+slider(gDp,"dWash","Ink wash",-1,1,0.01,"");
+slider(gDp,"dPal","Palette map",-1,1,0.01,"");
+subhead(gDp,"Depth looks");
+slider(gDp,"dSil","Silhouette lines",0,2,0.01,"");
+slider(gDp,"dWeight","Line weight by depth",0,1,0.01,"");
+slider(gDp,"fog","Atmosphere",0,1,0.01,"");
+colorPick(gDp,"fogCol","Atmosphere colour");
+slider(gDp,"dof","Depth of field",0,1,0.01,"");
+slider(gDp,"dFocus","Focus",0,1,0.005,"");
+note(gDp,"A scene depth buffer for footage that never had one. AI runs Depth Anything V2 on the GPU (WebGPU, or slower WASM without it) on the frames going onto the tape, and keeps each frame's depth with it — so loops, stutters and rewinds stay in step with their depth. The first use downloads the library and model (~100 MB) once; the browser keeps them after that. Estimate is a free stand-in that guesses from height in frame, colour and motion. The Rack cable takes any mask as depth (bright = near), such as a Kinect through Relief. Each slider below pushes an effect toward the near side (−) or the far side (+) of the split, like masking a post-process by SceneDepth. Silhouette lines ink the edges where depth jumps — the outline pass of a toon shader — and line weight thickens toward the camera. Atmosphere fades the far planes into a colour, like the layered haze of a woodblock print.");
 
 GRP="Datamosh";
 const gMs=document.getElementById("g-mosh");
@@ -597,7 +634,7 @@ slider(gP,"vig","Vignette",0,1,0.01,"");
 
 const gPo=document.getElementById("g-ports");
 const portsEl=document.createElement("div"); portsEl.className="ports"; gPo.appendChild(portsEl);
-note(gPo,"In: image → the tape's source. points → the lattice, and pushes the flow (Point push). field → motion vectors for the mosh and every flow effect (Flow from). mask → where the mosh is allowed, and where glitches land with Glitch where it moves. Out: the picture; the lattice's points; the flow field it is moshing with (uv per second, 48 × 27) and its motion mask — so another tool can follow the same motion. Cut a cable and Rewind goes back to what it was using before.");
+note(gPo,"In: depth → a depth map for the Depth group (bright = near). Out: depth → the AI depth map as a mask, for any tool that takes one. In: image → the tape's source. points → the lattice, and pushes the flow (Point push). field → motion vectors for the mosh and every flow effect (Flow from). mask → where the mosh is allowed, and where glitches land with Glitch where it moves. Out: the picture; the lattice's points; the flow field it is moshing with (uv per second, 48 × 27) and its motion mask — so another tool can follow the same motion. Cut a cable and Rewind goes back to what it was using before.");
 
 GRP="Display";
 const gD=document.getElementById("g-disp");
@@ -627,6 +664,10 @@ function vis(){
   ["tonePx","toneGamma"].forEach(k=>show(k,P.tone>0));
   ["hatchPx","hatchFlow"].forEach(k=>show(k,P.hatch>0));
   show("washBlur",P.wash>0);
+  const dOn=P.depthSrc!=="off";
+  ["depthSmooth","dGamma","dInv","dSplit","dSoft","dShow","dGlitch","dMosh","dLines","dTone","dWash","dPal","dSil","dWeight","fog","fogCol","dof","dFocus"].forEach(k=>show(k,dOn));
+  show("depthQ",P.depthSrc==="ai"); show("dFocus",dOn&&P.dof>0); show("fogCol",dOn&&P.fog>0);
+  if(typeof depthNote!=="undefined") depthNote.classList.toggle("hidden",P.depthSrc!=="ai");
   ["flowThresh","flowSmooth"].forEach(k=>show(k,P.flowSrc!=="rack"));
 }
 
@@ -745,7 +786,7 @@ function drawDemo(t){
   }
 }
 
-let rackImage = null, rackPts = null, rackField = null, rackMask = null;
+let rackImage = null, rackPts = null, rackField = null, rackMask = null, rackDepth = null, prevDepthSrc = null;
 let prevSource = null, prevLatSrc = null, prevFlowSrc = null, prevMoshMask = null;
 function currentSource(){
   const s = P.source;
@@ -861,6 +902,35 @@ float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2
 float fbm(vec2 p){ float s = 0.0, a = 0.5; for(int i = 0; i < 4; i++){ s += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
 `;
 
+const DEPTH_GLSL = `
+uniform sampler2D uDepth; uniform float uDOn, uDSplit, uDSoft, uDGamma, uDInv;
+float nearAt(vec2 uv){
+  if(uDOn < 0.5) return 0.5;
+  float n = pow(clamp(texture(uDepth, vec2(uv.x, 1.0 - uv.y)).r, 0.0, 1.0), uDGamma);
+  return uDInv > 0.5 ? 1.0 - n : n;
+}
+float dW(float bias, float n){
+  if(uDOn < 0.5 || abs(bias) < 0.001) return 1.0;
+  float nm = smoothstep(uDSplit - uDSoft, uDSplit + uDSoft, n);
+  return bias < 0.0 ? mix(1.0, nm, -bias) : mix(1.0, 1.0 - nm, bias);
+}
+`;
+
+/* a free depth guess: lower in frame, more saturated and moving = nearer. Written v-down like the AI map */
+const EST_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uA, uFlow;
+void main(){
+  vec2 g = vec2(vUv.x, 1.0 - vUv.y);
+  vec3 c = textureLod(uA, g, 3.0).rgb;
+  float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+  float sat = mx > 0.001 ? (mx - mn) / mx : 0.0;
+  float mot = clamp(length(texture(uFlow, vUv).xy) * 3.0, 0.0, 1.0);
+  float n = 0.55 * (1.0 - g.y) + 0.25 * sat + 0.1 * mx + 0.3 * mot;
+  o = vec4(vec3(clamp(n * 0.95, 0.0, 1.0)), 1.0);
+}`;
+
 /* the datamosh: last frame pushed along the vectors, some macroblocks refreshed from the tape */
 const MOSH_FS = `#version 300 es
 precision highp float;
@@ -868,8 +938,9 @@ in vec2 vUv; out vec4 o;
 uniform sampler2D uFresh, uFreshB, uOld, uFlow, uMask;
 uniform vec2 uGrid;
 uniform float uMix, uDt, uGain, uBlocky, uRefresh, uStill, uStillTh, uLeak, uKey, uFreeze;
-uniform float uMaskOn, uMaskInv, uSynth, uSynthScale, uT, uSeed;
+uniform float uMaskOn, uMaskInv, uSynth, uSynthScale, uT, uSeed, uDMosh;
 ${NOISE_GLSL}
+${DEPTH_GLSL}
 void main(){
   vec2 fuv = vec2(vUv.x, 1.0 - vUv.y);                  // fields and masks are stored v-down
   vec2 cell = (floor(fuv * uGrid) + 0.5) / uGrid;
@@ -897,6 +968,7 @@ void main(){
     ref = max(ref * step(0.5, mk), 1.0 - smoothstep(0.3, 0.6, mk));
   }
   ref *= 1.0 - uFreeze;
+  ref = max(ref, 1.0 - dW(uDMosh, nearAt(vUv)));
   ref = max(ref, uKey);
   vec3 c = mix(old, fresh, ref);
   c = mix(c, fresh, uLeak * (1.0 - uFreeze));
@@ -916,9 +988,10 @@ uniform float uFlowWarp, uSmear, uFlowCol, uGate;
 uniform float uTrack, uHead, uBleed, uGhost, uNoise, uDrop, uAge;
 uniform float uChrome, uSoft, uMelt, uRelief, uGloss, uBands;
 uniform float uPal; uniform vec3 uRA[5]; uniform vec3 uRB[5];
-uniform float uEdge, uEdgeTh, uGlyph, uGlyphPx, uRain, uGlyphImg, uGlyphDim;
+uniform float uEdge, uEdgeTh, uGlyph, uGlyphPx, uRain, uGlyphImg, uGlyphDim, uDGlitch, uDPal;
 #define PI 3.14159265
 ${NOISE_GLSL}
+${DEPTH_GLSL}
 float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
 vec3 rampA(float t){ t = clamp(t, 0.0, 1.0) * 4.0; int i = int(min(floor(t), 3.0)); return mix(uRA[i], uRA[i + 1], t - float(i)); }
 vec3 rampB(float t){ t = clamp(t, 0.0, 1.0) * 4.0; int i = int(min(floor(t), 3.0)); return mix(uRB[i], uRB[i + 1], t - float(i)); }
@@ -965,7 +1038,8 @@ void main(){
   /* --- motion here: the vectors, and how much is moving --- */
   vec2 fl = flowAt(vUv);
   float mot = uHasMask > 0.5 ? texture(uMask, vec2(vUv.x, 1.0 - vUv.y)).r : clamp(length(fl) * 4.0, 0.0, 1.0);
-  float gate = mix(1.0, mot, uGate);
+  float dn = nearAt(vUv);
+  float gate = mix(1.0, mot, uGate) * dW(uDGlitch, dn);
 
   /* --- tracking: line wobble, a rolling tear band, head switching --- */
   float ln = floor(uv.y * uRes.y * 0.5);
@@ -1011,7 +1085,7 @@ void main(){
   float qa = floor(atan(w.y, w.x) / (PI * 0.25) + 0.5) * (PI * 0.25);
   vec2 wS = vec2(cos(qa), sin(qa)) * floor(length(w) * 8.0) / 8.0;
   w = mix(w, wS, m);
-  off += w * uWarp * 0.25 * (1.0 + st);
+  off += w * uWarp * 0.25 * (1.0 + st) * dW(uDGlitch, dn);
   vec2 offUV = (D * off.x + Pp * off.y) / vec2(asp, 1.0);
   // flow warp: the picture pushed along its own motion
   vec2 flq = mix(fl, floor(fl * 24.0 + 0.5) / 24.0, m);
@@ -1066,7 +1140,7 @@ void main(){
 
   /* --- palette map --- */
   float L = lum(c);
-  c = mix(c, mix(rampA(L), rampB(L), m), uPal);
+  c = mix(c, mix(rampA(L), rampB(L), m), uPal * dW(uDPal, dn));
 
   /* --- flow colour: direction as hue when round, speed through the sigil palette when sharp --- */
   if(uFlowCol > 0.001){
@@ -1179,9 +1253,11 @@ uniform float uT, uM, uSeed, uStorm, uAct, uS;
 uniform float uLine, uLineW, uLineTh, uBoil, uWobble, uOffset;
 uniform float uTone, uToneMode, uTonePx, uToneGamma, uHatch, uHatchPx, uHatchFlow;
 uniform float uWash, uWashBlur, uInkMix, uPaper, uSpeed;
-uniform vec3 uInk, uPaperC;
+uniform vec3 uInk, uPaperC, uFogC;
+uniform float uDLines, uDTone, uDWash, uDSil, uDWeight, uFog, uDof, uFocus, uDShow;
 #define PI 3.14159265
 ${NOISE_GLSL}
+${DEPTH_GLSL}
 float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
 /* one screen: round dot → diamond → line, by morph; v is ink coverage */
 float screen(vec2 fc, float ang, float v, float cell, float m){
@@ -1208,7 +1284,8 @@ void main(){
   vec2 fc = gl_FragCoord.xy, uv = vUv;
   float m = uM, asp = uRes.x / uRes.y;
   float tb = uBoil > 0.0 ? floor(uT * mix(4.0, 12.0, uBoil)) : 0.0;
-  vec3 base = texture(uK, uv).rgb;
+  float dn = nearAt(uv);
+  vec3 base = uDof > 0.001 && uDOn > 0.5 ? textureLod(uK, uv, uDof * 5.0 * smoothstep(0.03, 0.6, abs(dn - uFocus))).rgb : texture(uK, uv).rgb;
   float L = lum(base);
 
   /* paper and wash */
@@ -1220,7 +1297,7 @@ void main(){
     float rim = clamp(abs(Ls - Lb) * 5.0, 0.0, 1.0) * smoothstep(0.95, 0.4, Lb);
     float ink = clamp(wsh * (0.7 + 0.5 * grain) + rim * 0.6, 0.0, 1.0);
     vec3 washed = mix(uPaperC * mix(0.9, 1.0, fiber), uInk, ink);
-    base = mix(base, mix(base * mix(vec3(1.0), uInk + 0.35, ink), washed, uInkMix), uWash);
+    base = mix(base, mix(base * mix(vec3(1.0), uInk + 0.35, ink), washed, uInkMix), uWash * dW(uDWash, dn));
   }
   vec3 mono = mix(uInk, uPaperC, smoothstep(0.05, 0.95, L));
   base = mix(base, mono, uInkMix * (1.0 - uWash * 0.5));
@@ -1245,7 +1322,7 @@ void main(){
       ht = uPaperC * (vec3(1.0) - C * vec3(0.95, 0.0, 0.0)) * (vec3(1.0) - M * vec3(0.0, 0.9, 0.0)) * (vec3(1.0) - Y * vec3(0.0, 0.0, 0.9));
       ht = mix(ht, uInk, K * 0.92);
     }
-    base = mix(base, ht, uTone);
+    base = mix(base, ht, uTone * dW(uDTone, dn));
   }
 
   /* manga hatching in the shadows, optionally turned along the motion */
@@ -1258,15 +1335,19 @@ void main(){
     float h = hatchLine(fc, a1, sp, uWobble, tb) * smoothstep(0.3, 0.42, d);
     h = max(h, hatchLine(fc, a1 + 1.5708, sp, uWobble, tb + 3.0) * smoothstep(0.52, 0.64, d));
     h = max(h, hatchLine(fc, a1 + 0.785, sp * 0.7, uWobble, tb + 7.0) * smoothstep(0.72, 0.84, d));
-    base = mix(base, uInk, h * uHatch);
+    base = mix(base, uInk, h * uHatch * dW(uDTone, dn));
   }
+
+  /* atmosphere: far planes fade into the haze colour, like layered woodblock distance */
+  float fogK = uDOn > 0.5 ? uFog * pow(1.0 - dn, 1.4) : 0.0;
+  base = mix(base, uFogC, fogK);
 
   /* ink lines traced from the flattened picture, hand-shaken, boiling, slightly off-register */
   if(uLine > 0.001){
     vec2 wob = (vec2(vnoise(fc * 0.035 + tb * 13.1), vnoise(fc * 0.035 + tb * 7.7 + 31.0)) - 0.5) * uWobble * 4.0 * uS / uRes;
     vec2 off = vec2(cos(uSeed * 6.28), sin(uSeed * 6.28)) * uOffset * 3.0 * uS / uRes;
     vec2 q = uv + wob + off;
-    vec2 e = uLineW * uS / uRes;
+    vec2 e = uLineW * uS * mix(1.0, 0.45 + 1.1 * dn, uDWeight * uDOn) / uRes;
     vec3 a = texture(uK, q + vec2(-e.x, e.y)).rgb, b = texture(uK, q + vec2(0.0, e.y)).rgb, c = texture(uK, q + e).rgb;
     vec3 d = texture(uK, q + vec2(-e.x, 0.0)).rgb, f = texture(uK, q + vec2(e.x, 0.0)).rgb;
     vec3 g = texture(uK, q - e).rgb, h = texture(uK, q + vec2(0.0, -e.y)).rgb, i = texture(uK, q + vec2(e.x, -e.y)).rgb;
@@ -1274,11 +1355,15 @@ void main(){
     float eL = length(vec2(lum(gx), lum(gy))) * 0.25;
     float eC = length(vec2(length(gx), length(gy))) * 0.14;
     float ed = max(eL, eC);
+    if(uDOn > 0.5 && uDSil > 0.001){
+      float n1 = nearAt(q + vec2(e.x, 0.0)), n2 = nearAt(q - vec2(e.x, 0.0)), n3 = nearAt(q + vec2(0.0, e.y)), n4 = nearAt(q - vec2(0.0, e.y));
+      ed = max(ed, length(vec2(n1 - n2, n3 - n4)) * uDSil * 2.5);
+    }
     float soft = mix(0.12, 0.015, m);
     float ln = smoothstep(uLineTh, uLineTh + soft, ed);
     // dry brush on the round side: the stroke breaks up along its length
     ln *= mix(0.55 + 0.45 * smoothstep(0.25, 0.6, vnoise(fc * vec2(0.08, 0.6) + tb)), 1.0, m);
-    base = mix(base, uInk, ln * uLine);
+    base = mix(base, uInk, ln * uLine * dW(uDLines, dn) * (1.0 - fogK * 0.7));
   }
 
   /* speed lines: anime focus lines, harder with motion and storms */
@@ -1291,6 +1376,7 @@ void main(){
     float ray = on * smoothstep(wid, 0.0, abs(fract(an * N) - 0.5)) * smoothstep(0.22 + 0.25 * h12(vec2(id, tq + 9.0)), 0.85, r);
     base = mix(base, uInk, ray * uSpeed * clamp(0.3 + uAct * 4.0 + uStorm * 0.7, 0.0, 1.0));
   }
+  if(uDShow > 0.5) base = vec3(uDOn > 0.5 ? dn : 0.0);
   o = vec4(clamp(base, 0.0, 1.0), 1.0);
 }`;
 
@@ -1328,7 +1414,7 @@ void main(){
 }`;
 
 const PCAP = prog(FULL_VS, CAP_FS), PCOPY = prog(FULL_VS, COPY_FS), PPROC = prog(FULL_VS, PROC_FS), PMOSH = prog(FULL_VS, MOSH_FS);
-const PKUWA = prog(FULL_VS, KUWA_FS), PINK = prog(FULL_VS, INK_FS);
+const PKUWA = prog(FULL_VS, KUWA_FS), PINK = prog(FULL_VS, INK_FS), PEST = prog(FULL_VS, EST_FS);
 const PBRI = prog(FULL_VS, BRIGHT_FS), PBLUR = prog(FULL_VS, BLUR_FS), PFIN = prog(FULL_VS, FINAL_FS);
 const fullVAO = gl.createVertexArray();
 
@@ -1349,7 +1435,7 @@ function target(w, h, mip){
   return { t, f, w, h };
 }
 function freeTarget(r){ if(r){ gl.deleteTexture(r.t); gl.deleteFramebuffer(r.f); } }
-const BOUND = [null, null, null, null, null, null];
+const BOUND = [null, null, null, null, null, null, null];
 function bindTex(unit, t){ gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); BOUND[unit] = t; }
 function draw(prog, rt, w, h){
   // never leave the target bound for sampling: that is a feedback loop
@@ -1371,6 +1457,10 @@ const ovTex = plainTex(gl.LINEAR);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
 const flowTex = plainTex(gl.LINEAR);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, 1, 1, 0, gl.RG, gl.FLOAT, new Float32Array([0, 0]));
+const depthTex = plainTex(gl.LINEAR);
+gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([128]));
+const estRT = target(160, 90);
 const maskTex = plainTex(gl.LINEAR);
 gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([0]));
@@ -1402,6 +1492,7 @@ function tapeAlloc(){
   const w = Math.max(16, Math.round(outW * s)), h = Math.max(16, Math.round(outH * s));
   if(TAPE.w === w && TAPE.h === h) return;
   TAPE.slots.forEach(freeTarget); TAPE.slots.fill(null); TAPE.ana.fill(null);
+  if(typeof DEPTH !== "undefined") DEPTH.slots.fill(null);
   TAPE.w = w; TAPE.h = h; TAPE.written = 0; TAPE.head = 0; TAPE.ev = null; TAPE.catchup = false;
   if(TAPE.base === "loop") TAPE.recLeft = Math.round(Q.tapeLen);
   moshRT.forEach(freeTarget); moshRT = [target(w, h, true), target(w, h, true)]; MOSH.key = true;
@@ -1440,15 +1531,10 @@ function capture(src){
   bindTex(0, rt.t); gl.generateMipmap(gl.TEXTURE_2D);
   // the analysis copy, cropped the same way (canvas y runs down; the crop is centred so it matches)
   const k = slotOf(f);
+  if(P.depthSrc === "ai" && DAI && DAI.ready) depthQueue(src, fit, f);
   if(needAna()){
     try{
-      ag.fillStyle = "#000"; ag.fillRect(0, 0, AW, AH);
-      ag.save();
-      if(src.mirror){ ag.translate(AW, 0); ag.scale(-1, 1); }
-      const sx = fit[2] * src.w, sy = fit[3] * src.h, sw = fit[0] * src.w, shh = fit[1] * src.h;
-      if(sw <= src.w + 0.5 && shh <= src.h + 0.5) ag.drawImage(src.el, sx, sy, sw, shh, 0, 0, AW, AH);
-      else { const dw = AW * src.w / sw, dh = AH * src.h / shh; ag.drawImage(src.el, (AW - dw) / 2, (AH - dh) / 2, dw, dh); }
-      ag.restore();
+      drawFit(ag, AW, AH, src, fit);
       const d = ag.getImageData(0, 0, AW, AH).data;
       if(!TAPE.ana[k] || TAPE.ana[k].length !== d.length) TAPE.ana[k] = new Uint8ClampedArray(d.length);
       TAPE.ana[k].set(d);
@@ -1456,6 +1542,89 @@ function capture(src){
   } else TAPE.ana[k] = null;
   TAPE.written++;
   return true;
+}
+
+/* draw a source into a small canvas with the same crop the tape uses */
+function drawFit(g, W, H, src, fit){
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+  g.save();
+  if(src.mirror){ g.translate(W, 0); g.scale(-1, 1); }
+  const sx = fit[2] * src.w, sy = fit[3] * src.h, sw = fit[0] * src.w, shh = fit[1] * src.h;
+  if(sw <= src.w + 0.5 && shh <= src.h + 0.5) g.drawImage(src.el, sx, sy, sw, shh, 0, 0, W, H);
+  else { const dw = W * src.w / sw, dh = H * src.h / shh; g.drawImage(src.el, (W - dw) / 2, (H - dh) / 2, dw, dh); }
+  g.restore();
+}
+
+/* ============================ depth ============================
+   AI depth is worked out for frames as they go onto the tape and kept
+   beside them, so a loop replays its own depth. Inference runs one frame
+   at a time; frames that arrive while it is busy are skipped, and the
+   nearest frame that has depth stands in for them. */
+const DAI = window.UnlimiterDepthAI ? UnlimiterDepthAI.create({ size:P.depthQ }) : null;
+const DEPTH = { slots:new Array(TCAP).fill(null), pending:null, busy:false, prev:null, shown:null, rackVer:-1, out:null };
+const dcv = document.createElement("canvas"), dctx = dcv.getContext("2d", { willReadFrequently:true });
+function depthLoad(){ if(DAI && !DAI.ready) DAI.load().then(ok => { if(!ok) console.warn("[rewind] depth model", DAI.error); }); }
+function depthQueue(src, fit, frame){
+  const [h, w] = DAI.inputSize();
+  if(dcv.width !== w || dcv.height !== h){ dcv.width = w; dcv.height = h; }
+  try{ drawFit(dctx, w, h, src, fit); DEPTH.pending = { frame, rgba:dctx.getImageData(0, 0, w, h).data }; }catch(e){ return; }
+  depthPump();
+}
+function depthPump(){
+  if(DEPTH.busy || !DEPTH.pending || !DAI || !DAI.ready) return;
+  const job = DEPTH.pending; DEPTH.pending = null; DEPTH.busy = true;
+  DAI.estimate(job.rgba).then(r => {
+    // steadiness: ease toward the new map so live depth doesn't shimmer
+    const s = clamp(P.depthSmooth, 0, 0.95), pv = DEPTH.prev;
+    if(pv && pv.w === r.w && pv.h === r.h && s > 0) for(let i = 0; i < r.data.length; i++) r.data[i] = pv.data[i] * s + r.data[i] * (1 - s);
+    DEPTH.prev = r;
+    DEPTH.slots[slotOf(job.frame)] = { frame:job.frame, data:r.data, w:r.w, h:r.h };
+  }).catch(e => console.warn("[rewind] depth", e)).finally(() => { DEPTH.busy = false; depthPump(); });
+}
+/* the depth for the frame on screen: its own, or the nearest one that has it */
+function depthFor(f){
+  for(let k = 0; k <= 12; k++){
+    for(const g of k ? [f - k, f + k] : [f]){
+      const e = DEPTH.slots[slotOf(g)];
+      if(e && e.frame === g) return e;
+    }
+  }
+  return null;
+}
+/* binds the depth map for this frame to unit 6; returns whether there is one */
+function depthBind(){
+  const mode = P.depthSrc;
+  if(mode === "off") { bindTex(6, depthTex); return false; }
+  if(mode === "estimate"){
+    const src = MOSH.wasOn && moshRT[mcur] ? moshRT[mcur].t : (TAPE.fA >= 0 && TAPE.slots[slotOf(TAPE.fA)] ? TAPE.slots[slotOf(TAPE.fA)].t : null);
+    if(!src){ bindTex(6, depthTex); return false; }
+    bindTex(0, src); bindTex(4, flowTex);
+    gl.useProgram(PEST.p); gl.uniform1i(PEST.u.uA, 0); gl.uniform1i(PEST.u.uFlow, 4);
+    draw(PEST, estRT, estRT.w, estRT.h);
+    bindTex(6, estRT.t); return true;
+  }
+  let e = null;
+  if(mode === "rack") e = rackDepth && rackDepth.data ? rackDepth : null;
+  else { depthLoad(); e = TAPE.fA >= 0 ? depthFor(TAPE.fA) : null; }
+  bindTex(6, depthTex);
+  if(!e) return false;
+  const ver = mode === "rack" ? e.version : 0;
+  if(e !== DEPTH.shown || (mode === "rack" && ver !== DEPTH.rackVer)){
+    DEPTH.shown = e; DEPTH.rackVer = ver;
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, e.w, e.h, 0, gl.RED, gl.UNSIGNED_BYTE, e.data);
+    if(PT && mode === "ai"){
+      if(!DEPTH.out || DEPTH.out.w !== e.w || DEPTH.out.h !== e.h) DEPTH.out = PT.makeMask(e.w, e.h);
+      DEPTH.out.data.set(e.data); PT.bump(DEPTH.out);
+    }
+  }
+  return true;
+}
+let depthOn = false;
+function setDepthUniforms(u){
+  gl.uniform1i(u.uDepth, 6); gl.uniform1f(u.uDOn, depthOn ? 1 : 0);
+  gl.uniform1f(u.uDSplit, Q.dSplit); gl.uniform1f(u.uDSoft, Math.max(0.005, Q.dSoft));
+  gl.uniform1f(u.uDGamma, Math.max(0.05, Q.dGamma)); gl.uniform1f(u.uDInv, P.dInv ? 1 : 0);
 }
 
 function setBase(mode){
@@ -1686,6 +1855,7 @@ function moshStep(dt, A, B, mix, t){
   gl.uniform1f(u.uLeak, Q.leak); gl.uniform1f(u.uKey, key ? 1 : 0); gl.uniform1f(u.uFreeze, ev ? 1 : 0);
   gl.uniform1f(u.uMaskOn, mk && P.moshMask !== "off" ? 1 : 0); gl.uniform1f(u.uMaskInv, P.moshMask === "outside" ? 1 : 0);
   gl.uniform1f(u.uSynth, Q.synth); gl.uniform1f(u.uSynthScale, Q.synthScale); gl.uniform1f(u.uT, t);
+  setDepthUniforms(u); gl.uniform1f(u.uDMosh, Q.dMosh);
   gl.uniform1f(u.uSeed, fract(P.seed * 0.1373));
   draw(PMOSH, rt, rt.w, rt.h);
   bindTex(0, rt.t); gl.generateMipmap(gl.TEXTURE_2D);
@@ -1915,6 +2085,7 @@ function render(t, dt){
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   }
   const hasMask = uploadFlow();
+  depthOn = depthBind();
   const has = TAPE.written > 0 && TAPE.fA >= 0;
   const A = has ? TAPE.slots[slotOf(TAPE.fA)] : null, B = has ? TAPE.slots[slotOf(TAPE.fB)] : null;
   // the mosh reads the tape and becomes the tape the rest of the chain sees
@@ -1923,6 +2094,7 @@ function render(t, dt){
   if(M){ tA = M.t; tB = A.t; fmix = 1 - clamp(Q.mosh, 0, 1); }
   const prev = pcur; pcur ^= 1;
   bindTex(0, tA); bindTex(1, tB); bindTex(2, proc[prev].t); bindTex(3, ovTex); bindTex(4, flowTex); bindTex(5, maskTex);
+  if(depthOn && P.depthSrc === "estimate") bindTex(6, estRT.t); else bindTex(6, depthTex);
   const pr = PPROC, u = pr.u;
   gl.useProgram(pr.p);
   gl.uniform1i(u.uA, 0); gl.uniform1i(u.uB, 1); gl.uniform1i(u.uPrev, 2); gl.uniform1i(u.uOv, 3); gl.uniform1i(u.uFlow, 4); gl.uniform1i(u.uMask, 5);
@@ -1944,6 +2116,7 @@ function render(t, dt){
   gl.uniform1f(u.uEdge, Q.edge); gl.uniform1f(u.uEdgeTh, Q.edgeTh);
   gl.uniform1f(u.uGlyph, Q.glyph); gl.uniform1f(u.uGlyphPx, Math.max(4, Q.glyphPx) * h / 720); gl.uniform1f(u.uRain, Q.rain);
   gl.uniform1f(u.uGlyphImg, Q.glyphImg); gl.uniform1f(u.uGlyphDim, Q.glyphDim);
+  setDepthUniforms(u); gl.uniform1f(u.uDGlitch, Q.dGlitch); gl.uniform1f(u.uDPal, Q.dPal);
   draw(pr, proc[pcur], w, h);
   // overdub: the processed frame back onto the loop
   const fA = TAPE.fA;
@@ -1975,7 +2148,12 @@ function render(t, dt){
   gl.uniform1f(ik.uHatch, Q.hatch); gl.uniform1f(ik.uHatchPx, Math.max(2, Q.hatchPx)); gl.uniform1f(ik.uHatchFlow, Q.hatchFlow);
   gl.uniform1f(ik.uWash, Q.wash); gl.uniform1f(ik.uWashBlur, Q.washBlur); gl.uniform1f(ik.uInkMix, Q.inkMix);
   gl.uniform1f(ik.uPaper, Q.paper); gl.uniform1f(ik.uSpeed, Q.focus);
-  gl.uniform3fv(ik.uInk, hexRGB(P.inkCol)); gl.uniform3fv(ik.uPaperC, hexRGB(P.paperCol));
+  gl.uniform3fv(ik.uInk, hexRGB(P.inkCol)); gl.uniform3fv(ik.uPaperC, hexRGB(P.paperCol)); gl.uniform3fv(ik.uFogC, hexRGB(P.fogCol));
+  if(depthOn && P.depthSrc === "estimate") bindTex(6, estRT.t); else bindTex(6, depthTex);
+  setDepthUniforms(ik);
+  gl.uniform1f(ik.uDLines, Q.dLines); gl.uniform1f(ik.uDTone, Q.dTone); gl.uniform1f(ik.uDWash, Q.dWash);
+  gl.uniform1f(ik.uDSil, Q.dSil); gl.uniform1f(ik.uDWeight, Q.dWeight); gl.uniform1f(ik.uFog, Q.fog);
+  gl.uniform1f(ik.uDof, Q.dof); gl.uniform1f(ik.uFocus, Q.dFocus); gl.uniform1f(ik.uDShow, P.dShow ? 1 : 0);
   draw(PINK, inkRT, w, h);
   // glow
   const bw = bl[0].w, bh = bl[0].h;
@@ -2059,9 +2237,15 @@ function frame(now){
       ` · morph ${EV.morph.toFixed(2)}` + (EV.storm > 0.05 ? ` · storm ${(EV.storm * 100).toFixed(0)}%` : "") +
       (P.latOn ? ` · ${LP.n} pts` : "") + ` · ${fpsEma.toFixed(0)} fps`;
     srcNote.textContent = src.label;
+    if(P.depthSrc === "ai"){
+      depthNote.textContent = !DAI ? "unlimiter-depthai.js is missing." :
+        DAI.state === "failed" ? "Couldn't load the depth model: " + DAI.error + " — it needs http(s) and an internet connection the first time." :
+        DAI.ready ? `Depth Anything V2 on ${DAI.device.toUpperCase()} · ${DAI.ms.toFixed(0)} ms a frame · ${DAI.inputSize()[1]}×${DAI.inputSize()[0]}` + (DAI.device === "wasm" ? " — no WebGPU here, so it is slow" : "") :
+        DAI.state + "…";
+    }
     portsEl.innerHTML =
       `image <b>${rackImage ? "patched" : "—"}</b> · points <b>${rackPts ? (rackPts.count || 0) : "—"}</b> · ` +
-      `field <b>${rackField ? rackField.w + "×" + rackField.h : "—"}</b> · mask <b>${rackMask ? "patched" : "—"}</b>` +
+      `field <b>${rackField ? rackField.w + "×" + rackField.h : "—"}</b> · mask <b>${rackMask ? "patched" : "—"}</b> · depth <b>${rackDepth ? "patched" : "—"}</b>` +
       (IN_RACK ? "<br>running inside the Rack" : "");
   }
 }
@@ -2168,16 +2352,23 @@ function setRackMask(v){
   if(rackMask && P.moshMask === "off"){ prevMoshMask = "off"; P.moshMask = "inside"; syncUI(); }
   else if(!rackMask && prevMoshMask){ P.moshMask = prevMoshMask; prevMoshMask = null; syncUI(); }
 }
+function setRackDepth(v){
+  rackDepth = v && v.data ? v : null; DEPTH.shown = null;
+  if(rackDepth && P.depthSrc !== "rack"){ prevDepthSrc = P.depthSrc; P.depthSrc = "rack"; syncUI(); }
+  else if(!rackDepth && P.depthSrc === "rack" && prevDepthSrc){ P.depthSrc = prevDepthSrc; prevDepthSrc = null; syncUI(); }
+}
 if(PT){
   try{ PT.publish({ tool:"rewind", label:"Rewind",
     outputs:{ out:{ type:"image", get:() => cv },
       points:{ type:"points", label:"lattice points", get:() => OUT },
       field:{ type:"field", label:"flow", get:() => FIELD_OUT },
-      mask:{ type:"mask", label:"motion", get:() => FLOW.ownMask || null } },
+      mask:{ type:"mask", label:"motion", get:() => FLOW.ownMask || null },
+      depth:{ type:"mask", label:"depth", get:() => (P.depthSrc === "ai" ? DEPTH.out : null) } },
     inputs:{ image:{ type:"image", label:"image", set:setRackImage },
       points:{ type:"points", label:"points", set:setRackPoints },
       field:{ type:"field", label:"flow", set:setRackField },
-      mask:{ type:"mask", label:"mask", set:setRackMask } } }); }
+      mask:{ type:"mask", label:"mask", set:setRackMask },
+      depth:{ type:"mask", label:"depth", set:setRackDepth } } }); }
   catch(e){ console.warn("[rewind] ports", e); }
 }
 if(Drive && Drive.registerSource){
