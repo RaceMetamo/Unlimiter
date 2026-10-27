@@ -73,6 +73,8 @@
     border-top:1px solid var(--line);margin-top:8px}
   #footer{border-top:1px solid var(--line);padding:12px 16px}
   .hidden{display:none !important}
+  #ovl{position:absolute;pointer-events:none}
+  #gl.drawing{cursor:copy}
 </style>
 </head>
 <body>
@@ -82,7 +84,7 @@
     <h1>Ouroboros <span>— recursive feedback engine</span></h1>
     <div id="status">starting</div>
   </div>
-  <div id="canvasWrap"><canvas id="gl"></canvas></div>
+  <div id="canvasWrap"><canvas id="gl"></canvas><canvas id="ovl"></canvas></div>
 </div>
 
 <div id="panel">
@@ -95,6 +97,11 @@
         <div class="btnrow"><button id="bExportPreset">Export preset</button><button id="bImportPreset">Import preset</button></div>
         <div class="note">A feedback loop needs something to chew on. Seed drops a pattern in, Flash injects a burst, or just drag on the canvas to paint light into it.</div>
       </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Tunnel — infinite slice<span class="chev"></span></summary>
+      <div class="body" id="g-tunnel"></div>
     </details>
 
     <details class="group" open>
@@ -168,6 +175,8 @@
 <div id="dropHint">Drop an image or a video file</div>
 <input type="file" id="fMedia" accept="image/*,video/*" class="hidden">
 <input type="file" id="fPreset" accept="application/json,.json" class="hidden">
+<input type="file" id="fMask" accept="image/*" class="hidden">
+<input type="file" id="fMM" accept="application/json,.json" class="hidden">
 
 <script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
@@ -202,7 +211,11 @@ const DEFAULTS = {
   abCount: 0, abMode: 0, abSpeed: 0.35, abSpread: 0.3, abSize: 0.07,
   abStr: 0.9, abHue: 0.15, abSat: 0.7, abJitter: 0, abBeat: 0,
   // brushes from the rack: every patched point stamps the loop
-  rkStr: 0.9, rkSize: 0.02, rkColour: 1, rkMax: 256
+  rkStr: 0.9, rkSize: 0.02, rkColour: 1, rkMax: 256,
+  // tunnel: a 2D slice extended into an infinite perspective tunnel
+  tun: 0, tunLoop: 0, tunShape: "frame", tunFit: "box", tunPat: 0, tunFov: 70, tunVpX: 0, tunVpY: 0,
+  tunSpeed: 0.5, tunSpacing: 0.3, tunRails: 3, tunLineW: 1.6, tunPersp: 0.6, tunFog: 0.35, tunTwist: 0,
+  tunHue: 0, tunCol: "#7fd1c0", tunWall: "#0c1418", tunFill: 0, tunWrap: 2, tunOutside: 0, tunLoopVP: 0, tunMaskIdx: 0, tunPAsp: "16:9"
 };
 let P = Object.assign({}, DEFAULTS);
 let Q = P;
@@ -230,6 +243,14 @@ const PRESETS = {
     sat:1.06, inMix:0.4, inMode:1, con:1.06 },
   "Etch": { zoom:1.002, rot:0, decay:0.94, sharp:0.9, blur:0, posterize:6,
     inMix:0.7, inMode:4, con:1.2, inEdge:1 },
+  "Infinite tunnel": { tun:1, tunLoop:0.12, tunPat:0, tunSpeed:0.5, tunFog:0.3, tunLoopVP:1, zoom:1.012, rot:0,
+    decay:0.95, blur:0.6, inMix:0, agc:0.5, agcTarget:0.12, vignette:0 },
+  "Anamorphic grid": { tun:1, tunLoop:0, tunPat:0, tunSpeed:0.25, tunRails:4, tunLineW:1.4, tunFog:0.22, tunFill:0.6,
+    tunOutside:1, zoom:1, rot:0, decay:0.9, inMix:0, agc:0, vignette:0 },
+  "Rings into the wall": { tun:1, tunLoop:0.35, tunPat:5, tunSpeed:0.8, tunHue:40, tunFog:0.4, tunLoopVP:1,
+    zoom:1.02, rot:0.2, decay:0.96, blur:0.8, hue:0.6, inMix:0, agc:0.6 },
+  "Loop wallpaper": { tun:1, tunLoop:0, tunPat:4, tunWrap:2, tunSpeed:0.4, tunFog:0.3, tunLineW:1,
+    abCount:3, abMode:2, abSize:0.06, abStr:1, zoom:1.006, rot:0.3, decay:0.985, blur:0.5, inMix:0.3, agc:0.6 },
   "Liquid mirror": { zoom:1.0, rot:0, selfWarp:0.045, decay:0.99, blur:0.8,
     mirrorMode:3, inMix:0.35, hue:0.4, sat:1.03 }
 };
@@ -269,7 +290,7 @@ function slider(parent,key,label,min,max,step,suffix){
   const v=document.createElement("span"); v.className="val";
   const show=()=>v.textContent=fmt(Number(P[key]),step)+(suffix||"");
   show();
-  i.addEventListener("input",()=>{P[key]=Number(i.value);show();});
+  i.addEventListener("input",()=>{const was=P[key]>0;P[key]=Number(i.value);show();if((P[key]>0)!==was)vis();});
   bound[key]=()=>{i.value=P[key];show();};
   registerMod(key,label,min,max);
   return row(parent,label,[i,v],key);
@@ -397,6 +418,50 @@ slider(gD,"exposure","Exposure",0.2,3,0.005,"");
 slider(gD,"gamma","Gamma",0.4,2.2,0.005,"");
 slider(gD,"satOut","Saturation",0,2,0.005,"");
 slider(gD,"vignette","Vignette",0,1,0.005,"");
+
+GRP="Tunnel";
+const gT=document.getElementById("g-tunnel");
+slider(gT,"tun","Over the output",0,1,0.01,"");
+slider(gT,"tunLoop","Into the loop",0,1,0.005,"");
+subhead(gT,"The slice");
+select(gT,"tunShape","Slice",[["frame","Frame edge"],["circle","Circle"],["hexagon","Hexagon"],["triangle","Triangle"],["diamond","Diamond"],["arch","Arch / doorway"],
+  ["drawn","Drawn here"],["metamapper","MetaMapper region"],["mask","Mask image"],["rack","Rack: slice cable (mask)"]]);
+const tunBtns1=document.createElement("div"); tunBtns1.className="btnrow";
+const bTDraw=document.createElement("button"); bTDraw.textContent="Draw slice";
+const bTClose=document.createElement("button"); bTClose.textContent="Close shape";
+const bTUndo=document.createElement("button"); bTUndo.textContent="Undo point";
+tunBtns1.append(bTDraw,bTClose,bTUndo); gT.appendChild(tunBtns1);
+const tunBtns2=document.createElement("div"); tunBtns2.className="btnrow";
+const bTMM=document.createElement("button"); bTMM.textContent="Load MetaMapper export";
+const bTMask=document.createElement("button"); bTMask.textContent="Load mask image";
+tunBtns2.append(bTMM,bTMask); gT.appendChild(tunBtns2);
+const regSel=document.createElement("select");
+row(gT,"Region",[regSel],"tunRegion");
+select(gT,"tunFit","Placement",[["box","Region box — as a MetaMapper source"],["frame","Whole frame — projector coordinates"]]);
+select(gT,"tunPAsp","Projector",[["16:9","16 : 9"],["16:10","16 : 10"],["4:3","4 : 3"],["21:9","21 : 9"],["32:9","32 : 9"],["1:1","1 : 1"]]);
+slider(gT,"tunMaskIdx","Shape in mask",0,24,1,"");
+const tunInfo=document.createElement("div"); tunInfo.className="note"; gT.appendChild(tunInfo);
+subhead(gT,"Perspective");
+slider(gT,"tunFov","Field of view",10,160,0.5,"°");
+slider(gT,"tunVpX","Vanishing point X",-0.6,0.6,0.002,"");
+slider(gT,"tunVpY","Vanishing point Y",-0.6,0.6,0.002,"");
+slider(gT,"tunTwist","Twist",-3,3,0.005,"");
+check(gT,"tunLoopVP","Loop zooms into the vanishing point");
+subhead(gT,"Surface");
+select(gT,"tunPat","Pattern",[[0,"Grid"],[1,"Rings"],[2,"Rails"],[3,"Checker"],[4,"Loop wallpaper"],[5,"Colour bands"]]);
+slider(gT,"tunSpeed","Fly speed",-4,4,0.01,"");
+slider(gT,"tunSpacing","Ring spacing",0.04,1.5,0.002,"");
+slider(gT,"tunRails","Rails per side",0,16,1,"");
+slider(gT,"tunLineW","Line width",0.4,8,0.05," px");
+slider(gT,"tunPersp","Thin with distance",0,1,0.01,"");
+slider(gT,"tunFog","Horizon fade",0,2,0.005,"");
+slider(gT,"tunHue","Hue with depth",-180,180,0.5,"°");
+colorPick(gT,"tunCol","Line colour");
+colorPick(gT,"tunWall","Wall colour");
+slider(gT,"tunFill","Wall fill",0,1,0.01,"");
+slider(gT,"tunWrap","Wallpaper repeat",1,8,1,"");
+check(gT,"tunOutside","Black outside the slice");
+note(gT,"The slice is the mouth of the tunnel: its outline is drawn at full size, and copies of it shrink toward the vanishing point, so the surface it is projected on seems to open into an endless corridor. Field of view sets how fast the copies shrink — narrow is a long telephoto corridor, wide plunges away. Move the vanishing point to where the viewer's eye is and the perspective holds from that spot, like an anamorphic street painting; shift-drag on the picture to place it by hand. In MetaMapper, export the regions as JSON, load that file here, pick the region and keep Placement on Region box — Ouroboros then fills that region with the tunnel's mouth sitting exactly on its edges (set the region's Fit to Cover, Scale 1, Angle 0). Into the loop feeds the lines into the feedback, so the zoom and trails carry them; Loop zooms into the vanishing point points the feedback zoom down the tunnel. Loop wallpaper wraps the feedback image itself around the walls.");
 GRP="";
 
 function vis(){
@@ -404,6 +469,14 @@ function vis(){
   show("kaleidoN", +P.mirrorMode===4);
   show("mirrorMix", +P.mirrorMode!==0);
   show("inKeySoft", P.inKey>0);
+  const sh=P.tunShape;
+  tunBtns1.classList.toggle("hidden", sh!=="drawn");
+  bTMM.classList.toggle("hidden", sh!=="metamapper"); bTMask.classList.toggle("hidden", sh!=="mask");
+  show("tunRegion", sh==="metamapper" && !!(TUN.mm && TUN.mm.length));
+  show("tunFit", sh==="metamapper"); show("tunPAsp", sh==="metamapper" && P.tunFit==="box");
+  show("tunMaskIdx", sh==="mask" || sh==="rack");
+  show("tunWrap", +P.tunPat===4); show("tunRails", [0,2,3].indexOf(+P.tunPat)>=0);
+  show("tunFill", +P.tunPat!==4); show("tunWall", +P.tunPat!==4 && P.tunFill>0);
 }
 
 /* ============================ GL ============================ */
@@ -417,6 +490,92 @@ void main(){
   vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);
   gl_Position = vec4(p*2.0-1.0, 0.0, 1.0);
 }`;
+
+/* The tunnel. Every pixel casts a ray from the vanishing point outward; where it crosses the
+   slice's outline is the wall point it belongs to. How far it got (t) is its depth — the slice
+   scaled by 1/t sits at depth f·(t − 1) — and which edge it hit, and where along it, is its
+   position around the wall. Rings are constant depth, rails constant position. */
+const TUN_GLSL = `
+uniform vec2 uTP[64];           // slice outline, relative to the vanishing point, aspect-corrected
+uniform vec4 uTL[64];           // per edge: where it starts/ends along its side (sides break at sharp corners), and around the whole outline
+uniform int uTN;
+uniform vec2 uTVP;              // vanishing point (uv)
+uniform float uTOn, uTF, uTZ, uTSp, uTRails, uTLW, uTPersp, uTFog, uTTwist, uTHue, uTFill, uTWrap, uTPat, uTAsp;
+uniform vec3 uTCol, uTWall;
+vec3 tunHit(vec2 c){
+  float bt = 1e9, bs = 0.0, bi = 0.0;
+  for(int i = 0; i < 64; i++){
+    if(i >= uTN) break;
+    vec2 a = uTP[i], b = uTP[i + 1 == uTN ? 0 : i + 1], e = b - a;
+    float den = c.x * e.y - c.y * e.x;
+    if(abs(den) < 1e-12) continue;
+    float t = (a.x * e.y - a.y * e.x) / den, s = (a.x * c.y - a.y * c.x) / den;
+    if(t > 0.0 && s >= 0.0 && s <= 1.0 && t < bt){ bt = t; bs = s; bi = float(i); }
+  }
+  return vec3(bt, bs, bi);
+}
+vec3 tunHueRot(vec3 c, float deg){
+  float a = radians(deg), s = sin(a), co = cos(a);
+  mat3 m = mat3(
+    0.299+0.701*co+0.168*s, 0.587-0.587*co+0.330*s, 0.114-0.114*co-0.497*s,
+    0.299-0.299*co-0.328*s, 0.587+0.413*co+0.035*s, 0.114-0.114*co+0.292*s,
+    0.299-0.300*co+1.250*s, 0.587-0.588*co-1.050*s, 0.114+0.886*co-0.203*s);
+  return clamp(c * m, 0.0, 1.0);
+}
+float tunLine(float x, float lw){
+  float fw = max(fwidth(x), 1e-5);
+  float d = abs(fract(x + 0.5) - 0.5);
+  float l = 1.0 - smoothstep(fw * lw * 0.5, fw * (lw * 0.5 + 1.0), d);
+  return mix(l, min(1.0, lw * fw), smoothstep(0.18, 0.45, fw));   // too dense to draw: its average
+}
+/* premultiplied colour + coverage; w = 1 when the pixel is inside the slice */
+vec4 tunnel(vec2 uv, sampler2D loopTex, out float inside){
+  vec2 c = (uv - uTVP) * vec2(uTAsp, 1.0);
+  vec3 h = tunHit(c);
+  if(abs(uTTwist) > 1e-4){
+    // the slice turns with depth: undo the turn at this pixel's depth and look again
+    for(int k = 0; k < 3; k++){
+      float z = uTF * max(0.0, h.x - 1.0), a = -uTTwist * z, sa = sin(a), ca = cos(a);
+      h = tunHit(mat2(ca, -sa, sa, ca) * c);
+    }
+  }
+  float t = h.x;
+  inside = (t >= 1.0 && t < 1e8) ? 1.0 : 0.0;
+  float z = uTF * max(0.0, t - 1.0);
+  float rw = z / uTSp + uTZ;                  // rings: depth
+  vec4 el = uTL[int(h.z)];
+  float side = mix(el.x, el.y, h.y), around = mix(el.z, el.w, h.y);
+  float rc = side * max(1.0, uTRails);        // rails: evenly along each side; whole numbers land on the corners
+  float lwR = uTLW * mix(1.0, 1.0 / max(1.0, t), uTPersp);
+  float ring = tunLine(rw, lwR), rail = tunLine(rc, lwR);
+  float corner = rail;
+  if(inside < 0.5) return vec4(0.0);
+  float fog = exp(-z * uTFog * 1.6);
+  vec3 col = abs(uTHue) > 0.01 ? tunHueRot(uTCol, uTHue * z) : uTCol;
+  float line = 0.0; vec3 rgb = vec3(0.0); float a = 0.0;
+  float p = uTPat;
+  if(p < 0.5) line = max(ring, rail);
+  else if(p < 1.5) line = ring;
+  else if(p < 2.5) line = rail;
+  if(p < 2.5){
+    a = max(uTFill, line); rgb = uTWall * uTFill * (1.0 - line) + col * line;
+  } else if(p < 3.5){
+    float cell = mod(floor(rw) + floor(around * max(4.0, uTRails * 4.0)), 2.0);
+    a = mix(uTFill, 1.0, cell); rgb = mix(uTWall * uTFill, col, cell);
+  } else if(p < 4.5){
+    // the loop itself, wrapped around the walls
+    float u = fract(around * uTWrap);
+    vec3 tx = textureLod(loopTex, vec2(u, fract(rw / (uTWrap * 2.0))), 0.0).rgb;
+    a = 1.0; rgb = tx + col * corner * 0.6;
+  } else {
+    float band = floor(rw);
+    vec3 bc = tunHueRot(col, band * 23.0);
+    float on = mod(band, 2.0);
+    a = mix(uTFill, 1.0, on); rgb = mix(uTWall * uTFill, bc, on) + col * ring * 0.3;
+  }
+  return vec4(rgb * fog, a * fog);
+}
+`;
 
 const FEED = `#version 300 es
 precision highp float;
@@ -438,9 +597,10 @@ uniform int uInMode, uInEdge;
 uniform vec4 uB[8];             // xy position, z radius, w strength
 uniform vec3 uBC[8];            // colour per brush
 uniform int uBN;                // how many are active
-uniform float uAgc, uAgcTarget, uSoft, uMipLod;
+uniform float uAgc, uAgcTarget, uSoft, uMipLod, uTLoop;
 
 const float TAU = 6.28318530718;
+${TUN_GLSL}
 
 float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
 float vnoise(vec2 p){
@@ -626,6 +786,12 @@ void main(){
     prev += uBC[i] * f * b.w * 0.35;
   }
 
+  // the tunnel's lines, fed into the loop so the zoom and trails carry them
+  if(uTOn > 0.5 && uTLoop > 0.0005){
+    float ins; vec4 tn = tunnel(uv, uPrev, ins);
+    prev += tn.rgb * uTLoop * 2.0;
+  }
+
   // soft ceiling: compress the highlights instead of letting them stack and clip
   if(uSoft > 0.001) prev = prev / (1.0 + prev * uSoft);
 
@@ -637,13 +803,19 @@ precision highp float;
 out vec4 fragColor;
 uniform sampler2D uTex;
 uniform vec2 uRes;
-uniform float uExp, uGamma, uSatOut, uVig;
+uniform float uExp, uGamma, uSatOut, uVig, uTOver, uTOut;
+${TUN_GLSL}
 float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
 void main(){
   vec2 uv = gl_FragCoord.xy / uRes;
   vec3 c = texture(uTex, uv).rgb * uExp;
   if(abs(uSatOut-1.0) > 0.001){ float l = luma(c); c = mix(vec3(l), c, uSatOut); }
   c = pow(max(c, 0.0), vec3(1.0/max(0.05,uGamma)));
+  if(uTOn > 0.5){
+    float ins; vec4 tn = tunnel(uv, uTex, ins);
+    c = clamp(c, 0.0, 1.0) * (1.0 - tn.a * uTOver) + tn.rgb * uTOver;
+    if(uTOut > 0.5) c *= ins;
+  }
   if(uVig > 0.001){
     vec2 d = uv - 0.5;
     c *= 1.0 - uVig * dot(d,d) * 2.4;
@@ -763,6 +935,7 @@ function uploadToBuffer(srcCanvasOrImage){
   gl.uniform1f(gl.getUniformLocation(progShow,"uGamma"),1);
   gl.uniform1f(gl.getUniformLocation(progShow,"uSatOut"),1);
   gl.uniform1f(gl.getUniformLocation(progShow,"uVig"),0);
+  gl.uniform1f(gl.getUniformLocation(progShow,"uTOn"),0);
   gl.bindVertexArray(vao);
   gl.drawArrays(gl.TRIANGLES,0,3);
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
@@ -835,10 +1008,16 @@ function canvasUV(e){
   const r=cv.getBoundingClientRect();
   return [ (e.clientX-r.left)/r.width, 1-(e.clientY-r.top)/r.height ];
 }
-cv.addEventListener("pointerdown",e=>{ brush.down=true; const u=canvasUV(e); brush.x=u[0]; brush.y=u[1]; cv.setPointerCapture(e.pointerId); });
-cv.addEventListener("pointermove",e=>{ if(!brush.down) return; const u=canvasUV(e); brush.x=u[0]; brush.y=u[1]; });
-cv.addEventListener("pointerup",()=>{ brush.down=false; brush.x=-1; });
-cv.addEventListener("pointercancel",()=>{ brush.down=false; brush.x=-1; });
+function setVP(u){ P.tunVpX=Math.max(-0.6,Math.min(0.6,u[0]-TUN.cen[0])); P.tunVpY=Math.max(-0.6,Math.min(0.6,u[1]-TUN.cen[1])); syncUI(); }
+cv.addEventListener("pointerdown",e=>{
+  const u=canvasUV(e);
+  if(TUN.drawing){ TUN.draft.push([u[0],u[1]]); return; }
+  if(e.shiftKey && (P.tun>0||P.tunLoop>0)){ vpDrag=true; setVP(u); cv.setPointerCapture(e.pointerId); return; }
+  brush.down=true; brush.x=u[0]; brush.y=u[1]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove",e=>{ const u=canvasUV(e); if(vpDrag){ setVP(u); return; } if(!brush.down) return; brush.x=u[0]; brush.y=u[1]; });
+cv.addEventListener("pointerup",()=>{ vpDrag=false; brush.down=false; brush.x=-1; });
+cv.addEventListener("pointercancel",()=>{ vpDrag=false; brush.down=false; brush.x=-1; });
+cv.addEventListener("dblclick",()=>{ if(TUN.drawing){ TUN.draft.pop(); closeDrawing(); } });
 
 /* ============================ auto brushes ============================ */
 const AB = [];
@@ -993,6 +1172,248 @@ function drawRB(){
   gl.bindVertexArray(vao);
 }
 
+/* ============================ tunnel: the slice ============================
+   The slice is kept in uv with y up. Built-in shapes are made for this canvas's aspect;
+   a MetaMapper region is placed the way MetaMapper's Source fill places this canvas over
+   the region (cover-fit to the region's bounding box), so the tunnel's mouth lands on the
+   region's edges; mask images and the rack's slice cable are traced into outlines. */
+const TUN = { poly:[[0,0],[1,0],[1,1],[0,1]], drawn:null, draft:[], drawing:false, mm:null, mmAsp:16/9,
+              maskPolys:[], maskName:"", rackPolys:[], rackSrc:null, rackVer:-1, ver:0, sig:"", z:0,
+              vp:[0.5,0.5], cen:[0.5,0.5], rel:new Float32Array(128), n:4, info:"" };
+function regularPoly(n, rot, R){
+  const a=SW/SH, out=[];
+  for(let i=0;i<n;i++){ const t=rot+i*Math.PI*2/n; out.push([0.5+Math.cos(t)*R/a, 0.5+Math.sin(t)*R]); }
+  return out;
+}
+function builtinSlice(name){
+  const a=SW/SH;
+  if(name==="circle") return regularPoly(48, 0, 0.46);
+  if(name==="hexagon") return regularPoly(6, Math.PI/6, 0.47);
+  if(name==="triangle") return regularPoly(3, Math.PI/2, 0.52).map(q=>[q[0],q[1]-0.1]);
+  if(name==="diamond") return regularPoly(4, Math.PI/2, 0.48);
+  if(name==="arch"){
+    const hw=0.24/a*1.0, w=0.24, base=0.06, spring=0.62, out=[[0.5-hw,base],[0.5+hw,base],[0.5+hw,spring]];
+    for(let i=1;i<16;i++){ const t=i/16*Math.PI; out.push([0.5+Math.cos(t)*w/a, spring+Math.sin(t)*w]); }
+    out.push([0.5-hw,spring]); return out;
+  }
+  return [[0,0],[1,0],[1,1],[0,1]];
+}
+function aspOf(str){ const m=String(str).split(":").map(Number); return m[1]?m[0]/m[1]:16/9; }
+/* MetaMapper region (normalised, y down) → this canvas. "box": as its Source fill shows us. */
+function placeRegion(poly, fit){
+  if(fit!=="box") return poly.map(q=>[q[0],1-q[1]]);
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const q of poly){ x0=Math.min(x0,q[0]); y0=Math.min(y0,q[1]); x1=Math.max(x1,q[0]); y1=Math.max(y1,q[1]); }
+  const bw=Math.max(1e-6,x1-x0), bh=Math.max(1e-6,y1-y0), boxAR=bw*aspOf(P.tunPAsp)/bh, cAR=SW/SH;
+  // MetaMapper covers the box with this canvas, cropping the overflow evenly: the box is this centred window
+  const rw=cAR>boxAR?boxAR/cAR:1, rh=cAR>boxAR?1:cAR/boxAR, ox=(1-rw)/2, oy=(1-rh)/2;
+  return poly.map(q=>[ox+(q[0]-x0)/bw*rw, 1-(oy+(q[1]-y0)/bh*rh)]);
+}
+/* fewer than 64 corners for the shader */
+function capCorners(poly){
+  let out=poly, eps=0.002;
+  while(out.length>64 && eps<0.2){ out=simplifyLoop(poly, eps); eps*=1.6; }
+  return out.length>64 ? out.filter((q,i)=>i%Math.ceil(out.length/64)===0) : out;
+}
+function buildSlice(){
+  const sh=P.tunShape;
+  let poly=null, info="";
+  if(sh==="drawn"){ poly=TUN.drawn; info=poly?poly.length+" corners, drawn here.":"Nothing drawn yet — press Draw slice, click the corners on the picture, then Close shape."; }
+  else if(sh==="metamapper"){
+    const r=TUN.mm && TUN.mm[+regSel.value||0];
+    if(r){ poly=placeRegion(r.poly, P.tunFit); info=`“${r.label}”, ${r.poly.length} corners`+(P.tunFit==="box"?" — fill that region with this tool, Fit: Cover.":" — in projector coordinates."); }
+    else info="Load a MetaMapper export (JSON) to use one of its regions as the slice.";
+  }
+  else if(sh==="mask"){
+    const L=TUN.maskPolys, k=Math.min(L.length-1, Math.round(P.tunMaskIdx));
+    if(L.length){ poly=L[k].map(q=>[q[0],1-q[1]]); info=`${TUN.maskName}: shape ${k+1} of ${L.length}, biggest first.`; }
+    else info="Load a mask image — white shapes on black, like a MetaMapper mask.";
+  }
+  else if(sh==="rack"){
+    const L=TUN.rackPolys, k=Math.min(L.length-1, Math.round(P.tunMaskIdx));
+    if(L.length){ poly=L[k].map(q=>[q[0],1-q[1]]); info=`Rack mask: shape ${k+1} of ${L.length}.`; }
+    else info="Patch a mask into slice in the Rack (any lit shape works: a Lattice silhouette, a Vision foreground…).";
+  }
+  if(!poly || poly.length<3){ poly=builtinSlice(sh); if(!info) info=""; }
+  TUN.poly=capCorners(poly); TUN.sideFor=null;
+  // the area centroid is the natural vanishing point
+  let A=0,cx=0,cy=0; const n=TUN.poly.length, a=SW/SH;
+  for(let i=0;i<n;i++){ const p=TUN.poly[i], q=TUN.poly[(i+1)%n], cr=p[0]*a*q[1]-q[0]*a*p[1]; A+=cr; cx+=(p[0]*a+q[0]*a)*cr; cy+=(p[1]+q[1])*cr; }
+  if(Math.abs(A)>1e-9){ TUN.cen=[cx/(3*A)/a, cy/(3*A)]; }
+  else { TUN.cen=[TUN.poly.reduce((s,q)=>s+q[0],0)/n, TUN.poly.reduce((s,q)=>s+q[1],0)/n]; }
+  TUN.info=info; tunInfo.textContent=info; tunInfo.classList.toggle("hidden",!info);
+}
+function updateTunnel(dt){
+  const sig=[P.tunShape,P.tunFit,P.tunPAsp,Math.round(P.tunMaskIdx),regSel.value,SW,SH,TUN.ver].join("|");
+  if(sig!==TUN.sig){ TUN.sig=sig; buildSlice(); }
+  if(P.tunShape==="rack" && TUN.rackSrc && TUN.rackSrc.version!==TUN.rackVer){ TUN.rackVer=TUN.rackSrc.version; TUN.rackPolys=traceMask(TUN.rackSrc.data,TUN.rackSrc.w,TUN.rackSrc.h,128,0); buildSlice(); }
+  TUN.z=(TUN.z + dt*Q.tunSpeed/Math.max(0.02,Q.tunSpacing)) % 4096;
+  TUN.vp=[TUN.cen[0]+Q.tunVpX, TUN.cen[1]+Q.tunVpY];
+  const a=SW/SH, n=TUN.poly.length;
+  for(let i=0;i<n;i++){ TUN.rel[i*2]=(TUN.poly[i][0]-TUN.vp[0])*a; TUN.rel[i*2+1]=TUN.poly[i][1]-TUN.vp[1]; }
+  TUN.n=n;
+  if(TUN.sideFor!==TUN.sig) sideTable();
+}
+/* sides: runs of edges between sharp corners (a turn over ~28°), so a circle or an arch's curve
+   is one smooth side rather than dozens of short ones */
+function sideTable(){
+  TUN.sideFor=TUN.sig;
+  const P0=TUN.poly, n=P0.length, a=SW/SH, len=[], sharp=[];
+  for(let i=0;i<n;i++){ const p=P0[i], q=P0[(i+1)%n]; len.push(Math.hypot((q[0]-p[0])*a,q[1]-p[1])); }
+  for(let i=0;i<n;i++){
+    const o=P0[(i-1+n)%n], p=P0[i], q=P0[(i+1)%n];
+    const ux=(p[0]-o[0])*a, uy=p[1]-o[1], vx=(q[0]-p[0])*a, vy=q[1]-p[1];
+    const c=(ux*vx+uy*vy)/Math.max(1e-9,Math.hypot(ux,uy)*Math.hypot(vx,vy));
+    sharp.push(c<0.88);
+  }
+  const L=TUN.L||(TUN.L=new Float32Array(256)); L.fill(0);
+  const total=len.reduce((s,v)=>s+v,0)||1;
+  let start=sharp.indexOf(true); const anySharp=start>=0; if(!anySharp) start=0;
+  // walk the outline from a sharp corner, cutting into sides at every sharp corner
+  let i=start, cum=0, k=0;
+  const glob=new Float32Array(n+1); for(let j=0;j<n;j++) glob[j+1]=glob[j]+len[j];
+  while(k<n){
+    let j=i, sl=0, cnt=0;
+    do{ sl+=len[j]; j=(j+1)%n; cnt++; }while(cnt<n && !(anySharp && sharp[j]));
+    let acc=0; j=i;
+    for(let c=0;c<cnt;c++){
+      const e=j*4, f0=acc/sl, f1=(acc+len[j])/sl;
+      L[e]=anySharp?f0:f0*4; L[e+1]=anySharp?f1:f1*4; L[e+2]=glob[j]/total; L[e+3]=glob[j+1]/total;
+      acc+=len[j]; j=(j+1)%n;
+    }
+    k+=cnt; i=j;
+  }
+}
+function setTunUniforms(prog, on){
+  gl.uniform1f(U(prog,"uTOn"), on?1:0);
+  if(!on) return;
+  gl.uniform2fv(U(prog,"uTP"), TUN.rel);
+  gl.uniform1i(U(prog,"uTN"), TUN.n);
+  gl.uniform4fv(U(prog,"uTL"), TUN.L);
+  gl.uniform2f(U(prog,"uTVP"), TUN.vp[0], TUN.vp[1]);
+  gl.uniform1f(U(prog,"uTAsp"), SW/SH);
+  gl.uniform1f(U(prog,"uTF"), 0.5/Math.tan(Math.max(5,Math.min(170,Q.tunFov))*Math.PI/360));
+  gl.uniform1f(U(prog,"uTZ"), TUN.z);
+  gl.uniform1f(U(prog,"uTSp"), Math.max(0.02,Q.tunSpacing));
+  gl.uniform1f(U(prog,"uTRails"), Math.round(Q.tunRails));
+  gl.uniform1f(U(prog,"uTLW"), Q.tunLineW*SH/1080*1.4);
+  gl.uniform1f(U(prog,"uTPersp"), Q.tunPersp);
+  gl.uniform1f(U(prog,"uTFog"), Q.tunFog);
+  gl.uniform1f(U(prog,"uTTwist"), Q.tunTwist);
+  gl.uniform1f(U(prog,"uTHue"), Q.tunHue);
+  gl.uniform1f(U(prog,"uTFill"), Q.tunFill);
+  gl.uniform1f(U(prog,"uTWrap"), Math.max(1,Math.round(Q.tunWrap)));
+  gl.uniform1f(U(prog,"uTPat"), +Q.tunPat);
+  gl.uniform3fv(U(prog,"uTCol"), hex2rgb(P.tunCol));
+  gl.uniform3fv(U(prog,"uTWall"), hex2rgb(P.tunWall));
+}
+
+/* ---- outlines from a mask: threshold → connected shapes → contour → simplify ----
+   (the auto-map from MetaMapper's scan, trimmed to what a slice needs) */
+function traceMask(data, w, h, thr, stride){
+  // data: one byte per pixel (stride 0) or RGBA (stride 4), rows top-down
+  const N=w*h, fg=new Uint8Array(N);
+  for(let i=0;i<N;i++){ const v=stride? (data[i*4]*0.3+data[i*4+1]*0.59+data[i*4+2]*0.11)*(data[i*4+3]/255) : data[i]; fg[i]=v>thr?1:0; }
+  const lab=new Int32Array(N), stack=new Int32Array(N), comps=[]; let nl=0;
+  for(let p=0;p<N;p++){
+    if(!fg[p]||lab[p]) continue;
+    nl++; lab[p]=nl; let sp=0, area=0; stack[sp++]=p;
+    while(sp){ const q=stack[--sp], x=q%w; area++;
+      if(x>0&&fg[q-1]&&!lab[q-1]){lab[q-1]=nl;stack[sp++]=q-1;}
+      if(x<w-1&&fg[q+1]&&!lab[q+1]){lab[q+1]=nl;stack[sp++]=q+1;}
+      if(q>=w&&fg[q-w]&&!lab[q-w]){lab[q-w]=nl;stack[sp++]=q-w;}
+      if(q<N-w&&fg[q+w]&&!lab[q+w]){lab[q+w]=nl;stack[sp++]=q+w;} }
+    comps.push({id:nl,area,first:p});
+  }
+  const minA=N*0.0015;
+  return comps.filter(c=>c.area>=minA).sort((a,b)=>b.area-a.area).slice(0,25).map(c=>{
+    const ring=mooreTrace(lab,c.id,w,h,c.first).map(q=>[(q[0]+0.5)/w,(q[1]+0.5)/h]);
+    return simplifyLoop(ring, 1.2/Math.max(w,h));
+  }).filter(p=>p.length>=3);
+}
+const MX=[1,1,0,-1,-1,-1,0,1], MY=[0,1,1,1,0,-1,-1,-1];
+function mooreTrace(lab,id,w,h,start){
+  const sx=start%w, sy=(start/w)|0, pts=[[sx,sy]], maxS=w*h*2; let x=sx,y=sy,d=0,first=-1;
+  for(let st=0;st<maxS;st++){
+    let f=-1;
+    for(let k=0;k<8;k++){ const nd=(d+5+k)%8, nx=x+MX[nd], ny=y+MY[nd]; if(nx>=0&&ny>=0&&nx<w&&ny<h&&lab[ny*w+nx]===id){f=nd;break;} }
+    if(f<0) break;
+    if(st===0) first=f; else if(x===sx&&y===sy&&f===first) break;
+    x+=MX[f]; y+=MY[f]; d=f; pts.push([x,y]);
+  }
+  if(pts.length>1){ const L=pts[pts.length-1]; if(L[0]===sx&&L[1]===sy) pts.pop(); }
+  return pts;
+}
+function dpLine(p,eps){
+  if(p.length<3) return p.slice();
+  const keep=new Uint8Array(p.length), st=[[0,p.length-1]]; keep[0]=keep[p.length-1]=1;
+  while(st.length){ const [i0,i1]=st.pop(), ax=p[i0][0], ay=p[i0][1], bx=p[i1][0], by=p[i1][1], dx=bx-ax, dy=by-ay, L=Math.hypot(dx,dy);
+    let md=-1, mi=-1;
+    for(let i=i0+1;i<i1;i++){ const dd=L<1e-12?Math.hypot(p[i][0]-ax,p[i][1]-ay):Math.abs(dy*p[i][0]-dx*p[i][1]+bx*ay-by*ax)/L; if(dd>md){md=dd;mi=i;} }
+    if(md>eps){ keep[mi]=1; st.push([i0,mi],[mi,i1]); } }
+  return p.filter((q,i)=>keep[i]);
+}
+function simplifyLoop(pts,eps){
+  if(pts.length<4) return pts.slice();
+  let far=0, fd=-1;
+  for(let i=1;i<pts.length;i++){ const d=(pts[i][0]-pts[0][0])**2+(pts[i][1]-pts[0][1])**2; if(d>fd){fd=d;far=i;} }
+  const a=dpLine(pts.slice(0,far+1),eps), b=dpLine(pts.slice(far).concat([pts[0]]),eps);
+  return a.slice(0,-1).concat(b.slice(0,-1));
+}
+
+/* ---- loading a mask image or a MetaMapper export ---- */
+function loadMaskImage(f){
+  const im=new Image(), url=URL.createObjectURL(f);
+  im.onload=()=>{
+    const k=Math.min(1, 480/Math.max(im.naturalWidth,im.naturalHeight)), w=Math.max(8,Math.round(im.naturalWidth*k)), h=Math.max(8,Math.round(im.naturalHeight*k));
+    const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d"); x.drawImage(im,0,0,w,h);
+    TUN.maskPolys=traceMask(x.getImageData(0,0,w,h).data,w,h,128,4); TUN.maskName=f.name;
+    TUN.ver++; URL.revokeObjectURL(url); vis();
+  };
+  im.src=url;
+}
+function loadMetaMapper(f){
+  const r=new FileReader();
+  r.onload=()=>{ try{
+    const j=JSON.parse(r.result), arr=Array.isArray(j)?j:(j.regions||[]);
+    const regs=arr.filter(g=>g&&Array.isArray(g.poly)&&g.poly.length>=3&&g.type!=="text").map((g,i)=>({label:g.label||("Region "+(i+1)),poly:g.poly.map(q=>[+q[0],+q[1]])}));
+    if(!regs.length){ tunInfo.textContent="No regions in that file."; return; }
+    TUN.mm=regs; regSel.innerHTML="";
+    regs.forEach((g,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=g.label+" · "+g.poly.length+" corners"; regSel.appendChild(o); });
+    TUN.ver++; vis();
+  }catch(e){ tunInfo.textContent="That file isn't a MetaMapper export."; } };
+  r.readAsText(f);
+}
+function setRackSlice(m){ TUN.rackSrc=m&&m.data?m:null; TUN.rackVer=-1; if(!TUN.rackSrc){ TUN.rackPolys=[]; TUN.ver++; } }
+
+/* ---- drawing the slice on the picture; shift-drag places the vanishing point ---- */
+const ovl=document.getElementById("ovl"), octx=ovl.getContext("2d");
+function drawOverlay(){
+  const wrap=document.getElementById("canvasWrap"), r=cv.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1, W=Math.round(r.width*dpr), H=Math.round(r.height*dpr);
+  ovl.style.left=(r.left-wr.left)+"px"; ovl.style.top=(r.top-wr.top)+"px"; ovl.style.width=r.width+"px"; ovl.style.height=r.height+"px";
+  if(ovl.width!==W||ovl.height!==H){ ovl.width=W; ovl.height=H; }
+  octx.clearRect(0,0,W,H);
+  const on=(P.tun>0||P.tunLoop>0);
+  if(!TUN.drawing && !(on && vpDrag)) return;
+  const X=u=>u*W, Y=v=>(1-v)*H;
+  octx.lineWidth=1.5*dpr; octx.strokeStyle="#ffe600"; octx.fillStyle="#ffe600"; octx.setLineDash([6*dpr,4*dpr]);
+  const d=TUN.drawing?TUN.draft:TUN.poly;
+  if(d.length){ octx.beginPath(); octx.moveTo(X(d[0][0]),Y(d[0][1])); for(let i=1;i<d.length;i++) octx.lineTo(X(d[i][0]),Y(d[i][1])); if(!TUN.drawing) octx.closePath(); octx.stroke(); }
+  octx.setLineDash([]);
+  for(const q of d){ octx.beginPath(); octx.arc(X(q[0]),Y(q[1]),3*dpr,0,Math.PI*2); octx.fill(); }
+  if(on){ const vx=X(TUN.vp[0]), vy=Y(TUN.vp[1]); octx.beginPath(); octx.moveTo(vx-9*dpr,vy); octx.lineTo(vx+9*dpr,vy); octx.moveTo(vx,vy-9*dpr); octx.lineTo(vx,vy+9*dpr); octx.stroke(); }
+}
+let vpDrag=false;
+function startDrawing(){
+  TUN.drawing=!TUN.drawing; if(TUN.drawing) TUN.draft=[];
+  bTDraw.textContent=TUN.drawing?"Cancel drawing":"Draw slice"; bTDraw.classList.toggle("on",TUN.drawing); cv.classList.toggle("drawing",TUN.drawing);
+}
+function closeDrawing(){
+  if(TUN.draft.length>=3){ TUN.drawn=TUN.draft.slice(); P.tunShape="drawn"; syncUI(); TUN.ver++; }
+  TUN.drawing=false; TUN.draft=[]; bTDraw.textContent="Draw slice"; bTDraw.classList.remove("on"); cv.classList.remove("drawing");
+}
+
 /* ============================ frame ============================ */
 const t0=performance.now();
 let frames=0, fpsT=performance.now(), fps=0, lastFrameT=performance.now(), mipLod=10;
@@ -1004,6 +1425,8 @@ function frame(now){
   if(!gl||!progFeed) return;
   Q = Drive ? Drive.resolve(P) : P;
   const time=(now-t0)/1000;
+  const tunOn = Q.tun>0.001 || Q.tunLoop>0.0005;
+  updateTunnel(Math.min(0.1,(now-lastFrameT)/1000||0.016));
 
   if(inIsVideo && vid && vid.readyState>=2) uploadInput(vid);
 
@@ -1026,7 +1449,8 @@ function frame(now){
   gl.uniform1f(U(progFeed,"uZoom"),Q.zoom);
   gl.uniform1f(U(progFeed,"uRot"),Q.rot);
   gl.uniform2f(U(progFeed,"uDrift"),Q.driftX,Q.driftY);
-  gl.uniform2f(U(progFeed,"uCenter"),Q.cx,Q.cy);
+  if(tunOn && P.tunLoopVP) gl.uniform2f(U(progFeed,"uCenter"),TUN.vp[0],TUN.vp[1]);
+  else gl.uniform2f(U(progFeed,"uCenter"),Q.cx,Q.cy);
   gl.uniform1f(U(progFeed,"uTwist"),Q.twist);
   gl.uniform1f(U(progFeed,"uBarrel"),Q.barrel);
   gl.uniform1f(U(progFeed,"uSwirlAmp"),Q.swirlAmp);
@@ -1072,6 +1496,8 @@ function frame(now){
   gl.uniform1f(U(progFeed,"uAgcTarget"),Q.agcTarget);
   gl.uniform1f(U(progFeed,"uSoft"),Q.soft);
   gl.uniform1f(U(progFeed,"uMipLod"),mipLod);
+  setTunUniforms(progFeed, tunOn && Q.tunLoop>0.0005);
+  gl.uniform1f(U(progFeed,"uTLoop"),Q.tunLoop);
 
   gl.bindVertexArray(vao);
   gl.drawArrays(gl.TRIANGLES,0,3);
@@ -1094,7 +1520,11 @@ function frame(now){
   gl.uniform1f(U(progShow,"uGamma"),Q.gamma);
   gl.uniform1f(U(progShow,"uSatOut"),Q.satOut);
   gl.uniform1f(U(progShow,"uVig"),Q.vignette);
+  setTunUniforms(progShow, tunOn);
+  gl.uniform1f(U(progShow,"uTOver"),Q.tun);
+  gl.uniform1f(U(progShow,"uTOut"),P.tunOutside?1:0);
   gl.drawArrays(gl.TRIANGLES,0,3);
+  drawOverlay();
 
   if(Drive) Drive.pushFrame(cv);     // preserveDrawingBuffer is off
 
@@ -1134,7 +1564,15 @@ function randomise(){
     brushCol:P.brushCol
   });
 }
+/* the slice belongs to the venue, not the look: presets leave it where it is */
+const SLICE_KEYS=["tunShape","tunFit","tunPAsp","tunMaskIdx","tunVpX","tunVpY"];
 function applyPreset(n){
+  const keep={}; SLICE_KEYS.forEach(k=>keep[k]=P[k]);
+  applyPreset0(n);
+  if(n!=="*User preset") SLICE_KEYS.forEach(k=>P[k]=keep[k]);
+  syncUI();
+}
+function applyPreset0(n){
   if(n==="*Random values") randomise();
   else if(n==="*User preset"){ if(userSlot) P=Object.assign({},DEFAULTS,userSlot); }
   else P=Object.assign({},DEFAULTS,PRESETS[n]||{});
@@ -1147,6 +1585,7 @@ document.getElementById("bFlash").addEventListener("click",()=>{ flashT=1; });
 document.getElementById("bExportPreset").addEventListener("click",()=>{
   const out=Object.assign({},P);
   if(Drive) out._drive=Drive.serialize();
+  if(TUN.drawn) out._slice=TUN.drawn;
   download(new Blob([JSON.stringify(out,null,2)],{type:"application/json"}),"ouroboros-preset.json");
 });
 const fPreset=document.getElementById("fPreset");
@@ -1158,12 +1597,23 @@ fPreset.addEventListener("change",e=>{
     const j=JSON.parse(r.result);
     if(Drive && j._drive) Drive.load(j._drive);
     delete j._drive;
+    if(Array.isArray(j._slice)){ TUN.drawn=j._slice; TUN.ver++; } delete j._slice;
     P=Object.assign({},DEFAULTS,j);
     userSlot=JSON.parse(JSON.stringify(P));
     presetSel.value="*User preset"; syncUI();
   }catch(err){ statusEl.textContent="that file isn't a preset"; } };
   r.readAsText(f); e.target.value="";
 });
+
+bTDraw.addEventListener("click",startDrawing);
+bTClose.addEventListener("click",closeDrawing);
+bTUndo.addEventListener("click",()=>{ if(TUN.drawing) TUN.draft.pop(); });
+const fMask=document.getElementById("fMask"), fMM=document.getElementById("fMM");
+bTMask.addEventListener("click",()=>fMask.click());
+bTMM.addEventListener("click",()=>fMM.click());
+fMask.addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadMaskImage(f); e.target.value=""; });
+fMM.addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadMetaMapper(f); e.target.value=""; });
+regSel.addEventListener("change",()=>{ TUN.ver++; });
 
 const fMedia=document.getElementById("fMedia");
 bCam.addEventListener("click",startCam);
@@ -1219,6 +1669,9 @@ window.addEventListener("keydown",e=>{
   if(e.key==="s"||e.key==="S") seedPattern();
   if(e.key==="f"||e.key==="F") flashT=1;
   if(e.key==="w"||e.key==="W") wipe();
+  if(TUN.drawing && e.key==="Enter") closeDrawing();
+  if(TUN.drawing && e.key==="Escape") startDrawing();
+  if(TUN.drawing && e.key==="Backspace"){ TUN.draft.pop(); e.preventDefault(); }
 });
 
 /* ============================ boot ============================ */
@@ -1245,7 +1698,8 @@ vis();
 /* What this tool takes, for the rack (unlimiter-ports.js). */
 if(window.UnlimiterPorts){
   try{ UnlimiterPorts.publish({ tool:'ouroboros', label:'Ouroboros',
-    inputs:{ brushes:{ type:'points', label:'brushes', set:setRackBrushes } } }); }
+    inputs:{ brushes:{ type:'points', label:'brushes', set:setRackBrushes },
+             slice:{ type:'mask', label:'tunnel slice', set:setRackSlice } } }); }
   catch(e){ console.warn('[ouroboros] ports', e); }
 }
 
@@ -1260,7 +1714,7 @@ if(window.UnlimiterDice){
     params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
     refresh:k=>{ if(bound[k]) bound[k](); },
     switches:[["mirrorMode","Mirror mode"],["inMode","Input blend"],["edgeMode","Frame edges"],["abMode","Auto brush motion"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
-    drive:Drive, off:["rkStr","rkSize","rkColour","rkMax"],
+    drive:Drive, off:["rkStr","rkSize","rkColour","rkMax","tun","tunLoop","tunVpX","tunVpY","tunMaskIdx"],
     ranges:{ decay:[0.96,1.0], exposure:[0.6,1.8], gamma:[0.7,1.5], zoom:[0.985,1.03] }
   });
   dice.mountPanel(document.getElementById("g-dice"));
