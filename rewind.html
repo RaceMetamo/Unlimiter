@@ -175,14 +175,6 @@
       <summary>Display<span class="chev"></span></summary>
       <div class="body" id="g-disp"></div>
     </details>
-    <details class="group">
-      <summary>Dice — roll &amp; evolve<span class="chev"></span></summary>
-      <div class="body" id="g-dice"></div>
-    </details>
-    <details class="group">
-      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
-      <div class="body" id="g-drive"></div>
-    </details>
   </div>
   <div id="footer">
     <div class="btnrow">
@@ -198,7 +190,6 @@
 
 <script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
-<script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script src="unlimiter-vision.js"></script>
 <script src="unlimiter-depthai.js"></script>
@@ -266,14 +257,19 @@ const DEFAULTS = {
   // anime
   toon:0.85, toonBands:2, toonTh:0.5, toonSoft:0.04, lightAz:135, lightEl:40, shape:0.45, shadowCol:"#6b5a9e",
   rim:0.5, rimCol:"#ffd9a8", spec:0.35, specTh:0.93, bgPaint:0.5, bgSoft:2.5, holdLine:0.4, toneShadow:1,
-  onTwos:2, impact:1, impactRate:0, impactHit:0, impactLen:3,
+  onTwos:2, impact:1, impactRate:0, impactLen:3,
+  // woodblock
+  plates:0, bokashi:0, bokashiCol:"#2b3a6b", wood:0, pressure:0.5,
   // ink
-  kuwa:4, cel:0.6, bands:3, celSoft:0.08, line:1, lineW:1.4, lineTh:0.11, boil:0.3, wobble:0.25,
+  kuwa:4, aniso:0.6, cel:0.6, bands:3, celSoft:0.08, line:1, lineW:1.4, lineTh:0.11, boil:0.3, wobble:0.25,
   tone:0.35, toneMode:"ink", tonePx:5, toneGamma:1.2, hatch:0, hatchPx:5, hatchFlow:0.5,
   wash:0, washBlur:4, inkMix:0, paper:0.15, offset:0, focus:0, inkCol:"#140a1e", paperCol:"#f2e8d5",
   // depth
   depthSrc:"estimate", depthQ:"mid", depthSmooth:0.6, dGamma:1, dInv:0, dSplit:0.5, dSoft:0.15, dShow:0,
-  dGlitch:0, dMosh:0, dLines:0, dTone:0, dWash:0, dPal:0, dSil:1, dWeight:0.7, fog:0.25, fogCol:"#e9d8c4", dof:0, dFocus:0.75,
+  dSil:1, fog:0.25,
+  // near → far: each pair is a multiplier on the effect at the near end and at the far end
+  dKuwaN:1, dKuwaF:2.2, dCelN:1, dCelF:0.7, dToonN:1, dToonF:0.4, dLinesN:1, dLinesF:0.5, dWeightN:1.2, dWeightF:0.6,
+  dToneN:1, dToneF:0.7, dSatN:1.1, dSatF:0.75, dWashN:1, dWashF:1, dPalN:1, dPalF:1.2, dGlitchN:1, dGlitchF:1, dMoshN:1, dMoshF:1, fogCol:"#e9d8c4", dof:0, dFocus:0.75,
   // datamosh
   mosh:0, moshGain:1.5, blocky:0.6, refresh:1, still:0.3, stillTh:0.04, leak:0, keyEvery:0,
   synth:0, synthScale:1.5, moshMask:"off", evBloom:1, evSmear:1,
@@ -310,7 +306,8 @@ const SOURCE_KEYS = new Set(["source","mirror","fit","res","tapeRes","seed","flo
 const FX = { toon:0, onTwos:1, bgPaint:0, rim:0, spec:0, holdLine:0, toneShadow:0, halation:0, grain:0, fog:0,
   kuwa:3, cel:0.8, bands:4, celSoft:0.15, line:0.85, lineW:1.2, lineTh:0.12, boil:0.5, wobble:0.4, tone:0.3, tonePx:6,
   paper:0.3, offset:0.15, palMix:0.35, morph:0.15, mosh:0.35, block:0.1, split:0.3, tear:0.12, warp:0.2, hold:0.03,
-  stormRate:3, chaos:0.8, edge:0.15, glyph:0.6, bleed:0.2, travel:0.05, dSil:0.6, dWeight:0.5 };
+  stormRate:3, chaos:0.8, edge:0.15, glyph:0.6, bleed:0.2, travel:0.05, dSil:0.6, aniso:0, pressure:0,
+  dKuwaF:1, dCelF:1, dToonF:1, dLinesF:1, dWeightN:1, dWeightF:0.8, dToneF:1, dSatN:1, dSatF:1, dPalF:1 };
 const LOOKS = {
   "Anime cel": {},
   "Night cel": { palA:"Night market", palMix:0.3, shadowCol:"#3a2d78", rim:0.85, rimCol:"#62f0ff", lightAz:30, lightEl:25,
@@ -319,8 +316,11 @@ const LOOKS = {
                  celSoft:0.12, toonSoft:0.07, tone:0.25, bloom:0.4, vig:0.4, rimCol:"#ffb27a", paper:0.25 },
   "Manga screentone": { inkMix:1, toon:1, toneShadow:1, tone:0.95, tonePx:4.5, line:1, lineW:1.6, paper:0.6, palMix:0,
                         rim:0, spec:0.6, specTh:0.9, holdLine:0, focus:0.25, fog:0.1, bgPaint:0.3 },
-  "Painted background": { bgPaint:0.95, bgSoft:3.5, fog:0.45, dSplit:0.45, kuwa:5, dLines:-0.6, tone:0.2, halation:0.3 },
-  "Impact": { impactHit:1, impactRate:6, focus:0.5, onTwos:2, toon:1, rim:0.7, spec:0.5 },
+  "Painted background": { bgPaint:0.95, bgSoft:3.5, fog:0.45, dSplit:0.45, kuwa:5, dKuwaF:2.6, dLinesF:0.35, tone:0.2, halation:0.3 },
+  "Geylang Crunk": { kuwa:4.5, aniso:0.85, dKuwaN:0.8, dKuwaF:2.8, plates:0.55, bokashi:0.6, wood:0.35, pressure:0.8,
+                     toon:0.8, toonBands:3, line:1, lineW:1.6, holdLine:0.3, offset:0.35, paper:0.45, tone:0.2, fog:0.3,
+                     dLinesF:0.4, dToonF:0.3, dSatF:0.6, palA:"Ukiyo-e indigo", palMix:0.2, onTwos:2, grain:0.08 },
+  "Impact": { impactRate:8, focus:0.5, onTwos:2, toon:1, rim:0.7, spec:0.5 },
   "Psyberpunk": { ...FX },
   "Halftone print": { ...FX, tone:0.9, toneMode:"cmyk", tonePx:7, line:0.6, offset:0.7, paper:0.7, kuwa:2, cel:0.3, palMix:0.2,
                       mosh:0.4, scan:0, curve:0, vig:0.15 },
@@ -332,7 +332,7 @@ const LOOKS = {
                    morph:0.6, mosh:0.4, paper:0.6 },
   "Neon sigil": { ...FX, morph:1, palMix:0.7, glyph:0.7, glyphImg:0.7, edge:0.6, line:0.7, tone:0.35, toneMode:"color", crush:0.3,
                   block:0.18, tear:0.35, latOn:1, flowLines:1, inkCol:"#05000a" },
-  "Depth ink": { ...FX, depthSrc:"ai", fog:0.5, dof:0.4, dLines:-0.3, dSil:1, dWeight:1, dTone:0.6, dGlitch:0.7, dMosh:0.5,
+  "Depth ink": { ...FX, depthSrc:"ai", fog:0.5, dof:0.4, dLinesF:0.4, dSil:1, dWeightN:1.3, dWeightF:0.5, dToneN:0.4, dGlitchN:0.3, dMoshN:0.5,
                  line:1, lineW:1.6, tone:0.45, kuwa:4, cel:0.9, palMix:0.4 },
   "Datamosh": { ...FX, mosh:1, moshGain:1.6, blocky:0.95, refresh:0.05, still:0.05, keyEvery:8, hold:0.12, block:0.12, morph:0.7,
                 split:0.4, rate:3, glyph:0, chaos:2, evStutter:1, evRewind:0, line:0.6, tone:0.2 },
@@ -358,7 +358,7 @@ const cv = document.getElementById("gl");
 const Drive = (window.UnlimiterDrive)
   ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
   : null;
-const NO_MOD = new Set(["toonBands","onTwos","impactLen","depthSmooth","tapeLen","tapeFps","tapeRes","latN","latK","stutLen","reRec","seed","keyEvery"]);
+const NO_MOD = new Set(["dKuwaN","dKuwaF","dCelN","dCelF","dToonN","dToonF","dLinesN","dLinesF","dWeightN","dWeightF","dToneN","dToneF","dSatN","dSatF","dWashN","dWashF","dPalN","dPalF","dGlitchN","dGlitchF","dMoshN","dMoshF","toonBands","onTwos","impactLen","depthSmooth","tapeLen","tapeFps","tapeRes","latN","latK","stutLen","reRec","seed","keyEvery"]);
 let GRP = "";
 function registerMod(key,label,min,max){
   if(!Drive || NO_MOD.has(key)) return;
@@ -414,6 +414,19 @@ function colorPick(parent,key,label){
   bound[key]=()=>{c.value=P[key];};
   return row(parent,label,[c],key);
 }
+/* near and far multipliers on one row */
+function pair(parent,kn,kf,label,max){
+  const mk=(k)=>{
+    const w=document.createElement("div"); w.style.cssText="flex:1;min-width:0;display:flex;align-items:center;gap:4px";
+    const i=document.createElement("input"); i.type="range"; i.min=0; i.max=max; i.step=0.01; i.value=P[k];
+    const v=document.createElement("span"); v.className="val"; v.style.width="30px";
+    const show=()=>v.textContent=Number(P[k]).toFixed(2);
+    show(); i.addEventListener("input",()=>{P[k]=Number(i.value);show();});
+    bound[k]=()=>{i.value=P[k];show();};
+    w.appendChild(i); w.appendChild(v); return w;
+  };
+  const r=row(parent,label,[mk(kn),mk(kf)],kn); rows[kf]=r; return r;
+}
 function buttons(parent,list){
   const d=document.createElement("div"); d.className="btnrow";
   list.forEach(([id,t])=>{const b=document.createElement("button");b.id=id;b.textContent=t;d.appendChild(b);});
@@ -466,18 +479,24 @@ slider(gA,"bgPaint","Painted background",0,1,0.01,"");
 slider(gA,"bgSoft","Background softness",0.5,5,0.05,"");
 slider(gA,"holdLine","Colour hold lines",0,1,0.01,"");
 check(gA,"toneShadow","Screentone in shadows only");
+subhead(gA,"Woodblock");
+slider(gA,"plates","Ink plates",0,1,0.01,"");
+slider(gA,"bokashi","Bokashi sky",0,1,0.01,"");
+colorPick(gA,"bokashiCol","Bokashi colour");
+slider(gA,"wood","Wood grain",0,1,0.01,"");
+slider(gA,"pressure","Brush pressure",0,1,0.01,"");
 subhead(gA,"Timing");
 select(gA,"onTwos","Animate on",[[1,"1s — every frame"],[2,"2s"],[3,"3s"],[4,"4s"]]);
 check(gA,"impact","Impact frames");
 slider(gA,"impactRate","Random impacts",0,30,0.1," /min");
-check(gA,"impactHit","Impact on audio hits");
 slider(gA,"impactLen","Impact length",1,8,1," frames");
 buttons(gA,[["bImpact","Impact!"]]);
-note(gA,"A cel-shading pass built from the picture itself. Toon shading lights the scene again from a direction you choose: surfaces come from the depth map (Depth group — the built-in estimate needs no download) mixed with the picture's own shading (Shape from picture), then cut into two or three flat tones with a hard shadow line, the shadow tinted like anime colour design. Rim light catches edges turned away from the light; Shine adds the hard highlight. Painted background turns everything beyond the depth split into a soft painted backdrop, so the near layer reads as cels over a background painting. Colour hold lines tint the ink in bright areas, like traced colour lines in old cel animation. Animate on 2s or 3s holds each drawing for two or three frames, the rhythm of limited animation, and impact frames flash the picture to inverted ink for a few frames — by hand, at random or on audio hits.");
+note(gA,"A cel-shading pass built from the picture itself. Toon shading lights the scene again from a direction you choose: surfaces come from the depth map (Depth group — the built-in estimate needs no download) mixed with the picture's own shading (Shape from picture), then cut into two or three flat tones with a hard shadow line, the shadow tinted like anime colour design. Rim light catches edges turned away from the light; Shine adds the hard highlight. Painted background turns everything beyond the depth split into a soft painted backdrop, so the near layer reads as cels over a background painting. Colour hold lines tint the ink in bright areas, like traced colour lines in old cel animation. Woodblock: Ink plates snap the colours to a few flat inks — the round palette plus ink and paper — like a print cut on a handful of blocks; Bokashi sky lays the graded colour band of an ukiyo-e sky across the far top of the frame; Wood grain presses the block’s grain into flat areas; Brush pressure swells the ink line in the shadows and thins it in the light. Animate on 2s or 3s holds each drawing for two or three frames, the rhythm of limited animation, and impact frames flash the picture to inverted ink for a few frames — by hand (or the I key) or at random.");
 
 GRP="Ink";
 const gI=document.getElementById("g-ink");
 slider(gI,"kuwa","Paint flatten",0,10,0.1," px");
+slider(gI,"aniso","Brush direction",0,1,0.01,"");
 slider(gI,"cel","Cel shading",0,1,0.01,"");
 slider(gI,"bands","Cel bands",2,8,1,"");
 slider(gI,"celSoft","Band softness",0,0.5,0.005,"");
@@ -517,21 +536,26 @@ check(gDp,"dInv","Invert");
 slider(gDp,"dSplit","Near / far split",0,1,0.005,"");
 slider(gDp,"dSoft","Split softness",0.01,0.5,0.005,"");
 check(gDp,"dShow","Show depth map");
-subhead(gDp,"Where each effect lands  (− near · 0 everywhere · + far)");
-slider(gDp,"dGlitch","Glitch",-1,1,0.01,"");
-slider(gDp,"dMosh","Mosh",-1,1,0.01,"");
-slider(gDp,"dLines","Ink lines",-1,1,0.01,"");
-slider(gDp,"dTone","Halftone & hatch",-1,1,0.01,"");
-slider(gDp,"dWash","Ink wash",-1,1,0.01,"");
-slider(gDp,"dPal","Palette map",-1,1,0.01,"");
+subhead(gDp,"Near ⟶ far  (× the effect at each end)");
+pair(gDp,"dKuwaN","dKuwaF","Paint flatten",4);
+pair(gDp,"dCelN","dCelF","Cel bands",2);
+pair(gDp,"dToonN","dToonF","Toon light",2);
+pair(gDp,"dLinesN","dLinesF","Ink lines",2);
+pair(gDp,"dWeightN","dWeightF","Line weight",3);
+pair(gDp,"dToneN","dToneF","Halftone & hatch",2);
+pair(gDp,"dSatN","dSatF","Saturation",2);
+pair(gDp,"dWashN","dWashF","Ink wash",2);
+pair(gDp,"dPalN","dPalF","Palette map",2);
+pair(gDp,"dGlitchN","dGlitchF","Glitch",2);
+pair(gDp,"dMoshN","dMoshF","Mosh",1);
+buttons(gDp,[["bFlat","Same near and far"],["bDeep","Deep defaults"]]);
 subhead(gDp,"Depth looks");
 slider(gDp,"dSil","Silhouette lines",0,2,0.01,"");
-slider(gDp,"dWeight","Line weight by depth",0,1,0.01,"");
 slider(gDp,"fog","Atmosphere",0,1,0.01,"");
 colorPick(gDp,"fogCol","Atmosphere colour");
 slider(gDp,"dof","Depth of field",0,1,0.01,"");
 slider(gDp,"dFocus","Focus",0,1,0.005,"");
-note(gDp,"A scene depth buffer for footage that never had one. AI runs Depth Anything V2 on the GPU (WebGPU, or slower WASM without it) on the frames going onto the tape, and keeps each frame's depth with it — so loops, stutters and rewinds stay in step with their depth. The first use downloads the library and model (~100 MB) once; the browser keeps them after that. Estimate is a free stand-in that guesses from height in frame, colour and motion. The Rack cable takes any mask as depth (bright = near), such as a Kinect through Relief. Each slider below pushes an effect toward the near side (−) or the far side (+) of the split, like masking a post-process by SceneDepth. Silhouette lines ink the edges where depth jumps — the outline pass of a toon shader — and line weight thickens toward the camera. Atmosphere fades the far planes into a colour, like the layered haze of a woodblock print.");
+note(gDp,"A scene depth buffer for footage that never had one. AI runs Depth Anything V2 on the GPU (WebGPU, or slower WASM without it) on the frames going onto the tape, and keeps each frame's depth with it — so loops, stutters and rewinds stay in step with their depth. The first use downloads the library and model (~100 MB) once; the browser keeps them after that. Estimate is a free stand-in that guesses from height in frame, colour and motion. The Rack cable takes any mask as depth (bright = near), such as a Kinect through Relief. Near ⟶ far scales each effect separately at the near and far ends of the depth range — left slider near, right slider far — blending between them across the split, like driving post-process weights from SceneDepth. The Geylang Crunk recipe is a small paint flatten up close and a big one in the distance, with lines and toon light thinning out as things recede. Silhouette lines ink the edges where depth jumps — the outline pass of a toon shader. Atmosphere fades the far planes into a colour, like the layered haze of a woodblock print.");
 
 GRP="Datamosh";
 const gMs=document.getElementById("g-mosh");
@@ -696,9 +720,8 @@ const gD=document.getElementById("g-disp");
 select(gD,"res","Resolution",[["1280x720","1280 × 720"],["1920x1080","1920 × 1080"],["1080x1080","1080 × 1080"],["1080x1920","1080 × 1920 (vertical)"],["720x480","720 × 480 (NTSC)"]]);
 buttons(gD,[["bWipe","Clear trails & mosh"]]);
 
-const drivePanel=document.getElementById("g-drive");
-if(Drive){ Drive.mountPanel(drivePanel); }
-else drivePanel.innerHTML='<div class="note">unlimiter-drive.js was not found. It must sit in the same folder, served over http://localhost or https.</div>';
+/* no Drive panel here: Rewind is played by hand. The drive still exists so the Rack can read and
+   override this tool's parameters, as it does for every tool. */
 
 function vis(){
   const src=P.source;
@@ -721,11 +744,12 @@ function vis(){
   show("washBlur",P.wash>0);
   const tOn=P.toon>0;
   ["toonBands","toonTh","toonSoft","lightAz","lightEl","shape","shadowCol","rim","rimCol","spec","specTh"].forEach(k=>show(k,tOn));
-  show("rimCol",tOn&&P.rim>0); show("specTh",tOn&&P.spec>0); show("bgSoft",P.bgPaint>0);
-  ["impactRate","impactHit","impactLen"].forEach(k=>show(k,!!P.impact));
+  show("rimCol",tOn&&P.rim>0); show("bokashiCol",P.bokashi>0); show("specTh",tOn&&P.spec>0); show("bgSoft",P.bgPaint>0);
+  ["impactRate","impactLen"].forEach(k=>show(k,!!P.impact));
   const dOn=P.depthSrc!=="off";
-  ["depthSmooth","dGamma","dInv","dSplit","dSoft","dShow","dGlitch","dMosh","dLines","dTone","dWash","dPal","dSil","dWeight","fog","fogCol","dof","dFocus"].forEach(k=>show(k,dOn));
+  ["depthSmooth","dGamma","dInv","dSplit","dSoft","dShow","dKuwaN","dCelN","dToonN","dLinesN","dWeightN","dToneN","dSatN","dWashN","dPalN","dGlitchN","dMoshN","dSil","fog","fogCol","dof","dFocus"].forEach(k=>show(k,dOn));
   show("depthQ",P.depthSrc==="ai"); show("dFocus",dOn&&P.dof>0); show("fogCol",dOn&&P.fog>0);
+  { const b=document.getElementById("bFlat"); if(b) b.parentNode.classList.toggle("hidden",!dOn); }
   if(typeof depthNote!=="undefined") depthNote.classList.toggle("hidden",P.depthSrc!=="ai");
   ["flowThresh","flowSmooth"].forEach(k=>show(k,P.flowSrc!=="rack"));
 }
@@ -968,10 +992,10 @@ float nearAt(vec2 uv){
   float n = pow(clamp(texture(uDepth, vec2(uv.x, 1.0 - uv.y)).r, 0.0, 1.0), uDGamma);
   return uDInv > 0.5 ? 1.0 - n : n;
 }
-float dW(float bias, float n){
-  if(uDOn < 0.5 || abs(bias) < 0.001) return 1.0;
-  float nm = smoothstep(uDSplit - uDSoft, uDSplit + uDSoft, n);
-  return bias < 0.0 ? mix(1.0, nm, -bias) : mix(1.0, 1.0 - nm, bias);
+/* the effect's multiplier here: its near value up close, its far value in the distance */
+float dMix(vec2 nf, float n){
+  if(uDOn < 0.5) return nf.x;
+  return mix(nf.y, nf.x, smoothstep(uDSplit - uDSoft, uDSplit + uDSoft, n));
 }
 `;
 
@@ -1022,7 +1046,7 @@ in vec2 vUv; out vec4 o;
 uniform sampler2D uFresh, uFreshB, uOld, uFlow, uMask;
 uniform vec2 uGrid;
 uniform float uMix, uDt, uGain, uBlocky, uRefresh, uStill, uStillTh, uLeak, uKey, uFreeze;
-uniform float uMaskOn, uMaskInv, uSynth, uSynthScale, uT, uSeed, uDMosh;
+uniform float uMaskOn, uMaskInv, uSynth, uSynthScale, uT, uSeed; uniform vec2 uDMosh;
 ${NOISE_GLSL}
 ${DEPTH_GLSL}
 void main(){
@@ -1052,7 +1076,7 @@ void main(){
     ref = max(ref * step(0.5, mk), 1.0 - smoothstep(0.3, 0.6, mk));
   }
   ref *= 1.0 - uFreeze;
-  ref = max(ref, 1.0 - dW(uDMosh, nearAt(vUv)));
+  ref = max(ref, 1.0 - clamp(dMix(uDMosh, nearAt(vUv)), 0.0, 1.0));
   ref = max(ref, uKey);
   vec3 c = mix(old, fresh, ref);
   c = mix(c, fresh, uLeak * (1.0 - uFreeze));
@@ -1072,7 +1096,7 @@ uniform float uFlowWarp, uSmear, uFlowCol, uGate;
 uniform float uTrack, uHead, uBleed, uGhost, uNoise, uDrop, uAge;
 uniform float uChrome, uSoft, uMelt, uRelief, uGloss, uBands;
 uniform float uPal; uniform vec3 uRA[5]; uniform vec3 uRB[5];
-uniform float uEdge, uEdgeTh, uGlyph, uGlyphPx, uRain, uGlyphImg, uGlyphDim, uDGlitch, uDPal;
+uniform float uEdge, uEdgeTh, uGlyph, uGlyphPx, uRain, uGlyphImg, uGlyphDim; uniform vec2 uDGlitch, uDPal;
 #define PI 3.14159265
 ${NOISE_GLSL}
 ${DEPTH_GLSL}
@@ -1123,7 +1147,7 @@ void main(){
   vec2 fl = flowAt(vUv);
   float mot = uHasMask > 0.5 ? texture(uMask, vec2(vUv.x, 1.0 - vUv.y)).r : clamp(length(fl) * 4.0, 0.0, 1.0);
   float dn = nearAt(vUv);
-  float gate = mix(1.0, mot, uGate) * dW(uDGlitch, dn);
+  float gate = mix(1.0, mot, uGate) * dMix(uDGlitch, dn);
 
   /* --- tracking: line wobble, a rolling tear band, head switching --- */
   float ln = floor(uv.y * uRes.y * 0.5);
@@ -1169,7 +1193,7 @@ void main(){
   float qa = floor(atan(w.y, w.x) / (PI * 0.25) + 0.5) * (PI * 0.25);
   vec2 wS = vec2(cos(qa), sin(qa)) * floor(length(w) * 8.0) / 8.0;
   w = mix(w, wS, m);
-  off += w * uWarp * 0.25 * (1.0 + st) * dW(uDGlitch, dn);
+  off += w * uWarp * 0.25 * (1.0 + st) * dMix(uDGlitch, dn);
   vec2 offUV = (D * off.x + Pp * off.y) / vec2(asp, 1.0);
   // flow warp: the picture pushed along its own motion
   vec2 flq = mix(fl, floor(fl * 24.0 + 0.5) / 24.0, m);
@@ -1224,7 +1248,7 @@ void main(){
 
   /* --- palette map --- */
   float L = lum(c);
-  c = mix(c, mix(rampA(L), rampB(L), m), uPal * dW(uDPal, dn));
+  c = mix(c, mix(rampA(L), rampB(L), m), clamp(uPal * dMix(uDPal, dn), 0.0, 1.0));
 
   /* --- flow colour: direction as hue when round, speed through the sigil palette when sharp --- */
   if(uFlowCol > 0.001){
@@ -1297,18 +1321,33 @@ void main(){
 const KUWA_FS = `#version 300 es
 precision highp float;
 in vec2 vUv; out vec4 o;
-uniform sampler2D uS; uniform vec2 uRes; uniform float uRad, uCel, uBands, uCelSoft, uM;
+uniform sampler2D uS; uniform vec2 uRes; uniform float uCelSoft, uM, uBands, uAniso;
+uniform vec2 uRad, uCel;
+${DEPTH_GLSL}
 float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
 void main(){
   vec3 c = texture(uS, vUv).rgb;
-  if(uRad > 0.25){
-    vec2 px = uRad / 4.0 / uRes;
+  float n = nearAt(vUv);
+  float rad = dMix(uRad, n), cel = clamp(dMix(uCel, n), 0.0, 1.0);
+  if(rad > 0.25){
+    // brush direction: quadrants are turned to run along the local edge and stretched along it
+    vec2 e = max(1.0, rad * 0.6) / uRes;
+    float gx = lum(texture(uS, vUv + vec2(e.x, 0.0)).rgb + texture(uS, vUv + vec2(e.x, e.y)).rgb + texture(uS, vUv + vec2(e.x, -e.y)).rgb)
+             - lum(texture(uS, vUv - vec2(e.x, 0.0)).rgb + texture(uS, vUv - vec2(e.x, -e.y)).rgb + texture(uS, vUv - vec2(e.x, e.y)).rgb);
+    float gy = lum(texture(uS, vUv + vec2(0.0, e.y)).rgb + texture(uS, vUv + vec2(e.x, e.y)).rgb + texture(uS, vUv + vec2(-e.x, e.y)).rgb)
+             - lum(texture(uS, vUv - vec2(0.0, e.y)).rgb + texture(uS, vUv - vec2(-e.x, e.y)).rgb + texture(uS, vUv - vec2(e.x, e.y)).rgb);
+    float gm = length(vec2(gx, gy));
+    vec2 t = gm > 1e-4 ? vec2(-gy, gx) / gm : vec2(1.0, 0.0);
+    float an = uAniso * smoothstep(0.02, 0.3, gm);
+    vec2 sc = vec2(1.0 + an * 1.6, 1.0 / (1.0 + an * 1.6));
+    mat2 R = mat2(t.x, t.y, -t.y, t.x);
+    vec2 px = rad / 4.0 / uRes;
     vec3 best = c; float bv = 1e9;
     for(int qd = 0; qd < 4; qd++){
       vec2 sg = vec2(qd == 1 || qd == 3 ? 1.0 : -1.0, qd >= 2 ? 1.0 : -1.0);
       vec3 sm = vec3(0.0), sq = vec3(0.0);
       for(int j = 0; j < 5; j++) for(int i = 0; i < 5; i++){
-        vec3 v = texture(uS, vUv + vec2(float(i), float(j)) * sg * px).rgb;
+        vec3 v = texture(uS, vUv + (R * (vec2(float(i), float(j)) * sg * sc)) * px).rgb;
         sm += v; sq += v * v;
       }
       sm /= 25.0; sq = sq / 25.0 - sm * sm;
@@ -1317,12 +1356,12 @@ void main(){
     }
     c = best;
   }
-  if(uCel > 0.001){
+  if(cel > 0.001){
     float L = lum(c), b = uBands;
     float w = max(0.004, uCelSoft * (1.0 - 0.8 * uM));
     float qv = (floor(L * b) + smoothstep(0.5 - w, 0.5 + w, fract(L * b))) / b;
     vec3 cc = c * (qv + 0.03) / (L + 0.03);
-    c = mix(c, cc, uCel);
+    c = mix(c, cc, cel);
   }
   o = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
@@ -1338,7 +1377,9 @@ uniform float uLine, uLineW, uLineTh, uBoil, uWobble, uOffset;
 uniform float uTone, uToneMode, uTonePx, uToneGamma, uHatch, uHatchPx, uHatchFlow;
 uniform float uWash, uWashBlur, uInkMix, uPaper, uSpeed;
 uniform vec3 uInk, uPaperC, uFogC;
-uniform float uDLines, uDTone, uDWash, uDSil, uDWeight, uFog, uDof, uFocus, uDShow;
+uniform float uDSil, uFog, uDof, uFocus, uDShow;
+uniform vec2 uDLines, uDTone, uDWash, uDWeight, uDToon, uDSat;
+uniform float uPlates, uBoka, uWood, uPressure; uniform vec3 uBokaC; uniform vec3 uPl[7];
 uniform float uToon, uToonB, uToonTh, uToonSoft, uShape, uRim, uSpec, uSpecTh, uBgPaint, uBgSoft, uHoldLine, uToneShadow, uImpact;
 uniform vec3 uLight, uShadowC, uRimC; uniform vec2 uDTexel;
 #define PI 3.14159265
@@ -1412,7 +1453,7 @@ void main(){
     float l1 = smoothstep(uToonTh - uToonSoft, uToonTh + uToonSoft, t);
     float l2 = uToonB > 2.5 ? smoothstep(uToonTh - 0.2 - uToonSoft, uToonTh - 0.2 + uToonSoft, t) : 1.0;
     vec3 sh = mix(uShadowC * uShadowC * 0.9, uShadowC, l2);
-    float k = uToon * (1.0 - bgk * 0.75);
+    float k = clamp(uToon * dMix(uDToon, dn), 0.0, 1.0) * (1.0 - bgk * 0.75);
     base *= mix(vec3(1.0), mix(sh, vec3(1.0), l1), k);
     lit = mix(1.0, l1, k);
     vec2 lxy = normalize(uLight.xy + vec2(1e-4));
@@ -1427,7 +1468,25 @@ void main(){
     float rim = clamp(abs(Ls - Lb) * 5.0, 0.0, 1.0) * smoothstep(0.95, 0.4, Lb);
     float ink = clamp(wsh * (0.7 + 0.5 * grain) + rim * 0.6, 0.0, 1.0);
     vec3 washed = mix(uPaperC * mix(0.9, 1.0, fiber), uInk, ink);
-    base = mix(base, mix(base * mix(vec3(1.0), uInk + 0.35, ink), washed, uInkMix), uWash * dW(uDWash, dn));
+    base = mix(base, mix(base * mix(vec3(1.0), uInk + 0.35, ink), washed, uInkMix), clamp(uWash * dMix(uDWash, dn), 0.0, 1.0));
+  }
+  /* saturation by depth */
+  base = clamp(mix(vec3(lum(base)), base, dMix(uDSat, dn)), 0.0, 1.0);
+  /* woodblock: snap to a few inks, a bokashi band in the far sky, grain pressed into the flats */
+  if(uPlates > 0.001){
+    vec3 best = base; float bd = 1e9;
+    for(int i = 0; i < 7; i++){ vec3 dc = base - uPl[i]; float d = dot(dc, dc * vec3(0.8, 1.2, 0.6)); if(d < bd){ bd = d; best = uPl[i]; } }
+    base = mix(base, best, uPlates);
+  }
+  if(uBoka > 0.001){
+    float farB = uDOn > 0.5 ? 1.0 - smoothstep(uDSplit - uDSoft, uDSplit + uDSoft, dn) : 1.0;
+    float band = smoothstep(0.5, 1.0, uv.y + (vnoise(vec2(fc.x * 0.004, 2.0)) - 0.5) * 0.05);
+    base = mix(base, base * 0.35 + uBokaC * 0.75, band * farB * uBoka);
+  }
+  if(uWood > 0.001){
+    float wq = vnoise(fc * vec2(0.006, 0.02)) * 10.0;
+    float rings = 0.5 + 0.5 * sin(fc.y * 0.11 * uS + wq + vnoise(fc * 0.01) * 4.0);
+    base *= 1.0 - uWood * 0.16 * rings * (0.6 + 0.4 * fiber);
   }
   vec3 mono = mix(uInk, uPaperC, smoothstep(0.05, 0.95, L));
   base = mix(base, mono, uInkMix * (1.0 - uWash * 0.5));
@@ -1452,7 +1511,7 @@ void main(){
       ht = uPaperC * (vec3(1.0) - C * vec3(0.95, 0.0, 0.0)) * (vec3(1.0) - M * vec3(0.0, 0.9, 0.0)) * (vec3(1.0) - Y * vec3(0.0, 0.0, 0.9));
       ht = mix(ht, uInk, K * 0.92);
     }
-    base = mix(base, ht, uTone * dW(uDTone, dn) * mix(1.0, smoothstep(0.85, 0.25, lit), uToneShadow));
+    base = mix(base, ht, clamp(uTone * dMix(uDTone, dn), 0.0, 1.0) * mix(1.0, smoothstep(0.85, 0.25, lit), uToneShadow));
   }
 
   /* manga hatching in the shadows, optionally turned along the motion */
@@ -1465,7 +1524,7 @@ void main(){
     float h = hatchLine(fc, a1, sp, uWobble, tb) * smoothstep(0.3, 0.42, d);
     h = max(h, hatchLine(fc, a1 + 1.5708, sp, uWobble, tb + 3.0) * smoothstep(0.52, 0.64, d));
     h = max(h, hatchLine(fc, a1 + 0.785, sp * 0.7, uWobble, tb + 7.0) * smoothstep(0.72, 0.84, d));
-    base = mix(base, uInk, h * uHatch * dW(uDTone, dn));
+    base = mix(base, uInk, h * clamp(uHatch * dMix(uDTone, dn), 0.0, 1.0));
   }
 
   /* atmosphere: far planes fade into the haze colour, like layered woodblock distance */
@@ -1477,7 +1536,7 @@ void main(){
     vec2 wob = (vec2(vnoise(fc * 0.035 + tb * 13.1), vnoise(fc * 0.035 + tb * 7.7 + 31.0)) - 0.5) * uWobble * 4.0 * uS / uRes;
     vec2 off = vec2(cos(uSeed * 6.28), sin(uSeed * 6.28)) * uOffset * 3.0 * uS / uRes;
     vec2 q = uv + wob + off;
-    vec2 e = uLineW * uS * mix(1.0, 0.45 + 1.1 * dn, uDWeight * uDOn) / uRes;
+    vec2 e = uLineW * uS * dMix(uDWeight, dn) * mix(1.0, 0.55 + 0.9 * (1.0 - lum(base)), uPressure) / uRes;
     vec3 a = texture(uK, q + vec2(-e.x, e.y)).rgb, b = texture(uK, q + vec2(0.0, e.y)).rgb, c = texture(uK, q + e).rgb;
     vec3 d = texture(uK, q + vec2(-e.x, 0.0)).rgb, f = texture(uK, q + vec2(e.x, 0.0)).rgb;
     vec3 g = texture(uK, q - e).rgb, h = texture(uK, q + vec2(0.0, -e.y)).rgb, i = texture(uK, q + vec2(e.x, -e.y)).rgb;
@@ -1495,7 +1554,7 @@ void main(){
     ln *= mix(0.55 + 0.45 * smoothstep(0.25, 0.6, vnoise(fc * vec2(0.08, 0.6) + tb)), 1.0, m);
     vec3 hold = clamp(mix(vec3(lum(base)), base, 1.8) * 0.5, 0.0, 1.0);
     vec3 lc = mix(uInk, hold, uHoldLine * smoothstep(0.4, 0.8, lum(base)));
-    base = mix(base, lc, ln * uLine * dW(uDLines, dn) * (1.0 - fogK * 0.7) * (1.0 - bgk * 0.6));
+    base = mix(base, lc, ln * clamp(uLine * dMix(uDLines, dn), 0.0, 1.0) * (1.0 - fogK * 0.7) * (1.0 - bgk * 0.6));
   }
 
   /* speed lines: anime focus lines, harder with motion and storms */
@@ -1790,10 +1849,6 @@ function impactStep(){
   if(!P.impact){ IMP.left = 0; return; }
   if(Q.impactRate > 0){ if(EV.t >= IMP.next){ if(IMP.next > 0) triggerImpact(); IMP.next = EV.t + -Math.log(1 - Math.random() * 0.98) * 60 / Q.impactRate; } }
   else IMP.next = 0;
-  if(P.impactHit && Drive && EV.t > IMP.cool){
-    const on = Drive.sourceValue ? Drive.sourceValue("audio.onset") : 0;
-    if(on > 0.6){ triggerImpact(); IMP.cool = EV.t + 0.3; }
-  }
   if(IMP.left && EV.t > IMP.until) IMP.left = 0;
 }
 function impactState(t){ return IMP.left ? (Math.floor(t * 24) % 2 ? 2 : 1) : 0; }
@@ -2029,7 +2084,7 @@ function moshStep(dt, A, B, mix, t){
   gl.uniform1f(u.uLeak, Q.leak); gl.uniform1f(u.uKey, key ? 1 : 0); gl.uniform1f(u.uFreeze, ev ? 1 : 0);
   gl.uniform1f(u.uMaskOn, mk && P.moshMask !== "off" ? 1 : 0); gl.uniform1f(u.uMaskInv, P.moshMask === "outside" ? 1 : 0);
   gl.uniform1f(u.uSynth, Q.synth); gl.uniform1f(u.uSynthScale, Q.synthScale); gl.uniform1f(u.uT, t);
-  setDepthUniforms(u); gl.uniform1f(u.uDMosh, Q.dMosh);
+  setDepthUniforms(u); gl.uniform2f(u.uDMosh, Q.dMoshN, Q.dMoshF);
   gl.uniform1f(u.uSeed, fract(P.seed * 0.1373));
   draw(PMOSH, rt, rt.w, rt.h);
   bindTex(0, rt.t); gl.generateMipmap(gl.TEXTURE_2D);
@@ -2290,7 +2345,7 @@ function render(t, dt){
   gl.uniform1f(u.uEdge, Q.edge); gl.uniform1f(u.uEdgeTh, Q.edgeTh);
   gl.uniform1f(u.uGlyph, Q.glyph); gl.uniform1f(u.uGlyphPx, Math.max(4, Q.glyphPx) * h / 720); gl.uniform1f(u.uRain, Q.rain);
   gl.uniform1f(u.uGlyphImg, Q.glyphImg); gl.uniform1f(u.uGlyphDim, Q.glyphDim);
-  setDepthUniforms(u); gl.uniform1f(u.uDGlitch, Q.dGlitch); gl.uniform1f(u.uDPal, Q.dPal);
+  setDepthUniforms(u); gl.uniform2f(u.uDGlitch, Q.dGlitchN, Q.dGlitchF); gl.uniform2f(u.uDPal, Q.dPalN, Q.dPalF);
   draw(pr, proc[pcur], w, h);
   // overdub: the processed frame back onto the loop
   const fA = TAPE.fA;
@@ -2306,8 +2361,11 @@ function render(t, dt){
   const S = h / 720;
   bindTex(0, proc[pcur].t); gl.useProgram(PKUWA.p);
   gl.uniform1i(PKUWA.u.uS, 0); gl.uniform2f(PKUWA.u.uRes, w, h);
-  gl.uniform1f(PKUWA.u.uRad, Q.kuwa * S); gl.uniform1f(PKUWA.u.uCel, Q.cel); gl.uniform1f(PKUWA.u.uBands, Math.max(2, Math.round(Q.bands)));
+  gl.uniform2f(PKUWA.u.uRad, Q.kuwa * S * Q.dKuwaN, Q.kuwa * S * Q.dKuwaF); gl.uniform2f(PKUWA.u.uCel, Q.cel * Q.dCelN, Q.cel * Q.dCelF);
+  gl.uniform1f(PKUWA.u.uBands, Math.max(2, Math.round(Q.bands))); gl.uniform1f(PKUWA.u.uAniso, Q.aniso);
   gl.uniform1f(PKUWA.u.uCelSoft, Q.celSoft); gl.uniform1f(PKUWA.u.uM, m);
+  if(depthOn && P.depthSrc === "estimate") bindTex(6, estRT.t); else bindTex(6, depthTex);
+  setDepthUniforms(PKUWA.u);
   draw(PKUWA, kRT, w, h);
   bindTex(0, kRT.t); gl.generateMipmap(gl.TEXTURE_2D); bindTex(4, flowTex);
   const ik = PINK.u; gl.useProgram(PINK.p);
@@ -2325,8 +2383,12 @@ function render(t, dt){
   gl.uniform3fv(ik.uInk, hexRGB(P.inkCol)); gl.uniform3fv(ik.uPaperC, hexRGB(P.paperCol)); gl.uniform3fv(ik.uFogC, hexRGB(P.fogCol));
   if(depthOn && P.depthSrc === "estimate") bindTex(6, estRT.t); else bindTex(6, depthTex);
   setDepthUniforms(ik);
-  gl.uniform1f(ik.uDLines, Q.dLines); gl.uniform1f(ik.uDTone, Q.dTone); gl.uniform1f(ik.uDWash, Q.dWash);
-  gl.uniform1f(ik.uDSil, Q.dSil); gl.uniform1f(ik.uDWeight, Q.dWeight); gl.uniform1f(ik.uFog, Q.fog);
+  gl.uniform2f(ik.uDLines, Q.dLinesN, Q.dLinesF); gl.uniform2f(ik.uDTone, Q.dToneN, Q.dToneF); gl.uniform2f(ik.uDWash, Q.dWashN, Q.dWashF);
+  gl.uniform2f(ik.uDWeight, Q.dWeightN, Q.dWeightF); gl.uniform2f(ik.uDToon, Q.dToonN, Q.dToonF); gl.uniform2f(ik.uDSat, Q.dSatN, Q.dSatF);
+  gl.uniform1f(ik.uDSil, Q.dSil); gl.uniform1f(ik.uFog, Q.fog);
+  gl.uniform1f(ik.uPlates, Q.plates); gl.uniform1f(ik.uBoka, Q.bokashi); gl.uniform1f(ik.uWood, Q.wood); gl.uniform1f(ik.uPressure, Q.pressure);
+  gl.uniform3fv(ik.uBokaC, hexRGB(P.bokashiCol));
+  { const A = palA(), pl = [].concat(...A, ...hexRGB(P.inkCol), ...hexRGB(P.paperCol)); gl.uniform3fv(ik.uPl, new Float32Array(pl)); }
   gl.uniform1f(ik.uDof, Q.dof); gl.uniform1f(ik.uFocus, Q.dFocus); gl.uniform1f(ik.uDShow, P.dShow ? 1 : 0);
   const az = Q.lightAz * Math.PI / 180, el = Q.lightEl * Math.PI / 180;
   gl.uniform3f(ik.uLight, Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el));
@@ -2475,6 +2537,8 @@ $("bRew").addEventListener("click", () => startEvent("rewind", true));
 $("bPause").addEventListener("click", () => startEvent("pause", true));
 $("bSlow").addEventListener("click", () => startEvent("slow", true));
 $("bKey").addEventListener("click", () => keyframe());
+$("bFlat").addEventListener("click", () => { ["dKuwa","dCel","dToon","dLines","dWeight","dTone","dSat","dWash","dPal","dGlitch","dMosh"].forEach(k => { P[k + "N"] = 1; P[k + "F"] = 1; }); syncUI(); });
+$("bDeep").addEventListener("click", () => { ["dKuwa","dCel","dToon","dLines","dWeight","dTone","dSat","dWash","dPal","dGlitch","dMosh"].forEach(k => { P[k + "N"] = DEFAULTS[k + "N"]; P[k + "F"] = DEFAULTS[k + "F"]; }); syncUI(); });
 $("bImpact").addEventListener("click", () => triggerImpact());
 $("bBloom").addEventListener("click", () => startMoshEvent("bloom", true));
 $("bSmear").addEventListener("click", () => startMoshEvent("smear", true));
@@ -2569,22 +2633,6 @@ sizeCanvas();
 scheduleStorm();
 if(P.source === "camera") startCamera();
 requestAnimationFrame(frame);
-
-/* ============================ dice ============================ */
-if(window.UnlimiterDice){
-  const diceEl=(k,sel)=>rows[k] ? rows[k].querySelector(sel) : null;
-  const dice=UnlimiterDice.create({
-    tool:"rewind", get:k=>P[k], set:(k,v)=>{ P[k]=v; },
-    params:UnlimiterDice.fromDrive(Drive, k=>diceEl(k,'input[type=range]')),
-    refresh:k=>{ if(bound[k]) bound[k](); },
-    switches:[["palA","Round palette"],["palB","Sigil palette"],["morphMode","Auto morph"],["toneMode","Halftone"]].map(([k,l])=>({key:k,label:l,el:diceEl(k,"select")})).filter(w=>w.el),
-    drive:Drive, off:["exposure","tapeFps","edgeTh","bloomTh","latAlpha","flowThresh","flowSmooth","stillTh"],
-    ranges:{ morph:[0,1], kuwa:[0,6], inkMix:[0,0.6], wash:[0,0.6], focus:[0,0.5], crush:[0,0.6], noise:[0,0.6], drop:[0,1.2], warp:[0,0.8], split:[0,0.8], hold:[0,0.25], trails:[0,0.7],
-      moshGain:[0.5,3], refresh:[0,3], leak:[0,0.05] }
-  });
-  dice.mountPanel(document.getElementById("g-dice"));
-  window.__dice=dice;
-}
 
 /* which camera: one choice for the whole suite (unlimiter-camera.js) */
 if(window.UnlimiterCamera) UnlimiterCamera.mount(camBtns);
