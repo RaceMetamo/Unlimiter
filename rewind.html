@@ -120,6 +120,10 @@
       <div class="body" id="g-ink"></div>
     </details>
     <details class="group">
+      <summary>Shapes — planes &amp; gradient fills<span class="chev"></span></summary>
+      <div class="body" id="g-shapes"></div>
+    </details>
+    <details class="group">
       <summary>Depth — blend effects by distance<span class="chev"></span></summary>
       <div class="body" id="g-depth"></div>
     </details>
@@ -264,12 +268,15 @@ const DEFAULTS = {
   kuwa:4, aniso:0.6, cel:0.6, bands:3, celSoft:0.08, line:1, lineW:1.4, lineTh:0.11, boil:0.3, wobble:0.25,
   tone:0.35, toneMode:"ink", tonePx:5, toneGamma:1.2, hatch:0, hatchPx:5, hatchFlow:0.5,
   wash:0, washBlur:4, inkMix:0, paper:0.15, offset:0, focus:0, inkCol:"#140a1e", paperCol:"#f2e8d5",
+  // shapes: simplified planes found in the picture, filled with gradients
+  shapes:0, shapeFill:"picture", shapeBlend:"normal", shapeGrad:1, shapeFacet:0, shapeLine:0, shapeSoft:0.6,
+  shapeTol:0.12, shapeEdge:0.4, shapeDCut:0.5, shapeMin:0.003, shapeSimp:2.5, shapeDetail:224, shapeRate:12, shapeHold:0.4,
   // depth
   depthSrc:"estimate", depthQ:"mid", depthSmooth:0.6, dGamma:1, dInv:0, dSplit:0.5, dSoft:0.15, dShow:0,
   dSil:1, fog:0.25,
   // near → far: each pair is a multiplier on the effect at the near end and at the far end
   dKuwaN:1, dKuwaF:2.2, dCelN:1, dCelF:0.7, dToonN:1, dToonF:0.4, dLinesN:1, dLinesF:0.5, dWeightN:1.2, dWeightF:0.6,
-  dToneN:1, dToneF:0.7, dSatN:1.1, dSatF:0.75, dWashN:1, dWashF:1, dPalN:1, dPalF:1.2, dGlitchN:1, dGlitchF:1, dMoshN:1, dMoshF:1, fogCol:"#e9d8c4", dof:0, dFocus:0.75,
+  dToneN:1, dToneF:0.7, dSatN:1.1, dSatF:0.75, dWashN:1, dWashF:1, dPalN:1, dPalF:1.2, dGlitchN:1, dGlitchF:1, dMoshN:1, dMoshF:1, dShapeN:1, dShapeF:1, fogCol:"#e9d8c4", dof:0, dFocus:0.75,
   // datamosh
   mosh:0, moshGain:1.5, blocky:0.6, refresh:1, still:0.3, stillTh:0.04, leak:0, keyEvery:0,
   synth:0, synthScale:1.5, moshMask:"off", evBloom:1, evSmear:1,
@@ -320,6 +327,12 @@ const LOOKS = {
   "Geylang Crunk": { kuwa:4.5, aniso:0.85, dKuwaN:0.8, dKuwaF:2.8, plates:0.55, bokashi:0.6, wood:0.35, pressure:0.8,
                      toon:0.8, toonBands:3, line:1, lineW:1.6, holdLine:0.3, offset:0.35, paper:0.45, tone:0.2, fog:0.3,
                      dLinesF:0.4, dToonF:0.3, dSatF:0.6, palA:"Ukiyo-e indigo", palMix:0.2, onTwos:2, grain:0.08 },
+  "Gradient planes": { shapes:0.8, shapeFill:"picture", shapeGrad:1.3, shapeTol:0.14, shapeSimp:3, shapeLine:0.8, shapeSoft:0.4,
+                       kuwa:5, toon:0.55, tone:0.15, line:0.8, dShapeN:1, dShapeF:0.6, fog:0.3 },
+  "Poster facets": { shapes:0.9, shapeFill:"palette", shapeFacet:0.6, shapeGrad:1.2, shapeSimp:4, shapeTol:0.16, shapeLine:1.2,
+                     palA:"Kampong teal", palMix:0, toon:0.5, tone:0.25, toneMode:"color", line:0.9, lineW:1.2 },
+  "Lit planes": { shapes:0.7, shapeFill:"light", shapeBlend:"overlay", shapeGrad:1.6, shapeSimp:2.5, shapeEdge:0.55,
+                  toon:0.7, rim:0.6, dShapeN:1.2, dShapeF:0.5 },
   "Impact": { impactRate:8, focus:0.5, onTwos:2, toon:1, rim:0.7, spec:0.5 },
   "Psyberpunk": { ...FX },
   "Halftone print": { ...FX, tone:0.9, toneMode:"cmyk", tonePx:7, line:0.6, offset:0.7, paper:0.7, kuwa:2, cel:0.3, palMix:0.2,
@@ -358,7 +371,7 @@ const cv = document.getElementById("gl");
 const Drive = (window.UnlimiterDrive)
   ? UnlimiterDrive.create({ onChange:()=>{}, getOutputCanvas:()=>cv })
   : null;
-const NO_MOD = new Set(["dKuwaN","dKuwaF","dCelN","dCelF","dToonN","dToonF","dLinesN","dLinesF","dWeightN","dWeightF","dToneN","dToneF","dSatN","dSatF","dWashN","dWashF","dPalN","dPalF","dGlitchN","dGlitchF","dMoshN","dMoshF","toonBands","onTwos","impactLen","depthSmooth","tapeLen","tapeFps","tapeRes","latN","latK","stutLen","reRec","seed","keyEvery"]);
+const NO_MOD = new Set(["shapeDetail","shapeRate","dShapeN","dShapeF","dKuwaN","dKuwaF","dCelN","dCelF","dToonN","dToonF","dLinesN","dLinesF","dWeightN","dWeightF","dToneN","dToneF","dSatN","dSatF","dWashN","dWashF","dPalN","dPalF","dGlitchN","dGlitchF","dMoshN","dMoshF","toonBands","onTwos","impactLen","depthSmooth","tapeLen","tapeFps","tapeRes","latN","latK","stutLen","reRec","seed","keyEvery"]);
 let GRP = "";
 function registerMod(key,label,min,max){
   if(!Drive || NO_MOD.has(key)) return;
@@ -389,7 +402,7 @@ function slider(parent,key,label,min,max,step,suffix){
   const v=document.createElement("span"); v.className="val";
   const show=()=>v.textContent=fmt(Number(P[key]),step)+(suffix||"");
   show();
-  i.addEventListener("input",()=>{P[key]=Number(i.value);show();});
+  i.addEventListener("input",()=>{const was=P[key]>0;P[key]=Number(i.value);show();if((P[key]>0)!==was)vis();});
   bound[key]=()=>{i.value=P[key];show();};
   registerMod(key,label,min,max);
   return row(parent,label,[i,v],key);
@@ -525,6 +538,27 @@ colorPick(gI,"paperCol","Paper colour");
 slider(gI,"focus","Speed lines",0,1,0.01,"");
 note(gI,"Drawn on top of everything the tape, mosh and glitches did. Paint flatten is a Kuwahara filter: it flattens the picture into painted shapes before the cel bands cut it into flat tones. Ink lines are traced from that flattened picture, so they follow shapes rather than noise; Hand wobble and Line boil make them shake and redraw like hand-inked animation, and Print offset slides the line plate off the colour plate like a misregistered woodblock or risograph. Halftone screens the tones as ink dots, coloured dots or a four-plate CMYK print; the dots go round → diamond → line screen along the morph. Hatching lays manga crosshatch into the shadows, and can turn to follow the motion. Ink wash bleeds the darks into sumi pools with darker rims and paper grain; Monochrome reduces the colour to ink on paper. Speed lines burst from the centre, harder with motion and storms.");
 
+GRP="Shapes";
+const gSh=document.getElementById("g-shapes");
+slider(gSh,"shapes","Shape fill",0,1,0.01,"");
+select(gSh,"shapeFill","Fill from",[["picture","Picture — each plane's own gradient"],["light","Light — shaded toward the toon light"],["depth","Depth — bright near, hazed far"],["palette","Palette — round ↔ sigil palettes"]]);
+select(gSh,"shapeBlend","Blend",[["normal","Over"],["multiply","Multiply"],["screen","Screen"],["overlay","Overlay"],["color","Colour only"]]);
+slider(gSh,"shapeGrad","Gradient",0,2.5,0.01,"");
+slider(gSh,"shapeFacet","Facets",0,1,0.01,"");
+slider(gSh,"shapeLine","Shape outline",0,4,0.05," px");
+slider(gSh,"shapeSoft","Softness",0,4,0.05,"");
+subhead(gSh,"Finding shapes");
+slider(gSh,"shapeTol","Colour tolerance",0.02,0.45,0.005,"");
+slider(gSh,"shapeEdge","Edge cut",0,1,0.01,"");
+slider(gSh,"shapeDCut","Depth cut",0,1,0.01,"");
+slider(gSh,"shapeMin","Smallest shape",0.0005,0.03,0.0005,"");
+slider(gSh,"shapeSimp","Simplify",0.5,10,0.1," px");
+slider(gSh,"shapeDetail","Detail",128,384,32," px");
+slider(gSh,"shapeRate","Redraw",2,30,1," fps");
+slider(gSh,"shapeHold","Crossfade",0,1,0.01,"");
+const shapeNote=note(gSh,"","shapeState");
+note(gSh,"Finds the big flat areas of the picture and redraws them as simplified planes, each filled with a gradient, then lays them over the image — the auto-mapping idea from MetaMapper (threshold → connected regions → contour trace → simplify), run on the flattened, depth-aware picture. Regions grow while colour stays within the tolerance; Edge cut stops them at strong edges and Depth cut stops them where depth jumps, so a figure doesn't merge with the wall behind it. Each plane gets a gradient fitted to its own pixels (Picture), turned toward the toon light (Light), toward the viewer (Depth), or mapped through the palettes (Palette). Facets break each plane into flat-shaded triangles. Simplify sets how few corners the shapes keep. Redraw sets how often the shapes are found again — 12 fps reads like animation on twos — and Crossfade melts one set of shapes into the next. Toon light, halftone and ink lines all draw on top of the planes. The Depth group has a near/far pair for the shape fill.");
+
 GRP="Depth";
 const gDp=document.getElementById("g-depth");
 select(gDp,"depthSrc","Depth from",[["off","Off"],["ai","AI — Depth Anything V2 (GPU)"],["estimate","Estimate — position, colour, motion"],["rack","Rack: depth cable (mask)"]],()=>{ if(P.depthSrc==="ai") depthLoad(); });
@@ -548,6 +582,7 @@ pair(gDp,"dWashN","dWashF","Ink wash",2);
 pair(gDp,"dPalN","dPalF","Palette map",2);
 pair(gDp,"dGlitchN","dGlitchF","Glitch",2);
 pair(gDp,"dMoshN","dMoshF","Mosh",1);
+pair(gDp,"dShapeN","dShapeF","Shape fill",2);
 buttons(gDp,[["bFlat","Same near and far"],["bDeep","Deep defaults"]]);
 subhead(gDp,"Depth looks");
 slider(gDp,"dSil","Silhouette lines",0,2,0.01,"");
@@ -746,8 +781,10 @@ function vis(){
   ["toonBands","toonTh","toonSoft","lightAz","lightEl","shape","shadowCol","rim","rimCol","spec","specTh"].forEach(k=>show(k,tOn));
   show("rimCol",tOn&&P.rim>0); show("bokashiCol",P.bokashi>0); show("specTh",tOn&&P.spec>0); show("bgSoft",P.bgPaint>0);
   ["impactRate","impactLen"].forEach(k=>show(k,!!P.impact));
+  ["shapeFill","shapeBlend","shapeGrad","shapeFacet","shapeLine","shapeSoft","shapeTol","shapeEdge","shapeDCut","shapeMin","shapeSimp","shapeDetail","shapeRate","shapeHold"].forEach(k=>show(k,P.shapes>0));
+  { const el=document.getElementById("shapeState"); if(el) el.classList.toggle("hidden",!(P.shapes>0)); }
   const dOn=P.depthSrc!=="off";
-  ["depthSmooth","dGamma","dInv","dSplit","dSoft","dShow","dKuwaN","dCelN","dToonN","dLinesN","dWeightN","dToneN","dSatN","dWashN","dPalN","dGlitchN","dMoshN","dSil","fog","fogCol","dof","dFocus"].forEach(k=>show(k,dOn));
+  ["depthSmooth","dGamma","dInv","dSplit","dSoft","dShow","dKuwaN","dCelN","dToonN","dLinesN","dWeightN","dToneN","dSatN","dWashN","dPalN","dGlitchN","dMoshN","dShapeN","dSil","fog","fogCol","dof","dFocus"].forEach(k=>show(k,dOn));
   show("depthQ",P.depthSrc==="ai"); show("dFocus",dOn&&P.dof>0); show("fogCol",dOn&&P.fog>0);
   { const b=document.getElementById("bFlat"); if(b) b.parentNode.classList.toggle("hidden",!dOn); }
   if(typeof depthNote!=="undefined") depthNote.classList.toggle("hidden",P.depthSrc!=="ai");
@@ -1382,6 +1419,7 @@ uniform vec2 uDLines, uDTone, uDWash, uDWeight, uDToon, uDSat;
 uniform float uPlates, uBoka, uWood, uPressure; uniform vec3 uBokaC; uniform vec3 uPl[7];
 uniform float uToon, uToonB, uToonTh, uToonSoft, uShape, uRim, uSpec, uSpecTh, uBgPaint, uBgSoft, uHoldLine, uToneShadow, uImpact;
 uniform vec3 uLight, uShadowC, uRimC; uniform vec2 uDTexel;
+uniform sampler2D uShp0, uShp1; uniform float uShapes, uShFade, uShSoft, uShBlend; uniform vec2 uDShape;
 #define PI 3.14159265
 ${NOISE_GLSL}
 ${DEPTH_GLSL}
@@ -1443,6 +1481,19 @@ void main(){
     float pool = clamp(abs(lum(sa) - lum(sb)) * 4.0, 0.0, 1.0);
     vec3 paint = sa * (0.9 + 0.15 * grain) * (1.0 - pool * 0.3);
     base = mix(base, mix(paint, vec3(lum(paint)), 0.1), bgk);
+  }
+
+  /* shapes: simplified planes with gradient fills, found on the CPU and laid over the picture */
+  if(uShapes > 0.001){
+    vec4 sp = mix(textureLod(uShp0, uv, uShSoft), textureLod(uShp1, uv, uShSoft), uShFade);
+    if(sp.a > 0.002){
+      vec3 sc = clamp(sp.rgb / sp.a, 0.0, 1.0), bl = sc;
+      if(uShBlend > 0.5 && uShBlend < 1.5) bl = base * sc;
+      else if(uShBlend < 2.5 && uShBlend > 1.5) bl = 1.0 - (1.0 - base) * (1.0 - sc);
+      else if(uShBlend < 3.5 && uShBlend > 2.5) bl = mix(2.0 * base * sc, 1.0 - 2.0 * (1.0 - base) * (1.0 - sc), step(0.5, base));
+      else if(uShBlend > 3.5) bl = sc + (lum(base) - lum(sc));
+      base = mix(base, clamp(bl, 0.0, 1.0), clamp(sp.a * uShapes * dMix(uDShape, dn), 0.0, 1.0));
+    }
   }
 
   /* toon light: two or three flat tones, a tinted shadow, rim and shine */
@@ -1576,6 +1627,13 @@ void main(){
   o = vec4(clamp(base, 0.0, 1.0), 1.0);
 }`;
 
+const SHIN_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uK; uniform float uLod;
+${DEPTH_GLSL}
+void main(){ o = vec4(textureLod(uK, vUv, uLod).rgb, nearAt(vUv)); }`;
+
 const BRIGHT_FS = `#version 300 es
 precision highp float;
 in vec2 vUv; out vec4 o; uniform sampler2D uS; uniform float uTh;
@@ -1622,6 +1680,7 @@ void main(){
 
 const PCAP = prog(FULL_VS, CAP_FS), PCOPY = prog(FULL_VS, COPY_FS), PPROC = prog(FULL_VS, PROC_FS), PMOSH = prog(FULL_VS, MOSH_FS);
 const PKUWA = prog(FULL_VS, KUWA_FS), PINK = prog(FULL_VS, INK_FS), PEST = prog(FULL_VS, EST_FS), PEST2 = prog(FULL_VS, EST2_FS);
+const PSHIN = prog(FULL_VS, SHIN_FS);
 const PBRI = prog(FULL_VS, BRIGHT_FS), PBLUR = prog(FULL_VS, BLUR_FS), PFIN = prog(FULL_VS, FINAL_FS);
 const fullVAO = gl.createVertexArray();
 
@@ -1632,6 +1691,7 @@ function tex(w, h, mip){
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   if(mip) gl.generateMipmap(gl.TEXTURE_2D);
+  if(typeof BOUND !== "undefined") BOUND[ACTIVE] = t;   // keep the record honest, so draw() can unbind it
   return t;
 }
 function target(w, h, mip){
@@ -1642,8 +1702,9 @@ function target(w, h, mip){
   return { t, f, w, h };
 }
 function freeTarget(r){ if(r){ gl.deleteTexture(r.t); gl.deleteFramebuffer(r.f); } }
-const BOUND = [null, null, null, null, null, null, null];
-function bindTex(unit, t){ gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); BOUND[unit] = t; }
+const BOUND = [null, null, null, null, null, null, null, null, null];
+let ACTIVE = 0;
+function bindTex(unit, t){ ACTIVE = unit; gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); BOUND[unit] = t; }
 function draw(prog, rt, w, h){
   // never leave the target bound for sampling: that is a feedback loop
   if(rt) for(let k = 0; k < BOUND.length; k++) if(BOUND[k] === rt.t) bindTex(k, null);
@@ -2304,6 +2365,277 @@ function setPalUniforms(pr){
   gl.uniform3fv(pr.u.uRA, new Float32Array([].concat(...A)));
   gl.uniform3fv(pr.u.uRB, new Float32Array([].concat(...B)));
 }
+/* ============================ shapes: planes from the picture ============================
+   The MetaMapper auto-map, run every few frames on the flattened picture:
+   region growing on colour (stopped by strong edges and depth jumps) → drop the crumbs →
+   Moore contour trace → Douglas–Peucker simplify → a gradient fitted to each region's pixels.
+   The planes are drawn to a canvas and laid over the picture in the ink pass. */
+const SHP = { rt:null, px:null, W:0, H:0, buf:null, cv:document.createElement("canvas"), ctx:null,
+              tex:[null, null], cur:0, fadeT:-9, last:-9, n:0, ms:0, had:false };
+SHP.ctx = SHP.cv.getContext("2d");
+for(let k = 0; k < 2; k++){
+  const t = plainTex(gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+  gl.generateMipmap(gl.TEXTURE_2D);
+  SHP.tex[k] = t;
+}
+function shapeFade(){
+  const d = Math.max(0.001, Q.shapeHold * 0.5);
+  return clamp((performance.now() / 1000 - SHP.fadeT) / d, 0, 1);
+}
+function shapeBuffers(W, H){
+  const N = W * H;
+  if(SHP.buf && SHP.buf.N === N) return SHP.buf;
+  SHP.buf = { N, R:new Float32Array(N), G:new Float32Array(N), B:new Float32Array(N), D:new Float32Array(N),
+              L:new Float32Array(N), bar:new Uint8Array(N), lab:new Int32Array(N), lab2:new Int32Array(N), stack:new Int32Array(N) };
+  return SHP.buf;
+}
+const MDX = [1, 1, 0, -1, -1, -1, 0, 1], MDY = [0, 1, 1, 1, 0, -1, -1, -1];
+function shapeTrace(lab, id, w, h, start){
+  const sx = start % w, sy = (start / w) | 0, pts = [[sx, sy]], maxSteps = w * h * 2;
+  let x = sx, y = sy, d = 0, first = -1;
+  for(let step = 0; step < maxSteps; step++){
+    let found = -1;
+    for(let k = 0; k < 8; k++){ const nd = (d + 5 + k) % 8, nx = x + MDX[nd], ny = y + MDY[nd]; if(nx >= 0 && ny >= 0 && nx < w && ny < h && lab[ny * w + nx] === id){ found = nd; break; } }
+    if(found < 0) break;
+    if(step === 0) first = found; else if(x === sx && y === sy && found === first) break;
+    x += MDX[found]; y += MDY[found]; d = found; pts.push([x, y]);
+  }
+  if(pts.length > 1){ const L = pts[pts.length - 1]; if(L[0] === sx && L[1] === sy) pts.pop(); }
+  return pts;
+}
+function dpOpen(p, eps){
+  if(p.length < 3) return p.slice();
+  const keep = new Uint8Array(p.length), st = [[0, p.length - 1]]; keep[0] = keep[p.length - 1] = 1;
+  while(st.length){
+    const [i0, i1] = st.pop(), ax = p[i0][0], ay = p[i0][1], bx = p[i1][0], by = p[i1][1], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+    let md = -1, mi = -1;
+    for(let i = i0 + 1; i < i1; i++){
+      const dd = L < 1e-9 ? Math.hypot(p[i][0] - ax, p[i][1] - ay) : Math.abs(dy * p[i][0] - dx * p[i][1] + bx * ay - by * ax) / L;
+      if(dd > md){ md = dd; mi = i; }
+    }
+    if(md > eps){ keep[mi] = 1; st.push([i0, mi], [mi, i1]); }
+  }
+  const out = []; for(let j = 0; j < p.length; j++) if(keep[j]) out.push(p[j]); return out;
+}
+function simplifyClosed(pts, eps){
+  if(pts.length < 4) return pts.slice();
+  let far = 0, fd = -1;
+  for(let i = 1; i < pts.length; i++){ const dx = pts[i][0] - pts[0][0], dy = pts[i][1] - pts[0][1], d = dx * dx + dy * dy; if(d > fd){ fd = d; far = i; } }
+  const a = dpOpen(pts.slice(0, far + 1), eps), b = dpOpen(pts.slice(far).concat([pts[0]]), eps);
+  return a.slice(0, -1).concat(b.slice(0, -1));
+}
+function shapeSegment(px, W, H){
+  const b = shapeBuffers(W, H), N = b.N, { R, G, B, D, L, bar, lab, lab2, stack } = b;
+  for(let y = 0; y < H; y++){
+    const row = (H - 1 - y) * W;   // readPixels is bottom-up; work top-down
+    for(let x = 0; x < W; x++){
+      const i = y * W + x, j = (row + x) * 4;
+      R[i] = px[j] / 255; G[i] = px[j + 1] / 255; B[i] = px[j + 2] / 255; D[i] = px[j + 3] / 255;
+      L[i] = 0.299 * R[i] + 0.587 * G[i] + 0.114 * B[i];
+    }
+  }
+  // strong edges are walls the regions can't grow through
+  bar.fill(0);
+  if(Q.shapeEdge > 0.001){
+    const th = 0.03 + (1 - Q.shapeEdge) * 0.45;
+    for(let y = 1; y < H - 1; y++) for(let x = 1; x < W - 1; x++){
+      const i = y * W + x;
+      const gx = -L[i - W - 1] - 2 * L[i - 1] - L[i + W - 1] + L[i - W + 1] + 2 * L[i + 1] + L[i + W + 1];
+      const gy = -L[i - W - 1] - 2 * L[i - W] - L[i - W + 1] + L[i + W - 1] + 2 * L[i + W] + L[i + W + 1];
+      if(Math.hypot(gx, gy) * 0.25 > th) bar[i] = 1;
+    }
+  }
+  // region growing: a neighbour joins if it is close to its neighbour and to the region's average colour,
+  // and depth doesn't jump between them
+  const tol = Q.shapeTol, tl2 = (tol * 0.6) ** 2, tg2 = (tol * 1.7) ** 2;
+  const dcut = Q.shapeDCut > 0.001 ? lerp(0.25, 0.01, Q.shapeDCut) : 9, dglob = Q.shapeDCut > 0.001 ? lerp(0.8, 0.06, Q.shapeDCut) : 9;
+  const cd2 = (r, g, bb, q) => { const dr = r - R[q], dg = g - G[q], db = bb - B[q]; return dr * dr * 0.9 + dg * dg * 1.2 + db * db * 0.9; };
+  lab.fill(0);
+  const area = [0];
+  let nl = 0;
+  for(let p = 0; p < N; p++){
+    if(lab[p] || bar[p]) continue;
+    nl++; lab[p] = nl;
+    let sp = 0, cnt = 1, mr = R[p], mg = G[p], mb = B[p], md = D[p];
+    stack[sp++] = p;
+    while(sp){
+      const q = stack[--sp], qx = q % W;
+      for(let k = 0; k < 4; k++){
+        let n;
+        if(k === 0){ if(qx === 0) continue; n = q - 1; }
+        else if(k === 1){ if(qx === W - 1) continue; n = q + 1; }
+        else if(k === 2){ if(q < W) continue; n = q - W; }
+        else { if(q >= N - W) continue; n = q + W; }
+        if(lab[n] || bar[n]) continue;
+        if(cd2(R[q], G[q], B[q], n) > tl2 || cd2(mr, mg, mb, n) > tg2 || Math.abs(D[n] - D[q]) > dcut || Math.abs(D[n] - md) > dglob) continue;
+        lab[n] = nl; stack[sp++] = n; cnt++;
+        mr += (R[n] - mr) / cnt; mg += (G[n] - mg) / cnt; mb += (B[n] - mb) / cnt; md += (D[n] - md) / cnt;
+      }
+    }
+    area.push(cnt);
+  }
+  // crumbs and wall pixels are handed to the neighbouring big regions
+  const minA = Math.max(4, Q.shapeMin * N);
+  for(let i = 0; i < N; i++) if(lab[i] && area[lab[i]] < minA) lab[i] = 0;
+  let a = lab, o = lab2;
+  for(let pass = 0; pass < 10; pass++){
+    let changed = 0;
+    o.set(a);
+    for(let i = 0; i < N; i++){
+      if(a[i]) continue;
+      const x = i % W;
+      let best = 0, bd = 1e9;
+      const tryN = n => { const l = a[n]; if(!l) return; const d = cd2(R[i], G[i], B[i], n); if(d < bd){ bd = d; best = l; } };
+      if(x > 0) tryN(i - 1); if(x < W - 1) tryN(i + 1); if(i >= W) tryN(i - W); if(i < N - W) tryN(i + W);
+      if(best){ o[i] = best; changed++; }
+    }
+    const t = a; a = o; o = t;
+    if(!changed) break;
+  }
+  if(a !== lab) lab.set(a);
+  // per-region sums for a least-squares colour plane, c = mean + gx·(x − x̄) + gy·(y − ȳ)
+  const K = 18, S = new Float64Array((nl + 1) * K), first = new Int32Array(nl + 1).fill(-1);
+  for(let i = 0; i < N; i++){
+    const l = lab[i]; if(!l) continue;
+    if(first[l] < 0) first[l] = i;
+    const x = i % W, y = (i / W) | 0, o2 = l * K;
+    S[o2] += 1; S[o2 + 1] += x; S[o2 + 2] += y; S[o2 + 3] += x * x; S[o2 + 4] += x * y; S[o2 + 5] += y * y;
+    const cs = [R[i], G[i], B[i], D[i]];
+    for(let c = 0; c < 4; c++){ const v = cs[c]; S[o2 + 6 + c * 3] += v; S[o2 + 7 + c * 3] += x * v; S[o2 + 8 + c * 3] += y * v; }
+  }
+  const ids = [];
+  for(let l = 1; l <= nl; l++) if(first[l] >= 0 && S[l * K] >= minA) ids.push(l);
+  ids.sort((p, q) => S[q * K] - S[p * K]);
+  const shapes = [];
+  for(const l of ids.slice(0, 260)){
+    const ring = shapeTrace(lab, l, W, H, first[l]);
+    if(ring.length < 3) continue;
+    const poly = simplifyClosed(ring, Q.shapeSimp);
+    if(poly.length < 3) continue;
+    const o2 = l * K, n = S[o2], mx = S[o2 + 1] / n, my = S[o2 + 2] / n;
+    const sxx = S[o2 + 3] / n - mx * mx + 1, sxy = S[o2 + 4] / n - mx * my, syy = S[o2 + 5] / n - my * my + 1;
+    const det = sxx * syy - sxy * sxy;
+    const mean = [], gx = [], gy = [];
+    for(let c = 0; c < 4; c++){
+      const mc = S[o2 + 6 + c * 3] / n, cx = S[o2 + 7 + c * 3] / n - mx * mc, cy = S[o2 + 8 + c * 3] / n - my * mc;
+      mean.push(mc); gx.push((syy * cx - sxy * cy) / det); gy.push((sxx * cy - sxy * cx) / det);
+    }
+    shapes.push({ poly, n, mx, my, mean, gx, gy });
+  }
+  return shapes;
+}
+function cssRGB(c){ return "rgb(" + Math.round(clamp(c[0], 0, 1) * 255) + "," + Math.round(clamp(c[1], 0, 1) * 255) + "," + Math.round(clamp(c[2], 0, 1) * 255) + ")"; }
+function shapeDraw(shapes, W, H){
+  const cvs = SHP.cv, g = SHP.ctx;
+  const CW = 640, CH = Math.max(16, Math.round(CW * H / W));
+  if(cvs.width !== CW || cvs.height !== CH){ cvs.width = CW; cvs.height = CH; }
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, CW, CH);
+  const s = CW / W, k = Q.shapeGrad, fac = Q.shapeFacet, mode = P.shapeFill;
+  g.setTransform(s, 0, 0, s, s * 0.5, s * 0.5);   // analysis pixel centres
+  g.lineJoin = "round";
+  const az = Q.lightAz * Math.PI / 180, lx = Math.cos(az), ly = -Math.sin(az);
+  const shC = hexRGB(P.shadowCol), fogC = hexRGB(P.fogCol);
+  const A = palA(), Bp = palB(), mm = EV.morph;
+  const ramp = v => { v = clamp(v, 0, 1) * 4; const i = Math.min(3, Math.floor(v)), f = v - i; return mixC(mixC(A[i], A[i + 1], f), mixC(Bp[i], Bp[i + 1], f), mm); };
+  const lumC = c => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  for(const sh of shapes){
+    const { poly, mx, my, mean, gx, gy } = sh;
+    // the gradient runs along the direction the colour changes most, or toward the light / the viewer
+    let ux, uy;
+    if(mode === "light"){ ux = lx; uy = ly; }
+    else if(mode === "depth"){ ux = gx[3]; uy = gy[3]; }
+    else { ux = 0.299 * gx[0] + 0.587 * gx[1] + 0.114 * gx[2]; uy = 0.299 * gy[0] + 0.587 * gy[1] + 0.114 * gy[2]; }
+    let ul = Math.hypot(ux, uy);
+    if(ul < 1e-5){ if(mode === "depth"){ ux = 0; uy = 1; } else { ux = lx; uy = ly; } ul = 1; }
+    ux /= ul; uy /= ul;
+    let t0 = Infinity, t1 = -Infinity;
+    for(const q of poly){ const t = (q[0] - mx) * ux + (q[1] - my) * uy; if(t < t0) t0 = t; if(t > t1) t1 = t; }
+    if(!(t1 > t0)){ t0 = -1; t1 = 1; }
+    const m3 = [mean[0], mean[1], mean[2]];
+    const colAt = t => {
+      const a = (t - t0) / (t1 - t0);
+      let c;
+      if(mode === "light"){
+        const dark = [m3[0] * lerp(1, shC[0] * 1.1, 0.7 * Math.min(1, k)), m3[1] * lerp(1, shC[1] * 1.1, 0.7 * Math.min(1, k)), m3[2] * lerp(1, shC[2] * 1.1, 0.7 * Math.min(1, k))];
+        const lite = m3.map(v => v + (1 - v) * 0.28 * k);
+        c = mixC(dark, lite, a);
+      } else if(mode === "depth"){
+        const farC = mixC(m3, fogC, clamp(0.35 * k * (1 - mean[3]), 0, 1)), nearC = m3.map(v => v + (1 - v) * 0.15 * k);
+        c = mixC(farC, nearC, a);
+      } else {
+        c = [0, 1, 2].map(i => mean[i] + (gx[i] * ux + gy[i] * uy) * t * k);
+        if(mode === "palette") c = ramp(0.5 + (lumC(c) - 0.5) * 1.2);
+      }
+      return c;
+    };
+    g.beginPath(); g.moveTo(poly[0][0], poly[0][1]);
+    for(let i = 1; i < poly.length; i++) g.lineTo(poly[i][0], poly[i][1]);
+    g.closePath();
+    if(fac > 0.001){
+      // facets: a fan of flat-shaded triangles from the middle of the shape
+      let cx = 0, cy = 0; for(const q of poly){ cx += q[0]; cy += q[1]; } cx /= poly.length; cy /= poly.length;
+      g.save(); g.clip();
+      for(let i = 0; i < poly.length; i++){
+        const p0 = poly[i], p1 = poly[(i + 1) % poly.length];
+        const tx = (cx + p0[0] + p1[0]) / 3, ty = (cy + p0[1] + p1[1]) / 3;
+        const hsh = fract(Math.sin(Math.round(p0[0] * 0.5) * 12.9898 + Math.round(p0[1] * 0.5) * 78.233) * 43758.5453);
+        const c = colAt((tx - mx) * ux + (ty - my) * uy), f = 1 + (hsh - 0.5) * 0.5 * fac;
+        g.fillStyle = g.strokeStyle = cssRGB([c[0] * f, c[1] * f, c[2] * f]);
+        g.beginPath(); g.moveTo(cx, cy); g.lineTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.closePath();
+        g.lineWidth = 0.8; g.fill(); g.stroke();
+      }
+      g.restore();
+      g.beginPath(); g.moveTo(poly[0][0], poly[0][1]); for(let i = 1; i < poly.length; i++) g.lineTo(poly[i][0], poly[i][1]); g.closePath();
+      g.lineWidth = 1.1; g.strokeStyle = cssRGB(colAt(0)); g.stroke();
+    } else {
+      const gr = g.createLinearGradient(mx + ux * t0, my + uy * t0, mx + ux * t1, my + uy * t1);
+      gr.addColorStop(0, cssRGB(colAt(t0))); gr.addColorStop(1, cssRGB(colAt(t1)));
+      g.fillStyle = gr; g.strokeStyle = gr; g.lineWidth = 1.1;
+      g.fill(); g.stroke();   // the stroke grouts the seams between neighbouring planes
+    }
+  }
+  if(Q.shapeLine > 0.01){
+    g.strokeStyle = P.inkCol; g.lineWidth = Q.shapeLine * (outH / 720) * (W / outW);
+    for(const sh of shapes){
+      const poly = sh.poly; g.beginPath(); g.moveTo(poly[0][0], poly[0][1]);
+      for(let i = 1; i < poly.length; i++) g.lineTo(poly[i][0], poly[i][1]);
+      g.closePath(); g.stroke();
+    }
+  }
+}
+function shapeStep(w, h){
+  if(!(Q.shapes > 0.001)){ SHP.had = false; return false; }
+  const now = performance.now() / 1000;
+  if(SHP.had && now - SHP.last < 1 / Math.max(1, Q.shapeRate)) return true;
+  SHP.last = now;
+  const t0 = performance.now();
+  const W = Math.round(clamp(Q.shapeDetail, 96, 512)), H = Math.max(16, Math.round(W * h / w));
+  if(!SHP.rt || SHP.rt.w !== W || SHP.rt.h !== H){ freeTarget(SHP.rt); SHP.rt = target(W, H); SHP.px = new Uint8Array(W * H * 4); }
+  bindTex(0, kRT.t);
+  gl.useProgram(PSHIN.p); gl.uniform1i(PSHIN.u.uK, 0); gl.uniform1f(PSHIN.u.uLod, Math.max(0, Math.log2(w / W)));
+  setDepthUniforms(PSHIN.u);
+  draw(PSHIN, SHP.rt, W, H);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, SHP.rt.f);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, SHP.px);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  const shapes = shapeSegment(SHP.px, W, H);
+  shapeDraw(shapes, W, H);
+  SHP.cur ^= 1;
+  bindTex(8, SHP.tex[SHP.cur]);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, SHP.cv);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  // the first set after switching on appears at once; after that each set melts into the next
+  SHP.fadeT = SHP.had ? now : -9;
+  if(!SHP.had){ bindTex(7, SHP.tex[SHP.cur ^ 1]); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, SHP.cv); gl.generateMipmap(gl.TEXTURE_2D); }
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  SHP.had = true; SHP.n = shapes.length;
+  const ms = performance.now() - t0; SHP.ms = SHP.ms ? SHP.ms * 0.85 + ms * 0.15 : ms;
+  return true;
+}
+
 let hasOv = false;
 function render(t, dt){
   const w = outW, h = outH, m = EV.morph, st = EV.storm * Q.stormDepth;
@@ -2367,8 +2699,15 @@ function render(t, dt){
   if(depthOn && P.depthSrc === "estimate") bindTex(6, estRT.t); else bindTex(6, depthTex);
   setDepthUniforms(PKUWA.u);
   draw(PKUWA, kRT, w, h);
-  bindTex(0, kRT.t); gl.generateMipmap(gl.TEXTURE_2D); bindTex(4, flowTex);
+  bindTex(0, kRT.t); gl.generateMipmap(gl.TEXTURE_2D);
+  const shOn = shapeStep(w, h);
+  bindTex(0, kRT.t); bindTex(4, flowTex);
   const ik = PINK.u; gl.useProgram(PINK.p);
+  bindTex(7, SHP.tex[SHP.cur ^ 1]); bindTex(8, SHP.tex[SHP.cur]);
+  gl.uniform1i(ik.uShp0, 7); gl.uniform1i(ik.uShp1, 8);
+  gl.uniform1f(ik.uShapes, shOn ? Q.shapes : 0); gl.uniform1f(ik.uShFade, shapeFade());
+  gl.uniform1f(ik.uShSoft, Math.max(0, Q.shapeSoft)); gl.uniform2f(ik.uDShape, Q.dShapeN, Q.dShapeF);
+  gl.uniform1f(ik.uShBlend, ({ normal:0, multiply:1, screen:2, overlay:3, color:4 })[P.shapeBlend] || 0);
   gl.uniform1i(ik.uK, 0); gl.uniform1i(ik.uFlow, 4);
   gl.uniform2f(ik.uRes, w, h); gl.uniform2f(ik.uDir, Math.cos(EV.angle), Math.sin(EV.angle));
   gl.uniform1f(ik.uT, t); gl.uniform1f(ik.uM, m); gl.uniform1f(ik.uSeed, fract(P.seed * 0.1373)); gl.uniform1f(ik.uStorm, EV.storm);
@@ -2483,6 +2822,7 @@ function frame(now){
       ` · morph ${EV.morph.toFixed(2)}` + (EV.storm > 0.05 ? ` · storm ${(EV.storm * 100).toFixed(0)}%` : "") +
       (P.latOn ? ` · ${LP.n} pts` : "") + ` · ${fpsEma.toFixed(0)} fps`;
     srcNote.textContent = src.label;
+    if(Q.shapes > 0.001) shapeNote.textContent = `${SHP.n} shapes · ${SHP.ms.toFixed(1)} ms each redraw`;
     if(P.depthSrc === "ai"){
       depthNote.textContent = !DAI ? "unlimiter-depthai.js is missing." :
         DAI.state === "failed" ? "Couldn't load the depth model: " + DAI.error + " — it needs http(s) and an internet connection the first time." :
@@ -2537,8 +2877,8 @@ $("bRew").addEventListener("click", () => startEvent("rewind", true));
 $("bPause").addEventListener("click", () => startEvent("pause", true));
 $("bSlow").addEventListener("click", () => startEvent("slow", true));
 $("bKey").addEventListener("click", () => keyframe());
-$("bFlat").addEventListener("click", () => { ["dKuwa","dCel","dToon","dLines","dWeight","dTone","dSat","dWash","dPal","dGlitch","dMosh"].forEach(k => { P[k + "N"] = 1; P[k + "F"] = 1; }); syncUI(); });
-$("bDeep").addEventListener("click", () => { ["dKuwa","dCel","dToon","dLines","dWeight","dTone","dSat","dWash","dPal","dGlitch","dMosh"].forEach(k => { P[k + "N"] = DEFAULTS[k + "N"]; P[k + "F"] = DEFAULTS[k + "F"]; }); syncUI(); });
+$("bFlat").addEventListener("click", () => { ["dKuwa","dCel","dToon","dLines","dWeight","dTone","dSat","dWash","dPal","dGlitch","dMosh","dShape"].forEach(k => { P[k + "N"] = 1; P[k + "F"] = 1; }); syncUI(); });
+$("bDeep").addEventListener("click", () => { ["dKuwa","dCel","dToon","dLines","dWeight","dTone","dSat","dWash","dPal","dGlitch","dMosh","dShape"].forEach(k => { P[k + "N"] = DEFAULTS[k + "N"]; P[k + "F"] = DEFAULTS[k + "F"]; }); syncUI(); });
 $("bImpact").addEventListener("click", () => triggerImpact());
 $("bBloom").addEventListener("click", () => startMoshEvent("bloom", true));
 $("bSmear").addEventListener("click", () => startMoshEvent("smear", true));
