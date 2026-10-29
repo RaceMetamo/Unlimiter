@@ -19,6 +19,7 @@ internally, which until now never left its iframe except as a picture of itself.
 | sediment | `field` in · `mask` in | the field replaces the noise drift where it speaks; the mask gates where particles deposit |
 | lattice | `points` in, `image` in; `points`, `mask`, `history` out (+ canvas) | tracks whatever it is given and draws streaks, plexus links, Delaunay/Voronoi, flow hair, contours (hull, defects, echoes) and motion history from it. `mask` is the silhouette its contours trace; `history` is the motion history image (bright = just moved, fading over its memory) — both 192×108, and null while that effect is off. Points out carry velocity: tangent = direction of travel, size = 1 + speed, colour = the palette colour, `ids` = stable identity. A cable arriving switches its source to that cable |
 | ouroboros | `brushes` points in | every point is a stamped brush held down — a GL point-sprite pass into the loop's destination, same gaussian as the mouse brush, up to 1024 |
+| tessera | `out` image · `points` (moved cloud, 3d) · `nuclei` (cell centres, 3d) · `depth` mask out; `image`, `depth` (mask, bright = near), `mask` in | the cloud is unprojected from depth through a lens; points out are computed on the CPU with the same cell maths as the shader, so they sit on the drawn points. A depth cable switches *Depth from* to it |
 | anchor, phylo | — | next; ARCHITECTURE.md lists the seam in each |
 
 ---

@@ -172,6 +172,9 @@ const TOOLS = [
   { file:"rewind.html", name:"Rewind", motif:"rewind",
     desc:"An anime filter for any footage, built from the picture itself. It estimates depth with no download, relights the scene in flat toon shadows with rim light and shine, paints the background behind cel-shaded layers, inks the lines and screentones the shadows, and animates on 2s with impact frames. Underneath sits a tape machine that loops, stutters and datamoshes, with glitches, VHS and storms to bring in when wanted.",
     tags:["webcam","video","anime","cel shading","depth","datamosh","halftone","drive"] },
+  { file:"tessera.html", name:"Tessera", motif:"tessera",
+    desc:"Depth as cells. Takes depth from AI estimation, a Kinect, brightness or a Rack cable and unprojects it through a lens into a true 3D point cloud, then runs a Voronoi cell field through it \u2014 in 3D, or in 4D with time as the fourth axis \u2014 so the picture gathers into nuclei, foams onto cell walls, facets, shatters and dissolves. Plexus and a nucleus lattice grow on the moved points; echoes lay time out as space.",
+    tags:["depth","ai","kinect","point clouds","voronoi","4d","3d","drive"] },
   { file:"anchor.html", name:"Anchor", motif:"anchor",
     desc:"Turns type, point clouds, images or your own drawn strokes into ordered anchor points, then stamps shapes — or characters — on every one. Anchors carry depth, so the whole thing can be orbited in 3D. Exports real vector.",
     tags:["typography","ascii","point clouds","3d","draw","svg","drive"] },
@@ -327,6 +330,17 @@ const MOTIF = {
     const band=(t*38)%(h+40)-20;
     const img=g.getImageData(0,Math.max(0,band|0),w,10);
     g.putImageData(img,(hash(Math.floor(t*20),1)-0.5)*20,Math.max(0,band|0));
+  },
+  tessera(g,w,h,t){
+    // points on a tilted dome, each coloured by its nearest drifting seed; cell walls light up
+    const seeds=[]; for(let i=0;i<9;i++) seeds.push([0.5+0.32*Math.cos(i*2.4+t*0.25*(1+hash(i,2))), 0.5+0.3*Math.sin(i*1.7+t*0.31*(1+hash(i,5)))]);
+    for(let i=0;i<620;i++){
+      const u=hash(i,11), v=hash(i,17), d=Math.max(0,1-Math.pow((u-0.5)*2,2)-Math.pow((v-0.5)*2,2));
+      let b1=9,b2=9,k=0; seeds.forEach((s,j)=>{ const e=Math.hypot(u-s[0],v-s[1]); if(e<b1){b2=b1;b1=e;k=j;} else if(e<b2) b2=e; });
+      const wall=b2-b1<0.03, x=w*(0.12+u*0.76)+(v-0.5)*w*0.12, y=h*(0.18+v*0.62)-Math.sqrt(d)*h*0.22;
+      g.fillStyle=wall?"rgba(255,240,248,0.95)":`hsla(${[330,172,42][k%3]},80%,${48+d*22}%,0.8)`;
+      g.beginPath(); g.arc(x,y,wall?1.5:1.1,0,TAU); g.fill();
+    }
   },
   ouro(g,w,h,t){
     const cx=w/2, cy=h/2;

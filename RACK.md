@@ -142,6 +142,8 @@ LK on the frames its tape plays, plus anything patched in — uv per second, 48 
 push Flow Weave with the same motion. A **depth** input takes any mask as a depth map (bright = near — a Kinect via Relief, or another tool's depth), and with *Depth from: AI* Rewind gives back its own Depth Anything map as a **depth** mask, so Melted World, Sediment or the Plotter can be masked by distance too. Every cable switches the matching setting when it arrives and
 puts the old one back when it goes.
 
+**Tessera** (`tessera.html`, + Tool) is depth as cells. Its **image** input becomes the picture it builds from; a **depth** input takes any mask as depth (bright = near — Rewind's AI depth, a Kinect via Relief) and its cloud is unprojected from that; a **mask** keeps only the points inside it. It gives back its picture, its **points** (the cloud after the Voronoi cells have moved it, `"3d"`, colours as drawn), its **nuclei** (the centres of the occupied cells, sized by how full they are) and the **depth** map it is using. So Rewind's depth can become a Tessera cloud whose points paint Ouroboros or stamp Flow Weave.
+
 ## Signals — the old Control Surface, inside the graph
 
 There is one graph. **+ Signal ▾** adds three kinds of node, all wired with
