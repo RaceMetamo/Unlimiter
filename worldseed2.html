@@ -113,6 +113,9 @@
   #head h1 .ver{font-size:11px;font-weight:600;color:#16110a;background:var(--cool);border-radius:3px;padding:1px 5px;vertical-align:3px;letter-spacing:0}
   button.hotbtn{background:rgba(255,180,84,.16);border-color:rgba(255,180,84,.5);color:#ffe2b8}
   button.hotbtn:hover{background:rgba(255,180,84,.28)}
+  .linkbar{margin:6px 10px 10px;padding:9px 10px;border:1px solid rgba(120,200,255,.35);background:rgba(80,160,230,.10);border-radius:8px;font-size:11.5px;color:var(--ink-dim);line-height:1.45}
+  .linkbar b{color:#d8efff}
+  .linkbar .btns{margin-top:8px}
   .gen-info{margin-top:8px}
   .gen-info b,.gen-star b{color:var(--ink-bright)}
   .gen-clock{display:flex;align-items:baseline;gap:10px;margin:2px 0 2px}
@@ -741,13 +744,21 @@ void main(){
       vec2 luv=sphUV(vObj);
       vec4 lf=texture(uLife,luv);
       // draw each automaton cell as a round dot (grid is 160×80, matching LIFE_W/LIFE_H)
-      vec2 cf=fract(luv*vec2(160.0,80.0))-0.5;
+      vec2 cg=luv*vec2(160.0,80.0), cell=floor(cg);
+      float ch=fract(sin(dot(cell,vec2(12.9898,78.233)))*43758.5453);
+      // each organism sits a little off its grid point and has its own size, so colonies read as organic, not as a lattice
+      vec2 cf=fract(cg)-0.5-(vec2(ch,fract(ch*7.13))-0.5)*0.34;
       float sx=max(sqrt(max(1.0-vObj.y*vObj.y,0.0)),0.08);
       float dd=length(vec2(cf.x*sx,cf.y));
-      float rad=0.2+0.24*lf.a;
-      float dotm=smoothstep(rad+0.07,rad-0.05,dd);
+      float rad=(0.17+0.22*lf.a)*(0.75+0.5*fract(ch*3.7));
+      float dotm=smoothstep(rad+0.08,rad-0.05,dd);
+      // crowded cells merge into a continuous mat / canopy; lone ones stay as dots
+      ivec2 ci=ivec2(cell);
+      float dens=0.25*(texelFetch(uLife,ivec2((ci.x+1)%160,ci.y),0).a+texelFetch(uLife,ivec2((ci.x+159)%160,ci.y),0).a
+        +texelFetch(uLife,ivec2(ci.x,min(ci.y+1,79)),0).a+texelFetch(uLife,ivec2(ci.x,max(ci.y-1,0)),0).a);
+      float fill=smoothstep(0.3,0.85,dens)*0.8;
       cityE=step(0.965,lf.a)*dotm;
-      lifeA=lf.a*(1.0-step(0.965,lf.a))*mix(0.3,1.0,dotm);
+      lifeA=lf.a*(1.0-step(0.965,lf.a))*max(dotm,fill);
       lifeC=lf.rgb;
       col=mix(col,lf.rgb,lifeA*0.92);
       col=mix(col,vec3(0.32,0.3,0.28),cityE*0.7);
@@ -2359,6 +2370,7 @@ function render(now){
     gl.useProgram(pPlanet); gl.uniformMatrix4fv(U(pPlanet,'uVP'),false,VP);
     const w={}; SCHEMA.forEach(s=>w[s.id]=MP[s.id]);
     if(!S.paintOn){ w.paint=0; w.carve=0; }
+    if(editorEvo){ if(editorEvo.ov) geoOverride.set(w,editorEvo.ov); if(editorEvo.fx) evoFX.set(w,editorEvo.fx); }
     const L=[Math.cos(MP.lightPit)*Math.sin(MP.lightYaw),Math.sin(MP.lightPit),Math.cos(MP.lightPit)*Math.cos(MP.lightYaw)];
     if(linkIdx>=0){
       if(!bodies[linkIdx]){ linkIdx=-1; buildUI(); }
@@ -2451,6 +2463,7 @@ function render(now){
     }
 
     genDrawZones(VP);
+    genDrawRogues(VP);
     // asteroid belts
     if(belts.length){
       gl.useProgram(pBelt);
@@ -2868,19 +2881,29 @@ function buildUI(){
 }
 
 function buildPlanetUI(){
+  if(editorEvo){
+    const ev=el('div','linkbar');
+    ev.innerHTML=`<b>${editorEvo.name}</b> at ${fmtAge(editorEvo.t)} — ${editorEvo.era||'evolved'}. Its drifted continents, craters, biomes, weather and life are frozen on it; shape, material and colour edits apply on top.`;
+    const bb=el('div','btns');
+    const b1=el('button',null,'Back to Genesis'); b1.onclick=()=>setMode('genesis');
+    const b2=el('button',null,'Plain terrain'); b2.title='Drop the evolved layers and show the 1.0 terrain from this seed';
+    b2.onclick=()=>{ editorEvo=null; buildUI(); };
+    bb.append(b1,b2); ev.appendChild(bb); scrollEl.appendChild(ev);
+  }
+  buildSendToGenesis();
   // world
   const w=section('World',true);
   const psel=el('div','sel','<label for="preset">Starting point</label>');
   const sel=document.createElement('select'); sel.id='preset';
   sel.innerHTML='<option value="">Choose…</option>'+Object.keys(BUILTIN).map(k=>`<option>${k}</option>`).join('');
-  sel.onchange=()=>{ if(sel.value) applyPreset(BUILTIN[sel.value],false); };
+  sel.onchange=()=>{ if(sel.value){ editorEvo=null; applyPreset(BUILTIN[sel.value],false); } };
   psel.appendChild(sel); w.appendChild(psel);
   const srow=el('div','sel','<label for="seedin">Seed</label>');
   const si=document.createElement('input'); si.type='text'; si.id='seedin'; si.value=S.seed;
   si.onchange=()=>{ S.seed=parseFloat(si.value)||0; clearAccum(); };
   srow.appendChild(si); w.appendChild(srow);
   const b1=el('div','btns');
-  const bNew=el('button',null,'New seed'); bNew.onclick=()=>{ S.seed=Math.floor(Math.random()*9999); si.value=S.seed; clearAccum(); };
+  const bNew=el('button',null,'New seed'); bNew.onclick=()=>{ S.seed=Math.floor(Math.random()*9999); si.value=S.seed; clearAccum(); if(editorEvo){ editorEvo=null; buildUI(); } };
   const bShuf=el('button',null,'Shuffle shape');
   bShuf.onclick=()=>{
     ['freq','ridge','sea','warpAmp','warpFreq','amp','snow','plateAmp','plateRidge','plateTrench','shelf','rivers'].forEach(id=>{
@@ -2891,7 +2914,7 @@ function buildPlanetUI(){
     P.oblate=Math.random()<0.45?Math.random()*0.35:0;
     P.elong=Math.random()<0.35?Math.random()*0.6:0;
     P.lump=Math.random()<0.3?Math.random()*0.35:0;
-    S.seed=Math.floor(Math.random()*9999); clearAccum(); buildUI();
+    S.seed=Math.floor(Math.random()*9999); editorEvo=null; clearAccum(); buildUI();
   };
   const bClr=el('button',null,'Clear paint'); bClr.onclick=clearAccum;
   b1.append(bNew,bShuf,bClr); w.appendChild(b1);
@@ -2905,7 +2928,7 @@ function buildPlanetUI(){
     const it=el('div','item');
     const dot=el('div','dot'); dot.style.background=entry.colors?entry.colors.mid:'#888';
     const nm=el('span','nm'); nm.textContent=entry.name;
-    const bl=el('button',null,'Load'); bl.onclick=()=>{ restore(entry); clearAccum(); buildUI(); hud('Loaded “'+entry.name+'”.'); };
+    const bl=el('button',null,'Load'); bl.onclick=()=>{ editorEvo=null; restore(entry); clearAccum(); buildUI(); hud('Loaded “'+entry.name+'”.'); };
     const bo=el('button',null,'Orbit'); bo.title='Add to the system';
     bo.onclick=()=>{ const keep=snapshot(); restore(entry); addBodyFromCurrent(entry.name,false,-1); restore(keep); buildUI(); };
     const bx=el('button',null,'✕'); bx.title='Delete';
@@ -3743,6 +3766,34 @@ function evoAddCrater(e,r,rad,dir){
   if(rad>wv) e.craters[wi]=c;
 }
 
+// one impact, from the disk's own leftovers or from a rogue passing through
+function evoImpact(e,r,rad,dir,kind,sys,log,t,why){
+  evoAddCrater(e,r,Math.min(0.42,rad),dir); e.nImp++;
+  const comet=kind==='comet';
+  if(comet){
+    // comets are dirty snowballs: water, CO2 and the raw organics life starts from
+    e.W+=rad*rad*(0.9+sys.comets)*Math.min(1.5,1+e.m)*1.6;
+    e.Catm+=rad*rad*1.5; e.life.chem+=rad*0.8; e.N2+=rad*rad*0.3;
+  } else e.Catm+=rad*rad*0.4;
+  if(rad>0.2||why){
+    e.bigImp++;
+    e.H=Math.min(1,e.H+rad*rad*2/(1+e.m));
+    e.T+=rad*90;      // a pulse of heat — enough to crack a snowball for a while
+    if(e.flashes.length<4) e.flashes.push({d:dir,r:rad*1.6,a:1});
+    const lossA=Math.min(0.2,rad*rad*1.5/Math.max(e.g*e.g,0.04));
+    e.Catm*=1-lossA; e.N2*=1-lossA*0.7; e.H2O*=1-lossA;
+    e.W+=sys.comets*rad*rad*0.8*Math.min(1.5,1+e.m);
+    if(e.life.stage>0){
+      const kill=Math.min(0.97,rad*1.8)*(1-0.5*(sys.ten||0));
+      e.life.ext=Math.max(e.life.ext,kill);
+      e.life.killDir=dir; e.life.killR=rad*2.6;
+      log(e,`${why||'A '+Math.round(rad*2*6371*e.R/10)*10+' km impact'} — ${Math.round(kill*100)}% of life lost`,'extinct');
+      if(kill>0.85&&e.life.stage>=3) e.life.prog*=0.4;
+    } else if(why) log(e,why+(comet?' — water and organics delivered':''),'impact');
+    else if(rad>0.36&&t>150) log(e,'A huge impact has reset part of the surface','impact');
+  }
+}
+
 function evoStep(e,dt,t,sys,r,log){
   if(e.dead) return;
   const st=sys.starNow;
@@ -3785,24 +3836,7 @@ function evoStep(e,dt,t,sys,r,log){
   for(let i=0;i<k;i++){
     const u=Math.max(r(),1e-4);
     const rad=Math.min(0.42,0.035*Math.pow(u,-0.55));
-    const dir=randDir(r);
-    evoAddCrater(e,r,rad,dir); e.nImp++;
-    if(rad>0.2){
-      e.bigImp++;
-      e.H=Math.min(1,e.H+rad*rad*2/(1+e.m));
-      if(e.flashes.length<4) e.flashes.push({d:dir,r:rad*1.6,a:1});
-      const lossA=Math.min(0.2,rad*rad*1.5/Math.max(e.g*e.g,0.04));
-      e.Catm*=1-lossA; e.N2*=1-lossA*0.7; e.H2O*=1-lossA;
-      // comets bring water in from the cold
-      e.W+=sys.comets*rad*rad*0.8*Math.min(1.5,1+e.m);
-      if(e.life.stage>0){
-        const kill=Math.min(0.97,rad*1.8);
-        e.life.ext=Math.max(e.life.ext,kill);
-        e.life.killDir=dir; e.life.killR=rad*2.6;
-        log(e,`A ${Math.round(rad*2*6371*e.R/10)*10} km impact — ${Math.round(kill*100)}% of life lost`,'extinct');
-        if(kill>0.85&&e.life.stage>=3) e.life.prog*=0.4;
-      } else if(rad>0.36&&t>150) log(e,'A huge impact has reset part of the surface','impact');
-    }
+    evoImpact(e,r,rad,randDir(r),'rock',sys,log,t);
   }
   // craters soften under wind, water, ice and moving plates
   const er=0.00035+(e.liquid?0.009*Math.min(1,Math.sqrt(e.P)):0)+(e.P>0.05?0.0015*Math.min(1,e.P):0)
@@ -3846,7 +3880,7 @@ function evoStep(e,dt,t,sys,r,log){
   if(L.stage>=1&&e.liquid&&!L.sub){ e.CH4=Math.min(0.002,e.CH4+dt*0.000004*(L.stage<3?1:0.2)); }
   if(L.stage>=2&&!L.sub){
     const tgt=(L.stage>=3?0.24:0.06)*Math.max(0.65,Math.min(1.2,e.N2/0.8+0.4));
-    e.O2+=(tgt-e.O2)*Math.min(1,dt/(L.stage>=3?900:1600));
+    e.O2+=(tgt-e.O2)*Math.min(1,dt/(L.stage>=3?900:1600)*(1+2*(sys.ten||0)));
     if(e.O2>0.02&&!e._goeLogged){ e._goeLogged=1; log(e,'Oxygen is building up in the air — the oceans are rusting','life'); }
     e.CH4*=Math.exp(-dt/300);
   }
@@ -3937,12 +3971,14 @@ function evoStep(e,dt,t,sys,r,log){
 
 function evoLife(e,dt,t,sys,r,log){
   const L=e.life;
-  const surf=e.liquid&&e.T>258&&e.T<350;
+  // tenacity widens what life will put up with and how fast it moves on
+  const ten=sys.ten||0;
+  const surf=e.liquid&&e.T>258-14*ten&&e.T<350+12*ten;
   const hab=surf||e.sub;
   if(!hab){
     if(L.stage>0){
       L.unhab=(L.unhab||0)+dt;
-      if(L.unhab>(e.ice>0.9?220:40)){
+      if(L.unhab>(e.ice>0.9?220:40)*(1+3*ten)){
         log(e,e.steam?'The last microbes have cooked — life here is over':e.ice>0.9?'The ice won — life here has frozen out':'Life here could not hold on','extinct');
         L.stage=0; L.prog=0; L.chem=0.3; L.pop=0; L.unhab=0; L.gone=true;
       }
@@ -3955,7 +3991,7 @@ function evoLife(e,dt,t,sys,r,log){
     // dark oceans have chemistry but no sunlight, so they get there more slowly
     const food=(0.35+Math.min(1,e.vol*14)+Math.min(0.6,e.V*0.8)+(e.tidal>0.1?0.4:0))*(L.sub?(e.tidal>0.12?0.5:0.3):1);
     const calm=Math.exp(-sys.debris*45*Math.exp(-t/95));
-    L.chem+=dt*food*calm/520;
+    L.chem+=dt*food*calm/520*(1+2*ten);
     if(L.chem>L.gate){
       L.stage=1; L.prog=0; L.born=t; L.t1=t;
       log(e,L.sub?'Life has begun in the dark ocean under the ice':'Life has begun — microbial mats in the shallows','life');
@@ -3964,14 +4000,14 @@ function evoLife(e,dt,t,sys,r,log){
   }
   const light=Math.min(1.3,e.S*(1-e.haze*0.85));
   const cap=L.sub?1:5;
-  const rate=[0,1/550,1/760,1/480,1/1000][Math.min(L.stage,4)];
+  const rate=[0,1/550,1/760,1/480,1/1000][Math.min(L.stage,4)]*(1+3*ten);
   let ok=true;
   if(L.stage===1&&L.sub) ok=false;
   if(L.stage===1) ok=ok&&light>0.15;
-  if(L.stage===2) ok=e.O2>0.025&&e.ocean<0.985;
-  if(L.stage===3) ok=e.O2>0.09&&e.T>262&&e.T<330;
-  if(L.stage===4) ok=e.O2>0.15&&L.techOK!==false;
-  if(L.stage===4&&L.techOK===undefined) L.techOK=r()<0.42;
+  if(L.stage===2) ok=e.O2>0.025*(1-0.6*ten)&&e.ocean<0.985;
+  if(L.stage===3) ok=e.O2>0.09*(1-0.5*ten)&&e.T>262-12*ten&&e.T<330+12*ten;
+  if(L.stage===4) ok=e.O2>0.15*(1-0.5*ten)&&L.techOK!==false;
+  if(L.stage===4&&L.techOK===undefined) L.techOK=r()<0.42+0.4*ten;
   if(ok&&L.stage<cap) L.prog+=dt*rate*(0.6+0.8*r())*Math.min(1,1-L.ext*0.5);
   L.ext=Math.max(0,L.ext-dt*0.004);
   if(L.prog>=1&&L.stage<cap){
@@ -3996,7 +4032,7 @@ function evoEra(e,t,log){
   else if(L.stage===2) era='Oxygen age';
   else if(L.stage===1) era=L.sub?'Life under ice':'Microbial seas';
   else if(e.steam) era='Steam greenhouse';
-  else if(e.haze>0.5&&e.P>10) era='Hothouse';
+  else if(e.haze>0.5&&e.P>10) era=e.T>320?'Hothouse':'Smog world';
   else if(e.ice>0.92&&e.ocean>0.3&&278*Math.pow(e.S,0.25)>215) era='Snowball';
   else if(e.sub) era='Hidden ocean';
   else if(e.liquid&&e.ocean>0.98) era='Ocean world';
@@ -4284,6 +4320,7 @@ function genHZ(L){ return [0.95*Math.sqrt(L)*GEN.AU,1.67*Math.sqrt(L)*GEN.AU]; }
 
 /* ── setup and formation ─────────────────────────────────── */
 function genReset(){
+  if(typeof rogues!=='undefined') rogues.length=0;
   gen.S=genCreate(gen.ing);
   gen.starName=genName(mulberry(Math.floor(gen.ing.seed*131)+7));
   gen.phase='setup'; gen.ended=false;
@@ -4555,6 +4592,7 @@ function genEvoTick(dt){
     gen.lifeAcc+=dt;
     if(gen.lifeAcc>1/9){ gen.lifeAcc=0; for(const b of bodies) if(b.life&&!b.gone) lifeStep(b.life,b.evo); }
   }
+  genRogueTick(dt);
   const dyn=gen.sys.starNow||starAt(gen.st,gen.t);
   const look=genStarLook(gen.st,dyn,gen.starName);
   Object.assign(stars[0]||(stars[0]={}),look);
@@ -4570,6 +4608,7 @@ function genEvoTick(dt){
 }
 function genStepAll(dt){
   const sys=gen.sys;
+  sys.ten=gen.ing.tenacity||0;
   sys.starNow=starAt(gen.st,gen.t);
   const Rstar=gen.st.Rvis*sys.starNow.R;
   for(const b of bodies){
@@ -4697,7 +4736,7 @@ function applyEvoVisual(b){
   p.plateSharp=14;
   p.craterN=e.craters.length; p.craterDepth=0.26;
   // thick cloud decks hide the relief, so the silhouette goes smooth too
-  p.amp=(0.022+0.065*e.relief)*Math.max(0.7,Math.min(1.5,1/Math.sqrt(Math.max(e.g,0.05))))*(1-0.85*Math.min(1,e.haze));
+  p.amp=(b.baseAmp!==undefined?b.baseAmp:(0.022+0.065*e.relief)*Math.max(0.7,Math.min(1.5,1/Math.sqrt(Math.max(e.g,0.05)))))*(1-0.85*Math.min(1,e.haze));
   p.rough=magma?0.95:0.72; p.envAmt=magma?0.15:0.5;
   p.rivers=Math.min(0.14,0.015+0.12*e.erosion);
   p.snow=e.snow*(e.liquid||e.W>0.01?1:0.35);
@@ -4705,8 +4744,8 @@ function applyEvoVisual(b){
   p.rim=Math.min(1.7,0.03+0.5*Math.log10(1+e.P*3)+(e.haze>0?0.3:0));
   p.warpDrift=0;
   // crust colour from what the world is made of and what has happened to it
-  let pal=PAL.basalt;
-  pal=palMix(pal,PAL.sediment,e.erosion*0.7);
+  let pal=b.basePal?b.basePal.map(c=>Array.from(c)):PAL.basalt;
+  pal=palMix(pal,PAL.sediment,e.erosion*(b.basePal?0.2:0.7));
   const iron=clamp01((e.fe-0.28)*4);
   const rusted=clamp01(e.O2*5+(e.W<0.08&&e.P<0.4&&e.erosion>0.08?0.75:0))*Math.max(0.35,iron);
   pal=palMix(pal,PAL.rust,rusted);
@@ -4716,7 +4755,8 @@ function applyEvoVisual(b){
   if(magma) pal=palMix(pal,PAL.crust,Math.min(1,e.H*1.6));
   c.low=toHex(pal[0]); c.mid=toHex(pal[1]); c.high=toHex(pal[2]);
   const L=e.life;
-  if(e.W>0.004){ c.deep=L.stage>=2?'#0b2f46':'#0a2a48'; c.shallow=L.stage>=2?'#1f7a74':L.stage===1?'#2a6a86':'#1d6e92'; }
+  if(e.W>0.004&&b.baseOcean){ c.deep=b.baseOcean[0]; c.shallow=b.baseOcean[1]; }
+  else if(e.W>0.004){ c.deep=L.stage>=2?'#0b2f46':'#0a2a48'; c.shallow=L.stage>=2?'#1f7a74':L.stage===1?'#2a6a86':'#1d6e92'; }
   else { c.deep=c.low; c.shallow=c.mid; }
   let atmo;
   if(e.P<0.004) atmo='#202428';
@@ -4883,6 +4923,9 @@ function buildEvoUI(head){
   [[30,'30 Myr/s'],[120,'120 Myr/s'],[300,'300 Myr/s'],[700,'700 Myr/s']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===gen.speed) o.selected=true; ss.appendChild(o); });
   ss.onchange=()=>gen.speed=+ss.value; ss.style.width='auto'; ss.style.flex='1 1 auto';
   b1.append(bp,ss); head.appendChild(b1);
+  const tenRow=sliderRow(head,{l:'Life tenacity',min:0,max:1,step:0.01},gen.ing,'tenacity',()=>{ store('genesisIng',gen.ing); tenLbl.textContent=tenacityName(gen.ing.tenacity); });
+  const tenLbl=el('p','note',''); tenLbl.textContent=tenacityName(gen.ing.tenacity); head.appendChild(tenLbl);
+  sliderRow(head,{l:'Rogue asteroids & comets',min:0,max:1,step:0.01},gen.ing,'rogues',()=>store('genesisIng',gen.ing));
   const b2=el('div','btns');
   const bk=el('button',null,'Keep as system'); bk.title='Save these worlds as they are now and open System mode';
   bk.onclick=()=>{ saveSystem(); setMode('system'); hud('Saved. The worlds keep the look they had — life layers stay live this session.'); };
@@ -4905,6 +4948,22 @@ function buildEvoUI(head){
   });
   if(selIdx>=0) OPEN['Selected world']=true;
   const dv=section('Selected world',selIdx>=0);
+  if(selIdx>=0&&bodies[selIdx]&&bodies[selIdx].evo&&!bodies[selIdx].gone){
+    const si=selIdx, sb=bodies[selIdx];
+    const iv=el('div','btns');
+    const bc=el('button',null,'Comet'); bc.title='Throw a comet at it: water, CO₂ and organics';
+    bc.onclick=()=>genThrow(si,'comet');
+    const ba=el('button',null,'Asteroid'); ba.title='A big rocky impact: heat, craters, maybe extinction';
+    ba.onclick=()=>genThrow(si,'rock');
+    const bs=el('button',null,'Seed life'); bs.title='Panspermia — only takes where life could survive';
+    bs.onclick=()=>genSeedLife(si);
+    iv.append(bc,ba,bs);
+    if(sb.evo.kind!=='rocky'||sb.evo.life.stage>0){ bs.disabled=true; bs.title=sb.evo.kind!=='rocky'?'Nothing to seed on a giant':'Life is already here'; }
+    dv.appendChild(iv);
+    const ie=el('div','btns');
+    const be=el('button',null,'Open in Planet editor'); be.onclick=()=>genOpenInEditor(si);
+    ie.appendChild(be); dv.appendChild(ie);
+  }
   const det=el('div','gen-det'); dv.appendChild(det);
   if(selIdx<0) det.appendChild(el('p','note','Click a world in the view or the list to follow its story.'));
   const cl=section('Chronicle',true);
@@ -4982,6 +5041,289 @@ function genUIRefresh(force){
     const items=gen.log.filter(x=>!gen.filterSel||!who||x.who===who).slice(0,40);
     u.lg.innerHTML=items.length?items.map(x=>`<div class="gen-ev ${x.kind}"><b>${fmtAge(x.t)}</b>${x.who?' <u>'+x.who+'</u>':''} ${x.txt}</div>`).join(''):'<p class="note">Nothing yet.</p>';
   }
+}
+
+/* ── genesis: rogues, interventions and the bridge to the Planet editor ──
+   Rogue asteroids and comets fall through the system from outside; most
+   pass, some hit, a few get caught as moons. You can throw your own, seed
+   life, or send a planet from the editor into the evolving system — into
+   an orbit, or straight into another world.
+   ──────────────────────────────────────────────────────────────────── */
+if(gen.ing.tenacity===undefined) gen.ing.tenacity=0.5;
+if(gen.ing.rogues===undefined) gen.ing.rogues=0.35;
+gen.send={m:1,W:1,fe:0.32,vol:0.012,au:1,target:-1,name:''};
+const rogues=[];
+let editorEvo=null;
+
+function tenacityName(v){ return v<0.2?'Rare Earth':v<0.45?'Stubborn':v<0.75?'Hardy':'Life finds a way'; }
+function sysReach(){ return Math.max(10,bodies.reduce((m,b)=>Math.max(m,b.parent<0&&!b.gone?b.orbit.r:0),0)*1.45); }
+function genInitBody(b,hot){
+  const g=b.gen;
+  b.evo=evoNew(g,gen.rng||mulberry(5)); b.evo.name=b.name; b.evo.spin=b.spin;
+  b.evo.T=hot?(g.kind==='rocky'?1500:200):278*Math.pow(starAt(gen.st,gen.t).L/(g.aAU*g.aAU),0.25)+15;
+  b.evo.Tdry=b.evo.T;
+  b.life=null; b.lifeTex=null; b.bake=null; b.gone=false;
+  geoOverride.set(b.world.p,{plates:new Float32Array(MAX_PLATES*4),craters:new Float32Array(MAX_CRATERS*4),craterD:new Float32Array(MAX_CRATERS)});
+}
+
+/* rogue traffic */
+function spawnRogue(o){
+  o=o||{};
+  const reach=sysReach();
+  const live=bodies.map((b,i)=>i).filter(i=>!bodies[i].gone);
+  if(!live.length) return null;
+  let kind=o.kind||(Math.random()<0.35?'comet':'rock');
+  let mode='pass', target=-1;
+  if(o.target!==undefined){ mode='hit'; target=o.target; }
+  else {
+    const roll=Math.random();
+    // bigger worlds are bigger targets
+    const pick=()=>{ let tot=0; live.forEach(i=>tot+=bodies[i].scale**2); let x=Math.random()*tot;
+      for(const i of live){ x-=bodies[i].scale**2; if(x<=0) return i; } return live[0]; };
+    if(roll<0.32){ mode='hit'; target=pick(); }
+    else if(roll<0.37){ mode='capture'; target=live.filter(i=>bodies[i].parent<0)[Math.floor(Math.random()*live.filter(i=>bodies[i].parent<0).length)]; }
+  }
+  const a=Math.random()*Math.PI*2, y=(Math.random()-0.5)*0.5;
+  const start=[Math.cos(a)*reach*1.5,y*reach,Math.sin(a)*reach*1.5];
+  const end=[-start[0]+(Math.random()-0.5)*reach,-start[1],-start[2]+(Math.random()-0.5)*reach];
+  const d=vnorm([end[0]-start[0],end[1]-start[1],end[2]-start[2]]);
+  const rad=o.rad||Math.min(0.4,0.12+Math.pow(Math.random(),3)*0.3);
+  const rg={kind,mode,target,rad,pos:start,vel:d,speed:reach*(o.payload?0.32:0.42),trail:[],age:0,payload:o.payload||null,user:!!o.user,name:o.name||''};
+  rogues.push(rg);
+  return rg;
+}
+function genRogueTick(dt){
+  if(gen.evoPlaying&&gen.t<gen.tMax&&gen.ing.rogues>0){
+    gen.rogueAcc=(gen.rogueAcc||0)+dt*gen.ing.rogues*0.5;
+    if(gen.rogueAcc>1&&rogues.length<7){ gen.rogueAcc=0; spawnRogue(); }
+  }
+  const reach=sysReach();
+  for(let k=rogues.length-1;k>=0;k--){
+    const rg=rogues[k];
+    rg.age+=dt;
+    if(rg.age>0.0){ rg.trail.unshift(rg.pos.slice()); if(rg.trail.length>16) rg.trail.pop(); }
+    const tb=rg.target>=0?bodies[rg.target]:null;
+    if(rg.mode!=='pass'&&(!tb||tb.gone)) rg.mode='pass';
+    if(rg.mode!=='pass'){
+      const tp=bodyPos(tb);
+      const to=[tp[0]-rg.pos[0],tp[1]-rg.pos[1],tp[2]-rg.pos[2]];
+      const dist=Math.hypot(to[0],to[1],to[2]);
+      const want=vnorm(to), steer=dist<Math.max(reach*0.35,tb.scale*8)?1:Math.min(1,dt*2.4);
+      rg.vel=vnorm([rg.vel[0]+(want[0]-rg.vel[0])*steer,rg.vel[1]+(want[1]-rg.vel[1])*steer,rg.vel[2]+(want[2]-rg.vel[2])*steer]);
+      if(rg.mode==='capture'&&dist<tb.scale*3.2){ captureRogue(rg); rogues.splice(k,1); continue; }
+      if(rg.mode==='hit'&&dist<tb.scale*1.1+rg.speed*dt*1.6){ rogueHit(rg,tb,want); rogues.splice(k,1); continue; }
+    }
+    const sp=rg.speed*(rg.mode==='pass'?1:Math.min(1.6,1+0.6*(1-Math.min(1,rg.age/3))));
+    rg.pos=[rg.pos[0]+rg.vel[0]*sp*dt,rg.pos[1]+rg.vel[1]*sp*dt,rg.pos[2]+rg.vel[2]*sp*dt];
+    if(rg.age>40||Math.hypot(...rg.pos)>reach*2.2) rogues.splice(k,1);
+  }
+}
+function rogueHit(rg,b,inDir){
+  const e=b.evo;
+  const dir=vnorm([-inDir[0],-inDir[1],-inDir[2]]);
+  if(rg.payload){ planetCollide(b,rg.payload); return; }
+  const what=rg.kind==='comet'?(rg.user?'Your comet hit':'A rogue comet struck'):(rg.user?'Your asteroid hit':'A rogue asteroid struck');
+  if(e.kind==='rocky') evoImpact(e,gen.rng,rg.rad,dir,rg.kind,gen.sys,genLog,gen.t,what);
+  else { e.H=Math.min(1,e.H+0.08); genLog(e,what+' and vanished into the clouds','impact'); }
+  if(selIdx>=0&&bodies[selIdx]===b) hud(b.name+': '+what.toLowerCase()+'.');
+}
+function captureRogue(rg){
+  const host=bodies[rg.target]; if(!host||bodies.length>=32) return;
+  const n=bodies.filter(x=>x.parent===rg.target).length;
+  const comet=rg.kind==='comet';
+  const p={amp:0.08,freq:1.8,ridge:0.5,warpAmp:0.3,warpFreq:0.6,warpIter:1,sea:-1.5,plateN:0,shelf:0.2,rivers:0,craterN:0,
+    craterSize:0.15,craterDepth:0.24,rim:0.02,spec:0.5,rough:0.8,paint:0,carve:0,tilt:Math.random()*0.6,lump:0.32,lumpScale:1.6,faceOn:0};
+  const sc=Math.max(0.014,host.scale*0.08);
+  const rad=host.scale*(3.2+n*0.9+Math.random()*0.6);
+  const sp=Math.max(0.25,Math.min(3,1.7*Math.pow(host.scale*2.6/rad,1.5)))*(Math.random()<0.3?-1:1);
+  const m=mkBody(host.name+' '+(ROMAN[n]||('M'+(n+1))),rg.target,p,
+    {deep:'#3a3a40',shallow:'#3a3a40',low:comet?'#7a8a96':'#4a4238',mid:comet?'#a8b8c4':'#6a6050',high:comet?'#dfe8ee':'#8a8070',atmo:'#202020'},
+    {r:rad,speed:sp,phase:Math.random()*6.28,incl:Math.random()*0.5},sc,0.4);
+  m.gen={kind:'rocky',m:0.0004,fe:comet?0.1:0.3,si:comet?0.4:0.68,wat:comet?0.45:0.002,vol:comet?0.05:0.01,gasf:0,aAU:host.gen.aAU,gi:0,hits:0,tidal:0};
+  bodies.push(m); genInitBody(m,false);
+  genLog(host.evo,`Caught a passing ${comet?'comet':'asteroid'} — it now circles as a small moon`,'geo');
+  if(mode==='genesis') buildUI();
+}
+// a whole planet arriving — the target gets the giant impact of its life
+function planetCollide(b,pl){
+  const e=b.evo, g=b.gen, m=pl.gen.m;
+  const q=m/Math.max(g.m,1e-6);
+  if(e.kind!=='rocky'){
+    g.m+=m; e.H=Math.min(1,e.H+Math.min(0.5,q*4));
+    genLog(e,`Swallowed ${pl.name} whole (${fmtM(m)} M⊕) — it glows with the heat`,'impact');
+    return;
+  }
+  const M=g.m+m;
+  for(const k of ['fe','si','vol']) g[k]=(g[k]*g.m+pl.gen[k]*m)/M;
+  e.fe=g.fe; e.si=g.si; e.vol=g.vol;
+  e.W+=pl.W||0; e.C+=pl.gen.vol*m*5000*0.5;
+  g.m=M; e.m=M; e.R=Math.pow(M,0.27); e.g=M/(e.R*e.R);
+  b.scale=Math.min(0.42,b.scale*Math.pow(M/(M-m),0.27));
+  e.H=Math.min(1,0.62+q*1.5); e.tauH=60+90*Math.pow(M,0.45);
+  e.craters=[]; e.relief=0.15; e.erosion=0;
+  e.flashes=[{d:randDir(Math.random),r:1.2,a:1}];
+  const L=e.life;
+  if(L.stage>0){ genLog(e,`${pl.name} hit — the surface melted and every living thing died`,'extinct');
+    L.stage=0; L.prog=0; L.chem=0.2; L.gone=true; if(b.life){ b.life=null; } }
+  else genLog(e,`${pl.name} hit — the two worlds have melted into one`,'impact');
+  if(q>0.04&&bodies.length<32){
+    // the splash gathers into a moon that still wears the impactor's colours
+    const idx=bodies.indexOf(b), n=bodies.filter(x=>x.parent===idx).length;
+    const p=JSON.parse(JSON.stringify(pl.world.p)); p.sea=-1.5; p.plateN=0; p.faceOn=pl.world.p.faceOn||0;
+    const sc=Math.max(0.025,b.scale*Math.min(0.45,0.2+q*0.6));
+    const rad=b.scale*(3.4+n*1.0);
+    const mm=mkBody(b.name+' '+(ROMAN[n]||('M'+(n+1))),idx,p,{...pl.world.colors},
+      {r:rad,speed:Math.max(0.3,1.7*Math.pow(b.scale*2.6/rad,1.5)),phase:Math.random()*6.28,incl:Math.random()*0.15},sc,0.3);
+    mm.world.seed=pl.world.seed;
+    mm.gen={kind:'rocky',m:Math.max(0.004,m*0.1),fe:0.12,si:0.84,wat:0.0008,vol:0.004,gasf:0,aAU:g.aAU,gi:0,hits:0,tidal:0};
+    mm.basePal=pl.basePal; mm.baseAmp=pl.world.p.amp;
+    bodies.push(mm); genInitBody(mm,true);
+    genLog(e,`Debris from ${pl.name} has gathered into a moon`,'geo');
+  }
+  if(mode==='genesis') buildUI();
+}
+
+/* interventions on the selected world */
+function genThrow(i,kind){
+  const b=bodies[i]; if(!b||b.gone) return;
+  spawnRogue({target:i,kind,rad:kind==='comet'?0.24:0.3,user:true});
+  if(!gen.evoPlaying&&gen.t<gen.tMax){ gen.evoPlaying=true; }
+  hud(kind==='comet'?'Comet away — water and organics incoming.':'Asteroid away — brace for it.');
+}
+function genSeedLife(i){
+  const b=bodies[i]; if(!b) return;
+  const e=b.evo, L=e.life;
+  if(e.kind!=='rocky'){ hud('Nothing to seed on a giant — try one of its moons.'); return; }
+  if(L.stage>0){ hud('Life is already here.'); return; }
+  const ten=gen.ing.tenacity||0;
+  const surf=e.liquid&&e.T>258-14*ten&&e.T<350+12*ten;
+  if(!surf&&!e.sub){
+    const why=e.regime==='magma'?'its surface is still molten':e.runaway||e.steam?'its oceans are boiling':!e.W||e.W<0.004?'it has no water':e.P<0.008?'it has no air to hold water':e.T<258?'it is frozen solid':'it is too hot';
+    hud(`Seeds would die on ${b.name} — ${why}. Try a comet first, or wait.`); return;
+  }
+  L.chem=L.gate+0.01;
+  genLog(e,'Panspermia — spores you sent have taken hold','life');
+}
+
+/* the bridge: Genesis world → Planet editor */
+function buildSendToGenesis(){
+  const live=gen.phase==='evolving'&&bodies.some(b=>b.evo);
+  const sg=section('Send to Genesis',live&&!!editorEvo);
+  if(!live){ sg.appendChild(el('p','note','Form a system in Genesis first. Then any planet you make here can be dropped into it — into an orbit, or flung at another world.')); return; }
+  sg.appendChild(el('p','note',`This planet joins ${gen.starName}'s system at ${fmtAge(gen.t)} and evolves from there. Its look comes from the editor; what it is made of comes from these.`));
+  const nr=el('div','sel','<label>Name</label>'); const ni=document.createElement('input'); ni.type='text'; ni.value=gen.send.name||'';
+  ni.placeholder='Visitor'; ni.oninput=()=>gen.send.name=ni.value; nr.appendChild(ni); sg.appendChild(nr);
+  const hz=genHZ((gen.sys&&gen.sys.starNow?gen.sys.starNow.L:gen.st.L));
+  if(!gen.send._auSet){ gen.send.au=+((hz[0]+hz[1])/2/GEN.AU).toFixed(2); gen.send._auSet=true; }
+  sliderRow(sg,{l:'Mass (M⊕)',min:0.02,max:12,step:0.01},gen.send,'m',null);
+  sliderRow(sg,{l:'Water (Earth oceans)',min:0,max:60,step:0.05},gen.send,'W',null);
+  sliderRow(sg,{l:'Iron fraction',min:0.05,max:0.65,step:0.01},gen.send,'fe',null);
+  sliderRow(sg,{l:'Volatiles (air & carbon)',min:0.001,max:0.1,step:0.001},gen.send,'vol',null);
+  sliderRow(sg,{l:'Orbit (AU)',min:+(gen.S.rin/GEN.AU).toFixed(2),max:+(sysReach()/GEN.AU).toFixed(1),step:0.01},gen.send,'au',null);
+  sg.appendChild(el('p','note',`Habitable zone right now: ${(hz[0]/GEN.AU).toFixed(2)}–${(hz[1]/GEN.AU).toFixed(2)} AU.`));
+  const b1=el('div','btns');
+  const bo=el('button','hotbtn','Place in orbit'); bo.onclick=()=>sendEditorToGenesis('orbit');
+  b1.appendChild(bo); sg.appendChild(b1);
+  const tr=el('div','sel','<label>Or fling it at</label>');
+  const ts=document.createElement('select');
+  bodies.forEach((b,i)=>{ if(b.gone||!b.evo) return; const o=document.createElement('option'); o.value=i; o.textContent=b.name+' · '+(b.evo.era||''); ts.appendChild(o); });
+  tr.appendChild(ts); sg.appendChild(tr);
+  const b2=el('div','btns');
+  const bf=el('button',null,'Fling it'); bf.title='A planet-scale impact: the target melts, merges with it, and may gain a moon wearing your planet\'s colours';
+  bf.onclick=()=>sendEditorToGenesis('fling',+ts.value);
+  b2.appendChild(bf); sg.appendChild(b2);
+}
+function genOpenInEditor(i){
+  const b=bodies[i]; if(!b) return;
+  syncGeo(b);
+  restore(b.world); clearAccum();
+  const ov=geoOverride.get(b.world.p), fx=evoFX.get(b.world.p);
+  editorEvo={name:b.name,t:gen.t,era:b.evo?b.evo.era:'',
+    ov:ov?{plates:ov.plates.slice(),craters:ov.craters.slice(),craterD:ov.craterD.slice()}:null,
+    fx:fx?Object.assign({},fx,{flash:new Float32Array(16)}):null,
+    gen:b.gen?{...b.gen}:null, W:b.evo?b.evo.W:0};
+  if(b.gen){ gen.send.m=b.gen.m; gen.send.fe=b.gen.fe; gen.send.vol=b.gen.vol; gen.send.W=Math.min(60,b.evo.W||0); gen.send.name=b.name+' II'; }
+  linkIdx=-1; setMode('planet'); scrollEl.scrollTop=0;
+  hud(`Opened ${b.name} as it stood at ${fmtAge(gen.t)}. Edits apply on top of its evolved surface.`);
+}
+// the bridge back: whatever is in the editor becomes a world in the running system
+function editorWorld(){
+  const snap=snapshot();
+  const sv=gen.send;
+  const m=Math.max(0.02,sv.m), W=Math.max(0,sv.W);
+  const fe=Math.max(0.05,Math.min(0.7,sv.fe)), vol=Math.max(0.001,sv.vol);
+  const wat=Math.min(0.45,W*1.3*0.0018/m);
+  const name=uniqueName((sv.name||'').trim()||'Visitor');
+  const b={name,world:snap,parent:-1,orbit:{r:sv.au*GEN.AU,speed:0,phase:Math.random()*6.28,incl:0.02},
+    scale:Math.max(0.035,Math.min(0.34,0.17*Math.pow(m,0.27)*(1+0.2*Math.min(1,wat*3)))),spin:0.6,accum:null};
+  b.gen={kind:'rocky',m,fe,si:Math.max(0.05,1-fe-wat-vol),wat,vol,gasf:0,aAU:sv.au,gi:0,hits:0,tidal:0,imported:true};
+  b.basePal=['low','mid','high'].map(k=>hex(snap.colors[k]));
+  b.baseOcean=[snap.colors.deep,snap.colors.shallow];
+  b.baseAmp=snap.p.amp;
+  b.W=W;
+  // keep its geography: the editor's own plates and craters seed the evolving ones
+  const ov=editorEvo&&editorEvo.ov;
+  const geo=ov?{plates:ov.plates,craters:ov.craters,craterD:ov.craterD}:deriveGeo(snap.seed,snap.p.plateN,snap.p.craterN,snap.p.craterSize);
+  b.geoSeed={plates:Array.from(geo.plates),craters:Array.from(geo.craters),craterD:geo.craterD?Array.from(geo.craterD):null,
+    nP:ov?MAX_PLATES:snap.p.plateN,nC:ov?MAX_CRATERS:snap.p.craterN};
+  return b;
+}
+function settleEditorWorld(b){
+  genInitBody(b,false);
+  const e=b.evo, gs=b.geoSeed, r=Math.random;
+  e.H=0.12; e.W=b.W; e.Wmax=b.W*0.4; e.Catm=0.01*b.gen.m; e.N2=Math.max(0.05,b.gen.vol*b.gen.m*42);
+  e.relief=0.6; e.erosion=0.3;
+  e.plates=[];
+  for(let i=0;i<gs.nP;i++){ const w=gs.plates[i*4+3]; if(!w&&i>=gs.nP) break;
+    if(gs.plates[i*4]===0&&gs.plates[i*4+1]===0&&gs.plates[i*4+2]===0) continue;
+    e.plates.push({c:[gs.plates[i*4],gs.plates[i*4+1],gs.plates[i*4+2]],ax:randDir(r),rate:(0.4+r()*1.2)*(r()<0.5?-1:1),w}); }
+  if(e.plates.length<4) for(let i=e.plates.length;i<8;i++) e.plates.push({c:randDir(r),ax:randDir(r),rate:0.8,w:-(0.3+r()*0.5)});
+  e.craters=[];
+  for(let i=0;i<Math.min(gs.nC,MAX_CRATERS);i++){ const rr=gs.craters[i*4+3]; if(rr>0.001)
+    e.craters.push({d:[gs.craters[i*4],gs.craters[i*4+1],gs.craters[i*4+2]],r:rr,depth:gs.craterD?gs.craterD[i]||1:1}); }
+}
+function sendEditorToGenesis(how,target){
+  if(gen.phase!=='evolving'){ hud('Form a system in Genesis first.'); return; }
+  if(bodies.length>=32){ hud('This system is full.'); return; }
+  const b=editorWorld();
+  b.orbit.speed=0.49*Math.sqrt(gen.S.GM/Math.pow(b.orbit.r,3));
+  if(how==='orbit'){
+    bodies.push(b); settleEditorWorld(b);
+    genLog(b.evo,`Arrived from the editor and settled at ${gen.send.au.toFixed(2)} AU`,'geo');
+    editorEvo=null; setMode('genesis'); focusBody(bodies.indexOf(b));
+    hud(`${b.name} is in orbit. Deep time takes it from here.`);
+  } else {
+    const t=bodies[target]; if(!t||t.gone){ hud('Pick a world to aim at.'); return; }
+    editorEvo=null; setMode('genesis');
+    spawnRogue({target,payload:b,kind:'rock',user:true,rad:0.42,name:b.name});
+    gen.evoPlaying=true; focusBody(target);
+    hud(`${b.name} is falling toward ${t.name}…`);
+  }
+}
+
+/* drawing the rogues: heads and fading trails, comets with a tail pointed away from the star */
+function genDrawRogues(VP){
+  if(mode!=='genesis'||!rogues.length) return;
+  ensureDust();
+  const reach=sysReach(); let n=0;
+  const put=(p,r,c,h)=>{ if(n>=880) return; const o=n*8; dustData[o]=p[0]; dustData[o+1]=p[1]; dustData[o+2]=p[2]; dustData[o+3]=r;
+    dustData[o+4]=c[0]; dustData[o+5]=c[1]; dustData[o+6]=c[2]; dustData[o+7]=h; n++; };
+  const base=Math.max(0.03,cam.dist*0.006);
+  for(const rg of rogues){
+    const comet=rg.kind==='comet';
+    const big=rg.payload?Math.max(0.08,rg.payload.scale):base*(1+rg.rad*2);
+    put(rg.pos,big,rg.payload?hex(rg.payload.world.colors.mid):comet?[0.85,0.95,1]:[0.55,0.47,0.4],comet?0:0.35);
+    rg.trail.forEach((p,j)=>{ const f=1-j/rg.trail.length;
+      put(p,big*0.55*f,comet?[0.5*f,0.75*f,1*f]:[0.9*f,0.55*f,0.3*f],comet?0:0.5*f); });
+    if(comet){ const away=vnorm(rg.pos);
+      for(let j=1;j<10;j++){ const f=1-j/10; put([rg.pos[0]+away[0]*j*base*1.6,rg.pos[1]+away[1]*j*base*1.6,rg.pos[2]+away[2]*j*base*1.6],base*0.6*f,[0.6*f,0.85*f,1*f],0); } }
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER,dustBuf); gl.bufferSubData(gl.ARRAY_BUFFER,0,dustData,0,n*8); gl.bindBuffer(gl.ARRAY_BUFFER,null);
+  gl.useProgram(pDust);
+  gl.uniformMatrix4fv(U(pDust,'uVP'),false,VP);
+  gl.uniform3fv(U(pDust,'uSun'),new Float32Array(stars[0]?starCol(stars[0]):[1,1,1]));
+  gl.bindVertexArray(dustVAO);
+  gl.drawElementsInstanced(gl.TRIANGLES,meshRock.count,gl.UNSIGNED_INT,0,n);
 }
 
 /* ── boot ─────────────────────────────────────────────────── */
