@@ -130,6 +130,13 @@
   .gen-ev{font-size:11px;padding:3px 0 3px 8px;border-left:2px solid var(--line);margin-bottom:3px;color:var(--ink)}
   .gen-ev b{font-weight:500;color:var(--ink-dim);margin-right:4px} .gen-ev u{text-decoration:none;color:var(--ink-bright)}
   .gen-ev.life{border-color:#5fcf6a} .gen-ev.extinct{border-color:#e05a4a} .gen-ev.impact{border-color:#ff9a4a}
+  .gen-ev.civ{border-color:#ffd27a}
+  .gen-civ{display:grid;grid-template-columns:12px 1fr;column-gap:6px;font-size:11.5px;margin:4px 0;color:var(--ink-bright)}
+  .gen-civ i{width:9px;height:9px;border-radius:50%;margin-top:4px;grid-row:span 2} .gen-civ b{font-weight:500} .gen-civ small{color:var(--ink-dim);font-size:10.5px;line-height:1.4}
+  .gen-civ.dead{opacity:.55} .gen-ev.species{border-color:#3d8a4a;color:var(--ink-dim)}
+  .gen-funnel .fn{display:grid;grid-template-columns:96px 1fr 30px;align-items:center;gap:6px;font-size:11px;color:var(--ink);margin:3px 0}
+  .gen-funnel .fn i{display:block;height:7px;border-radius:3px;background:linear-gradient(90deg,#3fb8a8,#ffd27a);min-width:2px}
+  .gen-funnel .fn b{font-weight:500;color:var(--ink-bright);text-align:right}
   .gen-ev.giant{border-color:#e8c890} .gen-ev.climate{border-color:#54d6ff} .gen-ev.lost{border-color:#7a6a9a}
   .gen-bar{display:flex;height:7px;border-radius:3px;overflow:hidden;margin:6px 0;background:rgba(150,180,200,.08)}
   .gen-bar i{display:block;height:100%}
@@ -312,6 +319,8 @@ const COLOR_NAMES={deep:'Deep water',shallow:'Shallows',low:'Lowland',mid:'Midla
 
 /* the live world being edited */
 const P={}; SCHEMA.forEach(s=>P[s.id]=s.v);
+// an evolved world's drifted plates, craters and surface layers travel with its parameters (null for a plain 1.0 world)
+P.evoGeo=null; P.evoLook=null;
 const S={
   seed:Math.floor(Math.random()*9999), facet:false, autoRot:true, paintOn:true,
   subdiv:6, pCount:30000, accumSize:2048, resScale:1,
@@ -321,6 +330,7 @@ const S={
 function snapshot(){ return JSON.parse(JSON.stringify({p:P,seed:S.seed,facet:S.facet,colors:S.colors})); }
 function restore(w){
   for(const k in w.p) if(k in P) P[k]=w.p[k];
+  P.evoGeo=w.p.evoGeo||null; P.evoLook=w.p.evoLook||null;
   S.seed=w.seed; S.facet=!!w.facet; Object.assign(S.colors,w.colors);
 }
 
@@ -743,8 +753,9 @@ void main(){
     if(uLifeOn>0.5){
       vec2 luv=sphUV(vObj);
       vec4 lf=texture(uLife,luv);
-      // draw each automaton cell as a round dot (grid is 160×80, matching LIFE_W/LIFE_H)
-      vec2 cg=luv*vec2(160.0,80.0), cell=floor(cg);
+      // draw each automaton cell as a round dot; the grid size comes from the texture (160×80 up to 480×240)
+      ivec2 lts=textureSize(uLife,0);
+      vec2 cg=luv*vec2(lts), cell=floor(cg);
       float ch=fract(sin(dot(cell,vec2(12.9898,78.233)))*43758.5453);
       // each organism sits a little off its grid point and has its own size, so colonies read as organic, not as a lattice
       vec2 cf=fract(cg)-0.5-(vec2(ch,fract(ch*7.13))-0.5)*0.34;
@@ -754,8 +765,8 @@ void main(){
       float dotm=smoothstep(rad+0.08,rad-0.05,dd);
       // crowded cells merge into a continuous mat / canopy; lone ones stay as dots
       ivec2 ci=ivec2(cell);
-      float dens=0.25*(texelFetch(uLife,ivec2((ci.x+1)%160,ci.y),0).a+texelFetch(uLife,ivec2((ci.x+159)%160,ci.y),0).a
-        +texelFetch(uLife,ivec2(ci.x,min(ci.y+1,79)),0).a+texelFetch(uLife,ivec2(ci.x,max(ci.y-1,0)),0).a);
+      float dens=0.25*(texelFetch(uLife,ivec2((ci.x+1)%lts.x,ci.y),0).a+texelFetch(uLife,ivec2((ci.x+lts.x-1)%lts.x,ci.y),0).a
+        +texelFetch(uLife,ivec2(ci.x,min(ci.y+1,lts.y-1)),0).a+texelFetch(uLife,ivec2(ci.x,max(ci.y-1,0)),0).a);
       float fill=smoothstep(0.3,0.85,dens)*0.8;
       cityE=step(0.965,lf.a)*dotm;
       lifeA=lf.a*(1.0-step(0.965,lf.a))*max(dotm,fill);
@@ -1577,6 +1588,7 @@ function load(k){ try{ let s=localStorage.getItem('worldseed2.'+k);
   return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveLibrary(){ store('library',library); }
 function saveSystem(){
+  for(const b of bodies) if(b.evo&&b.evo.kind==='rocky') bakeEvoInto(b);
   store('system',{stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))});
 }
 function migrate(w){
@@ -1853,6 +1865,7 @@ function loadSolarSystem(silent){
 }
 function openInEditor(i){
   const b=bodies[i]; if(!b) return;
+  if(b.evo&&b.evo.kind==='rocky') bakeEvoInto(b);
   restore(b.world);
   copyTex(bodyAccum(b),accum.tex,accum.size,accum.size/2);
   linkIdx=i; setMode('planet');
@@ -2001,6 +2014,7 @@ function singState(w){
 const MP={};
 function applyMods(t){
   SCHEMA.forEach(s=>MP[s.id]=P[s.id]);
+  MP.evoGeo=P.evoGeo; MP.evoLook=P.evoLook;
   for(const m of mods){
     if(m.target==='—') continue;
     const s=DEF(m.target); if(!s) continue;
@@ -2028,7 +2042,7 @@ window.addEventListener('resize',()=>resize());
 
 /* ── uniform helpers ──────────────────────────────────────── */
 function setTerrain(p,w,seed){
-  const ov=geoOverride.get(w);
+  const ov=geoOverride.get(w)||geoFromP(w);
   const g=ov||deriveGeo(seed,w.plateN,w.craterN,w.craterSize);
   gl.uniform1fv(U(p,'uCraterD[0]'),ov?ov.craterD:CRATER_ONES);
   gl.uniform1f(U(p,'uFreq'),w.freq); gl.uniform1f(U(p,'uRidge'),w.ridge);
@@ -2370,7 +2384,7 @@ function render(now){
     gl.useProgram(pPlanet); gl.uniformMatrix4fv(U(pPlanet,'uVP'),false,VP);
     const w={}; SCHEMA.forEach(s=>w[s.id]=MP[s.id]);
     if(!S.paintOn){ w.paint=0; w.carve=0; }
-    if(editorEvo){ if(editorEvo.ov) geoOverride.set(w,editorEvo.ov); if(editorEvo.fx) evoFX.set(w,editorEvo.fx); }
+    w.evoGeo=P.evoGeo; w.evoLook=P.evoLook;
     const L=[Math.cos(MP.lightPit)*Math.sin(MP.lightYaw),Math.sin(MP.lightPit),Math.cos(MP.lightPit)*Math.cos(MP.lightYaw)];
     if(linkIdx>=0){
       if(!bodies[linkIdx]){ linkIdx=-1; buildUI(); }
@@ -2819,6 +2833,7 @@ function applyMaterial(name,target,cols){
 }
 function applyPreset(src,keepSeed){
   for(const k in src.p) if(k in P) P[k]=src.p[k];
+  P.evoGeo=src.p.evoGeo||null; P.evoLook=src.p.evoLook||null;
   if(src.colors) Object.assign(S.colors,src.colors);
   if(src.seed!==undefined&&keepSeed) S.seed=src.seed;
   else if(!keepSeed) S.seed=Math.floor(Math.random()*9999);
@@ -2881,13 +2896,18 @@ function buildUI(){
 }
 
 function buildPlanetUI(){
+  if(!editorEvo&&P.evoGeo){
+    const ev=el('div','linkbar'); ev.innerHTML='This world carries its evolved surface — drifted plates, craters, biomes and weather. Shape, material and colour edits apply on top.';
+    const bb=el('div','btns'); const b2=el('button',null,'Plain terrain'); b2.onclick=()=>{ P.evoGeo=P.evoLook=null; clearAccum(); buildUI(); };
+    bb.appendChild(b2); ev.appendChild(bb); scrollEl.appendChild(ev);
+  }
   if(editorEvo){
     const ev=el('div','linkbar');
     ev.innerHTML=`<b>${editorEvo.name}</b> at ${fmtAge(editorEvo.t)} — ${editorEvo.era||'evolved'}. Its drifted continents, craters, biomes, weather and life are frozen on it; shape, material and colour edits apply on top.`;
     const bb=el('div','btns');
     const b1=el('button',null,'Back to Genesis'); b1.onclick=()=>setMode('genesis');
     const b2=el('button',null,'Plain terrain'); b2.title='Drop the evolved layers and show the 1.0 terrain from this seed';
-    b2.onclick=()=>{ editorEvo=null; buildUI(); };
+    b2.onclick=()=>{ editorEvo=null; P.evoGeo=P.evoLook=null; clearAccum(); buildUI(); };
     bb.append(b1,b2); ev.appendChild(bb); scrollEl.appendChild(ev);
   }
   buildSendToGenesis();
@@ -2903,7 +2923,7 @@ function buildPlanetUI(){
   si.onchange=()=>{ S.seed=parseFloat(si.value)||0; clearAccum(); };
   srow.appendChild(si); w.appendChild(srow);
   const b1=el('div','btns');
-  const bNew=el('button',null,'New seed'); bNew.onclick=()=>{ S.seed=Math.floor(Math.random()*9999); si.value=S.seed; clearAccum(); if(editorEvo){ editorEvo=null; buildUI(); } };
+  const bNew=el('button',null,'New seed'); bNew.onclick=()=>{ S.seed=Math.floor(Math.random()*9999); si.value=S.seed; P.evoGeo=P.evoLook=null; clearAccum(); if(editorEvo){ editorEvo=null; buildUI(); } };
   const bShuf=el('button',null,'Shuffle shape');
   bShuf.onclick=()=>{
     ['freq','ridge','sea','warpAmp','warpFreq','amp','snow','plateAmp','plateRidge','plateTrench','shelf','rivers'].forEach(id=>{
@@ -2914,7 +2934,7 @@ function buildPlanetUI(){
     P.oblate=Math.random()<0.45?Math.random()*0.35:0;
     P.elong=Math.random()<0.35?Math.random()*0.6:0;
     P.lump=Math.random()<0.3?Math.random()*0.35:0;
-    S.seed=Math.floor(Math.random()*9999); editorEvo=null; clearAccum(); buildUI();
+    S.seed=Math.floor(Math.random()*9999); editorEvo=null; P.evoGeo=P.evoLook=null; clearAccum(); buildUI();
   };
   const bClr=el('button',null,'Clear paint'); bClr.onclick=clearAccum;
   b1.append(bNew,bShuf,bClr); w.appendChild(b1);
@@ -3975,6 +3995,33 @@ function evoLife(e,dt,t,sys,r,log){
   const ten=sys.ten||0;
   const surf=e.liquid&&e.T>258-14*ten&&e.T<350+12*ten;
   const hab=surf||e.sub;
+  // complex life needs a narrower band than microbes: too much heat (or cold) and it is pushed back down
+  if(L.stage>=3){
+    const lo=255-12*ten, hi=336+12*ten;
+    const bad=!e.liquid||e.T>hi||e.T<lo;
+    if(bad){
+      L.stress=(L.stress||0)+dt;
+      if(L.stress>(30+40*ten)){
+        L.stress=0;
+        const hot=e.T>hi||e.steam;
+        const was=L.stage;
+        L.stage=Math.max(L.stage>=5?4:L.stage-1,2); L.prog=0;
+        if(was>=5){ civFall(e,L,t,hot?'Their world grew too hot to live on — the cities went dark':'The ice came back and the cities emptied',log); }
+        else log(e,hot?(was===4?'The heat has killed off the animals — only plants and mats are left':'The land has baked bare — life has retreated to the sea')
+                       :(was===4?'The cold has killed off the animals':'The land has frozen over — life has retreated to the sea'),'extinct');
+      }
+    } else L.stress=Math.max(0,(L.stress||0)-dt*0.5);
+  }
+  // the great filter: every technological civilisation faces some chance, each million years, of not making it
+  if(L.stage>=5){
+    const flt=sys.filter===undefined?0.5:sys.filter;
+    if(r()<dt*(0.0003+0.0045*flt*flt+0.001*flt)){
+      const why=['They went silent. No one is left to say why','A war ended them','They poisoned their own air','A plague of their own making emptied the cities',
+        'They used up their world and could not leave it in time','Their machines outlived them','They simply stopped transmitting'];
+      L.stage=Math.min(L.stage,4); L.prog=0;
+      civFall(e,L,t,why[Math.floor(r()*why.length)],log);
+    }
+  }
   if(!hab){
     if(L.stage>0){
       L.unhab=(L.unhab||0)+dt;
@@ -3999,8 +4046,8 @@ function evoLife(e,dt,t,sys,r,log){
     return;
   }
   const light=Math.min(1.3,e.S*(1-e.haze*0.85));
-  const cap=L.sub?1:5;
-  const rate=[0,1/550,1/760,1/480,1/1000][Math.min(L.stage,4)]*(1+3*ten);
+  const cap=L.sub?1:6;
+  const rate=[0,1/550,1/760,1/480,1/1000,1/160][Math.min(L.stage,5)]*(L.stage<5?(1+3*ten):1);
   let ok=true;
   if(L.stage===1&&L.sub) ok=false;
   if(L.stage===1) ok=ok&&light>0.15;
@@ -4008,6 +4055,7 @@ function evoLife(e,dt,t,sys,r,log){
   if(L.stage===3) ok=e.O2>0.09*(1-0.5*ten)&&e.T>262-12*ten&&e.T<330+12*ten;
   if(L.stage===4) ok=e.O2>0.15*(1-0.5*ten)&&L.techOK!==false;
   if(L.stage===4&&L.techOK===undefined) L.techOK=r()<0.42+0.4*ten;
+  if(L.stage===5){ if(L.spaceOK===undefined) L.spaceOK=r()<0.88-0.55*(sys.filter===undefined?0.5:sys.filter); ok=L.spaceOK; }
   if(ok&&L.stage<cap) L.prog+=dt*rate*(0.6+0.8*r())*Math.min(1,1-L.ext*0.5);
   L.ext=Math.max(0,L.ext-dt*0.004);
   if(L.prog>=1&&L.stage<cap){
@@ -4016,17 +4064,28 @@ function evoLife(e,dt,t,sys,r,log){
       'Photosynthesis has evolved — the seas are turning green',
       'Life has crawled onto land — the continents are greening',
       'Complex, moving life has appeared',
-      'Lights on the night side — something here builds cities'][L.stage];
-    log(e,msg,'life');
+      'Lights on the night side — something here builds cities',
+      'They have left their world — ships are heading out across the system'][L.stage];
+    log(e,msg,L.stage>=5?'civ':'life');
   }
 }
 
+// a technosphere ends; what is left behind is ruins, and maybe another try much later
+function civFall(e,L,t,why,log){
+  L.fallen=(L.fallen||0)+1; L.ruins=true; L.fellAt=t; L.fallWhy=why;
+  L.techOK=Math.random()<0.25; L.spaceOK=undefined;
+  e.civFell=why;
+  log(e,why,'extinct');
+}
 function evoEra(e,t,log){
   let era;
   const L=e.life;
   if(e.engulfed) era='Engulfed';
   else if(e.regime==='magma') era=e.Teq>1100?'Lava world':'Magma ocean';
+  else if(L.stage>=6) era='Spacefaring';
   else if(L.stage>=5) era='Technosphere';
+  else if(e.colony&&!e.colony.dead) era=e.liquid&&e.T>255&&e.T<330?'Colony':'Outpost';
+  else if(L.ruins||(e.colony&&e.colony.dead)) era='Silent ruins';
   else if(L.stage===4) era='Age of animals';
   else if(L.stage===3) era='Green continents';
   else if(L.stage===2) era='Oxygen age';
@@ -4067,19 +4126,23 @@ function evoGiant(e,dt,t,sys,S){
    with currents set by the spin and the climate; land animals eat
    the plants they walk over; impacts and ice cut them back.
    ───────────────────────────────────────────────────────────── */
-const LIFE_W=160, LIFE_H=80;
+// grid size is chosen per world when its biosphere starts; 1× = 160×80, 2× = 320×160, 3× = 480×240
+function lifeGridFor(res){ const k=Math.max(1,Math.min(3,Math.round(res||1))); return [160*k,80*k]; }
 const LIFE_RULES={
   mats:[['Anneal','B4678/S35678'],['Coral','B3/S45678'],['Maze','B3/S12345'],['Diamoeba','B35678/S5678'],
         ['Mazectric','B3/S1234'],['Vote','B5678/S45678'],['Walled cities','B45678/S2345']],
   movers:[['Life','B3/S23'],['HighLife','B36/S23'],['Move','B368/S245'],['2×2','B36/S125'],
           ['Day & Night','B3678/S34678'],['Amoeba','B357/S1358'],['Pseudo-life','B357/S238'],['Drighlife','B367/S23']]
 };
+const LIFE_MAXSP=12;
 function parseRule(str){
   const b=new Uint8Array(9),s=new Uint8Array(9);
   const m=/B(\d*)\/S(\d*)/.exec(str);
   if(m){ for(const c of m[1]) b[+c]=1; for(const c of m[2]) s[+c]=1; }
   return {b,s,str};
 }
+function ruleStr(b,s){ let x='B',y='S'; for(let i=0;i<9;i++){ if(b[i]) x+=i; if(s[i]) y+=i; } return x+'/'+y; }
+function ruleName(str){ for(const set of [LIFE_RULES.mats,LIFE_RULES.movers]) for(const p of set) if(p[1]===str) return p[0]; return null; }
 function hashStr(...xs){ let h=2166136261>>>0; for(const x of xs){ const s=String(Math.round(x*1e4));
   for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } } return h>>>0; }
 
@@ -4090,16 +4153,18 @@ function pigment(starT,k){
   if(starT<6300) return [[0.16,0.42,0.16],[0.32,0.5,0.14],[0.1,0.32,0.22]][k%3];
   return [[0.62,0.4,0.1],[0.7,0.24,0.12],[0.55,0.5,0.14]][k%3];
 }
-function lifeNew(e,body,starT,sysSeed){
+function lifeNew(e,body,starT,sysSeed,res){
   const h=hashStr(e.fe,e.wat,e.vol,e.m,sysSeed,e.seed);
   const r=mulberry(h);
-  const N=LIFE_W*LIFE_H;
-  const L={grid:[],hab:new Uint8Array(N),cold:new Float32Array(N),trail:new Uint8Array(N),
+  const [W,H]=lifeGridFor(res);
+  const N=W*H;
+  const L={W,H,grid:[],hab:new Uint8Array(N),cold:new Float32Array(N),trail:new Uint8Array(N),
     city:new Uint8Array(N),species:[],pix:new Uint8Array(N*4),dirty:true,steps:0,pop:0,r,h,
-    driftAcc:[],starT,lat:new Float32Array(LIFE_H),lastExt:0};
-  for(let y=0;y<LIFE_H;y++) L.lat[y]=Math.cos(((y+0.5)/LIFE_H)*Math.PI);
+    driftAcc:[],starT,lat:new Float32Array(H),lastExt:0,kinds:{},events:[],nextId:1};
+  for(let y=0;y<H;y++) L.lat[y]=Math.cos(((y+0.5)/H)*Math.PI);
   return L;
 }
+const KIND_COVER={microbe:110,photo:150,plant:215,animal:255};
 function lifeAddSpecies(L,e,kind,starT){
   const r=L.r;
   let pick,rule,col,hab,drift,cover;
@@ -4113,33 +4178,71 @@ function lifeAddSpecies(L,e,kind,starT){
     pick=set[Math.floor((lean*1.7+r()*0.45)*set.length)%set.length];
   }
   rule=parseRule(pick[1]);
-  if(kind==='microbe'){ col=e.fe>0.36?[0.42,0.22,0.36]:[0.2,0.36,0.3]; hab=1; cover=110; }
-  else if(kind==='photo'){ col=pigment(starT,0).map(v=>Math.min(1,v*1.25+0.06)); hab=1; cover=150; }
-  else if(kind==='plant'){ col=pigment(starT,1+Math.floor(r()*2)); hab=2; cover=215; }
+  if(kind==='microbe'){ col=e.fe>0.36?[0.42,0.22,0.36]:[0.2,0.36,0.3]; hab=1; }
+  else if(kind==='photo'){ col=pigment(starT,0).map(v=>Math.min(1,v*1.25+0.06)); hab=1; }
+  else if(kind==='plant'){ col=pigment(starT,1+Math.floor(r()*2)); hab=2; }
   else { const c=[[0.95,0.55,0.25],[0.92,0.86,0.75],[0.85,0.3,0.42],[0.98,0.78,0.3],[0.55,0.75,0.95]];
-    col=c[Math.floor(r()*c.length)]; hab=3; cover=255; }
-  if(L.species.length&&L.species[L.species.length-1].kind==='microbe'&&kind==='photo') {}
+    col=c[Math.floor(r()*c.length)]; hab=3; }
+  cover=KIND_COVER[kind];
   // ocean lineages ride the currents; spin speed and the heat gradient set how fast
   drift=(hab===1?1:hab===3?0.45:0)*(0.25+Math.min(1.2,Math.abs(e.spin||0.6))*0.5)*(r()<0.5?-1:1);
-  const sp={kind,name:pick[0],rule,col,hab,drift,cover,born:0};
-  L.species.push(sp); L.grid.push(new Uint8Array(LIFE_W*LIFE_H)); L.driftAcc.push(new Float32Array(LIFE_H));
+  const sp={id:L.nextId++,kind,name:pick[0],rule,col,hab,drift,cover,born:0,root:true,gen:0,lowN:0};
+  L.species.push(sp); L.grid.push(new Uint8Array(L.W*L.H)); L.driftAcc.push(new Float32Array(L.H));
+  L.kinds[kind]=1;
   lifeSeed(L,L.species.length-1,0.004);
   return sp;
 }
+// a population cut off in one region drifts to a neighbouring rule and becomes its own species
+const SP_SYL=['an','or','ve','thi','ka','lu','mer','sa','oth','ri','zen','al','ui','pho','dra','nym','qe','tor','is','ba'];
+function lifeSpeciate(L,e){
+  const r=L.r, N=L.W*L.H;
+  if(L.species.length>=LIFE_MAXSP) return null;
+  const cand=[];
+  for(let s=0;s<L.species.length;s++){ let c=0; const g=L.grid[s]; for(let i=0;i<N;i+=7) c+=g[i]; if(c*7>N*0.012) cand.push(s); }
+  if(!cand.length) return null;
+  const ps=cand[Math.floor(r()*cand.length)], par=L.species[ps], pg=L.grid[ps];
+  // mutate: flip one birth or survival count, keeping births ≥3 so nothing explodes into static
+  const b=par.rule.b.slice(), s=par.rule.s.slice();
+  for(let tries=0;tries<12;tries++){
+    if(r()<0.5){ const k=3+Math.floor(r()*6); b[k]^=1; if(!b.some(v=>v)) b[k]=1; }
+    else { const k=Math.floor(r()*9); s[k]^=1; }
+    if(ruleStr(b,s)!==par.rule.str) break;
+  }
+  const str=ruleStr(b,s);
+  // the founder population: the parent's cells inside one region
+  let seedI=-1; for(let t=0;t<400&&seedI<0;t++){ const i=Math.floor(r()*N); if(pg[i]) seedI=i; }
+  if(seedI<0) return null;
+  const cx=seedI%L.W, cy=Math.floor(seedI/L.W), R=Math.max(4,Math.round(L.W*(0.04+r()*0.05)));
+  const g=new Uint8Array(N); let moved=0;
+  for(let dy=-R;dy<=R;dy++){ const y=cy+dy; if(y<0||y>=L.H) continue;
+    for(let dx=-R*2;dx<=R*2;dx++){ if(dx*dx/4+dy*dy>R*R) continue;
+      const x=(cx+dx+L.W)%L.W, i=y*L.W+x; if(pg[i]){ g[i]=1; pg[i]=0; moved++; } } }
+  if(moved<6){ for(let i=0;i<N;i++) if(g[i]) pg[i]=1; return null; }
+  let nm=ruleName(str);
+  if(!nm){ nm=''; const n=2+(r()<0.4?1:0); for(let k=0;k<n;k++) nm+=SP_SYL[Math.floor(r()*SP_SYL.length)]; nm=nm[0].toUpperCase()+nm.slice(1); }
+  const j=()=>(r()-0.5)*0.22;
+  const col=par.col.map(v=>Math.max(0.05,Math.min(1,v+j())));
+  // now and then a sea lineage learns to cope with land, or the other way round
+  let hab=par.hab;
+  if(par.kind!=='animal'&&r()<0.12&&e.life.stage>=3) hab=3;
+  const sp={id:L.nextId++,kind:par.kind,name:nm,rule:{b,s,str},col,hab,drift:par.drift*(0.6+r()*0.8),cover:par.cover,
+    born:e?e._t||0:0,root:false,gen:par.gen+1,parent:par.name,lowN:0};
+  L.species.push(sp); L.grid.push(g); L.driftAcc.push(new Float32Array(L.H));
+  return {sp,par};
+}
 // where each lineage can live: 1 = sea, 2 = land, 3 = sea or land
 function lifeHabitat(L,e,hmap,sea,sub){
-  const N=LIFE_W*LIFE_H;
+  const W=L.W,H=L.H;
   const iceEdge=1-e.seaIce*1.05;
-  for(let y=0;y<LIFE_H;y++){
+  for(let y=0;y<H;y++){
     const lat=Math.abs(L.lat[y]);
-    for(let x=0;x<LIFE_W;x++){
-      const i=y*LIFE_W+x;
+    for(let x=0;x<W;x++){
+      const i=y*W+x;
       const h=hmap?hmap[i]:0;
       let k=0;
       if(h<sea){
         const frozen=lat>iceEdge||e.ice>0.95;
         if(!frozen||sub) k=1;
-        else if(frozen&&sub) k=1;
       } else {
         const tl=(h-sea)/Math.max(1-sea,1e-3);
         const T=e.T-48*Math.pow(lat,1.5)-38*Math.max(tl,0);
@@ -4152,35 +4255,36 @@ function lifeHabitat(L,e,hmap,sea,sub){
   L.sub=sub;
 }
 function lifeSeed(L,si,density){
-  const sp=L.species[si], g=L.grid[si], r=L.r;
-  const N=LIFE_W*LIFE_H;
+  const sp=L.species[si], g=L.grid[si], r=L.r, W=L.W, H=L.H;
+  const N=W*H;
   const want=sp.hab===1?1:sp.hab===2?2:3;
   let tries=Math.max(4,Math.round(N*density/9));
+  const R0=Math.max(1,Math.round(W/160))*(sp.kind==='animal'?1:2);
   while(tries-->0){
-    const cx=Math.floor(r()*LIFE_W), cy=Math.floor(r()*LIFE_H);
-    const c=L.hab[cy*LIFE_W+cx];
+    const cx=Math.floor(r()*W), cy=Math.floor(r()*H);
+    const c=L.hab[cy*W+cx];
     if(!(c&&(want===3||c===want))) continue;
     // a small random soup, the classic way to start a Life pattern
-    const R=sp.kind==='animal'?1:2;
-    for(let dy=-R;dy<=R;dy++) for(let dx=-R;dx<=R;dx++){
-      const y=cy+dy; if(y<0||y>=LIFE_H) continue;
-      const x=(cx+dx+LIFE_W)%LIFE_W, i=y*LIFE_W+x;
+    for(let dy=-R0;dy<=R0;dy++) for(let dx=-R0;dx<=R0;dx++){
+      const y=cy+dy; if(y<0||y>=H) continue;
+      const x=(cx+dx+W)%W, i=y*W+x;
       if(r()<0.55&&L.hab[i]&&(want===3||L.hab[i]===want)) g[i]=1;
     }
   }
 }
 function lifeStep(L,e){
-  const W=LIFE_W,H=LIFE_H,N=W*H;
+  const W=L.W,H=L.H,N=W*H;
   const nS=L.species.length;
   const r=L.r;
   const occ=new Uint8Array(N);   // which lineage holds a cell, so they compete for room
   for(let s=0;s<nS;s++){ const g=L.grid[s]; for(let i=0;i<N;i++) if(g[i]&&!occ[i]) occ[i]=s+1; }
-  let pop=0;
+  const isPlant=L.species.map(q=>q.kind==='plant');
+  let pop=0; const dead=[];
   for(let s=0;s<nS;s++){
     const sp=L.species[s], g=L.grid[s], B=sp.rule.b, S=sp.rule.s;
     const want=sp.hab===1?1:sp.hab===2?2:3;
     const nx=new Uint8Array(N);
-    const prey=sp.kind==='animal'?L.grid[L.species.findIndex(q=>q.kind==='plant')]:null;
+    const grazer=sp.kind==='animal';
     // mats and forests also creep outward on their own; the rule only shapes the texture
     const spread={animal:0,plant:0.045,photo:0.028,microbe:0.018}[sp.kind]*(L.vigor||1);
     const hold={animal:0,plant:0.7,photo:0.5,microbe:0.4}[sp.kind];
@@ -4197,18 +4301,18 @@ function lifeStep(L,e){
         if(g[i]){ nx[i]=okHab&&(S[n]||(hold>0&&n>=2&&r()<hold))?1:0; }
         else if(okHab&&(B[n]||(spread>0&&n>0&&r()<spread*n))){
           const o=occ[i];
-          // animals may move into plant cells and graze them; everyone else needs empty ground
-          if(!o||(prey&&o&&L.species[o-1].kind==='plant'&&prey[i])) nx[i]=1;
+          // animals may move into any plant's cells and graze them; everyone else needs empty ground
+          if(!o||(grazer&&isPlant[o-1])) nx[i]=1;
         }
       }
     }
-    if(prey) for(let i=0;i<N;i++) if(nx[i]&&prey[i]&&r()<0.6) prey[i]=0;
+    if(grazer) for(let i=0;i<N;i++){ const o=occ[i]; if(nx[i]&&o&&isPlant[o-1]&&r()<0.6) L.grid[o-1][i]=0; }
     // currents and winds carry sea life sideways, faster near the equator
     if(sp.drift){
       const acc=L.driftAcc[s];
       for(let y=0;y<H;y++){
         const lat=L.lat[y];
-        acc[y]+=sp.drift*(Math.cos(lat*Math.PI*1.5))*0.35;
+        acc[y]+=sp.drift*(Math.cos(lat*Math.PI*1.5))*0.35*(W/160);
         const k=Math.trunc(acc[y]);
         if(k){ acc[y]-=k; const row=nx.slice(y*W,y*W+W);
           for(let x=0;x<W;x++){ const tx=(x+k%W+W)%W, j=y*W+tx; nx[j]=row[x]&&L.hab[j]&&(want===3||L.hab[j]===want)?1:0; } }
@@ -4216,25 +4320,56 @@ function lifeStep(L,e){
     }
     L.grid[s]=nx;
     let c=0; for(let i=0;i<N;i++) c+=nx[i];
-    // a lineage that collapses gets reseeded from survivors hiding somewhere we can't see
-    if(c<N*0.002) lifeSeed(L,s,0.003);
-    else if(r()<0.25) lifeSeed(L,s,0.0004);
+    if(sp.root){
+      // a founding lineage that collapses gets reseeded from survivors hiding somewhere we can't see
+      if(c<N*0.002) lifeSeed(L,s,0.003);
+      else if(r()<0.25) lifeSeed(L,s,0.0004);
+    } else {
+      // descendants get no such luck: dwindle for long enough and they are gone
+      if(c<N*0.0008){ if(++sp.lowN>12) dead.push(s); } else sp.lowN=0;
+    }
     pop+=c;
   }
-  // technosphere: lights gather where animals are thickest near the coast
-  if(e.life.stage>=5){
-    const ai=L.species.findIndex(q=>q.kind==='animal');
-    for(let k=0;k<30;k++){
-      const i=Math.floor(r()*N);
-      if(L.hab[i]===2&&((ai>=0&&L.grid[ai][i])||r()<0.15)){ L.city[i]=1;
-        const y=Math.floor(i/W),x=i%W; const j=y*W+((x+(r()<0.5?1:-1)+W)%W); if(L.hab[j]===2&&r()<0.5) L.city[j]=1; }
-    }
-  }
+  for(let k=dead.length-1;k>=0;k--){ const s=dead[k];
+    L.events.push({t:'extinct',name:L.species[s].name});
+    L.species.splice(s,1); L.grid.splice(s,1); L.driftAcc.splice(s,1); }
+  lifeCities(L,e);
   L.pop=pop/N; L.steps++; L.dirty=true;
 }
+// city lights: values 1–254 are a civilisation's id, 255 is a dead city
+function lifeCities(L,e){
+  const W=L.W,H=L.H,N=W*H,r=L.r, k=W/160;
+  const home=e.civ&&!e.civ.dead&&e.life.stage>=5?e.civ:null;
+  const col=e.colony&&!e.colony.dead?e.colony:null;
+  if(home){
+    // technosphere: lights gather where animals are thickest near the coast
+    const ai=L.species.findIndex(q=>q.kind==='animal');
+    for(let n=0;n<30*k*k;n++){
+      const i=Math.floor(r()*N);
+      if(L.hab[i]===2&&((ai>=0&&L.grid[ai][i])||r()<0.15)){ L.city[i]=home.id;
+        const y=Math.floor(i/W),x=i%W; const j=y*W+((x+(r()<0.5?1:-1)+W)%W); if(L.hab[j]===2&&r()<0.5) L.city[j]=home.id; }
+    }
+  }
+  if(col){
+    // a settlement grows outward from where the first ship came down; domes don't care about the weather
+    if(col.site===undefined){
+      let s=-1; for(let t=0;t<300&&s<0;t++){ const i=Math.floor(r()*N); if(L.hab[i]===2||(!L.hab[i]&&r()<0.4)) s=i; }
+      col.site=s<0?Math.floor(N/2):s; L.city[col.site]=col.civ;
+    }
+    const grow=Math.round((6+Math.min(30,(col.age||0)*0.08))*k*k);
+    for(let n=0;n<grow;n++){
+      const i=Math.floor(r()*N); if(L.city[i]!==col.civ) continue;
+      const y=Math.floor(i/W)+Math.round((r()-0.5)*2.4), x=(i%W+Math.round((r()-0.5)*2.4)+W)%W;
+      if(y<0||y>=H) continue; const j=y*W+x;
+      if(L.hab[j]===1&&r()<0.85) continue;
+      if(!L.city[j]) L.city[j]=col.civ;
+    }
+  }
+}
+function lifeRuin(L,civId){ for(let i=0;i<L.city.length;i++) if(L.city[i]&&(civId===undefined||L.city[i]===civId)) L.city[i]=255; L.dirty=true; }
 // knock a hole in every lineage — a crater's worth of extinction, plus a global cull
 function lifeCull(L,dir,rad,frac){
-  const W=LIFE_W,H=LIFE_H,r=L.r;
+  const W=L.W,H=L.H,r=L.r;
   for(let y=0;y<H;y++){
     const ph=(y+0.5)/H*Math.PI, sy=Math.sin(ph), cy=Math.cos(ph);
     for(let x=0;x<W;x++){
@@ -4243,13 +4378,13 @@ function lifeCull(L,dir,rad,frac){
       const ang=Math.acos(Math.max(-1,Math.min(1,dx*dir[0]+cy*dir[1]+dz*dir[2])));
       const i=y*W+x;
       const kill=ang<rad||r()<frac;
-      if(kill){ for(const g of L.grid) g[i]=0; L.city[i]=0; L.trail[i]=0; }
+      if(kill){ for(const g of L.grid) g[i]=0; if(ang<rad) L.city[i]=0; L.trail[i]=0; }
     }
   }
   L.dirty=true;
 }
 function lifePaint(L){
-  const W=LIFE_W,H=LIFE_H,N=W*H,px=L.pix;
+  const W=L.W,H=L.H,N=W*H,px=L.pix;
   const nS=L.species.length;
   for(let i=0;i<N;i++){
     let rr=0,gg=0,bb=0,a=0;
@@ -4259,12 +4394,16 @@ function lifePaint(L){
       // fading ghost of whatever lived here, so movement leaves a soft wake
       for(let s=nS-1;s>=0;s--){ const sp=L.species[s]; if(sp.hab===L.hab[i]||sp.hab===3){ rr=sp.col[0]*0.8; gg=sp.col[1]*0.8; bb=sp.col[2]*0.8; break; } }
       a=L.trail[i]; }
-    if(L.city[i]){ rr=1; gg=0.82; bb=0.5; a=255; }
-    else if(a>246) a=246;     // 247+ is reserved for lights, which glow at night
+    const c=L.city[i];
+    if(c===255){ rr=0.36; gg=0.34; bb=0.32; a=Math.max(a,200); }
+    else if(c){ const cc=CIV_COLS[(c-1)%CIV_COLS.length]; rr=cc[0]; gg=cc[1]; bb=cc[2]; a=255; }
+    if(c!==255&&!c&&a>246) a=246;     // 247+ is reserved for lights, which glow at night
+    if(c===255&&a>246) a=246;
     if(L.sub&&a<247) a=Math.round(a*0.35);
     px[i*4]=rr*255; px[i*4+1]=gg*255; px[i*4+2]=bb*255; px[i*4+3]=a;
   }
 }
+const CIV_COLS=[[1,0.82,0.5],[0.55,0.95,1],[1,0.55,0.85],[0.7,1,0.55],[1,0.95,0.7],[0.75,0.7,1]];
 
 /* ── genesis: wiring the simulations into the renderer and panel ── */
 const GEN_TEND=3000;            // formation runs to ~60 Myr of compressed time
@@ -4299,7 +4438,7 @@ const geoOverride=new WeakMap();
 const evoFX=new WeakMap();
 const CRATER_ONES=new Float32Array(MAX_CRATERS).fill(1);
 let blankTex=null, dustVAO=null, dustBuf=null, dustData=null, bakeFB=null, bakeTex=null;
-const BAKE_W=LIFE_W, BAKE_H=LIFE_H;
+let BAKE_W=160, BAKE_H=80, bakeTexW=0;
 
 function clamp01(v){ return v<0?0:v>1?1:v; }
 function mix3(a,b,t){ return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
@@ -4558,6 +4697,7 @@ function genCrystallize(){
     comets:ing.comets*(0.3+Math.min(1,debrisIce/Math.max(debrisM,1e-6))),starNow:starAt(gen.st,0)};
   gen.tMax=Math.min(12500,gen.st.life+2200);
   gen.t=0; gen.log=[]; gen.tickAcc=0; gen.evoPlaying=true; gen.phase='evolving';
+  gen.civs=[]; gen.run={}; gen.fermi.runs++; store('fermi',gen.fermi);
   bodies.forEach(b=>{
     const g=b.gen;
     b.evo=evoNew(g,r); b.evo.name=b.name; b.evo.spin=b.spin; b.evo.T=g.kind==='rocky'?1500:200; b.evo.Tdry=b.evo.T;
@@ -4590,7 +4730,7 @@ function genEvoTick(dt){
     if(n>=60) gen.tickAcc=0;
     if(gen.t>=gen.tMax&&!gen.ended){ gen.ended=true; gen.evoPlaying=false; genLog(null,'The clock has run out — the story of this system is told','geo'); }
     gen.lifeAcc+=dt;
-    if(gen.lifeAcc>1/9){ gen.lifeAcc=0; for(const b of bodies) if(b.life&&!b.gone) lifeStep(b.life,b.evo); }
+    if(gen.lifeAcc>(gen.ing.lifeRes>=3?1/6:1/9)){ gen.lifeAcc=0; for(const b of bodies) if(b.life&&!b.gone) lifeStep(b.life,b.evo); }
   }
   genRogueTick(dt);
   const dyn=gen.sys.starNow||starAt(gen.st,gen.t);
@@ -4608,7 +4748,7 @@ function genEvoTick(dt){
 }
 function genStepAll(dt){
   const sys=gen.sys;
-  sys.ten=gen.ing.tenacity||0;
+  sys.ten=gen.ing.tenacity||0; sys.filter=gen.ing.filter;
   sys.starNow=starAt(gen.st,gen.t);
   const Rstar=gen.st.Rvis*sys.starNow.R;
   for(const b of bodies){
@@ -4624,29 +4764,38 @@ function genStepAll(dt){
     evoStep(e,dt,gen.t,sys,gen.rng,genLog);
     const L=e.life;
     if(e.kind==='rocky'){
-      if(L.stage>0&&!b.life&&b.bake){
-        b.life=lifeNew(e,b,gen.st.T,gen.ing.seed);
+      const colony=e.colony&&!e.colony.dead;
+      if((L.stage>0||colony||e.civ)&&!b.life&&b.bake&&b.bake.W===lifeGridFor(gen.ing.lifeRes)[0]){
+        b.life=lifeNew(e,b,gen.st.T,gen.ing.seed,gen.ing.lifeRes);
         lifeHabitat(b.life,e,b.bake.h,b.world.p.sea,L.sub);
-        lifeAddSpecies(b.life,e,'microbe',gen.st.T);
-        if(!b.lifeTex) b.lifeTex=makeLifeTex();
+        if(L.stage>0) lifeAddSpecies(b.life,e,'microbe',gen.st.T);
+        if(!b.lifeTex||b.lifeTex._w!==b.life.W) b.lifeTex=makeLifeTex(b.life.W,b.life.H);
       }
       if(b.life){
-        if(L.stage===0){ b.life=null; continue; }
-        const want=['microbe','photo','plant','animal'].slice(0,Math.min(4,L.stage));
-        while(b.life.species.length<want.length&&!L.sub){
-          const sp=lifeAddSpecies(b.life,e,want[b.life.species.length],gen.st.T);
-          genLog(e,`New lineage: ${sp.kind==='animal'?'mobile creatures':sp.kind==='plant'?'land plants':'photosynthetic mats'} following ${sp.name} (${sp.rule.str})`,'life');
+        if(L.stage===0&&!colony&&!e.civ){ b.life=null; continue; }
+        if(!L.sub) for(const k of ['microbe','photo','plant','animal'].slice(0,Math.min(4,L.stage))){
+          if(b.life.kinds[k]) continue;
+          const sp=lifeAddSpecies(b.life,e,k,gen.st.T);
+          genLog(e,`New lineage: ${k==='animal'?'mobile creatures':k==='plant'?'land plants':k==='photo'?'photosynthetic mats':'microbes'} following ${sp.name} (${sp.rule.str})`,'life');
         }
+        // isolated populations drift into new species; more room on a finer grid means more of them
+        if(L.stage>=1&&!L.sub&&b.life.species.length<LIFE_MAXSP&&gen.rng()<dt*0.0025*(1+0.6*gen.ing.lifeRes)*(1+0.5*(gen.ing.tenacity||0))){
+          e._t=gen.t; const nw=lifeSpeciate(b.life,e);
+          if(nw) genLog(e,`New species: ${nw.sp.name} (${nw.sp.rule.str}) split off from ${nw.par.name}`,'species');
+        }
+        for(const ev of b.life.events.splice(0)) if(ev.t==='extinct') genLog(e,`${ev.name} has died out`,'species');
         if(L.killDir){ lifeCull(b.life,L.killDir,L.killR,L.ext*0.45); L.killDir=null; }
         b.life.vigor=0.6+Math.min(1,L.prog+0.3)*0.6;
       }
     }
   }
+  genCivTick(dt);
   gen.t+=dt;
 }
-function makeLifeTex(){
+function makeLifeTex(W,H){
   const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,LIFE_W,LIFE_H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  t._w=W;
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
@@ -4655,11 +4804,14 @@ function makeLifeTex(){
 }
 function uploadLife(b){
   gl.bindTexture(gl.TEXTURE_2D,b.lifeTex);
-  gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,LIFE_W,LIFE_H,gl.RGBA,gl.UNSIGNED_BYTE,b.life.pix);
+  gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,b.life.W,b.life.H,gl.RGBA,gl.UNSIGNED_BYTE,b.life.pix);
 }
 // render the planet's height field flat and read it back, so sea level and habitats match what is drawn
 function bakeBody(b){
+  [BAKE_W,BAKE_H]=lifeGridFor(gen.ing.lifeRes);
+  if(bakeFB&&bakeTexW!==BAKE_W){ gl.deleteFramebuffer(bakeFB); gl.deleteTexture(bakeTex); bakeFB=null; }
   if(!bakeFB){
+    bakeTexW=BAKE_W;
     bakeTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,bakeTex);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,BAKE_W,BAKE_H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
@@ -4684,8 +4836,8 @@ function bakeBody(b){
   const NB=256, hist=new Float32Array(NB); let tot=0;
   for(let y=0;y<BAKE_H;y++){ const w=Math.sin((y+0.5)/BAKE_H*Math.PI);
     for(let x=0;x<BAKE_W;x++){ const v=h[y*BAKE_W+x]; const k=Math.max(0,Math.min(NB-1,Math.floor((v-lo)/(hi-lo+1e-6)*NB))); hist[k]+=w; tot+=w; } }
-  b.bake={h,lo,hi,hist,tot,t:gen.t,nC:b.evo.craters.length};
-  if(b.life) lifeHabitat(b.life,b.evo,h,seaFor(b),b.evo.life.sub);
+  b.bake={h,lo,hi,hist,tot,t:gen.t,nC:b.evo.craters.length,W:BAKE_W};
+  if(b.life&&b.life.W===BAKE_W) lifeHabitat(b.life,b.evo,h,seaFor(b),b.evo.life.sub);
 }
 function seaFor(b){
   const k=b.bake, e=b.evo;
@@ -4698,7 +4850,9 @@ function seaFor(b){
   return k.hi;
 }
 function syncGeo(b){
-  const e=b.evo, ov=geoOverride.get(b.world.p); if(!ov) return;
+  const e=b.evo; if(!e) return;
+  let ov=geoOverride.get(b.world.p);
+  if(!ov){ ov={plates:new Float32Array(MAX_PLATES*4),craters:new Float32Array(MAX_CRATERS*4),craterD:new Float32Array(MAX_CRATERS)}; geoOverride.set(b.world.p,ov); }
   for(let i=0;i<MAX_PLATES;i++){
     const pl=e.plates[i];
     if(pl){ ov.plates[i*4]=pl.c[0]; ov.plates[i*4+1]=pl.c[1]; ov.plates[i*4+2]=pl.c[2]; ov.plates[i*4+3]=pl.w; }
@@ -4709,6 +4863,42 @@ function syncGeo(b){
     if(c){ ov.craters[i*4]=c.d[0]; ov.craters[i*4+1]=c.d[1]; ov.craters[i*4+2]=c.d[2]; ov.craters[i*4+3]=c.r; ov.craterD[i]=c.depth; }
     else { ov.craters[i*4+3]=0.0001; ov.craterD[i]=0; }
   }
+}
+// turning a living world's layers into plain data that can be saved, and back
+const LIFE_REG=new Map(); let lifeRegN=0;
+const r4=v=>Math.round(v*1e4)/1e4;
+function serialGeo(ov){ return ov?{plates:Array.from(ov.plates,r4),craters:Array.from(ov.craters,r4),craterD:Array.from(ov.craterD,r4)}:null; }
+function serialLook(fx,b){
+  if(!fx||!fx.on) return null;
+  const o={};
+  for(const k in fx){ if(k==='flash'||k==='lifeTex') continue; const v=fx[k];
+    if(typeof v==='number') o[k]=r4(v); else if(Array.isArray(v)||ArrayBuffer.isView(v)) o[k]=Array.from(v,r4); }
+  if(fx.lifeTex&&b){ if(!b._lifeKey) b._lifeKey='L'+(++lifeRegN); LIFE_REG.set(b._lifeKey,b); o.lifeKey=b._lifeKey; }
+  return o;
+}
+const evoGeoCache=new WeakMap(), lookCache=new WeakMap();
+function geoFromP(w){
+  const g=w&&w.evoGeo; if(!g) return null;
+  let ov=evoGeoCache.get(g);
+  if(!ov){ ov={plates:new Float32Array(MAX_PLATES*4),craters:new Float32Array(MAX_CRATERS*4),craterD:new Float32Array(MAX_CRATERS)};
+    ov.plates.set(g.plates.slice(0,MAX_PLATES*4)); ov.craters.set(g.craters.slice(0,MAX_CRATERS*4)); ov.craterD.set(g.craterD.slice(0,MAX_CRATERS));
+    evoGeoCache.set(g,ov); }
+  return ov;
+}
+function lookFromP(w){
+  const l=w&&w.evoLook; if(!l) return null;
+  let fx=lookCache.get(l);
+  if(!fx){ fx=Object.assign({},l,{flash:new Float32Array(16)}); lookCache.set(l,fx); }
+  // the biosphere is a live texture, so it only comes along while its world is still in this session
+  const src=l.lifeKey&&LIFE_REG.get(l.lifeKey);
+  fx.lifeTex=src&&src.lifeTex||null; fx.lifeOn=fx.lifeTex&&l.lifeOn?1:0;
+  return fx;
+}
+function bakeEvoInto(b){
+  if(!b||!b.evo||!b.world) return;
+  syncGeo(b);
+  b.world.p.evoGeo=serialGeo(geoOverride.get(b.world.p));
+  b.world.p.evoLook=serialLook(evoFX.get(b.world.p),b);
 }
 const H3=h=>hex(h);
 const PAL={
@@ -4812,7 +5002,7 @@ function giantVisual(b,fx){
   if(!fx.vegA){ fx.vegA=fx.vegB=fx.vegC=fx.desert=fx.tundra=fx.algaeCol=[0,0,0]; fx.cloudCol=fx.hazeCol=[1,1,1]; }
 }
 function setEvoUniforms(w){
-  const fx=evoFX.get(w);
+  const fx=evoFX.get(w)||lookFromP(w);
   if(!blankTex){ blankTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,blankTex);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4)); }
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D,(fx&&fx.lifeTex)||blankTex);
@@ -4857,6 +5047,8 @@ function kindName(b){
 function eraColor(e){
   if(!e) return '#888';
   if(e.engulfed||e.dead) return '#5a3030';
+  if(e.life.stage>=5||(e.colony&&!e.colony.dead)) return '#ffd27a';
+  if(e.era==='Silent ruins') return '#8a7f74';
   if(e.life.stage>=3) return '#5fcf6a'; if(e.life.stage>=1) return '#3fb8a8';
   if(e.regime==='magma') return '#ff7a3a';
   if(e.liquid) return '#4a9fe0'; if(e.ice>0.9||e.T<200) return '#cfe6f2';
@@ -4926,6 +5118,12 @@ function buildEvoUI(head){
   const tenRow=sliderRow(head,{l:'Life tenacity',min:0,max:1,step:0.01},gen.ing,'tenacity',()=>{ store('genesisIng',gen.ing); tenLbl.textContent=tenacityName(gen.ing.tenacity); });
   const tenLbl=el('p','note',''); tenLbl.textContent=tenacityName(gen.ing.tenacity); head.appendChild(tenLbl);
   sliderRow(head,{l:'Rogue asteroids & comets',min:0,max:1,step:0.01},gen.ing,'rogues',()=>store('genesisIng',gen.ing));
+  const gr=el('div','sel','<label>Life grid</label>'); const gs=document.createElement('select');
+  [[1,'160 × 80 — fast'],[2,'320 × 160'],[3,'480 × 240 — most diverse, slower']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===gen.ing.lifeRes) o.selected=true; gs.appendChild(o); });
+  gs.onchange=()=>{ gen.ing.lifeRes=+gs.value; store('genesisIng',gen.ing);
+    for(const b of bodies){ b.life=null; b.bake=null; }
+    hud('Biospheres restart on the new grid — the story so far is kept, the patterns begin again.'); };
+  gr.appendChild(gs); head.appendChild(gr);
   const b2=el('div','btns');
   const bk=el('button',null,'Keep as system'); bk.title='Save these worlds as they are now and open System mode';
   bk.onclick=()=>{ saveSystem(); setMode('system'); hud('Saved. The worlds keep the look they had — life layers stay live this session.'); };
@@ -4966,6 +5164,7 @@ function buildEvoUI(head){
   }
   const det=el('div','gen-det'); dv.appendChild(det);
   if(selIdx<0) det.appendChild(el('p','note','Click a world in the view or the list to follow its story.'));
+  buildSilenceUI();
   const cl=section('Chronicle',true);
   const fl=el('div','btns');
   const fA=el('button',null,gen.filterSel?'Show all':'Only this world'); fA.onclick=()=>{ gen.filterSel=!gen.filterSel; fA.textContent=gen.filterSel?'Show all':'Only this world'; gen.logDirty=true; genUIRefresh(true); };
@@ -5024,13 +5223,14 @@ function genUIRefresh(force){
       R('Water',e.W<0.004?(e.H2O>1?'all steam':'none'):(e.ice>0.9?'frozen ':e.liquid?'':'ice ')+(e.W<10?e.W.toFixed(2):Math.round(e.W))+' oceans · '+Math.round(e.ocean*100)+'% cover');
       R('Interior',{magma:'magma ocean',plates:'plate tectonics',lid:'stagnant lid'}[e.regime]+(e.mag?' · magnetic field':''));
       R('Impacts',e.nImp+' ('+e.bigImp+' huge)');
-      R('Life',L.stage===0?(L.gone?'extinct':e.liquid||e.sub?'not yet':'—'):['','microbes','photosynthesis','land life','animals','technosphere'][L.stage]+(L.sub?' (under ice)':''));
+      const cs=civSummary(e); if(cs) R('Civilisation',cs);
+      R('Life',L.stage===0?(L.gone?'extinct':e.liquid||e.sub?'not yet':'—'):['','microbes','photosynthesis','land life','animals','technosphere','spacefaring'][L.stage]+(L.sub?' (under ice)':''));
     }
     let html=`<div class="gen-era" style="border-color:${eraColor(e)}">${b.gone?'Engulfed':e.era}<small>since ${fmtAge(e.eraT||0)}</small></div>`+
       `<div class="gen-bar">${comp.map(c=>c[0]>0.002?`<i style="width:${(c[0]/tot*100).toFixed(1)}%;background:${c[1]}" title="${c[2]} ${(c[0]*100).toFixed(1)}%"></i>`:'').join('')}</div>`+
       `<div class="gen-stat">${rows.join('')}</div>`;
-    if(b.life){
-      html+=`<p class="subhead">Lineages</p>`+b.life.species.map(sp=>`<div class="gen-row"><i style="background:${toHex(sp.col)}"></i>${({microbe:'Microbial mats',photo:'Photosynthesisers',plant:'Land plants',animal:'Mobile life'})[sp.kind]} <em>${sp.name} · ${sp.rule.str}</em></div>`).join('')+
+    if(b.life&&b.life.species.length){
+      html+=`<p class="subhead">Species (${b.life.species.length})</p>`+b.life.species.map(sp=>`<div class="gen-row"><i style="background:${toHex(sp.col)}"></i>${sp.root?({microbe:'Microbial mats',photo:'Photosynthesisers',plant:'Land plants',animal:'Mobile life'})[sp.kind]:sp.name+' <small style="color:var(--ink-dim)">from '+sp.parent+'</small>'} <em>${sp.root?sp.name+' · ':''}${sp.rule.str}</em></div>`).join('')+
         `<p class="note">Rules are hashed from this world's iron, water, volatiles and mass. Sea lineages drift with currents set by its spin; animals graze the plants they cross. Cover: ${(b.life.pop*100).toFixed(1)}% of the surface.</p>`;
     }
     if(u.detFor!==selIdx||force||now-(u.detT||0)>400){ u.det.innerHTML=html; u.detFor=selIdx; u.detT=now; }
@@ -5039,6 +5239,7 @@ function genUIRefresh(force){
     gen.logDirty=false;
     const who=b?b.name:null;
     const items=gen.log.filter(x=>!gen.filterSel||!who||x.who===who).slice(0,40);
+    if(gen.silUI) silenceRefresh();
     u.lg.innerHTML=items.length?items.map(x=>`<div class="gen-ev ${x.kind}"><b>${fmtAge(x.t)}</b>${x.who?' <u>'+x.who+'</u>':''} ${x.txt}</div>`).join(''):'<p class="note">Nothing yet.</p>';
   }
 }
@@ -5095,7 +5296,7 @@ function spawnRogue(o){
 function genRogueTick(dt){
   if(gen.evoPlaying&&gen.t<gen.tMax&&gen.ing.rogues>0){
     gen.rogueAcc=(gen.rogueAcc||0)+dt*gen.ing.rogues*0.5;
-    if(gen.rogueAcc>1&&rogues.length<7){ gen.rogueAcc=0; spawnRogue(); }
+    if(gen.rogueAcc>1&&rogues.filter(x=>!x.civ).length<7){ gen.rogueAcc=0; spawnRogue(); }
   }
   const reach=sysReach();
   for(let k=rogues.length-1;k>=0;k--){
@@ -5115,12 +5316,13 @@ function genRogueTick(dt){
     }
     const sp=rg.speed*(rg.mode==='pass'?1:Math.min(1.6,1+0.6*(1-Math.min(1,rg.age/3))));
     rg.pos=[rg.pos[0]+rg.vel[0]*sp*dt,rg.pos[1]+rg.vel[1]*sp*dt,rg.pos[2]+rg.vel[2]*sp*dt];
-    if(rg.age>40||Math.hypot(...rg.pos)>reach*2.2) rogues.splice(k,1);
+    if(rg.age>(rg.civ?90:40)||Math.hypot(...rg.pos)>reach*2.2) rogues.splice(k,1);
   }
 }
 function rogueHit(rg,b,inDir){
   const e=b.evo;
   const dir=vnorm([-inDir[0],-inDir[1],-inDir[2]]);
+  if(rg.kind==='ship'){ civArrive(rg,b); return; }
   if(rg.payload){ planetCollide(b,rg.payload); return; }
   const what=rg.kind==='comet'?(rg.user?'Your comet hit':'A rogue comet struck'):(rg.user?'Your asteroid hit':'A rogue asteroid struck');
   if(e.kind==='rocky') evoImpact(e,gen.rng,rg.rad,dir,rg.kind,gen.sys,genLog,gen.t,what);
@@ -5235,13 +5437,9 @@ function buildSendToGenesis(){
 }
 function genOpenInEditor(i){
   const b=bodies[i]; if(!b) return;
-  syncGeo(b);
+  if(b.evo&&b.evo.kind==='rocky') bakeEvoInto(b);
   restore(b.world); clearAccum();
-  const ov=geoOverride.get(b.world.p), fx=evoFX.get(b.world.p);
-  editorEvo={name:b.name,t:gen.t,era:b.evo?b.evo.era:'',
-    ov:ov?{plates:ov.plates.slice(),craters:ov.craters.slice(),craterD:ov.craterD.slice()}:null,
-    fx:fx?Object.assign({},fx,{flash:new Float32Array(16)}):null,
-    gen:b.gen?{...b.gen}:null, W:b.evo?b.evo.W:0};
+  editorEvo={name:b.name,t:gen.t,era:b.evo?b.evo.era:'',gen:b.gen?{...b.gen}:null, W:b.evo?b.evo.W:0};
   if(b.gen){ gen.send.m=b.gen.m; gen.send.fe=b.gen.fe; gen.send.vol=b.gen.vol; gen.send.W=Math.min(60,b.evo.W||0); gen.send.name=b.name+' II'; }
   linkIdx=-1; setMode('planet'); scrollEl.scrollTop=0;
   hud(`Opened ${b.name} as it stood at ${fmtAge(gen.t)}. Edits apply on top of its evolved surface.`);
@@ -5262,7 +5460,7 @@ function editorWorld(){
   b.baseAmp=snap.p.amp;
   b.W=W;
   // keep its geography: the editor's own plates and craters seed the evolving ones
-  const ov=editorEvo&&editorEvo.ov;
+  const ov=geoFromP(P);
   const geo=ov?{plates:ov.plates,craters:ov.craters,craterD:ov.craterD}:deriveGeo(snap.seed,snap.p.plateN,snap.p.craterN,snap.p.craterSize);
   b.geoSeed={plates:Array.from(geo.plates),craters:Array.from(geo.craters),craterD:geo.craterD?Array.from(geo.craterD):null,
     nP:ov?MAX_PLATES:snap.p.plateN,nC:ov?MAX_CRATERS:snap.p.craterN};
@@ -5310,6 +5508,13 @@ function genDrawRogues(VP){
     dustData[o+4]=c[0]; dustData[o+5]=c[1]; dustData[o+6]=c[2]; dustData[o+7]=h; n++; };
   const base=Math.max(0.03,cam.dist*0.006);
   for(const rg of rogues){
+    if(rg.civ){
+      // ships and arks: a bright point in the civilisation's colour with a thin wake
+      const c=(civOf(rg.civ)||{col:[1,1,1]}).col, s=base*(rg.kind==='ark'?1.1:0.7);
+      put(rg.pos,s,c.map(v=>v*1.6),0);
+      rg.trail.forEach((p,j)=>{ const f=1-j/rg.trail.length; put(p,s*0.45*f,c.map(v=>v*f),0); });
+      continue;
+    }
     const comet=rg.kind==='comet';
     const big=rg.payload?Math.max(0.08,rg.payload.scale):base*(1+rg.rad*2);
     put(rg.pos,big,rg.payload?hex(rg.payload.world.colors.mid):comet?[0.85,0.95,1]:[0.55,0.47,0.4],comet?0:0.35);
@@ -5324,6 +5529,182 @@ function genDrawRogues(VP){
   gl.uniform3fv(U(pDust,'uSun'),new Float32Array(stars[0]?starCol(stars[0]):[1,1,1]));
   gl.bindVertexArray(dustVAO);
   gl.drawElementsInstanced(gl.TRIANGLES,meshRock.count,gl.UNSIGNED_INT,0,n);
+}
+
+
+/* ── genesis: civilisations, ships and the great silence ──
+   A technosphere that reaches space sends ships to the other worlds.
+   Settlements grow from where they land: domes on airless rock,
+   transplanted forests on empty seas. Every civilisation also faces the
+   great filter, a chance each million years of simply ending. Across
+   every system grown here, a tally shows where the funnel narrows.
+   ──────────────────────────────────────────────────────────────── */
+if(gen.ing.lifeRes===undefined) gen.ing.lifeRes=2;
+if(gen.ing.filter===undefined) gen.ing.filter=0.5;
+gen.civs=[]; gen.run={};
+gen.fermi=Object.assign({runs:0,life:0,animals:0,tech:0,space:0,fell:0,arks:0,contact:0},load('fermi')||{});
+function filterName(v){ return v<0.2?'Gentle — civilisations tend to last':v<0.45?'Survivable':v<0.75?'Harsh':'The Great Filter — almost nobody makes it'; }
+function fermiMark(k){ if(gen.run[k]) return; gen.run[k]=1; gen.fermi[k]++; store('fermi',gen.fermi); }
+function fermiAdd(k){ gen.fermi[k]++; store('fermi',gen.fermi); }
+function civOf(id){ return gen.civs[id-1]||null; }
+function civWorlds(civ){
+  const out=[];
+  bodies.forEach((b,i)=>{ if(b.gone||!b.evo) return; const e=b.evo;
+    if(e.civ===civ||(e.colony&&!e.colony.dead&&e.colony.civ===civ.id)) out.push(i); });
+  return out;
+}
+function genCivTick(dt){
+  const r=gen.rng, flt=gen.ing.filter;
+  bodies.forEach((b,i)=>{
+    if(b.gone||!b.evo||b.evo.kind!=='rocky') return;
+    const e=b.evo, L=e.life;
+    if(L.stage>=1) fermiMark('life');
+    if(L.stage>=4) fermiMark('animals');
+    // a homeworld comes of age
+    if(L.stage>=5&&!e.civ&&gen.civs.length<254){
+      const civ={id:gen.civs.length+1,name:genName(r),home:b.name,born:gen.t,homeAlive:true,dead:false,space:false,arks:0,settled:0,endT:0,why:''};
+      civ.col=CIV_COLS[(civ.id-1)%CIV_COLS.length];
+      gen.civs.push(civ); e.civ=civ;
+      fermiMark('tech');
+      genLog(e,`The ${civ.name} have built a technological civilisation`,'civ');
+    }
+    if(e.civ&&L.stage>=6&&!e.civ.space){ e.civ.space=true; fermiMark('space'); }
+    // the evolution step decided this world's civilisation has ended
+    if(e.civFell){
+      const civ=e.civ;
+      if(civ){
+        civ.homeAlive=false; if(b.life) lifeRuin(b.life,civ.id);
+        fermiAdd('fell');
+        bodies.forEach(c=>{ const ce=c.evo; if(!ce||!ce.colony||ce.colony.dead||ce.colony.civ!==civ.id) return;
+          if(r()<0.5){ ce.colony.dead=true; if(c.life) lifeRuin(c.life,civ.id);
+            genLog(ce,`Cut off from ${b.name}, the ${civ.name} here fell silent too`,'extinct'); } });
+        e.civ=null;
+        if(!civWorlds(civ).length){ civ.dead=true; civ.endT=gen.t; civ.why=e.civFell; }
+      }
+      e.civFell=null;
+    }
+    // settlements live on their own clock, and face their own filter
+    if(e.colony&&!e.colony.dead){
+      e.colony.age=(e.colony.age||0)+dt;
+      if(r()<dt*(0.0002+0.0025*flt*flt)){
+        const civ=civOf(e.colony.civ);
+        e.colony.dead=true; if(b.life) lifeRuin(b.life,e.colony.civ);
+        genLog(e,`The ${civ?civ.name:'settlers'} here went quiet`,'extinct');
+        if(civ&&!civWorlds(civ).length){ civ.dead=true; civ.endT=gen.t; civ.why='The last settlement went quiet'; fermiAdd('fell'); }
+      }
+    }
+  });
+  // ships: any living world of a spacefaring civilisation can send them
+  for(const civ of gen.civs){
+    if(civ.dead||!civ.space) continue;
+    const ws=civWorlds(civ);
+    if(!ws.length){ civ.dead=true; civ.endT=gen.t; continue; }
+    const flying=rogues.filter(x=>x.civ===civ.id&&x.kind==='ship').length;
+    for(const wi of ws){
+      const src=bodies[wi], se=src.evo;
+      const can=se.civ===civ?se.life.stage>=6:(se.colony.age||0)>200;
+      if(!can||flying>=3||r()>dt*0.007) continue;
+      const tgt=civPickTarget(civ,wi);
+      if(tgt>=0) launchShip(civ,wi,tgt);
+    }
+    // arks: when a civilisation holds several worlds, some of it leaves for other stars
+    if(ws.length>=2&&r()<dt*0.003){
+      const src=ws[Math.floor(r()*ws.length)];
+      launchArk(civ,src);
+    }
+  }
+}
+function civPickTarget(civ,from){
+  const fp=bodyPos(bodies[from]);
+  let best=-1,bw=0,tot=0; const cand=[];
+  bodies.forEach((b,i)=>{
+    if(i===from||b.gone||!b.evo||b.evo.kind!=='rocky') return;
+    const e=b.evo;
+    if(e.civ===civ||(e.colony&&!e.colony.dead&&e.colony.civ===civ.id)) return;
+    if(e.regime==='magma') return;
+    const p=bodyPos(b), d=Math.hypot(p[0]-fp[0],p[1]-fp[1],p[2]-fp[2]);
+    let w=1/(0.5+d);
+    if(e.liquid&&e.T>260&&e.T<325) w*=5;
+    if(e.colony&&!e.colony.dead) w*=0.4;
+    if(e.civ) w*=0.5;
+    cand.push([i,w]); tot+=w;
+  });
+  if(!cand.length) return -1;
+  let x=gen.rng()*tot; for(const [i,w] of cand){ x-=w; if(x<=0) return i; }
+  return cand[cand.length-1][0];
+}
+function launchShip(civ,from,to){
+  const p=bodyPos(bodies[from]), q=bodyPos(bodies[to]);
+  const reach=sysReach();
+  rogues.push({kind:'ship',mode:'hit',target:to,civ:civ.id,rad:0,pos:p.slice(),vel:vnorm([q[0]-p[0],q[1]-p[1]+0.001,q[2]-p[2]]),
+    speed:reach*0.14,trail:[],age:0,payload:null,user:false,name:''});
+  civ.ships=(civ.ships||0)+1;
+}
+function launchArk(civ,from){
+  const p=bodyPos(bodies[from]);
+  const out=vnorm([p[0]+(Math.random()-0.5)*2,(Math.random()-0.5)*0.6,p[2]+(Math.random()-0.5)*2]);
+  rogues.push({kind:'ark',mode:'pass',target:-1,civ:civ.id,rad:0,pos:p.slice(),vel:out,speed:sysReach()*0.1,trail:[],age:0,payload:null,user:false,name:''});
+  civ.arks++; fermiAdd('arks');
+  genLog(bodies[from].evo,`An ark of the ${civ.name} has left for another star. Nothing will come back for a very long time.`,'civ');
+}
+function civArrive(rg,b){
+  const e=b.evo, L=e.life, civ=civOf(rg.civ);
+  if(!civ||!e||e.kind!=='rocky') return;
+  const other=e.civ&&e.civ!==civ?e.civ:(e.colony&&!e.colony.dead&&e.colony.civ!==civ.id?civOf(e.colony.civ):null);
+  if(other){
+    if(!gen.run['contact'+civ.id+'_'+other.id]){ gen.run['contact'+civ.id+'_'+other.id]=1; fermiAdd('contact');
+      genLog(e,`First contact: a ship of the ${civ.name} has met the ${other.name}`,'civ'); }
+    return;
+  }
+  if(e.colony&&!e.colony.dead) return;
+  const back=e.colony&&e.colony.dead;
+  e.colony={civ:civ.id,t:gen.t,age:0,dead:false};
+  civ.settled++;
+  const fair=e.liquid&&!e.sub&&e.T>262&&e.T<322;
+  if(fair&&L.stage===0){
+    // an empty, kind world: they bring their own biosphere
+    L.chem=L.gate+0.05; L.stage=3; L.prog=0; L.born=gen.t; L.gone=false; L.seeded=true;
+    genLog(e,`The ${civ.name} have landed and brought their own life — ${b.name} is greening`,'civ');
+  } else if(L.stage>0){
+    genLog(e,`The ${civ.name} have settled here, beside the native life`,'civ');
+  } else {
+    genLog(e,back?`The ${civ.name} have resettled the old ruins`:`Domes on the surface — the ${civ.name} have an outpost here`,'civ');
+  }
+  if(selIdx>=0&&bodies[selIdx]===b) hud(`${b.name}: the ${civ.name} have arrived.`);
+}
+function civSummary(e){
+  if(e.civ) return `${e.civ.name} · home world`+(e.civ.space?' · spacefaring':'');
+  if(e.colony){ const c=civOf(e.colony.civ); return (c?c.name:'?')+(e.colony.dead?' · ruins':' · settled '+fmtAge(e.colony.t)); }
+  if(e.life.ruins) return 'ruins · '+(e.life.fallWhy||'silent');
+  return '';
+}
+// the tally across every system grown in this browser
+function buildSilenceUI(){
+  const sec=section('The Great Silence',gen.civs.length>0);
+  sliderRow(sec,{l:'Great filter',min:0,max:1,step:0.01},gen.ing,'filter',()=>{ store('genesisIng',gen.ing); fl.textContent=filterName(gen.ing.filter); });
+  const fl=el('p','note',filterName(gen.ing.filter)); sec.appendChild(fl);
+  const civs=el('div','gen-civs'); sec.appendChild(civs);
+  sec.appendChild(el('p','subhead','Every system you have grown'));
+  const fun=el('div','gen-funnel'); sec.appendChild(fun);
+  const extra=el('p','note',''); sec.appendChild(extra);
+  const bc=el('div','btns'); const br=el('button',null,'Reset tally'); br.title='Start the count over';
+  br.onclick=()=>{ for(const k in gen.fermi) gen.fermi[k]=0; store('fermi',gen.fermi); silenceRefresh(); };
+  bc.appendChild(br); sec.appendChild(bc);
+  gen.silUI={civs,fun,extra};
+  silenceRefresh();
+}
+function silenceRefresh(){
+  const u=gen.silUI; if(!u||!u.fun.isConnected) return;
+  const F=gen.fermi, R=Math.max(1,F.runs);
+  const rows=[['Systems grown',F.runs],['Any life',F.life],['Animals',F.animals],['Technology',F.tech],['Reached space',F.space]];
+  u.fun.innerHTML=rows.map(([k,v])=>`<div class="fn"><span>${k}</span><i style="width:${(v/R*100).toFixed(1)}%"></i><b>${v}</b></div>`).join('');
+  u.extra.textContent=F.runs?`${F.fell} civilisation${F.fell===1?'':'s'} fell · ${F.arks} ark${F.arks===1?'':'s'} sent to other stars, none heard from · ${F.contact} first contact${F.contact===1?'':'s'}. Where the bars drop is where your filter is.`
+    :'Form a system to start the tally. Where the bars drop is where your filter is.';
+  u.civs.innerHTML=gen.civs.length?gen.civs.map(c=>{
+    const n=civWorlds(c).length;
+    const st=c.dead?`silent since ${fmtAge(c.endT)}`:`${n} world${n===1?'':'s'}${c.space?' · spacefaring':''}`;
+    return `<div class="gen-civ${c.dead?' dead':''}"><i style="background:${toHex(c.col)}"></i><b>The ${c.name}</b><small>of ${c.home} · ${st}${c.arks?' · '+c.arks+' ark'+(c.arks>1?'s':''):''}${c.dead&&c.why?'<br>'+c.why:''}</small></div>`; }).join('')
+    :`<p class="note">No one here has built anything yet.</p>`;
 }
 
 /* ── boot ─────────────────────────────────────────────────── */
