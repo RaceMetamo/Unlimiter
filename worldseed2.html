@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Worldseed 2.0</title>
 <style>
   :root{
@@ -161,6 +162,20 @@
   .item .chip{flex:0 0 auto;font-size:10px;color:var(--ink);background:rgba(150,180,200,.1);border-radius:8px;padding:1px 6px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .item.sel{border-color:var(--hot)}
   #hud{position:fixed;left:14px;bottom:12px;z-index:4;color:var(--ink-dim);font-size:11px;pointer-events:none;max-width:44ch}
+  /* tablets and phones: bigger targets, and 16px inputs so iOS doesn't zoom the page when one is focused */
+  @media (pointer:coarse){
+    body{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+    #ui{width:360px}
+    #ui button{min-height:36px}
+    #ui select,#ui input[type=text],#ui input[type=number]{font-size:16px;min-height:34px}
+    #ui input[type=range]{height:30px}
+    #ui input[type=range]::-webkit-slider-thumb{width:22px;height:22px}
+    #ui .item{min-height:40px}
+    #ui input[type=text]{-webkit-user-select:text;user-select:text}
+    #ui summary{padding-top:10px;padding-bottom:10px}
+    button,select,input,summary{touch-action:manipulation}
+    #hovercard{width:280px;font-size:13px}
+  }
   @media (max-width:720px){
     #ui{width:100%;height:64%;top:auto;bottom:0;border-left:none;border-top:1px solid var(--line)}
     #ui.hidden{transform:translateY(100%)}
@@ -187,6 +202,7 @@
 <div id="recdot"><b></b><span id="rectime">0:00</span></div>
 <button id="toggle">Hide panel</button>
 <div id="hud">Drag to orbit, scroll to zoom.</div>
+<script>if(matchMedia("(pointer:coarse)").matches) document.getElementById("hud").textContent="Drag to orbit · pinch to zoom · twist to turn · hold a world for its card";</script>
 
 <script>
 /* ─────────────────────────────────────────────────────────────
@@ -1983,18 +1999,19 @@ function focusBody(i){
   });
   hud('Focused '+b.name+'.');
 }
-canvas.addEventListener('pointerdown',e=>{
-  dragging=true; lastX=e.clientX; lastY=e.clientY;
-  downX=e.clientX; downY=e.clientY; downT=performance.now();
-  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener('pointerup',e=>{
-  dragging=false; canvas.classList.remove('dragging');
+/* ── pointer & touch: one finger orbits, two fingers pinch to zoom and twist to turn,
+   tap picks, double-tap opens, press-and-hold shows a world's card (there is no hover on a tablet) ── */
+const ptrs=new Map();
+let pinch=null, lastTap={t:0,x:0,y:0}, holdTimer=0, hoverPin=false;
+function zoomLimits(){ return mode==='planet'?[1.35,9]:[0.6,140]; }
+function setZoom(d,now){ const lim=zoomLimits(); cam.tDist=Math.max(lim[0],Math.min(lim[1],d)); if(now) cam.dist=cam.tDist; }
+function pinchState(){ const p=[...ptrs.values()]; const a=p[0],b=p[1];
+  return {d:Math.hypot(b.x-a.x,b.y-a.y),ang:Math.atan2(b.y-a.y,b.x-a.x),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2}; }
+function tapPick(x,y,touch){
   if(mode!=='system'&&!(mode==='genesis'&&gen.phase==='evolving')) return;
-  if(Math.hypot(e.clientX-downX,e.clientY-downY)>5) return;
-  if(performance.now()-downT>600) return;
-  const t=pickAt(e.clientX,e.clientY);
-  if(!t){ if(focusIdx>=0||selIdx>=0){ focusIdx=-1; selIdx=-1;
+  const t=pickAt(x,y);
+  if(!t){ hoverPin=false; hoverIdx=-1; hoverUpdate();
+    if(focusIdx>=0||selIdx>=0){ focusIdx=-1; selIdx=-1;
       cam.tDist=Math.max(14,(bodies.reduce((m,b)=>Math.max(m,b.orbit.r),6))*2.1);
       buildUI(); hud('Showing the whole system.'); } return; }
   if(t.kind==='star'){
@@ -2002,16 +2019,86 @@ canvas.addEventListener('pointerup',e=>{
     focusIdx=-1; selIdx=-1; cam.tTarget=[0,0,0];
     cam.tDist=Math.max(3,st.radius*5);
     buildUI(); hud('Focused '+(st.name||'the star')+'.');
-  } else focusBody(t.n);
+  } else {
+    focusBody(t.n);
+    // on a touch screen a tap also shows the world's card for a moment
+    if(touch){ hoverPin=true; hoverIdx=t.n; hoverXY=[x,y]; hoverUpdate(true); }
+  }
+}
+canvas.addEventListener('pointerdown',e=>{
+  // a primary pointer is the first contact: forget any finger whose lift we never heard about
+  if(e.isPrimary){ ptrs.clear(); pinch=null; }
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
+  try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+  clearTimeout(holdTimer);
+  if(ptrs.size===1){
+    dragging=true; lastX=e.clientX; lastY=e.clientY;
+    downX=e.clientX; downY=e.clientY; downT=performance.now();
+    canvas.classList.add('dragging');
+    if(e.pointerType!=='mouse'){
+      if(hoverPin){ hoverPin=false; hoverIdx=-1; hoverUpdate(); }
+      // press and hold: the card for whatever is under the finger
+      holdTimer=setTimeout(()=>{
+        if(ptrs.size!==1||Math.hypot(lastX-downX,lastY-downY)>8) return;
+        if(mode!=='system'&&!(mode==='genesis'&&gen.phase==='evolving')) return;
+        const t=pickAt(downX,downY);
+        if(t&&t.kind==='body'){ dragging=false; hoverPin=true; hoverIdx=t.n; hoverXY=[downX,downY-40]; hoverUpdate(true); downT=-1e9; }
+      },480);
+    }
+  } else if(ptrs.size===2){
+    pinch={...pinchState(),dist:cam.tDist,yaw:cam.yaw,pitch:cam.pitch};
+    downT=-1e9;   // a second finger means this was never a tap
+  }
 });
+function endPointer(e){
+  const had=ptrs.has(e.pointerId);
+  ptrs.delete(e.pointerId);
+  clearTimeout(holdTimer);
+  if(ptrs.size<2) pinch=null;
+  if(ptrs.size===1){ const q=[...ptrs.values()][0]; lastX=q.x; lastY=q.y; return; }
+  if(ptrs.size>0) return;
+  dragging=false; canvas.classList.remove('dragging');
+  if(!had||e.type==='pointercancel') return;
+  if(Math.hypot(e.clientX-downX,e.clientY-downY)>(e.pointerType==='mouse'?5:12)) return;
+  if(performance.now()-downT>600) return;
+  const touch=e.pointerType!=='mouse', now=performance.now();
+  // double-tap on a touch screen does what double-click does
+  if(touch&&now-lastTap.t<450&&Math.hypot(e.clientX-lastTap.x,e.clientY-lastTap.y)<30){
+    lastTap.t=0; hoverPin=false; hoverIdx=-1; hoverUpdate();
+    if(mode==='system'&&selIdx>=0) openInEditor(selIdx);
+    else if(mode==='genesis'&&selIdx>=0&&bodies[selIdx]&&bodies[selIdx].evo) setZoom(bodies[selIdx].scale*2.6);
+    else if(mode==='planet') setZoom(cam.tDist>2.4?1.8:3.1);
+    return;
+  }
+  lastTap={t:now,x:e.clientX,y:e.clientY};
+  tapPick(e.clientX,e.clientY,touch);
+}
+canvas.addEventListener('pointerup',endPointer);
+canvas.addEventListener('pointercancel',endPointer);
 canvas.addEventListener('dblclick',()=>{ if(mode==='system'&&selIdx>=0) openInEditor(selIdx); });
-canvas.addEventListener('pointermove',e=>{ if(!dragging) return;
+canvas.addEventListener('pointermove',e=>{
+  const q=ptrs.get(e.pointerId); if(!q) return;
+  q.x=e.clientX; q.y=e.clientY;
+  if(ptrs.size>=2&&pinch){
+    // pinch to zoom, twist to turn, move both fingers to tilt and orbit
+    const s=pinchState();
+    setZoom(pinch.dist*pinch.d/Math.max(10,s.d),true);
+    cam.yaw=pinch.yaw-(s.ang-pinch.ang)-(s.cx-pinch.cx)*0.006;
+    cam.pitch=Math.max(-1.5,Math.min(1.5,pinch.pitch+(s.cy-pinch.cy)*0.006));
+    return;
+  }
+  if(!dragging) return;
+  if(Math.hypot(e.clientX-downX,e.clientY-downY)>8) clearTimeout(holdTimer);
   cam.yaw-=(e.clientX-lastX)*0.006;
   cam.pitch=Math.max(-1.5,Math.min(1.5,cam.pitch+(e.clientY-lastY)*0.006));
   lastX=e.clientX; lastY=e.clientY; });
 canvas.addEventListener('wheel',e=>{ e.preventDefault();
-  const lim=mode==='planet'?[1.35,9]:[0.6,140];
-  cam.tDist=Math.max(lim[0],Math.min(lim[1],cam.tDist*(1+Math.sign(e.deltaY)*0.08))); },{passive:false});
+  // trackpad pinches arrive as ctrl+wheel with small deltas; mouse wheels as big steps
+  const k=e.ctrlKey?Math.exp(e.deltaY*0.01):(1+Math.sign(e.deltaY)*0.08);
+  setZoom(cam.tDist*k); },{passive:false});
+// Safari's own page pinch would fight the canvas
+['gesturestart','gesturechange','gestureend'].forEach(t=>document.addEventListener(t,e=>e.preventDefault(),{passive:false}));
+canvas.addEventListener('contextmenu',e=>{ if(e.pointerType!=='mouse') e.preventDefault(); });
 
 /* ── audio + modulation ───────────────────────────────────── */
 let audio=null;
@@ -3549,11 +3636,12 @@ document.getElementById('mPlanet').onclick=()=>setMode('planet');
 document.getElementById('mSystem').onclick=()=>setMode('system');
 document.getElementById('mGenesis').onclick=()=>setMode('genesis');
 
+const HUD_IDLE=matchMedia('(pointer:coarse)').matches?'Drag to orbit · pinch to zoom · twist to turn · hold a world for its card':'Drag to orbit, scroll to zoom.';
 let hudTimer;
 function hud(msg){
   const h=document.getElementById('hud'); h.textContent=msg;
   clearTimeout(hudTimer);
-  hudTimer=setTimeout(()=>h.textContent='Drag to orbit, scroll to zoom.',4500);
+  hudTimer=setTimeout(()=>h.textContent=HUD_IDLE,4500);
 }
 document.getElementById('toggle').onclick=e=>{
   const ui=document.getElementById('ui'); ui.classList.toggle('hidden');
@@ -6192,7 +6280,7 @@ function flagURL(f,h){
   const key=JSON.stringify([f.pal,f.bands,f.over,f.ems,f.aspect])+h;
   let c=flagCache.get(f); if(c&&c.key===key) return c.url;
   const cv=document.createElement('canvas'); const s=2; cv.height=h*s; cv.width=Math.round(h*f.aspect*s);
-  const ctx=cv.getContext('2d'); drawFlag(ctx,f,cv.width,cv.height);
+  const ctx=cv.getContext('2d',{willReadFrequently:true}); drawFlag(ctx,f,cv.width,cv.height);   // a CPU canvas: tiny, and no GPU context to spin up
   const url=cv.toDataURL(); flagCache.set(f,{key,url}); return url;
 }
 function flagOf(b){ if(!b) return null; if(!b.flag) b.flag=genFlag(b); return b.flag; }
@@ -6280,7 +6368,7 @@ function hoverHTML(b,i){
   return head+rows.join('')+ev;
 }
 function hoverUpdate(force){
-  if(hoverIdx<0||dragging||(mode!=='genesis'&&mode!=='system')){ hoverEl.style.display='none'; return; }
+  if(hoverIdx<0||(dragging&&!hoverPin)||(mode!=='genesis'&&mode!=='system')){ hoverEl.style.display='none'; return; }
   const b=bodies[hoverIdx]; if(!b||b.gone){ hoverEl.style.display='none'; return; }
   const now=performance.now();
   if(force||now-hoverT>400){ hoverT=now; hoverEl.innerHTML=hoverHTML(b,hoverIdx); }
@@ -6293,6 +6381,7 @@ function hoverUpdate(force){
 }
 let hoverPend=0;
 canvas.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='mouse') return;
   if(dragging||(mode!=='genesis'&&mode!=='system')){ hoverIdx=-1; hoverUpdate(); return; }
   hoverXY=[e.clientX,e.clientY];
   if(hoverPend) return;
@@ -6302,7 +6391,7 @@ canvas.addEventListener('pointermove',e=>{
     const changed=ni!==hoverIdx; hoverIdx=ni; hoverUpdate(changed);
     canvas.style.cursor=ni>=0?'pointer':''; });
 });
-canvas.addEventListener('pointerleave',()=>{ hoverIdx=-1; hoverUpdate(); });
+canvas.addEventListener('pointerleave',e=>{ if(e.pointerType!=='mouse'||hoverPin) return; hoverIdx=-1; hoverUpdate(); });
 setInterval(()=>{ if(hoverRow&&!hoverRow.isConnected){ hoverRow=null; hoverIdx=-1; } if(hoverIdx>=0||hoverEl.style.display==='block') hoverUpdate(); },500);
 
 /* ── boot ─────────────────────────────────────────────────── */
