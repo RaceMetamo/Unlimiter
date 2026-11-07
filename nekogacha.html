@@ -119,6 +119,20 @@ button{font:inherit;color:inherit}
 .emote.t0{background:#ecebf2;color:#6b6391}.emote.t4,.emote.t5{background:linear-gradient(90deg,#ffd1ea,#fff3b8,#c9fff0,#d6e4ff)}
 #stage.quake{animation:quake .6s}
 @keyframes quake{10%,50%,90%{transform:translate(-6px,3px)}30%,70%{transform:translate(6px,-4px)}}
+.draftbar{border-top:3px solid var(--ink);padding:10px 14px 12px;background:#fff6c7;border-radius:0 0 17px 17px;display:flex;flex-direction:column;gap:4px;animation:fxPop .35s cubic-bezier(.3,1.6,.5,1)}
+.draftbar .dtop{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px}
+.draftbar .dtop b#dCost{font-family:var(--f-display);font-weight:400;font-size:20px}
+.draftbar .dval{font-size:13px;font-variant-numeric:tabular-nums}.draftbar .dval b.up{color:#14a35c}.draftbar .dval b.down{color:#e8264c}
+.draftbar .note{margin:0}.draftbar .btn:disabled{opacity:.5;cursor:default}
+#previewTag{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:5;background:var(--sun);border:3px solid var(--ink);border-radius:99px;padding:3px 14px;font-family:var(--f-display);font-size:13px;letter-spacing:.06em;box-shadow:0 3px 0 var(--ink);pointer-events:none;animation:tagBob .8s ease-in-out infinite alternate}
+@keyframes tagBob{to{transform:translateX(-50%) translateY(4px)}}
+.logo .bankbox{pointer-events:auto}
+.bk-l{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.newgame{border:2px solid var(--ink);border-radius:8px;background:var(--paper);font:800 10px var(--f-body);letter-spacing:.04em;padding:1px 7px;cursor:pointer;color:var(--ink)}
+.newgame.arm{background:#ff3d5a;color:#fff}
+#broke{position:fixed;z-index:8;left:50%;top:calc(62px + env(safe-area-inset-top,0px));transform:translateX(-50%);width:min(420px,calc(100vw - 32px));background:var(--paper);border:3px solid var(--ink);border-radius:16px;box-shadow:5px 5px 0 var(--ink);padding:12px 14px;text-align:center;font-size:14px;animation:fxPop .4s cubic-bezier(.3,1.6,.5,1)}
+#broke b{font-family:var(--f-display);font-weight:400;font-size:18px;color:#e8264c}
+#broke .row{margin-top:10px}
 .tabs{display:flex;gap:6px}
 .tab{border:2.5px solid var(--ink);border-radius:10px;background:var(--paper);font-family:var(--f-display);font-size:14px;padding:4px 12px;cursor:pointer;letter-spacing:.04em}
 .tab[aria-selected="true"]{background:var(--ink);color:var(--sun)}
@@ -230,10 +244,12 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 
 <canvas id="stage" aria-label="Neko Gacha 3D stage. Drag to spin the cat, tap it to poke."></canvas>
 <div class="logo"><h1>NEKO<br><span>GACHA</span></h1><div class="sub"><span class="tag">ネコガチャ</span><span class="tag alt" id="pullcount">PULL 000</span></div>
-  <div class="bankbox" id="bankbox"><div class="bk-l">BANK</div><div class="bk-v" id="bank">$0</div><div class="bk-n">Net worth <b id="net">$0</b></div><div class="ticker" id="ticker"></div></div></div>
+  <div class="bankbox" id="bankbox"><div class="bk-l">BANK <button class="newgame" id="newGame" type="button" title="Start a new game">↺ New game</button></div><div class="bk-v" id="bank">$0</div><div class="bk-n">Net worth <b id="net">$0</b></div><div class="ticker" id="ticker"></div></div></div>
 <button id="editbtn" type="button" aria-controls="panel">LAB · SHELF</button>
 <div class="knobwrap"><div class="caps" id="caps" role="radiogroup" aria-label="Capsule type"></div><button id="roll" type="button" aria-label="Roll a new cat"></button><div class="knoblabel" id="knobLabel">ROLL!</div></div>
 <div id="tap" hidden>TAP!</div>
+<div id="previewTag" hidden>PREVIEW · not bought yet</div>
+<div id="broke" hidden><b>Out of cash.</b> <span id="brokeMsg">Sell nekos from your shelf, or start over.</span><div class="row"><button class="btn" id="brokeShelf" type="button">Open shelf</button><button class="btn hot" id="brokeNew" type="button">Start over with $5,000</button></div></div>
 <div id="flash"></div>
 <div id="fx" class="fx" hidden><div class="rays"></div><div class="fxwrap"><div class="fxt" id="fxText"></div><div class="fxs" id="fxSub"></div></div></div>
 <div id="emote" class="emote" hidden></div>
@@ -261,6 +277,12 @@ input[type=range]{width:100%;accent-color:var(--pink)}
   <div class="phead"><div class="tabs" role="tablist"><button class="tab" id="tabLab" role="tab" type="button" aria-selected="true">LAB</button><button class="tab" id="tabShelf" role="tab" type="button" aria-selected="false">SHELF <span id="shelfCount">0/12</span></button></div><button class="close" id="pClose" type="button" aria-label="Close panel">✕</button></div>
   <div class="pbody" id="pbody"></div>
   <div class="pbody" id="shelf" hidden></div>
+  <div class="draftbar" id="draftbar" hidden>
+    <div class="dtop"><b id="dCount">1 change on preview</b><span>Cost <b id="dCost">$0</b></span></div>
+    <div class="dval">Value <span id="dVal"></span> <b id="dDelta"></b></div>
+    <div class="note" id="dHint"></div>
+    <div class="row"><button class="btn" id="dRevert" type="button">Revert</button><button class="btn hot" id="dBuy" type="button">Buy</button></div>
+  </div>
 </aside>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -837,7 +859,7 @@ function setCat(a,pop){if(cat){holder.remove(cat);cat.traverse(o=>{if(o.userData
   motion.nextHop=clock.elapsedTime+1.5;updateUI()}
 
 let lastPullCost=0;
-function roll(){if(!(state==='idle'||state==='reveal'))return;
+function roll(){if(!(state==='idle'||state==='reveal'))return;if(draftBase){discardDraft(true);toast('Unbought preview changes were discarded.')}
   if(GS.inv.length>=GS.cap){toast('Your shelf is full. Sell a neko or buy more slots.');openPanel('shelf');shakeBank();return}
   const price=rollPrice();if(price>GS.bank){toast(`A ${CAPS[GS.capsule].name} capsule costs ${money(price)}. Sell something or try a cheaper capsule.`);shakeBank();openPanel('shelf');return}
   hideCard();hideFX();closePanelMobile();lastPullCost=price;addBank(-price,CAPS[GS.capsule].name+' capsule');
@@ -883,7 +905,8 @@ document.getElementById('cSell').onclick=()=>{const it=activeItem();if(it){lastP
 const $=q=>document.querySelector(q);
 const CAPS=[{name:'Standard',cost:199,w:[52,26,13,5,1.4,0.04],shiny:0.07},{name:'Premium',cost:549,w:[28,30,24,12,4.5,0.15],shiny:0.14},{name:'Mythic',cost:1299,w:[16,26,30,20,7,0.4],shiny:0.25}];
 const COST=[0,6,24,90,360,null],MATCOST=[0,45,120,180,600,900,3750,null],SHINY_COST=300,FAV_MAX=5,SELL_CUT=0.85;
-function newGame(){return{bank:1000,cap:12,inv:[],active:0,market:{idx:1,prev:1,hot:null,cold:null,n:0},pulls:0,capsule:0,nextId:1}}
+const START_BANK=5000;
+function newGame(){return{bank:START_BANK,cap:12,inv:[],active:0,market:{idx:1,prev:1,hot:null,cold:null,n:0},pulls:0,capsule:0,nextId:1}}
 let GS=newGame();
 function packSave(){return{app:'neko-gacha',type:'save',v:1,saved:new Date().toISOString(),bank:isFinite(GS.bank)?GS.bank:'inf',cap:GS.cap,inv:GS.inv,active:GS.active,market:GS.market,pulls:GS.pulls,capsule:GS.capsule,nextId:GS.nextId}}
 function unpackSave(o){if(!o||o.app!=='neko-gacha'||o.type!=='save'||!Array.isArray(o.inv))return null;const g=newGame();
@@ -894,7 +917,7 @@ function unpackSave(o){if(!o||o.app!=='neko-gacha'||o.type!=='save'||!Array.isAr
 function saveGame(){try{localStorage.setItem('nekogacha.save',JSON.stringify(packSave()))}catch(e){}}
 function starter(g){const a=defaultAttrs();g.inv.push({id:g.nextId++,code:encode(a),name:identity(a).name,fav:false});g.active=g.inv[0].id}
 function loadGame(){try{const g=unpackSave(JSON.parse(localStorage.getItem('nekogacha.save')||'null'));if(g)GS=g}catch(e){}
-  if(!GS.inv.length&&GS.pulls===0)starter(GS);if(!GS.market.hot)rollTrends()}
+  if(!GS.inv.length&&GS.pulls===0)starter(GS);if(!GS.market.hot)rollTrends();saveGame()}
 const activeItem=()=>GS.inv.find(i=>i.id===GS.active)||null;
 const TREND_KEYS=['pattern','eyes','ears','tail','head','neck','face','back','extra','material','legCount','eyeCount','mood','shape','style'];
 function rollTrends(){const pick=()=>{const k=TREND_KEYS[Math.floor(Math.random()*TREND_KEYS.length)];const o=OPT[k].map((_,i)=>i).filter(i=>i>0&&!(k==='material'&&i===7));return{k,v:o[Math.floor(Math.random()*o.length)]}};
@@ -939,23 +962,39 @@ function updateHUD(){const pc=$('#pullcount');if(pc)pc.textContent='PULL '+Strin
   const m=GS.market,arrow=m.idx>m.prev?'▲':m.idx<m.prev?'▼':'•';
   $('#ticker').innerHTML=`MKT ${m.idx.toFixed(2)}× ${arrow} · <span class="hot">HOT ${trendLabel(m.hot)}</span> · <span class="cold">NOT ${trendLabel(m.cold)}</span>`;
   const sc=$('#shelfCount');if(sc)sc.textContent=GS.inv.length+'/'+GS.cap;
-  if(isFinite(GS.bank))bankBox.classList.remove('inf');else{bankBox.classList.add('inf');bankEl.textContent='∞'}}
+  if(isFinite(GS.bank))bankBox.classList.remove('inf');else{bankBox.classList.add('inf');bankEl.textContent='∞'}checkBroke()}
 function renderCaps(){const el=$('#caps');el.innerHTML='';CAPS.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.className='capbtn c'+i;b.setAttribute('role','radio');
   b.innerHTML=`${c.name}<small>${money(c.cost)}</small>`;b.onclick=()=>{GS.capsule=i;saveGame();updateHUD();blip(600+i*200,800+i*200,0.08,'square',0.04)};el.appendChild(b)});updateHUD()}
 
 /* ---- buying, selling, shelf ---- */
 function commitActive(){const it=activeItem();if(!it)return;it.code=encode(A);saveGame();renderShelf();updateHUD();if(it.fav)refreshDisplays()}
+/* ---- try-on: changes preview free, then buy all at once ---- */
+let draftBase=null;
+function markDraft(){if(!draftBase)draftBase={...A}}
+function draftDiff(){return draftBase?KEYS.filter(k=>A[k]!==draftBase[k]):[]}
+function draftCost(){let c=0,blocked=null;if(!draftBase)return{c,blocked};
+  for(const k of draftDiff()){if(k==='shiny')continue;const x=optCost(k,A[k]);if(x===null)blocked=labelOf(k,A[k]);else c+=x}
+  GEAR.forEach((g,i)=>{const b=1<<i;if((A.shiny&b)&&!(draftBase.shiny&b)&&A[g]>0)c+=SHINY_COST});return{c,blocked}}
+function updateDraft(){const bar=$('#draftbar'),tag=$('#previewTag');const n=draftDiff().length;
+  if(!n){bar.hidden=true;tag.hidden=true;return}
+  const {c,blocked}=draftCost(),w0=worth(draftBase),w1=worth(A),d=w1-w0;
+  $('#dCount').textContent=`${n} change${n>1?'s':''} on preview`;
+  $('#dCost').textContent=money(c);$('#dVal').textContent=`${money(w0)} → ${money(w1)}`;
+  const dv=$('#dDelta');if(isFinite(d)){dv.textContent=`${d>=0?'+':'−'}${money(Math.abs(d))}`;dv.className=d>=0?'up':'down'}else{dv.textContent='∞';dv.className='up'}
+  const sellGain=isFinite(d)?Math.round(d*SELL_CUT)-c:0;$('#dHint').textContent=blocked?`${blocked} only comes out of capsules. Revert it to buy the rest.`:
+    c===0?'These changes are free.':sellGain>=0?`Pays for itself if you sell now (+${money(sellGain)} after the 15% cut).`:`Costs ${money(-sellGain)} more than it adds at today’s sell price.`;
+  const b=$('#dBuy');b.disabled=!!blocked||c>GS.bank;b.textContent=blocked?'Pull-only':c>GS.bank?`Need ${money(c-GS.bank)} more`:c===0?'Apply':'Buy '+money(c);
+  bar.hidden=false;tag.hidden=false}
 function buy(k,v){if(state!=='idle'&&state!=='reveal')return;if(!activeItem()){toast('Pick a neko from your shelf first, or pull one.');return}
-  if(A[k]===v)return;const c=optCost(k,v);
-  if(c===null){toast('Iridescent can only come out of a capsule. Good luck.');shakeBank();return}
-  if(c>GS.bank){toast(`${labelOf(k,v)} costs ${money(c)}. You have ${money(GS.bank)}.`);shakeBank();return}
-  A[k]=v;if(GEAR.includes(k)&&v===0)A.shiny&=~(1<<GEAR.indexOf(k));commitActive();if(c>0){addBank(-c,'Bought '+labelOf(k,v));blip(880,660,0.1,'square',0.05)}edit()}
-function buyShiny(k){if(state!=='idle'&&state!=='reveal')return;if(!activeItem())return;const bit=1<<GEAR.indexOf(k);
-  if(A.shiny&bit){A.shiny&=~bit;commitActive();edit();return}
-  if(SHINY_COST>GS.bank){toast(`Shiny upgrade costs ${money(SHINY_COST)}.`);shakeBank();return}
-  A.shiny|=bit;commitActive();addBank(-SHINY_COST,'Shiny '+OPT[k][A[k]][0]);blip(1568,2637,0.25,'triangle',0.05);edit()}
-function viewItem(id){const it=GS.inv.find(i=>i.id===id);if(!it)return;const a=decode(it.code);if(!a)return;GS.active=id;A=a;saveGame();hideCard();setCat(A,true);renderShelf();meow()}
-function sellItem(id,silent){const ix=GS.inv.findIndex(i=>i.id===id);if(ix<0)return 0;const it=GS.inv[ix];if(it.imp){toast('Imported nekos are display-only and can’t be sold.');return 0}
+  if(A[k]===v)return;markDraft();A[k]=v;if(GEAR.includes(k)&&v===0)A.shiny&=~(1<<GEAR.indexOf(k));blip(700,760,0.05,'square',0.03);edit();updateDraft()}
+function buyShiny(k){if(state!=='idle'&&state!=='reveal')return;if(!activeItem())return;markDraft();A.shiny^=1<<GEAR.indexOf(k);
+  if(A.shiny&(1<<GEAR.indexOf(k)))blip(1568,2637,0.2,'triangle',0.04);edit();updateDraft()}
+function commitDraft(){if(!draftBase)return;const {c,blocked}=draftCost();if(blocked){toast(`${blocked} can’t be bought.`);shakeBank();return}
+  if(c>GS.bank){toast(`These changes cost ${money(c)}. You have ${money(GS.bank)}.`);shakeBank();return}
+  const n=draftDiff().length;draftBase=null;commitActive();if(c>0){addBank(-c,`Bought ${n} change${n>1?'s':''}`);blip(880,1320,0.15,'square',0.05)}updateDraft();updateUI();motion.sqv-=6;meow(1.15)}
+function discardDraft(rebuild){if(!draftBase)return;A={...draftBase};draftBase=null;updateDraft();if(rebuild)edit();updateUI()}
+function viewItem(id){discardDraft(false);const it=GS.inv.find(i=>i.id===id);if(!it)return;const a=decode(it.code);if(!a)return;GS.active=id;A=a;saveGame();hideCard();setCat(A,true);renderShelf();meow()}
+function sellItem(id,silent){if(id===GS.active)discardDraft(false);const ix=GS.inv.findIndex(i=>i.id===id);if(ix<0)return 0;const it=GS.inv[ix];if(it.imp){toast('Imported nekos are display-only and can’t be sold.');return 0}
   const a=decode(it.code);const price=sellPrice(a);GS.inv.splice(ix,1);
   if(GS.active===id){const nx=GS.inv[0];if(nx){GS.active=nx.id;A=decode(nx.code);setCat(A,true)}else{GS.active=0;clearCat()}hideCard()}
   if(!silent){addBank(price,'Sold '+it.name);blip(1319,1760,0.1,'square',0.05)}
@@ -984,7 +1023,16 @@ $('#shelf').addEventListener('click',e=>{const b=e.target.closest('button');if(!
   else if(b.id==='expSave')openModal('Save file',JSON.stringify(packSave(),null,1),'neko-gacha-save.json');
   else if(b.id==='impSave')$('#importFile').click();
   else if(b.id==='restart'){if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='Wipe everything?';setTimeout(()=>{if(b.isConnected){b.classList.remove('arm');b.textContent='Restart'}},3000);return}
-    GS=newGame();starter(GS);rollTrends();saveGame();bankBox.className='bankbox';applyGame();toast('Fresh start: $1,000 and one starter neko.')}});
+    restartGame()}});
+function restartGame(){GS=newGame();starter(GS);rollTrends();saveGame();bankBox.className='bankbox';hideCard();applyGame();toast(`Fresh start: ${money(START_BANK)} and one starter neko.`);blip(523,1047,0.3,'square',0.05)}
+function armRestart(b,label){if(b.classList.contains('arm')){b.classList.remove('arm');b.textContent=label;restartGame();return}
+  b.classList.add('arm');b.textContent='Tap again to wipe';setTimeout(()=>{if(b.classList.contains('arm')){b.classList.remove('arm');b.textContent=label}},3000)}
+$('#newGame').onclick=e=>armRestart(e.currentTarget,'↺ New game');
+$('#brokeNew').onclick=e=>armRestart(e.currentTarget,'Start over with '+money(START_BANK));
+$('#brokeShelf').onclick=()=>openPanel('shelf');
+function checkBroke(){const el=$('#broke');if(!isFinite(GS.bank)||GS.bank>=CAPS[0].cost||state==='rolling'||state==='opening'||state==='waiting'){el.hidden=true;return}
+  let sellable=0;GS.inv.forEach(i=>{if(!i.imp){const a=decode(i.code);if(a)sellable+=sellPrice(a)}});
+  $('#brokeMsg').textContent=sellable+GS.bank>=CAPS[0].cost?`Your shelf would sell for about ${money(sellable)}. Sell a few to keep pulling, or start over.`:`Even selling everything (${money(sellable)}) won’t cover a ${money(CAPS[0].cost)} capsule. Time to start over?`;el.hidden=false}
 
 /* ---- JSON export / import ---- */
 let modalFile='neko.json';
@@ -1005,10 +1053,10 @@ addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files[0];if(!
 function importText(txt){let o;try{o=JSON.parse(txt)}catch(e){toast('That file isn’t valid JSON.');return}
   if(o&&o.type==='save'){const g=unpackSave(o);if(!g){toast('That save file is missing pieces.');return}GS=g;saveGame();bankBox.className='bankbox';applyGame();$('#modal').hidden=true;toast(`Save loaded: ${GS.inv.length} nekos, ${money(GS.bank)} in the bank.`);return}
   const code=o&&(o.type==='cat'?o.code:o.code);const a=code&&decode(code);if(!a){toast('No neko code found in that file.');return}importCat(a,o.name);$('#modal').hidden=true}
-function importCat(a,name){if(GS.inv.length>=GS.cap){toast('Shelf is full. Sell something first.');return}const it={id:GS.nextId++,code:encode(a),name:String(name||identity(a).name).slice(0,40),fav:false,imp:true};
+function importCat(a,name){discardDraft(false);if(GS.inv.length>=GS.cap){toast('Shelf is full. Sell something first.');return}const it={id:GS.nextId++,code:encode(a),name:String(name||identity(a).name).slice(0,40),fav:false,imp:true};
   GS.inv.unshift(it);saveGame();viewItem(it.id);toast(`Imported ${it.name}. Imported nekos are display-only and can’t be sold.`)}
 function exportCat(){const it=activeItem();if(!it){toast('Nothing on stage to export.');return}openModal('Cat file',JSON.stringify({app:'neko-gacha',type:'cat',v:1,name:it.name,code:it.code,species:identity(A).species,value:isFinite(worth(A))?worth(A):'inf'},null,1),'neko-'+it.name.replace(/[^a-z0-9-]+/gi,'_')+'.json')}
-function applyGame(){const it=activeItem();const a=it&&decode(it.code);if(a){A=a;setCat(A,true)}else clearCat();
+function applyGame(){draftBase=null;const it=activeItem();const a=it&&decode(it.code);if(a){A=a;setCat(A,true)}else clearCat();
   bankEl.textContent=money(GS.bank);netShown=null;refreshDisplays();renderShelf();updateHUD();updateUI()}
 
 /* ---- pull FX + emotes ---- */
@@ -1052,7 +1100,7 @@ function buildPanel(){pbody.innerHTML='<div class="meta" id="pRarity" style="pad
     const hd=document.createElement('div');hd.className='sechead';hd.innerHTML=`<h3>${s.title}</h3>`;const lk=document.createElement('button');lk.type='button';lk.className='lock';lk.id='lock-'+s.id;
     lk.textContent=locks[s.id]?'LOCKED':'LOCK';lk.setAttribute('aria-pressed',!!locks[s.id]);lk.title='Keep this group when you roll';lk.title='Keep this group when you roll (adds to the capsule price)';lk.onclick=()=>{locks[s.id]=!locks[s.id];lk.textContent=locks[s.id]?'LOCKED':'LOCK';lk.setAttribute('aria-pressed',locks[s.id]);updateHUD()};hd.appendChild(lk);sec.appendChild(hd);
     s.keys.forEach(k=>{if(k==='shiny')return;const f=document.createElement('div');f.className='field';
-      if(SLIDERS[k]){f.innerHTML=`<label class="flabel" for="sl-${k}">${SLIDERS[k]} <output id="out-${k}"></output></label>`;const r=document.createElement('input');r.type='range';r.min=0;r.max=9;r.step=1;r.id='sl-'+k;r.oninput=()=>{A[k]=+r.value;commitActive();edit()};f.appendChild(r);controls[k]=r}
+      if(SLIDERS[k]){f.innerHTML=`<label class="flabel" for="sl-${k}">${SLIDERS[k]} <output id="out-${k}"></output></label>`;const r=document.createElement('input');r.type='range';r.min=0;r.max=9;r.step=1;r.id='sl-'+k;r.oninput=()=>{markDraft();A[k]=+r.value;edit();updateDraft()};f.appendChild(r);controls[k]=r}
       else{f.innerHTML=`<div class="flabel">${LABEL[k]}</div>`;const list=OPT[k]||(k==='eye'?EYE:FUR);f.appendChild(chipGroup(k,list));
         if(GEAR.includes(k)){const sb=document.createElement('button');sb.type='button';sb.className='shinybtn';sb.id='sh-'+k;sb.textContent='✦ Shiny '+money(SHINY_COST);sb.title='Shiny variant: holographic finish, big rarity boost';
           sb.onclick=()=>buyShiny(k);f.appendChild(sb)}}
@@ -1090,7 +1138,7 @@ function updateUI(){for(const k of KEYS){const c=controls[k];if(!c)continue;if(c
     else[...c.children].forEach((b,i)=>b.setAttribute('aria-pressed',i===A[k]))}
   const ci=document.getElementById('code');if(ci&&document.activeElement!==ci)ci.value=encode(A);
   GEAR.forEach(g=>{const b=document.getElementById('sh-'+g);if(b){b.disabled=A[g]===0;b.setAttribute('aria-pressed',isShiny(A,g))}});
-  const t=rarity(A);const it=activeItem();document.getElementById('pRarity').textContent=it?`${PULL[t]} · worth ${money(worth(A))} · ${it.name}${it.imp?' (imported)':''}`:'Nothing on stage';updateHUD()}
+  const t=rarity(A);const it=activeItem();document.getElementById('pRarity').textContent=it?`${draftBase?'Preview: ':''}${PULL[t]} · worth ${money(worth(A))} · ${it.name}${it.imp?' (imported)':''}`:'Nothing on stage';updateHUD()}
 let editTimer=0;
 function edit(){if(state!=='idle'&&state!=='reveal')return;if(!activeItem())return;hideCard();cancelAnimationFrame(editTimer);editTimer=requestAnimationFrame(()=>{const keepYaw=motion.yaw;setCat(A,false);motion.yaw=keepYaw;motion.sqv-=3})}
 function updateCount(){updateHUD()}
@@ -1101,6 +1149,7 @@ function closePanel(){panel.classList.add('closed');document.body.classList.remo
 function closePanelMobile(){if(narrow())closePanel()}
 document.getElementById('editbtn').onclick=()=>panel.classList.contains('closed')?openPanel():closePanel();
 document.getElementById('pClose').onclick=closePanel;
+$('#dBuy').onclick=commitDraft;$('#dRevert').onclick=()=>discardDraft(true);
 $('#tabLab').onclick=()=>setTab('lab');$('#tabShelf').onclick=()=>setTab('shelf');
 
 /* ================= INPUT ================= */
