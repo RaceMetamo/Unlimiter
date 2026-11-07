@@ -108,6 +108,22 @@
     font-size:11px;letter-spacing:.02em;color:#d6e2ea;padding:1.5px 6px;border-radius:9px;
     background:rgba(6,9,13,.62);border:1px solid rgba(150,180,200,.16);
     backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+  #labels span img{height:10px;margin:0 5px -1px 0;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.35);vertical-align:baseline}
+  #hovercard{position:fixed;z-index:6;display:none;pointer-events:none;width:260px;padding:10px 12px;border-radius:10px;
+    background:rgba(12,14,20,.92);border:1px solid rgba(255,255,255,.12);box-shadow:0 8px 28px rgba(0,0,0,.45);backdrop-filter:blur(6px);
+    font:12px/1.4 Inter,system-ui,sans-serif;color:#cdd3de}
+  #hovercard .hc-h{display:flex;gap:9px;align-items:center;margin-bottom:7px}
+  #hovercard .hc-h img{height:22px;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+  #hovercard .hc-h b{display:block;color:#fff;font-size:13.5px;font-weight:600} #hovercard .hc-h small{color:#ffcf8a;font-size:11px}
+  #hovercard .hc-r{display:grid;grid-template-columns:74px 1fr;gap:6px;padding:2px 0;border-top:1px solid rgba(255,255,255,.05)}
+  #hovercard .hc-r span{color:#8a93a3} #hovercard .hc-r b{font-weight:500;color:#e8ecf2}
+  #hovercard .hc-ev{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#a8b0be}
+  #hovercard .hc-ev b{color:#ffcf8a;font-weight:500;margin-right:4px} #hovercard .hc-n{margin:6px 0 0;color:#8a93a3;font-size:11px}
+  img.rowflag{height:10px;margin-right:6px;vertical-align:-1px;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+  details.flagdet{margin:8px 0 4px;border:1px solid var(--line,rgba(255,255,255,.1));border-radius:8px;padding:2px 8px 6px}
+  details.flagdet summary{cursor:pointer;font-size:12px;padding:5px 0;color:var(--ink-bright,#fff)} details.flagdet summary img{height:12px;vertical-align:-1px;margin-right:5px;border-radius:1px}
+  .flag-ed .flag-big{display:block;height:60px;margin:6px auto 8px;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.18),0 4px 14px rgba(0,0,0,.4)}
+  .flag-sw{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0} .flag-sw input{width:30px;height:24px;padding:0;border:none;background:none;cursor:pointer}
   #labels span.star{color:#ffe0b0;border-color:rgba(255,180,84,.34);background:rgba(20,12,4,.66);font-weight:600}
   #labels span.sel{color:#16110a;background:var(--hot);border-color:var(--hot);font-weight:600}
   #head h1 .ver{font-size:11px;font-weight:600;color:#16110a;background:var(--cool);border-radius:3px;padding:1px 5px;vertical-align:3px;letter-spacing:0}
@@ -730,7 +746,7 @@ void main(){
     float sn=smoothstep(0.62,0.9,t*0.6+abs(vObj.y)*uSnow);
     col=mix(col,vec3(0.94,0.96,0.99),sn*uSnow);
   }
-  float lifeA=0.0, cityE=0.0; vec3 lifeC=vec3(0.0);
+  float lifeA=0.0, cityE=0.0, cityHalo=0.0, cityLum=0.0; vec3 lifeC=vec3(0.0), cityCol=vec3(1.0,0.8,0.5);
   if(uEvo>0.5){
     float lat=abs(vObj.y);
     if(water>0.5){
@@ -765,14 +781,22 @@ void main(){
       float dotm=smoothstep(rad+0.08,rad-0.05,dd);
       // crowded cells merge into a continuous mat / canopy; lone ones stay as dots
       ivec2 ci=ivec2(cell);
-      float dens=0.25*(texelFetch(uLife,ivec2((ci.x+1)%lts.x,ci.y),0).a+texelFetch(uLife,ivec2((ci.x+lts.x-1)%lts.x,ci.y),0).a
-        +texelFetch(uLife,ivec2(ci.x,min(ci.y+1,lts.y-1)),0).a+texelFetch(uLife,ivec2(ci.x,max(ci.y-1,0)),0).a);
+      vec4 nR=texelFetch(uLife,ivec2((ci.x+1)%lts.x,ci.y),0), nL=texelFetch(uLife,ivec2((ci.x+lts.x-1)%lts.x,ci.y),0),
+           nU=texelFetch(uLife,ivec2(ci.x,min(ci.y+1,lts.y-1)),0), nD=texelFetch(uLife,ivec2(ci.x,max(ci.y-1,0)),0);
+      float dens=0.25*(nR.a+nL.a+nU.a+nD.a);
       float fill=smoothstep(0.3,0.85,dens)*0.8;
-      cityE=step(0.965,lf.a)*dotm;
-      lifeA=lf.a*(1.0-step(0.965,lf.a))*max(dotm,fill);
+      float isC=step(0.965,lf.a);
+      // a lit cell fills its whole square once its neighbours are lit too, so cities read as sprawl, not dots
+      float cn=0.25*(step(0.965,nR.a)+step(0.965,nL.a)+step(0.965,nU.a)+step(0.965,nD.a));
+      cityE=isC*max(dotm,cn*0.65);
+      cityHalo=(1.0-isC)*cn*0.45;
+      lifeA=lf.a*(1.0-isC)*max(dotm,fill);
       lifeC=lf.rgb;
+      // a city's brightness rides in its colour: dim for a village, full for a metropolis
+      cityLum=isC>0.0?max(max(lf.r,lf.g),lf.b):max(max(max(nR.r,nL.r),max(nU.r,nD.r)),max(max(nR.g,nL.g),max(nU.g,nD.g)));
+      cityCol=isC>0.0?lf.rgb/max(cityLum,0.05):vec3(1.0,0.82,0.55);
       col=mix(col,lf.rgb,lifeA*0.92);
-      col=mix(col,vec3(0.32,0.3,0.28),cityE*0.7);
+      col=mix(col,mix(vec3(0.34,0.31,0.28),vec3(0.6,0.56,0.5),cityLum),cityE*0.75+cityHalo*0.3);
     }
   }
   vec4 fc=faceLayer(vObj,uTime);
@@ -871,7 +895,7 @@ void main(){
       float d=distance(vObj,uFlash[i].xyz);
       outc+=cLava*uFlash[i].w*smoothstep(uFlash[i].w*0.5+0.12,0.0,d)*4.0;
     }
-    outc+=vec3(1.0,0.76,0.4)*cityE*night*2.6;
+    outc+=mix(vec3(1.0,0.76,0.4),cityCol,0.55)*(cityE+cityHalo)*night*2.8*(0.35+0.65*cityLum);
     // living cells carry a faint light of their own, stronger at night and under ice
     outc+=lifeC*lifeA*(0.16+night*uLifeGlow*0.9);
     if(uCloud>0.001){
@@ -1246,7 +1270,7 @@ void main(){
   vec3 d=normalize(aPos);
   float sd=aI0.x*13.1+aI0.z*7.7;
   float lump=0.28*smoothstep(0.12,0.04,aI0.w);
-  float r=1.0+lump*snoise(d*1.8+vec3(sd));
+  float r=aI1.a<0.0?1.0:1.0+lump*snoise(d*1.8+vec3(sd));   // negative heat marks a light: a smooth glowing bead
   vec3 wp=aI0.xyz+d*r*aI0.w;
   vWorld=wp; vN=d; vCol=aI1.rgb; vHeat=aI1.a;
   gl_Position=uVP*vec4(wp,1.0);
@@ -1259,6 +1283,7 @@ layout(location=0) out vec4 oColor;
 layout(location=1) out vec4 oNorm;
 void main(){
   vec3 n=normalize(vN);
+  if(vHeat<0.0){ oColor=vec4(vCol,1.0); oNorm=vec4(n*0.5+0.5,1.0); return; }
   vec3 L=normalize(-vWorld);
   float lam=pow(clamp(dot(n,L)*0.5+0.5,0.0,1.0),1.6);
   vec3 col=vCol*(0.08+uSun*lam*1.1);
@@ -1571,11 +1596,33 @@ function newBelt(){
           lump:0.45,seed:Math.floor(Math.random()*9999),cA:'#8d8478',cB:'#413b36'};
 }
 let focusIdx=-1, selIdx=-1, linkIdx=-1, linkTimer=0, saveT=0;
+// the editor can be live-linked to one body; linkFrom is the view to go back to, linkBase what the editor held when the link began
+let linkFrom='system', linkBase=null, linkRef=null, linkPaintN=0;
 function saveSystemSoon(){ clearTimeout(saveT); saveT=setTimeout(saveSystem,800); }
+function linkValid(){
+  if(linkIdx<0) return null;
+  // bodies can be added or removed while a link is open; follow the body, not the slot
+  if(bodies[linkIdx]!==linkRef){ linkIdx=linkRef?bodies.indexOf(linkRef):-1; }
+  if(linkIdx<0||!bodies[linkIdx]||bodies[linkIdx].gone){ linkIdx=-1; linkRef=null; return null; }
+  return bodies[linkIdx];
+}
+function linkTo(i,from){
+  linkIdx=i; linkRef=bodies[i]||null; linkFrom=from||'system';
+  linkBase={p:{...P},c:{...S.colors}};
+}
+// an evolving world keeps recomputing its own look; what the person changed by hand is remembered and laid on top
+function recordUserEdits(b){
+  if(!b.evo||!linkBase) return;
+  for(const s of SCHEMA){ const k=s.id; if(P[k]!==linkBase.p[k]){ (b.userP||(b.userP={}))[k]=P[k]; } }
+  for(const k in S.colors) if(S.colors[k]!==linkBase.c[k]){ (b.userC||(b.userC={}))[k]=S.colors[k]; }
+}
+function recordAllAsUser(b){
+  for(const s of SCHEMA){ const k=s.id; if(P[k]!==b.world.p[k]) (b.userP||(b.userP={}))[k]=P[k]; }
+  for(const k in S.colors) if(S.colors[k]!==b.world.colors[k]) (b.userC||(b.userC={}))[k]=S.colors[k];
+}
 function syncLink(withPaint){
-  if(linkIdx<0) return;
-  const b=bodies[linkIdx];
-  if(!b){ linkIdx=-1; return; }
+  const b=linkValid(); if(!b) return;
+  recordUserEdits(b);
   b.world=snapshot();
   if(withPaint) copyTex(accum.tex,bodyAccum(b),BODY_ACC,BODY_ACC/2);
   saveSystemSoon();
@@ -1589,7 +1636,7 @@ function load(k){ try{ let s=localStorage.getItem('worldseed2.'+k);
 function saveLibrary(){ store('library',library); }
 function saveSystem(){
   for(const b of bodies) if(b.evo&&b.evo.kind==='rocky') bakeEvoInto(b);
-  store('system',{stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent)}))});
+  store('system',{stars,multi,sky,belts,bodies:bodies.map(b=>({name:b.name,world:b.world,orbit:b.orbit,scale:b.scale,spin:b.spin,parent:(b.parent===undefined?-1:b.parent),flag:b.flag||null,userP:b.userP||null,userC:b.userC||null}))});
 }
 function migrate(w){
   if(!w||!w.p) return w;
@@ -1668,7 +1715,7 @@ function addBodyFromCurrent(name,copyPaint,parent){
       ? {r:host.scale*2.6, speed:1.4+Math.random()*0.8, phase:Math.random()*6.28, incl:(Math.random()-0.5)*0.5}
       : {r:4+n*2.6, speed:0.22/Math.pow(1+n*0.6,1.5), phase:Math.random()*6.28, incl:(Math.random()-0.5)*0.25},
     scale: host?host.scale*0.3:0.28, spin:0.25, accum:t});
-  if(copyPaint!==false) linkIdx=bodies.length-1;
+  if(copyPaint!==false) linkTo(bodies.length-1,'system');
   saveSystem(); buildUI();
 }
 const MOON_NUM=['I','II','III','IV','V','VI','VII','VIII'];
@@ -1863,13 +1910,16 @@ function loadSolarSystem(silent){
   if(mode!=='system') setMode('system'); else buildUI();
   if(!silent) hud('Loaded our solar system — Mercury through Neptune, with a Moon, a few famous moons, and both asteroid belts.');
 }
-function openInEditor(i){
+function openInEditor(i,from){
   const b=bodies[i]; if(!b) return;
+  if(mode==='planet') syncLink(true);
+  from=from||(mode==='planet'?linkFrom:mode);
   if(b.evo&&b.evo.kind==='rocky') bakeEvoInto(b);
   restore(b.world);
   copyTex(bodyAccum(b),accum.tex,accum.size,accum.size/2);
-  linkIdx=i; setMode('planet');
-  hud('Editing “'+b.name+'” live — every change shows up in the system.');
+  linkTo(i,from); editorEvo=null;
+  setMode('planet'); scrollEl.scrollTop=0;
+  hud('Editing “'+b.name+'” live — changes show up in '+(from==='genesis'?'Genesis':'the system')+'.');
 }
 function bodyAccum(b){
   if(!b.accum){ b.accum=accumTex(BODY_ACC,BODY_ACC/2);
@@ -2387,11 +2437,11 @@ function render(now){
     w.evoGeo=P.evoGeo; w.evoLook=P.evoLook;
     const L=[Math.cos(MP.lightPit)*Math.sin(MP.lightYaw),Math.sin(MP.lightPit),Math.cos(MP.lightPit)*Math.cos(MP.lightYaw)];
     if(linkIdx>=0){
-      if(!bodies[linkIdx]){ linkIdx=-1; buildUI(); }
+      const lb=linkValid();
+      if(!lb) buildUI();
       else {
-        bodies[linkIdx].world=snapshot();
         linkTimer+=dt;
-        if(linkTimer>0.6){ linkTimer=0; syncLink(true); }
+        if(linkTimer>0.3){ linkTimer=0; linkPaintN=(linkPaintN+1)%4; syncLink(linkPaintN===0); }
       }
     }
     lights.n=1;
@@ -2608,7 +2658,7 @@ function updateLabels(VP,SP){
   if(!VP||S.labels===false||(mode!=='system'&&mode!=='genesis')){ labelsEl.style.display='none'; return; }
   const sp0=SP||[[0,0,0],[0,0,0]];
   const items=stars.map((st,i)=>({n:st.name||('Star '+(i+1)),p:sp0[i],r:st.radius,s:true}));
-  bodies.forEach((b,i)=>{ if(!b.gone) items.push({n:b.name,p:bodyPos(b),r:b.scale,sel:i===selIdx}); });
+  bodies.forEach((b,i)=>{ if(!b.gone) items.push({n:b.name,p:bodyPos(b),r:b.scale,sel:i===selIdx,fl:S.flags!==false&&(b.evo||mode==='system')?flagURL(flagOf(b),12):null}); });
   placeLabels(VP,items);
 }
 function placeLabels(VP,items){
@@ -2643,7 +2693,8 @@ function placeLabels(VP,items){
     if(i>=kept.length){ el2.style.display='none'; continue; }
     const it=kept[i];
     el2.style.display='block';
-    if(el2.textContent!==it.n) el2.textContent=it.n;
+    const lk=it.n+'|'+(it.fl||'');
+    if(el2._k!==lk){ el2._k=lk; el2.textContent=it.n; if(it.fl){ const im=document.createElement('img'); im.src=it.fl; el2.prepend(im); } }
     const cls=it.sel?'sel':(it.s?'star':'');
     if(el2.className!==cls) el2.className=cls;
     el2.style.left=it.sx+'px';
@@ -2869,19 +2920,25 @@ function checkbox(parent,label,get,set){
   const l=el('label','chk'); const c=document.createElement('input'); c.type='checkbox'; c.checked=get();
   c.onchange=()=>set(c.checked); l.append(c,document.createTextNode(label)); parent.appendChild(l); return c;
 }
+function linkBack(){
+  const b=linkValid(); const to=linkFrom==='genesis'&&gen.phase==='evolving'?'genesis':'system';
+  setMode(to);
+  if(b){ const i=bodies.indexOf(b); focusBody(i); }
+}
 function updateLinkBar(){
   const bar=document.getElementById('link');
   bar.innerHTML='';
-  if(mode!=='planet'||linkIdx<0||!bodies[linkIdx]){ bar.style.display='none'; return; }
+  const lb=linkValid();
+  if(mode!=='planet'||!lb){ bar.style.display='none'; return; }
   bar.style.display='flex';
   const t=document.createElement('span');
-  t.textContent='Live editing '+bodies[linkIdx].name;
-  const bs=document.createElement('button'); bs.textContent='Back';
-  bs.title='Return to the system view';
-  bs.onclick=()=>setMode('system');
+  t.textContent='Live editing '+lb.name;
+  const bs=document.createElement('button'); bs.textContent=linkFrom==='genesis'?'Back to Genesis':'Back';
+  bs.title=linkFrom==='genesis'?'Return to the evolving system':'Return to the system view';
+  bs.onclick=()=>linkBack();
   const bu=document.createElement('button'); bu.textContent='Unlink';
-  bu.title='Stop applying changes to that body';
-  bu.onclick=()=>{ syncLink(true); linkIdx=-1; buildUI(); hud('Unlinked. Changes stay in the editor now.'); };
+  bu.title='Stop applying changes to that body — keep editing a copy';
+  bu.onclick=()=>{ syncLink(true); linkIdx=-1; linkRef=null; buildUI(); hud('Unlinked. Changes stay in the editor now.'); };
   bar.append(t,bs,bu);
 }
 function buildUI(){
@@ -2896,7 +2953,16 @@ function buildUI(){
 }
 
 function buildPlanetUI(){
-  if(!editorEvo&&P.evoGeo){
+  const lkb=linkValid();
+  if(lkb&&lkb.evo){
+    const ev=el('div','linkbar');
+    ev.innerHTML=`<b>${lkb.name}</b> at ${fmtAge(gen.t)} — ${lkb.evo.era||'evolving'}. Changes apply live to it in ${linkFrom==='genesis'?'Genesis':'the system'}; deep time keeps evolving everything you don't touch.`;
+    const bb=el('div','btns');
+    const b1=el('button',null,linkFrom==='genesis'?'Back to Genesis':'Back to system'); b1.onclick=()=>linkBack();
+    const b3=el('button',null,'Forget my edits'); b3.title='Let evolution decide its whole look again';
+    b3.onclick=()=>{ lkb.userP=null; lkb.userC=null; if(lkb.evo) applyEvoVisual(lkb); bakeEvoInto(lkb); restore(lkb.world); linkTo(linkIdx,linkFrom); clearAccum(); buildUI(); hud('Edits cleared — '+lkb.name+' looks however evolution says.'); };
+    bb.append(b1,b3); ev.appendChild(bb); scrollEl.appendChild(ev);
+  } else if(!editorEvo&&P.evoGeo){
     const ev=el('div','linkbar'); ev.innerHTML='This world carries its evolved surface — drifted plates, craters, biomes and weather. Shape, material and colour edits apply on top.';
     const bb=el('div','btns'); const b2=el('button',null,'Plain terrain'); b2.onclick=()=>{ P.evoGeo=P.evoLook=null; clearAccum(); buildUI(); };
     bb.appendChild(b2); ev.appendChild(bb); scrollEl.appendChild(ev);
@@ -3235,7 +3301,7 @@ function buildSystemUI(){
       bodies.splice(i,1);
       bodies.forEach(o=>{ const pi=(o.parent===undefined?-1:o.parent);
         o.parent = pi===i ? -1 : (pi>i?pi-1:pi); });
-      linkIdx = linkIdx===i ? -1 : (linkIdx>i?linkIdx-1:linkIdx);
+      linkIdx = linkIdx===i ? -1 : (linkIdx>i?linkIdx-1:linkIdx); if(linkIdx<0) linkRef=null;
       if(focusIdx>=bodies.length) focusIdx=-1; selIdx=-1; saveSystem(); buildUI(); };
     it.append(tw,dot,nm);
     if(cnt) it.appendChild(cnt);
@@ -3268,7 +3334,10 @@ function buildSystemUI(){
       brm.onclick=()=>randomMoon(i);
       bb.append(bm,brm); box.appendChild(bb);
 
-      const wp=(id)=>sliderRow(box,DEF(id),b.world.p,id,saveSystem);
+      const wp=(id)=>sliderRow(box,DEF(id),b.world.p,id,()=>{ if(b.evo) (b.userP||(b.userP={}))[id]=b.world.p[id]; saveSystem(); });
+      { const fd=el('details','flagdet'); fd.dataset.g='flag_'+b.name; fd.open=!!OPEN['flag_'+b.name]; fd.ontoggle=()=>OPEN['flag_'+b.name]=fd.open;
+        const sm=document.createElement('summary'); sm.innerHTML=`<img data-flag="${i}" data-h="14" src="${flagURL(flagOf(b),14)}"> Flag`; fd.appendChild(sm);
+        buildFlagEditor(fd,b); box.appendChild(fd); }
       const wchk=(id,lbl)=>checkbox(box,lbl||DEF(id).l,()=>num(b.world.p[id],0)>0.5,
         v=>{ b.world.p[id]=v?1:0; saveSystem(); buildUI(); });
 
@@ -3329,7 +3398,7 @@ function buildSystemUI(){
       const be=el('button',null,'Open in editor');
       be.onclick=()=>openInEditor(i);
       const bu=el('button',null,'Copy editor onto this');
-      bu.onclick=()=>{ b.world=snapshot(); copyTex(accum.tex,bodyAccum(b),BODY_ACC,BODY_ACC/2); saveSystem(); buildUI(); hud('“'+b.name+'” now matches the editor.'); };
+      bu.onclick=()=>{ if(b.evo){ recordAllAsUser(b); } b.world=snapshot(); copyTex(accum.tex,bodyAccum(b),BODY_ACC,BODY_ACC/2); saveSystem(); buildUI(); hud('“'+b.name+'” now matches the editor.'); };
       bb2.append(be,bu); box.appendChild(bb2);
       if(lvl) box.style.marginLeft=(lvl*13)+'px';
       pb.appendChild(box);
@@ -3443,8 +3512,11 @@ function buildSystemUI(){
 }
 
 function setMode(m){
-  if(mode==='planet'&&m==='system') syncLink(true);
+  if(mode==='planet'&&m!=='planet') syncLink(true);
   const from=mode;
+  // back in the editor after deep time has moved on: pick the linked world up as it is now
+  if(m==='planet'&&from!=='planet'){ const lb=linkValid();
+    if(lb&&lb.evo&&lb.evo.kind==='rocky'){ bakeEvoInto(lb); restore(lb.world); linkTo(linkIdx,linkFrom); } }
   mode=m;
   if(m==='system'){ cam.tDist=Math.max(14,(bodies.reduce((x,b)=>Math.max(x,b.orbit.r),6))*2.1); cam.pitch=0.45; }
   else if(m==='genesis'){
@@ -4126,8 +4198,8 @@ function evoGiant(e,dt,t,sys,S){
    with currents set by the spin and the climate; land animals eat
    the plants they walk over; impacts and ice cut them back.
    ───────────────────────────────────────────────────────────── */
-// grid size is chosen per world when its biosphere starts; 1× = 160×80, 2× = 320×160, 3× = 480×240
-function lifeGridFor(res){ const k=Math.max(1,Math.min(3,Math.round(res||1))); return [160*k,80*k]; }
+// grid size is chosen per world when its biosphere starts; 1× = 160×80 up to 6× = 960×480
+function lifeGridFor(res){ const k=Math.max(1,Math.min(6,Math.round(res||1))); return [160*k,80*k]; }
 const LIFE_RULES={
   mats:[['Anneal','B4678/S35678'],['Coral','B3/S45678'],['Maze','B3/S12345'],['Diamoeba','B35678/S5678'],
         ['Mazectric','B3/S1234'],['Vote','B5678/S45678'],['Walled cities','B45678/S2345']],
@@ -4272,41 +4344,47 @@ function lifeSeed(L,si,density){
     }
   }
 }
+// a shared table of random numbers: the automaton touches every cell every step, so this is much cheaper than calling the generator
+const LIFE_RT=(()=>{ const t=new Float32Array(1<<16); const r=mulberry(9173); for(let i=0;i<t.length;i++) t[i]=r(); return t; })();
 function lifeStep(L,e){
   const W=L.W,H=L.H,N=W*H;
   const nS=L.species.length;
-  const r=L.r;
-  const occ=new Uint8Array(N);   // which lineage holds a cell, so they compete for room
-  for(let s=0;s<nS;s++){ const g=L.grid[s]; for(let i=0;i<N;i++) if(g[i]&&!occ[i]) occ[i]=s+1; }
-  const isPlant=L.species.map(q=>q.kind==='plant');
+  const r=L.r, RT=LIFE_RT; let ri=(L.r()*65536)|0;
+  if(!L.occ||L.occ.length!==N){ L.occ=new Uint8Array(N); L.cs=new Uint8Array(W*3); L.pool=[]; }
+  const occ=L.occ; occ.fill(0);   // which lineage holds a cell, so they compete for room
+  for(let s=0;s<nS;s++){ const g=L.grid[s], v=s+1; for(let i=0;i<N;i++) if(g[i]&&!occ[i]) occ[i]=v; }
+  const isPlant=new Uint8Array(nS+1); L.species.forEach((q,s)=>{ if(q.kind==='plant') isPlant[s+1]=1; });
   let pop=0; const dead=[];
+  const cs=new Uint8Array(W);
   for(let s=0;s<nS;s++){
     const sp=L.species[s], g=L.grid[s], B=sp.rule.b, S=sp.rule.s;
     const want=sp.hab===1?1:sp.hab===2?2:3;
-    const nx=new Uint8Array(N);
+    const nx=L.pool.pop()||new Uint8Array(N); nx.fill(0);
     const grazer=sp.kind==='animal';
     // mats and forests also creep outward on their own; the rule only shapes the texture
     const spread={animal:0,plant:0.045,photo:0.028,microbe:0.018}[sp.kind]*(L.vigor||1);
     const hold={animal:0,plant:0.7,photo:0.5,microbe:0.4}[sp.kind];
+    let c=0;
     for(let y=0;y<H;y++){
       const yu=y>0?(y-1)*W:-1, yd=y<H-1?(y+1)*W:-1, yc=y*W;
+      // column sums of the three rows, so each cell's neighbour count is three reads instead of eight
+      for(let x=0;x<W;x++) cs[x]=g[yc+x]+(yu>=0?g[yu+x]:0)+(yd>=0?g[yd+x]:0);
       for(let x=0;x<W;x++){
-        const xl=x>0?x-1:W-1, xr=x<W-1?x+1:0;
-        let n=g[yc+xl]+g[yc+xr];
-        if(yu>=0) n+=g[yu+xl]+g[yu+x]+g[yu+xr];
-        if(yd>=0) n+=g[yd+xl]+g[yd+x]+g[yd+xr];
         const i=yc+x, h=L.hab[i];
-        const okHab=h&&(want===3||h===want);
+        if(!h) continue;
+        const gi=g[i];
+        const n=cs[x>0?x-1:W-1]+cs[x]+cs[x<W-1?x+1:0]-gi;
+        if(!gi&&n===0) continue;
+        if(!(want===3||h===want)) continue;
         // mats and forests are tougher than the rule alone: a cell with company tends to hang on
-        if(g[i]){ nx[i]=okHab&&(S[n]||(hold>0&&n>=2&&r()<hold))?1:0; }
-        else if(okHab&&(B[n]||(spread>0&&n>0&&r()<spread*n))){
+        if(gi){ if(S[n]||(hold>0&&n>=2&&RT[(ri++)&65535]<hold)){ nx[i]=1; c++; } }
+        else if(B[n]||(spread>0&&RT[(ri++)&65535]<spread*n)){
           const o=occ[i];
           // animals may move into any plant's cells and graze them; everyone else needs empty ground
-          if(!o||(grazer&&isPlant[o-1])) nx[i]=1;
+          if(!o||(grazer&&isPlant[o])){ nx[i]=1; c++; if(o&&RT[(ri++)&65535]<0.6) L.grid[o-1][i]=0; }
         }
       }
     }
-    if(grazer) for(let i=0;i<N;i++){ const o=occ[i]; if(nx[i]&&o&&isPlant[o-1]&&r()<0.6) L.grid[o-1][i]=0; }
     // currents and winds carry sea life sideways, faster near the equator
     if(sp.drift){
       const acc=L.driftAcc[s];
@@ -4317,9 +4395,9 @@ function lifeStep(L,e){
         if(k){ acc[y]-=k; const row=nx.slice(y*W,y*W+W);
           for(let x=0;x<W;x++){ const tx=(x+k%W+W)%W, j=y*W+tx; nx[j]=row[x]&&L.hab[j]&&(want===3||L.hab[j]===want)?1:0; } }
       }
+      c=0; for(let i=0;i<N;i++) c+=nx[i];
     }
-    L.grid[s]=nx;
-    let c=0; for(let i=0;i<N;i++) c+=nx[i];
+    L.pool.push(g); L.grid[s]=nx;
     if(sp.root){
       // a founding lineage that collapses gets reseeded from survivors hiding somewhere we can't see
       if(c<N*0.002) lifeSeed(L,s,0.003);
@@ -4332,38 +4410,74 @@ function lifeStep(L,e){
   }
   for(let k=dead.length-1;k>=0;k--){ const s=dead[k];
     L.events.push({t:'extinct',name:L.species[s].name});
+    L.pool.push(L.grid[s]);
     L.species.splice(s,1); L.grid.splice(s,1); L.driftAcc.splice(s,1); }
   lifeCities(L,e);
   L.pop=pop/N; L.steps++; L.dirty=true;
 }
-// city lights: values 1–254 are a civilisation's id, 255 is a dead city
+// settlements: L.city holds the civilisation's id (255 = ruins), L.lv how built-up the cell is.
+// Towns are founded one by one, thicken into cities, sprawl outward, and get joined by roads.
 function lifeCities(L,e){
   const W=L.W,H=L.H,N=W*H,r=L.r, k=W/160;
-  const home=e.civ&&!e.civ.dead&&e.life.stage>=5?e.civ:null;
-  const col=e.colony&&!e.colony.dead?e.colony:null;
-  if(home){
-    // technosphere: lights gather where animals are thickest near the coast
-    const ai=L.species.findIndex(q=>q.kind==='animal');
-    for(let n=0;n<30*k*k;n++){
-      const i=Math.floor(r()*N);
-      if(L.hab[i]===2&&((ai>=0&&L.grid[ai][i])||r()<0.15)){ L.city[i]=home.id;
-        const y=Math.floor(i/W),x=i%W; const j=y*W+((x+(r()<0.5?1:-1)+W)%W); if(L.hab[j]===2&&r()<0.5) L.city[j]=home.id; }
+  if(!L.lv){ L.lv=new Uint8Array(N); L.cityList=[]; L.towns=[]; }
+  const home=e.civ&&!e.civ.dead&&e.civ.homeAlive!==false&&e.life.stage>=5?e.civ:null;
+  const col=!home&&e.colony&&!e.colony.dead?e.colony:null;
+  if(!home&&!col) return;
+  const id=home?home.id:col.civ;
+  const age=home?Math.max(0,gen.t-home.born):(col.age||0);
+  const dome=!home;                   // settlers on another world build where they can, weather or not
+  const okCell=i=>dome?L.hab[i]!==1||r()<0.05:L.hab[i]===2;
+  // how many towns this civilisation has had time to found
+  const target=Math.min(Math.round((home?70:24)*k),home?3+Math.floor(age/6):1+Math.floor(age/25));
+  const mine=L.towns.filter(t=>L.city[t]===id);
+  if(mine.length<target&&r()<0.35){
+    let best=-1,bs=-1;
+    for(let t=0;t<40;t++){
+      let i;
+      if(dome&&col.site!==undefined&&mine.length){ // new domes appear around the first landing, further out over time
+        const R=3+Math.min(W/4,age*0.05*k), y=Math.floor(col.site/W)+Math.round((r()-0.5)*R), x=(col.site%W+Math.round((r()-0.5)*R*2)+W)%W;
+        if(y<0||y>=H) continue; i=y*W+x;
+      } else i=Math.floor(r()*N);
+      if(!okCell(i)||L.city[i]===id) continue;
+      // coasts and well-fed land make the best town sites
+      let s=r();
+      if(!dome){ const x=i%W,y=(i/W)|0;
+        for(const [dx,dy] of [[2,0],[-2,0],[0,2],[0,-2]]){ const yy=y+dy; if(yy<0||yy>=H) continue; if(L.hab[yy*W+(x+dx+W)%W]===1) s+=0.8; }
+        const ai=L.species.findIndex(q=>q.kind==='animal'); if(ai>=0&&L.grid[ai][i]) s+=0.6;
+        s-=Math.abs(L.lat[y])*0.8; }
+      if(s>bs){ bs=s; best=i; }
+    }
+    if(best>=0){
+      if(dome&&col.site===undefined) col.site=best;
+      L.city[best]=id; L.lv[best]=50; L.cityList.push(best); L.towns.push(best);
+      // a new town gets a road to its nearest neighbour
+      let near=-1,nd=1e9; const bx=best%W, by=(best/W)|0;
+      for(const t of mine){ let dx=Math.abs(t%W-bx); dx=Math.min(dx,W-dx); const d=dx*dx+((t/W|0)-by)**2; if(d<nd){ nd=d; near=t; } }
+      if(near>=0&&nd<(W*0.18)**2) lifeRoad(L,best,near,id,dome);
     }
   }
-  if(col){
-    // a settlement grows outward from where the first ship came down; domes don't care about the weather
-    if(col.site===undefined){
-      let s=-1; for(let t=0;t<300&&s<0;t++){ const i=Math.floor(r()*N); if(L.hab[i]===2||(!L.hab[i]&&r()<0.4)) s=i; }
-      col.site=s<0?Math.floor(N/2):s; L.city[col.site]=col.civ;
-    }
-    const grow=Math.round((6+Math.min(30,(col.age||0)*0.08))*k*k);
-    for(let n=0;n<grow;n++){
-      const i=Math.floor(r()*N); if(L.city[i]!==col.civ) continue;
-      const y=Math.floor(i/W)+Math.round((r()-0.5)*2.4), x=(i%W+Math.round((r()-0.5)*2.4)+W)%W;
+  // existing settlements thicken and sprawl
+  const reps=Math.round(18*k*k);
+  for(let n=0;n<reps&&L.cityList.length;n++){
+    const li=Math.floor(r()*L.cityList.length), i=L.cityList[li];
+    if(L.city[i]!==id){ if(!L.city[i]||L.city[i]===255){ L.cityList[li]=L.cityList[L.cityList.length-1]; L.cityList.pop(); } continue; }
+    L.lv[i]=Math.min(255,L.lv[i]+(home?9:6));
+    if(L.lv[i]>110&&r()<0.4){
+      const y=((i/W)|0)+Math.floor(r()*3)-1, x=(i%W+Math.floor(r()*3)-1+W)%W;
       if(y<0||y>=H) continue; const j=y*W+x;
-      if(L.hab[j]===1&&r()<0.85) continue;
-      if(!L.city[j]) L.city[j]=col.civ;
+      if(okCell(j)&&L.city[j]!==id&&L.city[j]!==255){ L.city[j]=id; L.lv[j]=35; L.cityList.push(j); }
     }
+  }
+  if(L.cityList.length>N*0.25) L.cityList.splice(0,L.cityList.length-Math.floor(N*0.25));
+}
+function lifeRoad(L,a,b,id,dome){
+  const W=L.W; let x0=a%W,y0=(a/W)|0,x1=b%W,y1=(b/W)|0;
+  let dx=x1-x0; if(dx>W/2) dx-=W; if(dx<-W/2) dx+=W;
+  const dy=y1-y0, steps=Math.max(Math.abs(dx),Math.abs(dy));
+  for(let s=1;s<steps;s++){
+    const x=(Math.round(x0+dx*s/steps)+W)%W, y=Math.round(y0+dy*s/steps), i=y*W+x;
+    if(L.hab[i]===1&&!dome) continue;
+    if(!L.city[i]){ L.city[i]=id; L.lv[i]=18; }
   }
 }
 function lifeRuin(L,civId){ for(let i=0;i<L.city.length;i++) if(L.city[i]&&(civId===undefined||L.city[i]===civId)) L.city[i]=255; L.dirty=true; }
@@ -4378,7 +4492,7 @@ function lifeCull(L,dir,rad,frac){
       const ang=Math.acos(Math.max(-1,Math.min(1,dx*dir[0]+cy*dir[1]+dz*dir[2])));
       const i=y*W+x;
       const kill=ang<rad||r()<frac;
-      if(kill){ for(const g of L.grid) g[i]=0; if(ang<rad) L.city[i]=0; L.trail[i]=0; }
+      if(kill){ for(const g of L.grid) g[i]=0; if(ang<rad){ L.city[i]=0; if(L.lv) L.lv[i]=0; } L.trail[i]=0; }
     }
   }
   L.dirty=true;
@@ -4396,7 +4510,7 @@ function lifePaint(L){
       a=L.trail[i]; }
     const c=L.city[i];
     if(c===255){ rr=0.36; gg=0.34; bb=0.32; a=Math.max(a,200); }
-    else if(c){ const cc=CIV_COLS[(c-1)%CIV_COLS.length]; rr=cc[0]; gg=cc[1]; bb=cc[2]; a=255; }
+    else if(c){ const cc=CIV_COLS[(c-1)%CIV_COLS.length], f=0.22+0.78*(L.lv?L.lv[i]:200)/255; rr=cc[0]*f; gg=cc[1]*f; bb=cc[2]*f; a=255; }
     if(c!==255&&!c&&a>246) a=246;     // 247+ is reserved for lights, which glow at night
     if(c===255&&a>246) a=246;
     if(L.sub&&a<247) a=Math.round(a*0.35);
@@ -4724,13 +4838,19 @@ function genLog(e,txt,kind){
 function genEvoTick(dt){
   if(gen.phase!=='evolving') return;
   if(gen.evoPlaying&&gen.t<gen.tMax){
-    gen.tickAcc+=dt*gen.speed;
+    gen.pace=civPace();
+    gen.tickAcc+=dt*Math.min(gen.speed,gen.pace);
     let n=0;
     while(gen.tickAcc>=EVO_DT&&n<60){ gen.tickAcc-=EVO_DT; n++; genStepAll(EVO_DT); }
     if(n>=60) gen.tickAcc=0;
     if(gen.t>=gen.tMax&&!gen.ended){ gen.ended=true; gen.evoPlaying=false; genLog(null,'The clock has run out — the story of this system is told','geo'); }
     gen.lifeAcc+=dt;
-    if(gen.lifeAcc>(gen.ing.lifeRes>=3?1/6:1/9)){ gen.lifeAcc=0; for(const b of bodies) if(b.life&&!b.gone) lifeStep(b.life,b.evo); }
+    if(gen.lifeAcc>(gen.ing.lifeRes>=6?1/5:gen.ing.lifeRes>=3?1/7:1/9)){ gen.lifeAcc=0; gen.lifeN=(gen.lifeN||0)+1;
+      // on the finest grids, the world you're looking at gets every step and the rest take turns
+      const heavy=gen.ing.lifeRes>=4;
+      bodies.forEach((b,i)=>{ if(!b.life||b.gone) return;
+        if(heavy&&i!==focusIdx&&i!==selIdx&&(gen.lifeN+i)%3) return;
+        lifeStep(b.life,b.evo); }); }
   }
   genRogueTick(dt);
   const dyn=gen.sys.starNow||starAt(gen.st,gen.t);
@@ -4912,6 +5032,11 @@ const PAL={
 };
 function palMix(base,other,t){ if(t<=0) return base; return base.map((c,i)=>mix3(c,other[i],Math.min(1,t))); }
 function applyEvoVisual(b){
+  applyEvoVisual0(b);
+  if(b.userP) Object.assign(b.world.p,b.userP);
+  if(b.userC) Object.assign(b.world.colors,b.userC);
+}
+function applyEvoVisual0(b){
   const e=b.evo, p=b.world.p, c=b.world.colors;
   if(!e) return;
   let fx=evoFX.get(p);
@@ -5119,11 +5244,14 @@ function buildEvoUI(head){
   const tenLbl=el('p','note',''); tenLbl.textContent=tenacityName(gen.ing.tenacity); head.appendChild(tenLbl);
   sliderRow(head,{l:'Rogue asteroids & comets',min:0,max:1,step:0.01},gen.ing,'rogues',()=>store('genesisIng',gen.ing));
   const gr=el('div','sel','<label>Life grid</label>'); const gs=document.createElement('select');
-  [[1,'160 × 80 — fast'],[2,'320 × 160'],[3,'480 × 240 — most diverse, slower']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===gen.ing.lifeRes) o.selected=true; gs.appendChild(o); });
+  [[1,'160 × 80 — fast'],[2,'320 × 160'],[3,'480 × 240'],[4,'640 × 320 — fine'],[6,'960 × 480 — finest, heavy']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===gen.ing.lifeRes) o.selected=true; gs.appendChild(o); });
   gs.onchange=()=>{ gen.ing.lifeRes=+gs.value; store('genesisIng',gen.ing);
     for(const b of bodies){ b.life=null; b.bake=null; }
     hud('Biospheres restart on the new grid — the story so far is kept, the patterns begin again.'); };
   gr.appendChild(gs); head.appendChild(gr);
+  const cw=el('label','chk'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!gen.ing.civSlow;
+  cb.onchange=()=>{ gen.ing.civSlow=cb.checked; store('genesisIng',gen.ing); };
+  cw.append(cb,document.createTextNode(' Slow down when civilisations rise')); head.appendChild(cw);
   const b2=el('div','btns');
   const bk=el('button',null,'Keep as system'); bk.title='Save these worlds as they are now and open System mode';
   bk.onclick=()=>{ saveSystem(); setMode('system'); hud('Saved. The worlds keep the look they had — life layers stay live this session.'); };
@@ -5137,9 +5265,15 @@ function buildEvoUI(head){
     if(lvl) it.style.marginLeft=(lvl*12)+'px';
     const dot=el('div','dot');
     const nm=el('span','nm'); nm.textContent=b.name;
+    const fi=document.createElement('img'); fi.className='rowflag'; fi.dataset.flag=i; fi.dataset.h=12; fi.src=flagURL(flagOf(b),12);
+    if(!lvl) nm.prepend(fi);   // moons skip it so their longer names still fit
     const chip=el('span','chip');
     const tC=el('span','cnt');
     it.append(dot,nm,chip,tC);
+    // hovering a row shows the same card as hovering the world itself
+    it.onmouseenter=ev=>{ hoverIdx=i; hoverRow=it; hoverXY=[ev.clientX-300,ev.clientY]; hoverUpdate(true); };
+    it.onmousemove=ev=>{ hoverXY=[Math.min(ev.clientX,scrollEl.getBoundingClientRect().left)-290,ev.clientY]; hoverUpdate(); };
+    it.onmouseleave=()=>{ hoverIdx=-1; hoverRow=null; hoverUpdate(); };
     it.style.cursor='pointer';
     it.onclick=()=>{ if(b.gone) return; focusBody(i); };
     wl.appendChild(it); rows.push({b,it,dot,chip,tC,nm});
@@ -5161,6 +5295,9 @@ function buildEvoUI(head){
     const ie=el('div','btns');
     const be=el('button',null,'Open in Planet editor'); be.onclick=()=>genOpenInEditor(si);
     ie.appendChild(be); dv.appendChild(ie);
+    const fd=el('details','flagdet'); fd.dataset.g='genflag'; fd.open=!!OPEN['genflag']; fd.ontoggle=()=>OPEN['genflag']=fd.open;
+    const sm=document.createElement('summary'); sm.innerHTML=`<img data-flag="${si}" data-h="14" src="${flagURL(flagOf(sb),14)}"> Flag of ${sb.name}`; fd.appendChild(sm);
+    buildFlagEditor(fd,sb); dv.appendChild(fd);
   }
   const det=el('div','gen-det'); dv.appendChild(det);
   if(selIdx<0) det.appendChild(el('p','note','Click a world in the view or the list to follow its story.'));
@@ -5193,7 +5330,7 @@ function genUIRefresh(force){
   }
   if(gen.phase!=='evolving'||!u.top) return;
   const dyn=gen.sys.starNow||starAt(gen.st,gen.t);
-  u.top.innerHTML=`<b>${fmtAge(gen.t)}</b><span>${gen.t>=gen.tMax?'end of the record':gen.evoPlaying?'deep time running':'paused'}</span>`;
+  u.top.innerHTML=`<b>${fmtAge(gen.t)}</b><span>${gen.t>=gen.tMax?'end of the record':gen.evoPlaying?(gen.pace<gen.speed?`slowed to ${gen.pace} Myr/s — a civilisation is rising`:'deep time running'):'paused'}</span>`;
   const phase=dyn.phase==='main'?(gen.t<gen.st.life*0.1?'young':'main sequence'):dyn.phase==='giant'?'red giant — swelling':'white dwarf — cooling';
   u.star.innerHTML=`<b>${gen.starName}</b> · ${phase}, ${dyn.L<0.1?dyn.L.toFixed(3):dyn.L.toFixed(2)} L☉ · ${Math.round(dyn.T)} K`;
   u.tbar.style.width=Math.min(100,gen.t/gen.tMax*100).toFixed(1)+'%';
@@ -5302,19 +5439,20 @@ function genRogueTick(dt){
   for(let k=rogues.length-1;k>=0;k--){
     const rg=rogues[k];
     rg.age+=dt;
-    if(rg.age>0.0){ rg.trail.unshift(rg.pos.slice()); if(rg.trail.length>16) rg.trail.pop(); }
+    if(rg.age>0.0){ rg.trail.unshift(rg.pos.slice()); if(rg.trail.length>(rg.civ?30:16)) rg.trail.pop(); }
     const tb=rg.target>=0?bodies[rg.target]:null;
     if(rg.mode!=='pass'&&(!tb||tb.gone)) rg.mode='pass';
     if(rg.mode!=='pass'){
       const tp=bodyPos(tb);
       const to=[tp[0]-rg.pos[0],tp[1]-rg.pos[1],tp[2]-rg.pos[2]];
       const dist=Math.hypot(to[0],to[1],to[2]);
-      const want=vnorm(to), steer=dist<Math.max(reach*0.35,tb.scale*8)?1:Math.min(1,dt*2.4);
+      const want=vnorm(to), steer=rg.civ&&rg.age<1.2?Math.min(1,dt*0.6):dist<Math.max(reach*0.35,tb.scale*8)?1:Math.min(1,dt*2.4);
       rg.vel=vnorm([rg.vel[0]+(want[0]-rg.vel[0])*steer,rg.vel[1]+(want[1]-rg.vel[1])*steer,rg.vel[2]+(want[2]-rg.vel[2])*steer]);
       if(rg.mode==='capture'&&dist<tb.scale*3.2){ captureRogue(rg); rogues.splice(k,1); continue; }
       if(rg.mode==='hit'&&dist<tb.scale*1.1+rg.speed*dt*1.6){ rogueHit(rg,tb,want); rogues.splice(k,1); continue; }
     }
-    const sp=rg.speed*(rg.mode==='pass'?1:Math.min(1.6,1+0.6*(1-Math.min(1,rg.age/3))));
+    // ships climb away slowly and then pick up speed; asteroids come in fast
+    const sp=rg.civ?rg.speed*(0.06+0.94*Math.min(1,(rg.age/3)**2)):rg.speed*(rg.mode==='pass'?1:Math.min(1.6,1+0.6*(1-Math.min(1,rg.age/3))));
     rg.pos=[rg.pos[0]+rg.vel[0]*sp*dt,rg.pos[1]+rg.vel[1]*sp*dt,rg.pos[2]+rg.vel[2]*sp*dt];
     if(rg.age>(rg.civ?90:40)||Math.hypot(...rg.pos)>reach*2.2) rogues.splice(k,1);
   }
@@ -5437,12 +5575,9 @@ function buildSendToGenesis(){
 }
 function genOpenInEditor(i){
   const b=bodies[i]; if(!b) return;
-  if(b.evo&&b.evo.kind==='rocky') bakeEvoInto(b);
-  restore(b.world); clearAccum();
-  editorEvo={name:b.name,t:gen.t,era:b.evo?b.evo.era:'',gen:b.gen?{...b.gen}:null, W:b.evo?b.evo.W:0};
   if(b.gen){ gen.send.m=b.gen.m; gen.send.fe=b.gen.fe; gen.send.vol=b.gen.vol; gen.send.W=Math.min(60,b.evo.W||0); gen.send.name=b.name+' II'; }
-  linkIdx=-1; setMode('planet'); scrollEl.scrollTop=0;
-  hud(`Opened ${b.name} as it stood at ${fmtAge(gen.t)}. Edits apply on top of its evolved surface.`);
+  openInEditor(i,'genesis');
+  hud(`Editing ${b.name} live, as it stands at ${fmtAge(gen.t)}. Your changes are kept as it keeps evolving.`);
 }
 // the bridge back: whatever is in the editor becomes a world in the running system
 function editorWorld(){
@@ -5483,6 +5618,7 @@ function settleEditorWorld(b){
 function sendEditorToGenesis(how,target){
   if(gen.phase!=='evolving'){ hud('Form a system in Genesis first.'); return; }
   if(bodies.length>=32){ hud('This system is full.'); return; }
+  if(linkIdx>=0){ syncLink(true); linkIdx=-1; linkRef=null; }
   const b=editorWorld();
   b.orbit.speed=0.49*Math.sqrt(gen.S.GM/Math.pow(b.orbit.r,3));
   if(how==='orbit'){
@@ -5501,18 +5637,33 @@ function sendEditorToGenesis(how,target){
 
 /* drawing the rogues: heads and fading trails, comets with a tail pointed away from the star */
 function genDrawRogues(VP){
-  if(mode!=='genesis'||!rogues.length) return;
+  if(mode!=='genesis') return;
+  const orbiters=genOrbiters();
+  if(!rogues.length&&!orbiters.length) return;
   ensureDust();
   const reach=sysReach(); let n=0;
   const put=(p,r,c,h)=>{ if(n>=880) return; const o=n*8; dustData[o]=p[0]; dustData[o+1]=p[1]; dustData[o+2]=p[2]; dustData[o+3]=r;
     dustData[o+4]=c[0]; dustData[o+5]=c[1]; dustData[o+6]=c[2]; dustData[o+7]=h; n++; };
   const base=Math.max(0.03,cam.dist*0.006);
+  // satellites and stations: lights circling worlds that have learned to fly
+  const now=performance.now()/1000, lite=cam.dist*0.0042;
+  for(const o of orbiters){
+    const bp=bodyPos(o.b), c=o.col;
+    for(let k=0;k<o.n;k++){
+      const h1=Math.sin(k*12.9898+o.seed)*43758.5453%1, h2=Math.sin(k*78.233+o.seed)*12543.123%1;
+      const rr=o.b.scale*(1.12+Math.abs(h1)*(k%5===0?1.4:0.5)), inc=h2*1.4, ph=k*2.39996+o.seed;
+      const w=(0.5+Math.abs(h2))*0.35/Math.sqrt(rr/o.b.scale), a=now*w+ph;
+      const x=Math.cos(a)*rr, z=Math.sin(a)*rr;
+      put([bp[0]+x,bp[1]+z*Math.sin(inc),bp[2]+z*Math.cos(inc)],lite*(k%7===0?1.5:1.0),vivid(c),-1);
+    }
+  }
   for(const rg of rogues){
     if(rg.civ){
-      // ships and arks: a bright point in the civilisation's colour with a thin wake
-      const c=(civOf(rg.civ)||{col:[1,1,1]}).col, s=base*(rg.kind==='ark'?1.1:0.7);
-      put(rg.pos,s,c.map(v=>v*1.6),0);
-      rg.trail.forEach((p,j)=>{ const f=1-j/rg.trail.length; put(p,s*0.45*f,c.map(v=>v*f),0); });
+      // ships and arks: a bright point in the civilisation's colour with an engine wake; a flare at lift-off
+      const c=(civOf(rg.civ)||{col:[1,1,1]}).col, s=lite*(rg.kind==='ark'?3.2:2.2);
+      if(rg.age<0.8) put(rg.pos,s*(3.4-rg.age*3.5),[3,2.6,2],-1);
+      const vc=vivid(c); put(rg.pos,s,[1,1,1],-1);
+      rg.trail.forEach((p,j)=>{ const f=1-j/rg.trail.length; put(p,s*0.75*f+s*0.15,vc.map(v=>v*(0.35+0.65*f)),-1); });
       continue;
     }
     const comet=rg.kind==='comet';
@@ -5547,6 +5698,19 @@ function filterName(v){ return v<0.2?'Gentle — civilisations tend to last':v<0
 function fermiMark(k){ if(gen.run[k]) return; gen.run[k]=1; gen.fermi[k]++; store('fermi',gen.fermi); }
 function fermiAdd(k){ gen.fermi[k]++; store('fermi',gen.fermi); }
 function civOf(id){ return gen.civs[id-1]||null; }
+if(gen.ing.civSlow===undefined) gen.ing.civSlow=true;
+// while a civilisation is young, or ships are in flight, deep time eases off so there is something to watch
+function civPace(){
+  if(!gen.ing.civSlow) return Infinity;
+  let p=Infinity;
+  for(const c of gen.civs){ if(c.dead) continue;
+    const a=gen.t-c.born;
+    if(a<160) p=Math.min(p,3);
+    else if(c.space&&gen.t-(c.spaceT||0)<250) p=Math.min(p,3);
+    else p=Math.min(p,15); }
+  if(rogues.some(x=>x.kind==='ship'||x.kind==='ark')) p=Math.min(p,4);
+  return p;
+}
 function civWorlds(civ){
   const out=[];
   bodies.forEach((b,i)=>{ if(b.gone||!b.evo) return; const e=b.evo;
@@ -5567,8 +5731,9 @@ function genCivTick(dt){
       gen.civs.push(civ); e.civ=civ;
       fermiMark('tech');
       genLog(e,`The ${civ.name} have built a technological civilisation`,'civ');
+      hud(`${b.name}: a civilisation is rising${gen.ing.civSlow?' — deep time has slowed so you can watch':''}.`);
     }
-    if(e.civ&&L.stage>=6&&!e.civ.space){ e.civ.space=true; fermiMark('space'); }
+    if(e.civ&&L.stage>=6&&!e.civ.space){ e.civ.space=true; e.civ.spaceT=gen.t; fermiMark('space'); if(selIdx<0||!bodies[selIdx]||bodies[selIdx].evo!==e) hud(`${b.name}: the ${e.civ.name} have reached space. Select the world to watch them leave.`); }
     // the evolution step decided this world's civilisation has ended
     if(e.civFell){
       const civ=e.civ;
@@ -5603,7 +5768,7 @@ function genCivTick(dt){
     for(const wi of ws){
       const src=bodies[wi], se=src.evo;
       const can=se.civ===civ?se.life.stage>=6:(se.colony.age||0)>200;
-      if(!can||flying>=3||r()>dt*0.007) continue;
+      if(!can||flying>=3||r()>dt*0.03) continue;
       const tgt=civPickTarget(civ,wi);
       if(tgt>=0) launchShip(civ,wi,tgt);
     }
@@ -5634,14 +5799,35 @@ function civPickTarget(civ,from){
   return cand[cand.length-1][0];
 }
 function launchShip(civ,from,to){
-  const p=bodyPos(bodies[from]), q=bodyPos(bodies[to]);
+  const sb=bodies[from], c=bodyPos(sb), q=bodyPos(bodies[to]);
   const reach=sysReach();
-  rogues.push({kind:'ship',mode:'hit',target:to,civ:civ.id,rad:0,pos:p.slice(),vel:vnorm([q[0]-p[0],q[1]-p[1]+0.001,q[2]-p[2]]),
+  // lift-off from the surface on the side facing where it is going
+  const d=vnorm([q[0]-c[0],q[1]-c[1]+0.001,q[2]-c[2]]);
+  const up=vnorm([d[0]+(Math.random()-0.5)*0.8,d[1]+0.3+(Math.random()-0.5)*0.6,d[2]+(Math.random()-0.5)*0.8]);
+  const p=[c[0]+up[0]*sb.scale*1.02,c[1]+up[1]*sb.scale*1.02,c[2]+up[2]*sb.scale*1.02];
+  rogues.push({kind:'ship',mode:'hit',target:to,civ:civ.id,rad:0,pos:p,vel:up,from,
     speed:reach*0.14,trail:[],age:0,payload:null,user:false,name:''});
   civ.ships=(civ.ships||0)+1;
 }
+// the painterly post-filter averages tiny dots toward grey, so lights use fully saturated colour
+const vivid=c=>{ const p=c.map(v=>Math.pow(v,2.4)), m=Math.max(...p,1e-3); return p.map(v=>v/m); };
+function genOrbiters(){
+  const out=[];
+  bodies.forEach((b,i)=>{
+    if(b.gone||!b.evo) return; const e=b.evo;
+    if(e.civ&&!e.civ.dead&&e.life.stage>=5){
+      const age=gen.t-e.civ.born, sp=e.civ.space?gen.t-(e.civ.spaceT||gen.t):-1;
+      const n=sp>=0?Math.min(48,8+Math.floor(sp/5)):Math.min(5,Math.floor(age/25));
+      if(n>0) out.push({b,n,col:e.civ.col,seed:i*7.1});
+    } else if(e.colony&&!e.colony.dead&&(e.colony.age||0)>60){
+      const c=civOf(e.colony.civ); if(c) out.push({b,n:Math.min(14,Math.floor(e.colony.age/40)),col:c.col,seed:i*7.1});
+    }
+  });
+  return out;
+}
 function launchArk(civ,from){
-  const p=bodyPos(bodies[from]);
+  const sb=bodies[from], c=bodyPos(sb), u=vnorm([c[0],0.2,c[2]]);
+  const p=[c[0]+u[0]*sb.scale*1.05,c[1]+u[1]*sb.scale*1.05,c[2]+u[2]*sb.scale*1.05];
   const out=vnorm([p[0]+(Math.random()-0.5)*2,(Math.random()-0.5)*0.6,p[2]+(Math.random()-0.5)*2]);
   rogues.push({kind:'ark',mode:'pass',target:-1,civ:civ.id,rad:0,pos:p.slice(),vel:out,speed:sysReach()*0.1,trail:[],age:0,payload:null,user:false,name:''});
   civ.arks++; fermiAdd('arks');
@@ -5706,6 +5892,398 @@ function silenceRefresh(){
     return `<div class="gen-civ${c.dead?' dead':''}"><i style="background:${toHex(c.col)}"></i><b>The ${c.name}</b><small>of ${c.home} · ${st}${c.arks?' · '+c.arks+' ark'+(c.arks>1?'s':''):''}${c.dead&&c.why?'<br>'+c.why:''}</small></div>`; }).join('')
     :`<p class="note">No one here has built anything yet.</p>`;
 }
+
+
+/* ── flags: every world gets one ───────────────────────────────
+   A flag is a small data structure: a palette, a field of stripes,
+   overlays (crosses, cantons, triangles…) and emblems that point at
+   palette slots. Worlds get one generated from what they are made of;
+   Earth's national flags are presets in the same structure, simplified
+   (coats of arms and fine detail left out), so any of them can be
+   edited the same way.
+   ───────────────────────────────────────────────────────────── */
+const TINCT={white:'#f5f3ee',black:'#14161c',red:'#c8102e',gold:'#f2b705',blue:'#1f3a93',green:'#11823b',sky:'#5fa8d8',orange:'#ee7a1e',purple:'#5b2a86',teal:'#138f8a'};
+const FLAG_PATTERNS=[['plain','Plain field'],['h2','Two bands'],['h3','Three bands'],['v2','Two pales'],['v3','Tricolour'],['stripes','Stripes'],
+  ['nordic','Nordic cross'],['cross','Centred cross'],['saltire','Saltire'],['union','Union'],['canton','Stripes and canton'],['tri','Hoist triangle'],
+  ['diag','Diagonal split'],['band','Diagonal band'],['border','Border'],['quarters','Quarters']];
+const FLAG_EMBLEMS=[['none','None'],['disc','Disc'],['star','Star'],['starring','Ring of stars'],['crescent','Crescent & star'],['sun','Sun'],['wheel','Wheel'],
+  ['hexagram','Hexagram'],['leaf','Leaf'],['ring','Ringed world'],['cells','Glider'],['diamond','Diamond'],['moons','Moons']];
+function patternBuild(t,n){
+  const b=(dir,c,w)=>({dir,c,w:w||c.map(()=>1)});
+  const k=i=>Math.min(i,n-1);
+  switch(t){
+    case 'h2': return {bands:b('h',[0,k(1)]),over:[]};
+    case 'h3': return {bands:b('h',[0,k(1),k(2)]),over:[]};
+    case 'v2': return {bands:b('v',[0,k(1)]),over:[]};
+    case 'v3': return {bands:b('v',[0,k(1),k(2)]),over:[]};
+    case 'stripes': return {bands:b('h',Array.from({length:9},(_,i)=>i%2?k(1):0)),over:[]};
+    case 'nordic': return {bands:b('h',[0]),over:[{t:'nordic',c:k(1),w:0.25,inner:n>2?{c:k(2),w:0.12}:null}]};
+    case 'cross': return {bands:b('h',[0]),over:[{t:'cross',c:k(1),w:0.2}]};
+    case 'saltire': return {bands:b('h',[0]),over:[{t:'saltire',c:k(1),w:0.18}]};
+    case 'union': return {bands:b('h',[0]),over:[{t:'union',c:k(1),c2:k(2)}]};
+    case 'canton': return {bands:b('h',Array.from({length:13},(_,i)=>i%2?k(1):0)),over:[{t:'canton',c:k(2),w:0.4,h:7/13}]};
+    case 'tri': return {bands:b('h',[0,k(1)]),over:[{t:'tri',c:k(2),d:0.4}]};
+    case 'diag': return {bands:b('h',[0]),over:[{t:'diag',c:k(1)}]};
+    case 'band': return {bands:b('h',[0]),over:[{t:'band',c:k(1),w:0.22}]};
+    case 'border': return {bands:b('h',[0]),over:[{t:'border',c:k(1),w:0.1}]};
+    case 'quarters': return {bands:b('h',[0]),over:[{t:'quarters',c:[0,k(1),k(1),0]}]};
+    default: return {bands:b('h',[0]),over:[]};
+  }
+}
+function mkFlag(pattern,pal,ems,o){
+  const f={pattern,pal:pal.slice(),aspect:1.5,...patternBuild(pattern,pal.length),ems:ems||[]};
+  if(o){ if(o.w) f.bands.w=o.w; if(o.c) f.bands.c=o.c; if(o.over) f.over=o.over; if(o.aspect) f.aspect=o.aspect; if(o.extra) f.over=f.over.concat(o.extra); }
+  return f;
+}
+/* Earth's flags, simplified: the structure matches, coats of arms and seals are left out */
+const EARTH_FLAGS=(()=>{
+  const F=mkFlag, W='#ffffff';
+  const disc=(c,x,y,s)=>({t:'disc',c,x,y,s}), star=(c,x,y,s,o)=>({t:'star',c,x,y,s,...(o||{})});
+  return {
+    'Algeria':F('v2',['#006233',W,'#D21034'],[{t:'crescent',c:2,k:1,x:0.5,y:0.5,s:0.25,dir:1}]),
+    'Argentina':F('h3',['#74ACDF',W,'#74ACDF','#F6B40E'],[{t:'sun',c:3,x:0.5,y:0.5,s:0.12}],{aspect:1.6}),
+    'Australia':F('plain',['#012169',W,'#E4002B'],[star(1,0.25,0.75,0.15,{n:7}),star(1,0.75,0.84,0.07,{n:7}),star(1,0.62,0.44,0.07,{n:7}),star(1,0.75,0.18,0.07,{n:7}),star(1,0.87,0.38,0.07,{n:7}),star(1,0.8,0.55,0.035)],{aspect:2,extra:[{t:'canton',c:0,w:0.5,h:0.5,union:{c:1,c2:2}}]}),
+    'Austria':F('h3',['#ED2939',W,'#ED2939']),
+    'Bangladesh':F('plain',['#006A4E','#F42A41'],[disc(1,0.45,0.5,0.33)],{aspect:5/3}),
+    'Belgium':F('v3',['#000000','#FDDA24','#EF3340'],[],{aspect:15/13}),
+    'Brazil':F('plain',['#009C3B','#FFDF00','#002776'],[{t:'diamond',c:1,x:0.5,y:0.5,s:0.83},disc(2,0.5,0.5,0.25)],{aspect:10/7}),
+    'Bulgaria':F('h3',[W,'#00966E','#D62612'],[],{aspect:5/3}),
+    'Burkina Faso':F('h2',['#EF2B2D','#009E49','#FCD116'],[star(2,0.5,0.5,0.17)]),
+    'Cameroon':F('v3',['#007A5E','#CE1126','#FCD116'],[star(2,0.5,0.5,0.15)]),
+    'Canada':F('v3',['#D52B1E',W,'#D52B1E'],[{t:'leaf',c:0,x:0.5,y:0.5,s:0.32}],{w:[1,2,1],aspect:2}),
+    'Chile':F('h2',[W,'#D52B1E','#0039A6'],[star(0,1/6,0.25,0.1)],{extra:[{t:'canton',c:2,w:1/3,h:0.5}]}),
+    'China':F('plain',['#EE1C25','#FFFF00'],[star(1,5/30,5/20,3/20),star(1,10/30,2/20,1/20,{rot:0.4}),star(1,12/30,4/20,1/20,{rot:0.9}),star(1,12/30,7/20,1/20,{rot:0}),star(1,10/30,9/20,1/20,{rot:0.5})]),
+    'Colombia':F('h3',['#FCD116','#003893','#CE1126'],[],{w:[2,1,1]}),
+    "Côte d'Ivoire":F('v3',['#F77F00',W,'#009E60']),
+    'Cuba':F('stripes',['#002A8F',W,'#CB1515'],[star(1,0.145,0.5,0.1)],{c:[0,1,0,1,0],w:[1,1,1,1,1],aspect:2,over:[{t:'tri',c:2,d:0.43}]}),
+    'Czechia':F('h2',[W,'#D7141A','#11457E'],[],{over:[{t:'tri',c:2,d:0.5}]}),
+    'Denmark':F('nordic',['#C8102E',W],[],{aspect:37/28,over:[{t:'nordic',c:1,w:4/28,x:14/37}]}),
+    'England':F('cross',[W,'#CE1124'],[],{over:[{t:'cross',c:1,w:0.2}],aspect:5/3}),
+    'Estonia':F('h3',['#0072CE','#000000',W],[],{aspect:11/7}),
+    'European Union':F('plain',['#003399','#FFCC00'],[{t:'starring',c:1,x:0.5,y:0.5,r:1/3,s:1/18,n:12}]),
+    'Finland':F('nordic',[W,'#002F6C'],[],{aspect:18/11,over:[{t:'nordic',c:1,w:3/11,x:6.5/18}]}),
+    'France':F('v3',['#002395',W,'#ED2939']),
+    'Germany':F('h3',['#000000','#DD0000','#FFCE00'],[],{aspect:5/3}),
+    'Ghana':F('h3',['#CE1126','#FCD116','#006B3F','#000000'],[star(3,0.5,0.5,0.17)]),
+    'Greece':F('stripes',['#0D5EAF',W],[],{c:[0,1,0,1,0,1,0,1,0],aspect:1.5,extra:[{t:'canton',c:0,w:10/27,h:5/9,cross:{c:1,w:1/5}}]}),
+    'Hungary':F('h3',['#CE2939',W,'#477050'],[],{aspect:2}),
+    'Iceland':F('nordic',['#02529C',W,'#DC1E35'],[],{aspect:25/18,over:[{t:'nordic',c:1,w:4/18,x:9/25,inner:{c:2,w:2/18}}]}),
+    'India':F('h3',['#FF9933',W,'#138808','#000080'],[{t:'wheel',c:3,x:0.5,y:0.5,s:0.14}]),
+    'Indonesia':F('h2',['#CE1126',W]),
+    'Ireland':F('v3',['#169B62',W,'#FF883E'],[],{aspect:2}),
+    'Israel':F('h3',[W,'#0038B8'],[{t:'hexagram',c:1,x:0.5,y:0.5,s:0.21}],{c:[0,1,0,1,0],w:[1.5,1.6,7.8,1.6,1.5],aspect:160/110}),
+    'Italy':F('v3',['#009246',W,'#CE2B37']),
+    'Jamaica':F('plain',['#009B3A','#000000','#FED100'],[],{aspect:2,over:[{t:'xtri',c:[0,1,0,1]},{t:'saltire',c:2,w:0.15}]}),
+    'Japan':F('plain',[W,'#BC002D'],[disc(1,0.5,0.5,0.3)]),
+    'Laos':F('h3',['#CE1126','#002868',W],[disc(2,0.5,0.5,0.2)],{c:[0,1,0],w:[1,2,1]}),
+    'Lithuania':F('h3',['#FDB913','#006A44','#C1272D'],[],{aspect:5/3}),
+    'Malaysia':F('stripes',['#CC0001',W,'#010066','#FFCC00'],[{t:'crescent',c:3,k:2,x:0.17,y:0.29,s:0.2,dir:1},star(3,0.33,0.29,0.11,{n:14,inner:0.45})],{c:Array.from({length:14},(_,i)=>i%2),aspect:2,extra:[{t:'canton',c:2,w:0.5,h:8/14}]}),
+    'Mali':F('v3',['#14B53A','#FCD116','#CE1126']),
+    'Monaco':F('h2',['#CE1126',W],[],{aspect:1.25}),
+    'Myanmar':F('h3',['#FECB00','#34B233','#EA2839',W],[star(3,0.5,0.53,0.36)]),
+    'Netherlands':F('h3',['#AE1C28',W,'#21468B']),
+    'New Zealand':F('plain',['#012169',W,'#C8102E'],[star(2,0.75,0.8,0.07,{edge:1}),star(2,0.66,0.42,0.06,{edge:1}),star(2,0.77,0.2,0.065,{edge:1}),star(2,0.86,0.38,0.055,{edge:1})],{aspect:2,extra:[{t:'canton',c:0,w:0.5,h:0.5,union:{c:1,c2:2}}]}),
+    'Nigeria':F('v3',['#008751',W,'#008751'],[],{aspect:2}),
+    'Norway':F('nordic',['#BA0C2F',W,'#00205B'],[],{aspect:22/16,over:[{t:'nordic',c:1,w:4/16,x:8/22,inner:{c:2,w:2/16}}]}),
+    'Palau':F('plain',['#4AADD6','#FFDE00'],[disc(1,0.45,0.5,0.3)],{aspect:1.6}),
+    'Panama':F('plain',[W,'#DA121A','#072357'],[star(2,0.25,0.25,0.1),star(1,0.75,0.75,0.1)],{over:[{t:'quarters',c:[0,1,2,0]}]}),
+    'Peru':F('v3',['#D91023',W,'#D91023']),
+    'Philippines':F('h2',['#0038A8','#CE1126',W,'#FCD116'],[{t:'sun',c:3,x:0.16,y:0.5,s:0.1},star(3,0.05,0.12,0.035),star(3,0.05,0.88,0.035),star(3,0.36,0.5,0.035)],{aspect:2,over:[{t:'tri',c:2,d:0.433}]}),
+    'Poland':F('h2',[W,'#DC143C'],[],{aspect:1.6}),
+    'Romania':F('v3',['#002B7F','#FCD116','#CE1126']),
+    'Russia':F('h3',[W,'#0039A6','#D52B1E']),
+    'Scotland':F('saltire',['#005EB8',W],[],{over:[{t:'saltire',c:1,w:0.2}],aspect:5/3}),
+    'Senegal':F('v3',['#00853F','#FDEF42','#E31B23'],[star(0,0.5,0.5,0.15)]),
+    'Singapore':F('h2',['#EF3340',W],[{t:'crescent',c:1,k:0,x:0.18,y:0.25,s:0.16,dir:1},{t:'starring',c:1,x:0.3,y:0.25,r:0.085,s:0.034,n:5}]),
+    'Somalia':F('plain',['#4189DD',W],[star(1,0.5,0.5,0.25)]),
+    'Spain':F('h3',['#AA151B','#F1BF00'],[],{c:[0,1,0],w:[1,2,1]}),
+    'Sweden':F('nordic',['#006AA7','#FECC00'],[],{aspect:1.6,over:[{t:'nordic',c:1,w:0.2,x:6/16}]}),
+    'Switzerland':F('plain',['#DA291C',W],[],{aspect:1,over:[{t:'cross',c:1,w:6/32,len:20/32}]}),
+    'Taiwan':F('plain',['#FE0000','#000095',W],[{t:'sun',c:2,x:0.25,y:0.25,s:0.12}],{over:[{t:'canton',c:1,w:0.5,h:0.5}]}),
+    'Thailand':F('h3',['#A51931','#F4F5F8','#2D2A4A'],[],{c:[0,1,2,1,0],w:[1,1,2,1,1]}),
+    'Tunisia':F('plain',['#E70013',W],[disc(1,0.5,0.5,0.25),{t:'crescent',c:0,k:1,x:0.49,y:0.5,s:0.19,dir:1},star(0,0.535,0.5,0.09,{rot:-0.3})]),
+    'Turkey':F('plain',['#E30A17',W],[{t:'crescent',c:1,k:0,x:0.38,y:0.5,s:0.25,dir:1,nostar:1},star(1,0.55,0.5,0.125,{rot:-0.3})]),
+    'Ukraine':F('h2',['#0057B7','#FFD700']),
+    'United Kingdom':F('union',['#012169',W,'#C8102E'],[],{aspect:2}),
+    'United States':F('canton',['#B22234',W,'#3C3B6E'],[{t:'stargrid',c:1,x0:0.033,y0:0.054,x1:0.367,y1:0.485,rows:9,cols:11,s:0.031}],{aspect:1.9}),
+    'Vietnam':F('plain',['#DA251D','#FFFF00'],[star(1,0.5,0.5,0.3)])
+  };
+})();
+// a world's own flag, from what it is: its colours, its kind, its moons
+function genFlag(b){
+  const r=mulberry(hashStr(...(b.name||'x').split('').map(c=>c.charCodeAt(0))));
+  const w=b.world||{}, col=w.colors||{};
+  const e=b.evo, kind=e?e.kind:(w.p&&w.p.mat==='gas'?'gas':'rocky');
+  const tint=[TINCT.red,TINCT.blue,TINCT.green,TINCT.gold,TINCT.black,TINCT.sky,TINCT.orange,TINCT.purple,TINCT.teal];
+  const pick=()=>tint[Math.floor(r()*tint.length)];
+  // one colour from the world itself, pushed to a flag-strength version
+  const own=(()=>{ const src=col.shallow&&e&&e.W>0.01?col.shallow:col.mid||col.low||'#888888'; const c=hex(src);
+    const m=Math.max(...c), n=Math.min(...c); const s=m-n<0.08?[c[0]*1.1,c[1],c[2]*0.9]:c;
+    const k=1/Math.max(0.2,Math.max(...s)); return toHex(s.map(v=>Math.min(1,(v-n*0.6)*k*0.9))); })();
+  const pal=[];
+  const lightFirst=r()<0.35;
+  pal.push(lightFirst?TINCT.white:own);
+  let c2=pick(); while(c2===pal[0]) c2=pick(); pal.push(lightFirst?own:(r()<0.5?TINCT.white:c2));
+  let c3=pick(); while(pal.includes(c3)) c3=pick(); pal.push(c3);
+  pal.push(r()<0.6?TINCT.white:TINCT.gold);
+  const pats=['h2','h3','v3','v2','nordic','cross','saltire','canton','tri','diag','band','border','plain','quarters','stripes'];
+  const wts=[3,4,4,2,3,2,2,2,3,2,2,1,3,1,1];
+  let x=r()*wts.reduce((a,b)=>a+b,0), pat='h3'; for(let i=0;i<pats.length;i++){ x-=wts[i]; if(x<=0){ pat=pats[i]; break; } }
+  const f=mkFlag(pat,pal,[]);
+  f.aspect=[1.5,1.5,1.6,2,5/3][Math.floor(r()*5)];
+  // the emblem says what kind of world this is
+  const moons=bodies.filter(o=>o.parent>=0&&bodies[o.parent]===b&&!o.gone).length;
+  const L=e&&e.life, ei=3;
+  let em='none';
+  if(kind==='gas'||kind==='ice') em='ring';
+  else if(b.parent>=0) em='crescent';
+  else if(L&&L.stage>=5) em=r()<0.5?'star':'starring';
+  else if(L&&L.stage>=3) em=r()<0.5?'leaf':'cells';
+  else if(L&&L.stage>=1) em='cells';
+  else if(e&&e.regime==='magma') em='sun';
+  else if(moons>1) em='moons';
+  else em=['disc','star','diamond','none'][Math.floor(r()*4)];
+  setEmblem(f,em,{n:Math.max(3,Math.min(12,moons||5))});
+  f.gen=true;
+  return f;
+}
+// where an emblem sits: the canton or hoist when the pattern has one, otherwise the centre
+function emblemSpot(f){
+  const ct=f.over.find(o=>o.t==='canton'), tri=f.over.find(o=>o.t==='tri'), nd=f.over.find(o=>o.t==='nordic');
+  if(ct) return [ct.w/2,ct.h/2,0.7*Math.min(ct.h,ct.w*f.aspect)];
+  if(tri) return [tri.d*0.35,0.5,0.55];
+  if(nd) return [0.18,0.25,0.5];
+  return [0.5,0.5,1];
+}
+function emblemBg(f,x,y){
+  for(let i=f.over.length-1;i>=0;i--){ const o=f.over[i];
+    if(o.t==='canton'&&x<o.w&&y<o.h) return o.c;
+    if(o.t==='tri'&&x<o.d*(1-Math.abs(y-0.5)*2)) return o.c; }
+  const bd=f.bands, tot=bd.w.reduce((a,b)=>a+b,0); let acc=0; const v=bd.dir==='h'?y:x;
+  for(let i=0;i<bd.c.length;i++){ acc+=bd.w[i]/tot; if(v<=acc) return bd.c[i]; }
+  return bd.c[0];
+}
+function setEmblem(f,t,o){
+  o=o||{};
+  if(t==='none'){ f.ems=[]; f.emT='none'; return; }
+  const [x,y,k]=emblemSpot(f);
+  const bg=emblemBg(f,x,y);
+  // the emblem gets its own palette slot so its colour can be changed alone
+  let ci=f.ems.length?f.ems[0].c:-1;
+  if(ci<0||ci>=f.pal.length||ci===bg){ ci=f.pal.findIndex((c,i)=>i!==bg&&c!==f.pal[bg]&&!f.bands.c.includes(i));
+    if(ci<0){ f.pal.push(f.pal[bg]===TINCT.white?TINCT.gold:TINCT.white); ci=f.pal.length-1; } }
+  const s=(o.s||0.24)*k;
+  const E={disc:[{t:'disc',c:ci,x,y,s}],star:[{t:'star',c:ci,x,y,s}],starring:[{t:'starring',c:ci,x,y,r:s*1.2,s:s*0.24,n:o.n||12}],
+    crescent:[{t:'crescent',c:ci,k:bg,x:x-s*0.2,y,s,dir:1}],sun:[{t:'sun',c:ci,x,y,s:s*0.7}],wheel:[{t:'wheel',c:ci,x,y,s}],
+    hexagram:[{t:'hexagram',c:ci,x,y,s}],leaf:[{t:'leaf',c:ci,x,y,s:s*1.2}],ring:[{t:'ring',c:ci,k:bg,x,y,s:s*0.75}],
+    cells:[{t:'cells',c:ci,x,y,s}],diamond:[{t:'diamond',c:ci,x,y,s:Math.min(0.8,s*2.6)}],
+    moons:[{t:'disc',c:ci,x,y,s:s*0.55},{t:'starring',c:ci,x,y,r:s*1.25,s:s*0.13,n:o.n||4,dots:1}]};
+  f.ems=E[t]||[]; f.emT=t;
+}
+function flagSetPattern(f,pat){
+  const keep=f.ems.length?f.emT||'disc':'none';
+  const n=f.pal.length;
+  const nb=patternBuild(pat,n);
+  f.pattern=pat; f.bands=nb.bands; f.over=nb.over;
+  if(keep!=='none'){ f.ems=[]; setEmblem(f,keep); }
+}
+/* drawing */
+function starPath(ctx,x,y,R,n,rot,inner){
+  n=n||5; const ir=R*(inner||(n===5?0.382:n===7?0.45:0.5));
+  ctx.beginPath();
+  for(let i=0;i<n*2;i++){ const a=(rot||0)-Math.PI/2+i*Math.PI/n, rr=i%2?ir:R; ctx[i?'lineTo':'moveTo'](x+Math.cos(a)*rr,y+Math.sin(a)*rr); }
+  ctx.closePath();
+}
+const LEAF=[[0,-1],[0.12,-0.72],[0.3,-0.82],[0.26,-0.36],[0.62,-0.62],[0.56,-0.46],[0.86,-0.4],[0.74,-0.2],[0.84,-0.08],[0.38,0.24],[0.44,0.4],[0.06,0.34],[0.05,0.75],
+  [-0.05,0.75],[-0.06,0.34],[-0.44,0.4],[-0.38,0.24],[-0.84,-0.08],[-0.74,-0.2],[-0.86,-0.4],[-0.56,-0.46],[-0.62,-0.62],[-0.26,-0.36],[-0.3,-0.82],[-0.12,-0.72]];
+function drawUnion(ctx,x0,y0,w,h,cw,cr,cb){
+  ctx.save(); ctx.beginPath(); ctx.rect(x0,y0,w,h); ctx.clip();
+  ctx.fillStyle=cb; ctx.fillRect(x0,y0,w,h);
+  const u=h/30;
+  ctx.lineCap='butt';
+  const diag=(lw,col)=>{ ctx.strokeStyle=col; ctx.lineWidth=lw; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x0+w,y0+h); ctx.moveTo(x0+w,y0); ctx.lineTo(x0,y0+h); ctx.stroke(); };
+  diag(6*u,cw); diag(2*u,cr);
+  ctx.fillStyle=cw; ctx.fillRect(x0+w/2-5*u,y0,10*u,h); ctx.fillRect(x0,y0+h/2-5*u,w,10*u);
+  ctx.fillStyle=cr; ctx.fillRect(x0+w/2-3*u,y0,6*u,h); ctx.fillRect(x0,y0+h/2-3*u,w,6*u);
+  ctx.restore();
+}
+function drawFlag(ctx,f,W,H){
+  const P=i=>f.pal[i]||'#888';
+  ctx.save(); ctx.beginPath(); ctx.rect(0,0,W,H); ctx.clip();
+  // field
+  const bd=f.bands, tot=bd.w.reduce((a,b)=>a+b,0); let acc=0;
+  bd.c.forEach((ci,i)=>{ const a=acc/tot, b=(acc+bd.w[i])/tot; acc+=bd.w[i]; ctx.fillStyle=P(ci);
+    if(bd.dir==='h') ctx.fillRect(0,Math.floor(a*H),W,Math.ceil((b-a)*H)+1); else ctx.fillRect(Math.floor(a*W),0,Math.ceil((b-a)*W)+1,H); });
+  for(const o of f.over){
+    ctx.fillStyle=P(o.c); ctx.strokeStyle=P(o.c);
+    if(o.t==='nordic'){ const cx=(o.x||0.375)*W, w=o.w*H; ctx.fillRect(cx-w/2,0,w,H); ctx.fillRect(0,H/2-w/2,W,w);
+      if(o.inner){ ctx.fillStyle=P(o.inner.c); const iw=o.inner.w*H; ctx.fillRect(cx-iw/2,0,iw,H); ctx.fillRect(0,H/2-iw/2,W,iw); } }
+    else if(o.t==='cross'){ const w=o.w*H;
+      if(o.len){ const L=o.len*H; ctx.fillRect(W/2-w/2,H/2-L/2,w,L); ctx.fillRect(W/2-L/2,H/2-w/2,L,w); }
+      else { ctx.fillRect(W/2-w/2,0,w,H); ctx.fillRect(0,H/2-w/2,W,w); } }
+    else if(o.t==='saltire'){ ctx.lineWidth=o.w*H; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(W,H); ctx.moveTo(W,0); ctx.lineTo(0,H); ctx.stroke(); }
+    else if(o.t==='union'){ drawUnion(ctx,0,0,W,H,P(o.c),P(o.c2),P(bd.c[0])); }
+    else if(o.t==='canton'){ const cw=o.w*W, ch=o.h*H;
+      if(o.union) drawUnion(ctx,0,0,cw,ch,P(o.union.c),P(o.union.c2),P(o.c));
+      else { ctx.fillRect(0,0,cw,ch);
+        if(o.cross){ ctx.fillStyle=P(o.cross.c); const w=o.cross.w*ch; ctx.fillRect(cw/2-w/2,0,w,ch); ctx.fillRect(0,ch/2-w/2,cw,w); } } }
+    else if(o.t==='tri'){ ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(o.d*W,H/2); ctx.lineTo(0,H); ctx.closePath(); ctx.fill(); }
+    else if(o.t==='diag'){ ctx.beginPath(); ctx.moveTo(W,0); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill(); }
+    else if(o.t==='band'){ ctx.lineWidth=o.w*H; ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W,0); ctx.stroke(); }
+    else if(o.t==='border'){ const w=o.w*H; ctx.fillRect(0,0,W,w); ctx.fillRect(0,H-w,W,w); ctx.fillRect(0,0,w,H); ctx.fillRect(W-w,0,w,H); }
+    else if(o.t==='quarters'){ const q=o.c; [[0,0],[1,0],[0,1],[1,1]].forEach(([a,b],i)=>{ ctx.fillStyle=P(q[i]); ctx.fillRect(a*W/2,b*H/2,W/2+1,H/2+1); }); }
+    else if(o.t==='xtri'){ const q=o.c; const pts=[[[0,0],[W,0]],[[W,0],[W,H]],[[W,H],[0,H]],[[0,H],[0,0]]];
+      pts.forEach((pp,i)=>{ ctx.fillStyle=P(q[i]); ctx.beginPath(); ctx.moveTo(...pp[0]); ctx.lineTo(...pp[1]); ctx.lineTo(W/2,H/2); ctx.closePath(); ctx.fill(); }); }
+  }
+  // emblems; sizes are fractions of the flag's height
+  for(const m of f.ems){
+    const x=m.x*W, y=m.y*H, R=(m.s||0.2)*H;
+    ctx.fillStyle=P(m.c); ctx.strokeStyle=P(m.c);
+    if(m.t==='disc'){ ctx.beginPath(); ctx.arc(x,y,R,0,Math.PI*2); ctx.fill(); }
+    else if(m.t==='star'){ starPath(ctx,x,y,R,m.n,m.rot,m.inner); if(m.edge){ ctx.lineWidth=Math.max(1,R*0.18); ctx.strokeStyle='#fff'; ctx.stroke(); } ctx.fill(); }
+    else if(m.t==='starring'){ const rr=m.r*H, sr=m.s*H; for(let i=0;i<m.n;i++){ const a=-Math.PI/2+i*Math.PI*2/m.n, sx=x+Math.cos(a)*rr, sy=y+Math.sin(a)*rr;
+        if(m.dots){ ctx.beginPath(); ctx.arc(sx,sy,sr,0,Math.PI*2); ctx.fill(); } else { starPath(ctx,sx,sy,sr,5,0); ctx.fill(); } } }
+    else if(m.t==='stargrid'){ const sr=m.s*H; for(let rI=0;rI<m.rows;rI++) for(let cI=0;cI<m.cols;cI++){ if((rI+cI)%2) continue;
+        const sx=(m.x0+(m.x1-m.x0)*cI/(m.cols-1))*W, sy=(m.y0+(m.y1-m.y0)*rI/(m.rows-1))*H; starPath(ctx,sx,sy,sr,5,0); ctx.fill(); } }
+    else if(m.t==='crescent'){ ctx.beginPath(); ctx.arc(x,y,R,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=P(m.k); ctx.beginPath(); ctx.arc(x+R*0.26*(m.dir||1),y,R*0.8,0,Math.PI*2); ctx.fill();
+      if(!m.nostar&&f.ems.filter(q=>q.t!=='crescent').length===0){ ctx.fillStyle=P(m.c); starPath(ctx,x+R*0.75,y,R*0.32,5,0.3); ctx.fill(); } }
+    else if(m.t==='sun'){ for(let i=0;i<16;i++){ const a=i*Math.PI/8; ctx.beginPath(); ctx.moveTo(x+Math.cos(a-0.12)*R,y+Math.sin(a-0.12)*R);
+        ctx.lineTo(x+Math.cos(a)*R*1.75,y+Math.sin(a)*R*1.75); ctx.lineTo(x+Math.cos(a+0.12)*R,y+Math.sin(a+0.12)*R); ctx.fill(); }
+      ctx.beginPath(); ctx.arc(x,y,R,0,Math.PI*2); ctx.fill(); }
+    else if(m.t==='wheel'){ ctx.lineWidth=Math.max(1,R*0.12); ctx.beginPath(); ctx.arc(x,y,R,0,Math.PI*2); ctx.stroke();
+      ctx.lineWidth=Math.max(0.6,R*0.05); ctx.beginPath(); for(let i=0;i<24;i++){ const a=i*Math.PI/12; ctx.moveTo(x,y); ctx.lineTo(x+Math.cos(a)*R,y+Math.sin(a)*R); } ctx.stroke();
+      ctx.beginPath(); ctx.arc(x,y,R*0.18,0,Math.PI*2); ctx.fill(); }
+    else if(m.t==='hexagram'){ ctx.lineWidth=Math.max(1,R*0.16); for(const s of [1,-1]){ ctx.beginPath(); for(let i=0;i<3;i++){ const a=-s*Math.PI/2+i*Math.PI*2/3; ctx[i?'lineTo':'moveTo'](x+Math.cos(a)*R,y+Math.sin(a)*R); } ctx.closePath(); ctx.stroke(); } }
+    else if(m.t==='leaf'){ ctx.beginPath(); LEAF.forEach(([a,b],i)=>ctx[i?'lineTo':'moveTo'](x+a*R,y+b*R)); ctx.closePath(); ctx.fill(); }
+    else if(m.t==='ring'){ ctx.beginPath(); ctx.arc(x,y,R,0,Math.PI*2); ctx.fill();
+      ctx.lineWidth=Math.max(1,R*0.16); ctx.save(); ctx.translate(x,y); ctx.rotate(-0.35); ctx.scale(1,0.32);
+      ctx.strokeStyle=P(m.k); ctx.beginPath(); ctx.arc(0,0,R*1.75,0,Math.PI*2); ctx.lineWidth=Math.max(2,R*0.5); ctx.stroke();
+      ctx.strokeStyle=P(m.c); ctx.lineWidth=Math.max(1,R*0.22); ctx.beginPath(); ctx.arc(0,0,R*1.75,0,Math.PI*2); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.arc(x,y,R,Math.PI*1.05,Math.PI*1.95); ctx.fill(); }
+    else if(m.t==='cells'){ const g=[[0,1,0],[0,0,1],[1,1,1]], q=R*0.62; for(let a=0;a<3;a++) for(let b=0;b<3;b++) if(g[b][a]) ctx.fillRect(x+(a-1.5)*q+q*0.08,y+(b-1.5)*q+q*0.08,q*0.84,q*0.84); }
+    else if(m.t==='diamond'){ const dx=(W-H*(1-m.s))*0.5*m.s/Math.max(m.s,0.01), dy=H*m.s*0.5; ctx.beginPath(); ctx.moveTo(x-dx,y); ctx.lineTo(x,y-dy); ctx.lineTo(x+dx,y); ctx.lineTo(x,y+dy); ctx.closePath(); ctx.fill(); }
+  }
+  ctx.restore();
+}
+const flagCache=new WeakMap();
+function flagURL(f,h){
+  h=h||24;
+  const key=JSON.stringify([f.pal,f.bands,f.over,f.ems,f.aspect])+h;
+  let c=flagCache.get(f); if(c&&c.key===key) return c.url;
+  const cv=document.createElement('canvas'); const s=2; cv.height=h*s; cv.width=Math.round(h*f.aspect*s);
+  const ctx=cv.getContext('2d'); drawFlag(ctx,f,cv.width,cv.height);
+  const url=cv.toDataURL(); flagCache.set(f,{key,url}); return url;
+}
+function flagOf(b){ if(!b) return null; if(!b.flag) b.flag=genFlag(b); return b.flag; }
+/* the flag editor: shown in the panel for the selected world */
+function buildFlagEditor(parent,b){
+  const f=flagOf(b);
+  const box=el('div','flag-ed');
+  const img=document.createElement('img'); img.className='flag-big'; box.appendChild(img);
+  const refresh=()=>{ img.src=flagURL(b.flag,60); };
+  const prow=el('div','sel','<label>Flag</label>'); const ps=document.createElement('select');
+  const o0=document.createElement('option'); o0.value=''; o0.textContent=b.flag.preset?'Earth: '+b.flag.preset:(b.flag.gen?'Made for this world':'Custom'); ps.appendChild(o0);
+  const og=document.createElement('optgroup'); og.label='Earth';
+  Object.keys(EARTH_FLAGS).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; og.appendChild(o); }); ps.appendChild(og);
+  ps.onchange=()=>{ if(!ps.value) return; b.flag=JSON.parse(JSON.stringify(EARTH_FLAGS[ps.value])); b.flag.preset=ps.value; flagChanged(b); };
+  prow.appendChild(ps); box.appendChild(prow);
+  const row=(lab,opts,val,on)=>{ const r=el('div','sel',`<label>${lab}</label>`); const s=document.createElement('select');
+    opts.forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; if(v===val) o.selected=true; s.appendChild(o); });
+    s.onchange=()=>on(s.value); r.appendChild(s); box.appendChild(r); return s; };
+  row('Pattern',FLAG_PATTERNS,f.pattern,v=>{ flagSetPattern(b.flag,v); b.flag.preset=null; b.flag.gen=false; flagChanged(b); });
+  row('Emblem',FLAG_EMBLEMS,f.emT||(f.ems.length?'':'none'),v=>{ setEmblem(b.flag,v); b.flag.preset=null; b.flag.gen=false; flagChanged(b); });
+  if(b.flag.emScale===undefined){ b.flag.emScale=1; b.flag._emScale=1; }
+  if(f.ems.length) sliderRow(box,{l:'Emblem size',min:0.4,max:2,step:0.01},b.flag,'emScale',()=>{
+    const k=b.flag.emScale/(b.flag._emScale||1); b.flag._emScale=b.flag.emScale;
+    for(const m of b.flag.ems){ if(m.s) m.s*=k; if(m.r) m.r*=k; } refresh(); updateFlagViews(b); });
+  // colours: one swatch per palette slot that is actually used
+  const used=new Set([...f.bands.c]); f.over.forEach(o=>{ if(o.c!==undefined) [].concat(o.c).forEach(c=>used.add(c)); if(o.inner) used.add(o.inner.c); if(o.c2!==undefined) used.add(o.c2);
+    if(o.union){ used.add(o.union.c); used.add(o.union.c2); } if(o.cross) used.add(o.cross.c); }); f.ems.forEach(m=>used.add(m.c));
+  const sw=el('div','flag-sw');
+  [...used].sort((a,b)=>a-b).forEach(i=>{ const inp=document.createElement('input'); inp.type='color'; inp.value=normHex(f.pal[i]);
+    inp.oninput=()=>{ b.flag.pal[i]=inp.value; b.flag.gen=false; refresh(); updateFlagViews(b); };
+    inp.onchange=()=>{ saveSystemSoon(); }; sw.appendChild(inp); });
+  box.appendChild(sw);
+  const bb=el('div','btns');
+  const bn=el('button',null,'New design'); bn.title='Roll a fresh flag for this world';
+  bn.onclick=()=>{ b.flagRoll=(b.flagRoll||0)+1; const nm=b.name; b.name=nm+'#'+b.flagRoll; b.flag=genFlag(b); b.name=nm; flagChanged(b); };
+  const br=el('button',null,'Reset'); br.title='Back to the flag generated for it';
+  br.onclick=()=>{ b.flagRoll=0; b.flag=genFlag(b); flagChanged(b); };
+  bb.append(bn,br); box.appendChild(bb);
+  parent.appendChild(box);
+  refresh();
+}
+function normHex(c){ if(/^#[0-9a-f]{6}$/i.test(c)) return c; if(/^#[0-9a-f]{3}$/i.test(c)) return '#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3]; return toHex(hex(c)); }
+function flagChanged(b){ saveSystemSoon(); updateFlagViews(b); buildUI(); }
+function updateFlagViews(b){ document.querySelectorAll('img[data-flag]').forEach(im=>{ const i=+im.dataset.flag; if(bodies[i]===b) im.src=flagURL(b.flag,+im.dataset.h||24); }); }
+
+/* ── hover cards: what a world is, at a glance ───────────────── */
+const hoverEl=document.createElement('div'); hoverEl.id='hovercard'; document.body.appendChild(hoverEl);
+let hoverIdx=-1, hoverT=0, hoverXY=[0,0], hoverRow=null;
+function popOf(b){
+  const e=b.evo, L=b.life; if(!e||!L||!L.lv) return 0;
+  if(b._popT&&performance.now()-b._popT<900) return b._pop;
+  let s=0, sd=0; const home=e.civ&&!e.civ.dead;
+  for(let i=0;i<L.city.length;i++){ const c=L.city[i]; if(c&&c<255) s+=L.lv[i]/255; }
+  const R=Math.pow(Math.max(0.01,b.gen?b.gen.m:1),0.27);
+  const area=510e6*R*R/(L.W*L.H);
+  b._pop=s*area*(home?2600:320); b._popT=performance.now();
+  return b._pop;
+}
+function fmtPop(n){ if(n<1) return 'none'; if(n<1e3) return Math.round(n)+''; if(n<1e6) return (n/1e3).toFixed(n<1e4?1:0)+' thousand'; if(n<1e9) return (n/1e6).toFixed(n<1e7?1:0)+' million'; return (n/1e9).toFixed(n<1e10?1:0)+' billion'; }
+function hoverHTML(b,i){
+  const f=flagOf(b);
+  const e=b.evo;
+  let head=`<div class="hc-h"><img src="${flagURL(f,22)}"><div><b>${b.name}</b><small>${e?(b.gone?'Engulfed':e.era||''):(b.parent>=0?'moon of '+bodies[b.parent].name:'world')}</small></div></div>`;
+  if(!e) return head+`<div class="hc-r"><span>Made in</span><b>the Planet editor</b></div><p class="hc-n">No history yet — send it into Genesis to give it one.</p>`;
+  const rows=[], R=(k,v)=>rows.push(`<div class="hc-r"><span>${k}</span><b>${v}</b></div>`);
+  const L=e.life;
+  if(e.kind==='rocky'){
+    const gases=[['CO₂',e.Pco2||0],['N₂',e.N2],['O₂',e.O2],['H₂O',e.H2O],['CH₄',e.CH4]].filter(x=>x[1]>0.0005).sort((a,b)=>b[1]-a[1]);
+    const ice=e.ice>0.9?'frozen over':e.seaIce>0.4?'big ice caps':e.seaIce>0.1?'polar ice':'';
+    R('Climate',`${Math.round(e.T-273)}°C · `+(e.P<0.001?'no air':(e.P<1?e.P.toFixed(2):e.P.toFixed(1))+' bar '+gases.slice(0,2).map(x=>x[0]).join('/'))+
+      (e.W>0.004?` · ${e.liquid?Math.round(e.ocean*100)+'% ocean':'ice'}`:' · dry')+(ice?' · '+ice:''));
+    R('Geology',{magma:'magma ocean',plates:'plate tectonics',lid:'stagnant lid'}[e.regime]+(e.mag?' · magnetic field':' · no field')+` · ${e.nImp} impacts`);
+    R('Evolution',L.stage===0?(L.gone?'life went extinct':'lifeless'):['','microbes','photosynthesis','land life','animals','cities','spacefaring'][L.stage]+(L.sub?' under the ice':'')+(b.life&&b.life.species.length?` · ${b.life.species.length} species`:''));
+    const pop=popOf(b);
+    const cs=civSummary(e);
+    R('Population',pop>0?'≈ '+fmtPop(pop)+(cs?' · '+cs:''):(L.ruins&&!e.civ&&!(e.colony&&!e.colony.dead)?'none — only ruins remain':cs?cs:(L.stage>=4?'wild animals only':'nobody')));
+  } else {
+    const moons=bodies.filter(o=>o.parent>=0&&bodies[o.parent]===b&&!o.gone).length;
+    R('Type',kindName(b)+' · '+fmtM(b.gen.m)+' M⊕');
+    R('Climate',`${Math.round(e.T-273)}°C cloud tops`);
+    R('Moons',moons||'none');
+  }
+  const evs=gen.log.filter(x=>x.who===b.name&&x.kind!=='species').slice(0,3);
+  const ev=evs.length?`<div class="hc-ev">${evs.map(x=>`<div><b>${fmtAge(x.t)}</b> ${x.txt}</div>`).join('')}</div>`:'';
+  return head+rows.join('')+ev;
+}
+function hoverUpdate(force){
+  if(hoverIdx<0||dragging||(mode!=='genesis'&&mode!=='system')){ hoverEl.style.display='none'; return; }
+  const b=bodies[hoverIdx]; if(!b||b.gone){ hoverEl.style.display='none'; return; }
+  const now=performance.now();
+  if(force||now-hoverT>400){ hoverT=now; hoverEl.innerHTML=hoverHTML(b,hoverIdx); }
+  hoverEl.style.display='block';
+  const W=window.innerWidth, H=window.innerHeight, r=hoverEl.getBoundingClientRect();
+  let x=hoverXY[0]+18, y=hoverXY[1]+14;
+  if(x+r.width>W-8) x=hoverXY[0]-r.width-18;
+  if(y+r.height>H-8) y=Math.max(8,H-r.height-8);
+  hoverEl.style.left=x+'px'; hoverEl.style.top=y+'px';
+}
+let hoverPend=0;
+canvas.addEventListener('pointermove',e=>{
+  if(dragging||(mode!=='genesis'&&mode!=='system')){ hoverIdx=-1; hoverUpdate(); return; }
+  hoverXY=[e.clientX,e.clientY];
+  if(hoverPend) return;
+  hoverPend=requestAnimationFrame(()=>{ hoverPend=0;
+    const t=(mode==='genesis'&&gen.phase!=='evolving')?null:pickAt(hoverXY[0],hoverXY[1]);
+    const ni=t&&t.kind==='body'?t.n:-1;
+    const changed=ni!==hoverIdx; hoverIdx=ni; hoverUpdate(changed);
+    canvas.style.cursor=ni>=0?'pointer':''; });
+});
+canvas.addEventListener('pointerleave',()=>{ hoverIdx=-1; hoverUpdate(); });
+setInterval(()=>{ if(hoverRow&&!hoverRow.isConnected){ hoverRow=null; hoverIdx=-1; } if(hoverIdx>=0||hoverEl.style.display==='block') hoverUpdate(); },500);
 
 /* ── boot ─────────────────────────────────────────────────── */
 buildSphere(S.subdiv);
