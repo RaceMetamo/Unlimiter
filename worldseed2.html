@@ -205,7 +205,7 @@ const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2',{antialias:false,alpha:false,depth:true,preserveDrawingBuffer:true});
 if(!gl){ document.body.innerHTML='<p style="padding:24px;font:14px sans-serif;color:#aec0cc">This tool needs WebGL2.</p>'; throw new Error('no webgl2'); }
 const hasFloatRT = !!gl.getExtension('EXT_color_buffer_float');
-const MAX_PLATES=24, MAX_CRATERS=32, MAX_BODIES=16, BODY_ACC=768;
+const MAX_PLATES=24, MAX_CRATERS=32, MAX_BODIES=40, BODY_ACC=768;
 
 /* ── parameter schema ─────────────────────────────────────── */
 const SCHEMA=[
@@ -338,7 +338,7 @@ const P={}; SCHEMA.forEach(s=>P[s.id]=s.v);
 // an evolved world's drifted plates, craters and surface layers travel with its parameters (null for a plain 1.0 world)
 P.evoGeo=null; P.evoLook=null;
 const S={
-  seed:Math.floor(Math.random()*9999), facet:false, autoRot:true, paintOn:true,
+  name:"", seed:Math.floor(Math.random()*9999), facet:false, autoRot:true, paintOn:true,
   subdiv:6, pCount:30000, accumSize:2048, resScale:1,
   colors:{deep:'#0a2a44',shallow:'#1d6f8e',low:'#3f6b4a',mid:'#8c7b45',high:'#6e5545',
           atmo:'#5fc8ff',flowA:'#ffd9a0',flowB:'#ff7a4d',ringA:'#d8c9ad',ringB:'#8f7f6b',eyeW:'#fdfaf2',ink:'#15100f'}
@@ -1710,7 +1710,7 @@ function addBodyFromCurrent(name,copyPaint,parent){
   const n=bodies.length;
   const par=(parent===undefined?-1:parent);
   const host=(par>=0&&bodies[par])?bodies[par]:null;
-  bodies.push({name:uniqueName(name||(host?(host.name+' Moon'):'Planet '+(n+1))), world:snapshot(), parent:par,
+  bodies.push({name:uniqueName(name||(host?(host.name+' Moon'):(S.name||'').trim()||'Planet '+(n+1))), world:snapshot(), parent:par,
     orbit: host
       ? {r:host.scale*2.6, speed:1.4+Math.random()*0.8, phase:Math.random()*6.28, incl:(Math.random()-0.5)*0.5}
       : {r:4+n*2.6, speed:0.22/Math.pow(1+n*0.6,1.5), phase:Math.random()*6.28, incl:(Math.random()-0.5)*0.25},
@@ -1917,7 +1917,7 @@ function openInEditor(i,from){
   if(b.evo&&b.evo.kind==='rocky') bakeEvoInto(b);
   restore(b.world);
   copyTex(bodyAccum(b),accum.tex,accum.size,accum.size/2);
-  linkTo(i,from); editorEvo=null;
+  linkTo(i,from); editorEvo=null; S.name=b.name; gen.send.name='';
   setMode('planet'); scrollEl.scrollTop=0;
   hud('Editing “'+b.name+'” live — changes show up in '+(from==='genesis'?'Genesis':'the system')+'.');
 }
@@ -2609,6 +2609,23 @@ function shepherdGapsFor(i,w,bsc){
   }
   return {t,w:ww,n};
 }
+// one place to rename a world, so its chronicle, civilisation, moons list and flag keep pointing at it
+function renameBody(b,raw){
+  const old=b.name, base=(raw||'').trim()||old;
+  if(base===old) return old;
+  let n=base, k=2; const taken=new Set(bodies.filter(o=>o!==b).map(o=>o.name));
+  while(taken.has(n)) n=base+' '+(k++);
+  b.name=n;
+  if(b.evo) b.evo.name=n;
+  for(const x of gen.log||[]) if(x.who===old) x.who=n;
+  for(const c of gen.civs||[]) if(c.home===old) c.home=n;
+  if(collapsed.has(old)){ collapsed.delete(old); collapsed.add(n); }
+  if(OPEN['flag_'+old]!==undefined) OPEN['flag_'+n]=OPEN['flag_'+old];
+  if(bodies[linkIdx]===b) S.name=n;
+  gen.logDirty=true;
+  saveSystemSoon();
+  return n;
+}
 function uniqueName(base){
   let n=base, k=2;
   const taken=new Set(bodies.map(b=>b.name));
@@ -2979,10 +2996,16 @@ function buildPlanetUI(){
   buildSendToGenesis();
   // world
   const w=section('World',true);
+  const nmr=el('div','sel','<label for="pname">Name</label>');
+  const pni=document.createElement('input'); pni.type='text'; pni.id='pname'; pni.placeholder='Unnamed planet'; pni.value=S.name||'';
+  pni.oninput=()=>{ S.name=pni.value; };
+  pni.onchange=()=>{ S.name=pni.value.trim(); const lb=linkValid(); if(lb&&S.name){ S.name=renameBody(lb,S.name); pni.value=S.name; updateLinkBar(); } };
+  pni.onkeydown=e=>{ if(e.key==='Enter') pni.blur(); };
+  nmr.appendChild(pni); w.appendChild(nmr);
   const psel=el('div','sel','<label for="preset">Starting point</label>');
   const sel=document.createElement('select'); sel.id='preset';
   sel.innerHTML='<option value="">Choose…</option>'+Object.keys(BUILTIN).map(k=>`<option>${k}</option>`).join('');
-  sel.onchange=()=>{ if(sel.value){ editorEvo=null; applyPreset(BUILTIN[sel.value],false); } };
+  sel.onchange=()=>{ if(sel.value){ editorEvo=null; if(linkIdx<0) S.name=sel.value; applyPreset(BUILTIN[sel.value],false); } };
   psel.appendChild(sel); w.appendChild(psel);
   const srow=el('div','sel','<label for="seedin">Seed</label>');
   const si=document.createElement('input'); si.type='text'; si.id='seedin'; si.value=S.seed;
@@ -3014,7 +3037,7 @@ function buildPlanetUI(){
     const it=el('div','item');
     const dot=el('div','dot'); dot.style.background=entry.colors?entry.colors.mid:'#888';
     const nm=el('span','nm'); nm.textContent=entry.name;
-    const bl=el('button',null,'Load'); bl.onclick=()=>{ editorEvo=null; restore(entry); clearAccum(); buildUI(); hud('Loaded “'+entry.name+'”.'); };
+    const bl=el('button',null,'Load'); bl.onclick=()=>{ editorEvo=null; restore(entry); if(linkIdx<0) S.name=entry.name; clearAccum(); buildUI(); hud('Loaded “'+entry.name+'”.'); };
     const bo=el('button',null,'Orbit'); bo.title='Add to the system';
     bo.onclick=()=>{ const keep=snapshot(); restore(entry); addBodyFromCurrent(entry.name,false,-1); restore(keep); buildUI(); };
     const bx=el('button',null,'✕'); bx.title='Delete';
@@ -3022,14 +3045,14 @@ function buildPlanetUI(){
     it.append(dot,nm,bl,bo,bx); lb.appendChild(it);
   });
   const sv=el('div','save');
-  const nameIn=document.createElement('input'); nameIn.type='text'; nameIn.placeholder='Name this planet';
+  const nameIn=document.createElement('input'); nameIn.type='text'; nameIn.placeholder='Name this planet'; nameIn.value=S.name||'';
   const bSave=el('button',null,'Save');
   const doSave=()=>{
-    const n=(nameIn.value||'').trim()||('Planet '+(library.length+1));
-    const snap=snapshot(); snap.name=n;
+    const n=(nameIn.value||'').trim()||S.name||('Planet '+(library.length+1));
+    const snap=snapshot(); snap.name=n; S.name=n;
     const ex=library.findIndex(e=>e.name===n);
     if(ex>=0) library[ex]=snap; else library.push(snap);
-    saveLibrary(); nameIn.value=''; buildUI(); hud('Saved “'+n+'”.');
+    saveLibrary(); buildUI(); hud('Saved “'+n+'”.');
   };
   bSave.onclick=doSave;
   nameIn.onkeydown=e=>{ if(e.key==='Enter') doSave(); };
@@ -3279,14 +3302,7 @@ function buildSystemUI(){
     nm.type='text'; nm.className='nm nmin'; nm.value=b.name; nm.spellcheck=false;
     nm.title='Click to rename';
     if(i===linkIdx) nm.style.color='var(--hot)';
-    nm.oninput=()=>{ b.name=nm.value; saveSystemSoon(); };
-    nm.onblur=()=>{
-      const old=b.name;
-      const clean=(nm.value||'').trim()||(lvl?'Moon':'Planet');
-      b.name=clean; nm.value=clean;
-      if(collapsed.has(old)&&old!==clean){ collapsed.delete(old); collapsed.add(clean); }
-      saveSystem(); buildUI();
-    };
+    nm.onblur=()=>{ if((nm.value||'').trim()===b.name) return; nm.value=renameBody(b,nm.value); saveSystem(); buildUI(); };
     nm.onkeydown=e=>{ if(e.key==='Enter') nm.blur(); };
     const cnt=kids&&collapsed.has(b.name)?el('span','cnt',String(kids)):null;
     const bsel=el('button',null,i===selIdx?'Hide':'Edit');
@@ -5282,6 +5298,10 @@ function buildEvoUI(head){
   const dv=section('Selected world',selIdx>=0);
   if(selIdx>=0&&bodies[selIdx]&&bodies[selIdx].evo&&!bodies[selIdx].gone){
     const si=selIdx, sb=bodies[selIdx];
+    const rn=el('div','sel','<label>Name</label>'); const ri=document.createElement('input'); ri.type='text'; ri.value=sb.name; ri.spellcheck=false;
+    ri.onchange=()=>{ ri.value=renameBody(sb,ri.value); buildUI(); hud('Renamed to '+ri.value+'.'); };
+    ri.onkeydown=e=>{ if(e.key==='Enter') ri.blur(); };
+    rn.appendChild(ri); dv.appendChild(rn);
     const iv=el('div','btns');
     const bc=el('button',null,'Comet'); bc.title='Throw a comet at it: water, CO₂ and organics';
     bc.onclick=()=>genThrow(si,'comet');
@@ -5468,7 +5488,7 @@ function rogueHit(rg,b,inDir){
   if(selIdx>=0&&bodies[selIdx]===b) hud(b.name+': '+what.toLowerCase()+'.');
 }
 function captureRogue(rg){
-  const host=bodies[rg.target]; if(!host||bodies.length>=32) return;
+  const host=bodies[rg.target]; if(!host||bodies.length>=MAX_BODIES) return;
   const n=bodies.filter(x=>x.parent===rg.target).length;
   const comet=rg.kind==='comet';
   const p={amp:0.08,freq:1.8,ridge:0.5,warpAmp:0.3,warpFreq:0.6,warpIter:1,sea:-1.5,plateN:0,shelf:0.2,rivers:0,craterN:0,
@@ -5551,8 +5571,8 @@ function buildSendToGenesis(){
   const sg=section('Send to Genesis',live&&!!editorEvo);
   if(!live){ sg.appendChild(el('p','note','Form a system in Genesis first. Then any planet you make here can be dropped into it — into an orbit, or flung at another world.')); return; }
   sg.appendChild(el('p','note',`This planet joins ${gen.starName}'s system at ${fmtAge(gen.t)} and evolves from there. Its look comes from the editor; what it is made of comes from these.`));
-  const nr=el('div','sel','<label>Name</label>'); const ni=document.createElement('input'); ni.type='text'; ni.value=gen.send.name||'';
-  ni.placeholder='Visitor'; ni.oninput=()=>gen.send.name=ni.value; nr.appendChild(ni); sg.appendChild(nr);
+  const nr=el('div','sel','<label>Arrives as</label>'); const ni=document.createElement('input'); ni.type='text'; ni.value=gen.send.name||'';
+  ni.placeholder=S.name||'Visitor'; ni.oninput=()=>gen.send.name=ni.value; nr.appendChild(ni); sg.appendChild(nr);
   const hz=genHZ((gen.sys&&gen.sys.starNow?gen.sys.starNow.L:gen.st.L));
   if(!gen.send._auSet){ gen.send.au=+((hz[0]+hz[1])/2/GEN.AU).toFixed(2); gen.send._auSet=true; }
   sliderRow(sg,{l:'Mass (M⊕)',min:0.02,max:12,step:0.01},gen.send,'m',null);
@@ -5575,7 +5595,7 @@ function buildSendToGenesis(){
 }
 function genOpenInEditor(i){
   const b=bodies[i]; if(!b) return;
-  if(b.gen){ gen.send.m=b.gen.m; gen.send.fe=b.gen.fe; gen.send.vol=b.gen.vol; gen.send.W=Math.min(60,b.evo.W||0); gen.send.name=b.name+' II'; }
+  if(b.gen){ gen.send.m=b.gen.m; gen.send.fe=b.gen.fe; gen.send.vol=b.gen.vol; gen.send.W=Math.min(60,b.evo.W||0); }
   openInEditor(i,'genesis');
   hud(`Editing ${b.name} live, as it stands at ${fmtAge(gen.t)}. Your changes are kept as it keeps evolving.`);
 }
@@ -5586,7 +5606,7 @@ function editorWorld(){
   const m=Math.max(0.02,sv.m), W=Math.max(0,sv.W);
   const fe=Math.max(0.05,Math.min(0.7,sv.fe)), vol=Math.max(0.001,sv.vol);
   const wat=Math.min(0.45,W*1.3*0.0018/m);
-  const name=uniqueName((sv.name||'').trim()||'Visitor');
+  const name=uniqueName((sv.name||'').trim()||(S.name||'').trim()||'Visitor');
   const b={name,world:snap,parent:-1,orbit:{r:sv.au*GEN.AU,speed:0,phase:Math.random()*6.28,incl:0.02},
     scale:Math.max(0.035,Math.min(0.34,0.17*Math.pow(m,0.27)*(1+0.2*Math.min(1,wat*3)))),spin:0.6,accum:null};
   b.gen={kind:'rocky',m,fe,si:Math.max(0.05,1-fe-wat-vol),wat,vol,gasf:0,aAU:sv.au,gi:0,hits:0,tidal:0,imported:true};
@@ -5617,7 +5637,7 @@ function settleEditorWorld(b){
 }
 function sendEditorToGenesis(how,target){
   if(gen.phase!=='evolving'){ hud('Form a system in Genesis first.'); return; }
-  if(bodies.length>=32){ hud('This system is full.'); return; }
+  if(bodies.length>=MAX_BODIES){ hud('This system is full.'); return; }
   if(linkIdx>=0){ syncLink(true); linkIdx=-1; linkRef=null; }
   const b=editorWorld();
   b.orbit.speed=0.49*Math.sqrt(gen.S.GM/Math.pow(b.orbit.r,3));
