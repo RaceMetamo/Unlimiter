@@ -202,6 +202,9 @@ const TOOLS = [
   { file:"galaxy.html", name:"Starfold", motif:"galaxy",
     desc:"A galaxy grown from a seed \u2014 spiral, barred, elliptical, ring or irregular \u2014 rendered on the Volume engine as gaussian splats for stars, gas and dust, with raymarched haze between them. Worldseed systems fly in and out of it, so you can zoom from the whole disc down to a single planet.",
     tags:["3d","procedural","volumetric","webgpu","drive"] },
+  { file:"nekogacha.html", name:"Neko Gacha", motif:"neko",
+    desc:"A gachapon for Geylang Crunk cats. Turn the knob, a capsule rolls in, tap it open and meet whoever is inside \u2014 rarer traits tint the capsule from blue to gold to rainbow. Then rebuild the cat by hand: Mochi, PS2, Voxel or shell-rendered Real Fur, with patterns, eyes, ears, tails, gear and a beckoning maneki paw. Every cat breathes, blinks, watches you and has a share code.",
+    tags:["3d","character","gacha","procedural animation","vertex colour","fur"] },
   { file:"tbg-facade.html", name:"TBG Facade", motif:"facade",
     desc:"Generative AV built on The Bridge Gallery's folded-panel identity, for the wall it came from.",
     tags:["brand","av"] }
@@ -343,6 +346,34 @@ const MOTIF = {
       const wall=b2-b1<0.03, x=w*(0.12+u*0.76)+(v-0.5)*w*0.12, y=h*(0.18+v*0.62)-Math.sqrt(d)*h*0.22;
       g.fillStyle=wall?"rgba(255,240,248,0.95)":`hsla(${[330,172,42][k%3]},80%,${48+d*22}%,0.8)`;
       g.beginPath(); g.arc(x,y,wall?1.5:1.1,0,TAU); g.fill();
+    }
+  },
+  neko(g,w,h,t){
+    // a capsule rolls in, splits, and a cat head pops out; confetti; loops every 4s
+    const k=(t%4)/4, cx=w/2, gy=h*0.82, R=Math.min(w,h)*0.2;
+    g.fillStyle="rgba(255,255,255,0.06)"; g.beginPath(); g.ellipse(cx,gy+2,R*1.1,R*0.18,0,0,TAU); g.fill();
+    const tiers=["#8fc6ff","#5fdc98","#c09bff","#ffcf33"], col=tiers[Math.floor(t/4)%4];
+    if(k<0.55){
+      const p=Math.min(1,k/0.45), e=1-Math.pow(1-p,3), x=cx+(1-e)*w*0.7, rot=(1-e)*-9, y=gy-R-Math.abs(Math.sin(e*Math.PI*2))*(1-e)*R;
+      g.save(); g.translate(x,y); g.rotate(rot+(p>=1?Math.sin(t*14)*0.08:0));
+      g.fillStyle=col; g.beginPath(); g.arc(0,0,R,Math.PI,0); g.fill();
+      g.fillStyle="#f4f1fb"; g.beginPath(); g.arc(0,0,R,0,Math.PI); g.fill();
+      g.strokeStyle="#1b1440"; g.lineWidth=2; g.beginPath(); g.arc(0,0,R,0,TAU); g.moveTo(-R,0); g.lineTo(R,0); g.stroke();
+      g.fillStyle="rgba(255,255,255,0.55)"; g.beginPath(); g.ellipse(-R*0.35,-R*0.5,R*0.22,R*0.1,-0.5,0,TAU); g.fill();
+      g.restore();
+    } else {
+      const q=(k-0.55)/0.45, s=Math.min(1,q*3)*(1+0.18*Math.sin(Math.min(q*3,1)*Math.PI)), hr=R*0.95*s, hy=gy-hr*1.05;
+      g.fillStyle=col; g.globalAlpha=Math.max(0,1-q*2);
+      g.beginPath(); g.arc(cx+q*w*0.25,gy-R-q*h*0.5,R,Math.PI,0); g.fill(); g.globalAlpha=1;
+      for(let i=0;i<34;i++){ const a=hash(i,9)*TAU, sp=(0.4+hash(i,4))*q*w*0.5, fx=cx+Math.cos(a)*sp, fy=gy-R+Math.sin(a)*sp*0.7+q*q*h*0.5;
+        g.fillStyle=["#ff5fa2","#ffd23f","#5e8bff","#3dffb6","#fff"][i%5]; g.fillRect(fx,fy,3,3); }
+      g.fillStyle="#f08a3c"; g.strokeStyle="#1b1440"; g.lineWidth=2;
+      [-1,1].forEach(sd=>{ g.beginPath(); g.moveTo(cx+sd*hr*0.25,hy-hr*0.7); g.lineTo(cx+sd*hr*0.85,hy-hr*1.15); g.lineTo(cx+sd*hr*0.9,hy-hr*0.25); g.closePath(); g.fill(); g.stroke(); });
+      g.beginPath(); g.ellipse(cx,hy,hr*1.1,hr*0.92,0,0,TAU); g.fill(); g.stroke();
+      const bl=(t%3)<0.12?0.15:1;
+      [-1,1].forEach(sd=>{ g.fillStyle="#ffc93c"; g.beginPath(); g.ellipse(cx+sd*hr*0.38,hy-hr*0.05,hr*0.17,hr*0.2*bl,0,0,TAU); g.fill();
+        g.fillStyle="#120c24"; g.beginPath(); g.ellipse(cx+sd*hr*0.38,hy-hr*0.03,hr*0.1,hr*0.13*bl,0,0,TAU); g.fill(); });
+      g.fillStyle="#ff7a9c"; g.beginPath(); g.arc(cx,hy+hr*0.18,hr*0.06,0,TAU); g.fill();
     }
   },
   ouro(g,w,h,t){
