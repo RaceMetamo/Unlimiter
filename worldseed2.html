@@ -148,6 +148,9 @@
   .gen-ev b{font-weight:500;color:var(--ink-dim);margin-right:4px} .gen-ev u{text-decoration:none;color:var(--ink-bright)}
   .gen-ev.life{border-color:#5fcf6a} .gen-ev.extinct{border-color:#e05a4a} .gen-ev.impact{border-color:#ff9a4a}
   .gen-ev.civ{border-color:#ffd27a}
+  .lab-read{margin:4px 0 8px;font-size:12px} .lab-read .hc-r{display:grid;grid-template-columns:70px 1fr;gap:6px;padding:3px 0;border-top:1px solid rgba(255,255,255,.05)}
+  .lab-read .hc-r span{color:var(--ink-dim)} .lab-read .hc-r b{font-weight:500;color:var(--ink-bright)}
+  .lab-log{max-height:170px;overflow:auto;margin:6px 0}
   .gen-civ{display:grid;grid-template-columns:12px 1fr;column-gap:6px;font-size:11.5px;margin:4px 0;color:var(--ink-bright)}
   .gen-civ i{width:9px;height:9px;border-radius:50%;margin-top:4px;grid-row:span 2} .gen-civ b{font-weight:500} .gen-civ small{color:var(--ink-dim);font-size:10.5px;line-height:1.4}
   .gen-civ.dead{opacity:.55} .gen-ev.species{border-color:#3d8a4a;color:var(--ink-dim)}
@@ -2569,6 +2572,8 @@ function render(now){
   if(mode==='planet'){
     if(S.autoRot) spinAngle+=MP.spin*dt;
     stepPaint(dt,time);
+    // the Life lab steps (and may bake its height map) before the scene's framebuffer is bound
+    if(lab.on&&lab.b) labTick(dt);
     const eye=[cam.target[0]+Math.cos(cam.pitch)*Math.sin(cam.yaw)*cam.dist,
                cam.target[1]+Math.sin(cam.pitch)*cam.dist,
                cam.target[2]+Math.cos(cam.pitch)*Math.cos(cam.yaw)*cam.dist];
@@ -2592,9 +2597,11 @@ function render(now){
     lights.dir.set(L,0); lights.col.set([1,1,1],0);
     const bnc=1+singState(w).bounce;
     const tiltM=mul(rotZ(MP.tilt),trs([0,0,0],bnc));
-    drawPlanet(w,S.seed,S.colors,S.facet,mul(mul(rotZ(MP.tilt),rotY(spinAngle)),trs([0,0,0],bnc)),
+    const lw=lab.on&&lab.b?lab.b.world:null;
+    const dw=lw?lw.p:w, dc=lw?lw.colors:S.colors;
+    drawPlanet(dw,lw?lw.seed:S.seed,dc,S.facet,mul(mul(rotZ(MP.tilt),rotY(spinAngle)),trs([0,0,0],bnc)),
                accum.tex,eye,time,mesh);
-    drawRing(w,S.colors,tiltM,eye,1+MP.amp,S.seed);
+    drawRing(dw,dc,tiltM,eye,1+MP.amp,lw?lw.seed:S.seed);
     updateLabels(null,null);
     endScene(la,null);
   } else if(mode==='genesis'&&gen.phase!=='evolving'){
@@ -3137,6 +3144,7 @@ function buildPlanetUI(){
     b2.onclick=()=>{ editorEvo=null; P.evoGeo=P.evoLook=null; clearAccum(); buildUI(); };
     bb.append(b1,b2); ev.appendChild(bb); scrollEl.appendChild(ev);
   }
+  buildLifeLab();
   buildSendToGenesis();
   // world
   const w=section('World',true);
@@ -4363,7 +4371,7 @@ function evoGiant(e,dt,t,sys,S){
    the plants they walk over; impacts and ice cut them back.
    ───────────────────────────────────────────────────────────── */
 // grid size is chosen per world when its biosphere starts; 1× = 160×80 up to 6× = 960×480
-function lifeGridFor(res){ const k=Math.max(1,Math.min(6,Math.round(res||1))); return [160*k,80*k]; }
+function lifeGridFor(res){ const k=Math.max(1,Math.min(8,Math.round(res||1))); return [160*k,80*k]; }
 const LIFE_RULES={
   mats:[['Anneal','B4678/S35678'],['Coral','B3/S45678'],['Maze','B3/S12345'],['Diamoeba','B35678/S5678'],
         ['Mazectric','B3/S1234'],['Vote','B5678/S45678'],['Walled cities','B45678/S2345']],
@@ -5046,35 +5054,38 @@ function genStepAll(dt){
       continue;
     }
     evoStep(e,dt,gen.t,sys,gen.rng,genLog);
-    const L=e.life;
-    if(e.kind==='rocky'){
-      const colony=e.colony&&!e.colony.dead;
-      if((L.stage>0||colony||e.civ)&&!b.life&&b.bake&&b.bake.W===lifeGridFor(gen.ing.lifeRes)[0]){
-        b.life=lifeNew(e,b,gen.st.T,gen.ing.seed,gen.ing.lifeRes);
-        lifeHabitat(b.life,e,b.bake.h,b.world.p.sea,L.sub);
-        if(L.stage>0) lifeAddSpecies(b.life,e,'microbe',gen.st.T);
-        if(!b.lifeTex||b.lifeTex._w!==b.life.W) b.lifeTex=makeLifeTex(b.life.W,b.life.H);
-      }
-      if(b.life){
-        if(L.stage===0&&!colony&&!e.civ){ b.life=null; continue; }
-        if(!L.sub) for(const k of ['microbe','photo','plant','animal'].slice(0,Math.min(4,L.stage))){
-          if(b.life.kinds[k]) continue;
-          const sp=lifeAddSpecies(b.life,e,k,gen.st.T);
-          genLog(e,`New lineage: ${k==='animal'?'mobile creatures':k==='plant'?'land plants':k==='photo'?'photosynthetic mats':'microbes'} following ${sp.name} (${sp.rule.str})`,'life');
-        }
-        // isolated populations drift into new species; more room on a finer grid means more of them
-        if(L.stage>=1&&!L.sub&&b.life.species.length<LIFE_MAXSP&&gen.rng()<dt*0.0025*(1+0.6*gen.ing.lifeRes)*(1+0.5*(gen.ing.tenacity||0))){
-          e._t=gen.t; const nw=lifeSpeciate(b.life,e);
-          if(nw) genLog(e,`New species: ${nw.sp.name} (${nw.sp.rule.str}) split off from ${nw.par.name}`,'species');
-        }
-        for(const ev of b.life.events.splice(0)) if(ev.t==='extinct') genLog(e,`${ev.name} has died out`,'species');
-        if(L.killDir){ lifeCull(b.life,L.killDir,L.killR,L.ext*0.45); L.killDir=null; }
-        b.life.vigor=0.6+Math.min(1,L.prog+0.3)*0.6;
-      }
-    }
+    bodyLifeTick(b,dt);
   }
   genCivTick(dt);
   gen.t+=dt;
+}
+// a world's biosphere for one deep-time step: starts it, adds lineages as stages arrive, lets species split
+function bodyLifeTick(b,dt){
+  const e=b.evo, L=e.life;
+  if(e.kind!=='rocky') return;
+  const res=b.lifeRes||gen.ing.lifeRes;
+  const colony=e.colony&&!e.colony.dead;
+  if((L.stage>0||colony||e.civ)&&!b.life&&b.bake&&b.bake.W===lifeGridFor(res)[0]){
+    b.life=lifeNew(e,b,gen.st.T,gen.ing.seed,res);
+    lifeHabitat(b.life,e,b.bake.h,b.world.p.sea,L.sub);
+    if(L.stage>0) lifeAddSpecies(b.life,e,'microbe',gen.st.T);
+    if(!b.lifeTex||b.lifeTex._w!==b.life.W) b.lifeTex=makeLifeTex(b.life.W,b.life.H);
+  }
+  if(!b.life) return;
+  if(L.stage===0&&!colony&&!e.civ){ b.life=null; return; }
+  if(!L.sub) for(const k of ['microbe','photo','plant','animal'].slice(0,Math.min(4,L.stage))){
+    if(b.life.kinds[k]) continue;
+    const sp=lifeAddSpecies(b.life,e,k,gen.st.T);
+    genLog(e,`New lineage: ${k==='animal'?'mobile creatures':k==='plant'?'land plants':k==='photo'?'photosynthetic mats':'microbes'} following ${sp.name} (${sp.rule.str})`,'life');
+  }
+  // isolated populations drift into new species; more room on a finer grid means more of them
+  if(L.stage>=1&&!L.sub&&b.life.species.length<LIFE_MAXSP&&gen.rng()<dt*0.0025*(1+0.6*Math.min(4,res))*(1+0.5*(gen.ing.tenacity||0))){
+    e._t=gen.t; const nw=lifeSpeciate(b.life,e);
+    if(nw) genLog(e,`New species: ${nw.sp.name} (${nw.sp.rule.str}) split off from ${nw.par.name}`,'species');
+  }
+  for(const ev of b.life.events.splice(0)) if(ev.t==='extinct') genLog(e,`${ev.name} has died out`,'species');
+  if(L.killDir){ lifeCull(b.life,L.killDir,L.killR,L.ext*0.45); L.killDir=null; }
+  b.life.vigor=0.6+Math.min(1,L.prog+0.3)*0.6;
 }
 function makeLifeTex(W,H){
   const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
@@ -5092,7 +5103,7 @@ function uploadLife(b){
 }
 // render the planet's height field flat and read it back, so sea level and habitats match what is drawn
 function bakeBody(b){
-  [BAKE_W,BAKE_H]=lifeGridFor(gen.ing.lifeRes);
+  [BAKE_W,BAKE_H]=lifeGridFor(b.lifeRes||gen.ing.lifeRes);
   if(bakeFB&&bakeTexW!==BAKE_W){ gl.deleteFramebuffer(bakeFB); gl.deleteTexture(bakeTex); bakeFB=null; }
   if(!bakeFB){
     bakeTexW=BAKE_W;
@@ -5495,7 +5506,7 @@ function buildEvoUI(head){
   const gr=el('div','sel','<label>Life grid</label>'); const gs=document.createElement('select');
   [[1,'160 × 80 — fast'],[2,'320 × 160'],[3,'480 × 240'],[4,'640 × 320 — fine'],[6,'960 × 480 — finest, heavy']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===gen.ing.lifeRes) o.selected=true; gs.appendChild(o); });
   gs.onchange=()=>{ gen.ing.lifeRes=+gs.value; store('genesisIng',gen.ing);
-    for(const b of bodies){ b.life=null; b.bake=null; }
+    for(const b of bodies){ b.life=null; b.bake=null; b.lifeRes=undefined; }
     hud('Biospheres restart on the new grid — the story so far is kept, the patterns begin again.'); };
   gr.appendChild(gs); head.appendChild(gr);
   const cw=el('label','chk'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!gen.ing.civSlow;
@@ -6541,6 +6552,220 @@ canvas.addEventListener('pointermove',e=>{
 });
 canvas.addEventListener('pointerleave',e=>{ if(e.pointerType!=='mouse'||hoverPin) return; hoverIdx=-1; hoverUpdate(); });
 setInterval(()=>{ if(hoverRow&&!hoverRow.isConnected){ hoverRow=null; hoverIdx=-1; } if(hoverIdx>=0||hoverEl.style.display==='block') hoverUpdate(); },500);
+
+
+/* ── the Life lab: one world, up close, on its own clock ───────
+   The planet in the editor gets a climate and a deep-time clock of
+   its own: the same evolution model Genesis uses, around a star you
+   choose, at the distance you choose. Seed it, slow time right down,
+   run the automata on a finer grid than Genesis can afford, and when
+   something good starts, send the whole living world into a system.
+   ──────────────────────────────────────────────────────────────── */
+const LAB_STARS={'Sun-like':1,'Orange dwarf':0.75,'Red dwarf':0.4,'Hot white star':1.6};
+const lab={on:false,b:null,t:0,st:null,sys:null,rng:null,log:[],speed:10,res:4,playing:true,acc:0,lifeAcc:0,star:'Sun-like',base:null,civN:0};
+// run fn with Genesis's clock, star, chronicle and dice swapped for the lab's, so the shared code works on the lab world
+function withLab(fn){
+  const keep={t:gen.t,st:gen.st,log:gen.log,rng:gen.rng,dirty:gen.logDirty};
+  gen.t=lab.t; gen.st=lab.st; gen.log=lab.log; gen.rng=lab.rng;
+  try{ return fn(); } finally{ lab.log=gen.log; gen.t=keep.t; gen.st=keep.st; gen.log=keep.log; gen.rng=keep.rng; gen.logDirty=keep.dirty; }
+}
+function labStarProps(){ return lab.star==='This Genesis star'&&gen.phase==='evolving'?{...gen.st}:starProps(LAB_STARS[lab.star]||1); }
+function labHZ(){ const st=labStarProps(); return genHZ(st.L).map(x=>x/GEN.AU); }
+function labStart(){
+  lab.st=labStarProps();
+  lab.rng=mulberry(Math.floor(Math.random()*1e9));
+  lab.t=0; lab.log=[]; lab.acc=0; lab.lifeAcc=0; lab.civN=0;
+  lab.sys={debris:0.6,comets:0.6,ten:gen.ing.tenacity||0,filter:gen.ing.filter,starNow:starAt(lab.st,0)};
+  const keepName=gen.send.name; gen.send.name=(S.name||'').trim()||'Lab world';
+  const b=editorWorld(); gen.send.name=keepName;
+  b.name=(S.name||'').trim()||'Lab world';
+  b.lifeRes=lab.res;
+  lab.b=b; lab.on=true;
+  withLab(()=>{
+    settleEditorWorld(b);
+    b.evo.name=b.name;
+    // skip the first few hundred million years: the crust has cooled and the air and seas have settled when you start watching
+    for(let i=0;i<80;i++) labEvoStep(5,true);
+    genLog(b.evo,`The clock starts: ${b.evo.era||'a young world'}, ${Math.round(b.evo.T-273)}°C`,'geo');
+  });
+  lab.base={p:{...P},c:{...S.colors}};
+  lab.playing=true; lab.justStarted=true;
+  hud(`${b.name} has a climate now. ${labVerdict()}`);
+}
+function labEvoStep(dt,quiet){
+  const b=lab.b, e=b.evo;
+  lab.sys.ten=gen.ing.tenacity||0; lab.sys.filter=gen.ing.filter;
+  lab.sys.starNow=starAt(lab.st,lab.t);
+  evoStep(e,dt,lab.t,lab.sys,lab.rng,quiet?()=>{}:genLog);
+  bodyLifeTick(b,dt);
+  labCiv(b);
+  lab.t+=dt; gen.t=lab.t;
+}
+// a lab civilisation: cities and falls work as in Genesis; ships need other worlds, so they wait for a system
+function labCiv(b){
+  const e=b.evo, L=e.life;
+  if(L.stage>=5&&!e.civ){
+    e.civ={id:1+(lab.civN++%6),name:genName(lab.rng),home:b.name,born:lab.t,homeAlive:true,dead:false,space:false,arks:0,settled:0,endT:0,why:''};
+    e.civ.col=CIV_COLS[(e.civ.id-1)%CIV_COLS.length];
+    genLog(e,`The ${e.civ.name} have built a technological civilisation`,'civ');
+  }
+  if(e.civ&&L.stage>=6&&!e.civ.space){ e.civ.space=true; e.civ.spaceT=lab.t; genLog(e,`The ${e.civ.name} are ready to leave — send ${b.name} into a system to watch them go`,'civ'); }
+  if(e.civFell){ if(e.civ){ e.civ.homeAlive=false; e.civ.dead=true; if(b.life) lifeRuin(b.life,e.civ.id); e.civ=null; } e.civFell=null; }
+}
+function labTick(dt){
+  const b=lab.b; if(!b) return;
+  // what you change in the editor while the clock runs is kept on top of what evolution does
+  if(lab.base){
+    for(const s of SCHEMA){ const k=s.id; if(P[k]!==lab.base.p[k]) (b.userP||(b.userP={}))[k]=P[k]; }
+    for(const k in S.colors) if(S.colors[k]!==lab.base.c[k]) (b.userC||(b.userC={}))[k]=S.colors[k];
+    b.world.p.surfFlag=P.surfFlag;
+  }
+  withLab(()=>{
+    if(lab.playing){
+      lab.acc+=dt*lab.speed;
+      let n=0; while(lab.acc>=EVO_DT&&n<40){ lab.acc-=EVO_DT; n++; labEvoStep(EVO_DT); }
+      if(n>=40) lab.acc=0;
+      lab.lifeAcc+=dt;
+      // the automata run in real time whatever the clock says, so slow time shows every generation
+      const every=lab.res>=8?1/5:lab.res>=6?1/7:1/11;
+      if(lab.lifeAcc>every){ lab.lifeAcc=0; if(b.life) lifeStep(b.life,b.evo); }
+    }
+    applyEvoVisual(b);
+    if(!b.bake||lab.t-b.bake.t>=60||b.bake.nC!==b.evo.craters.length&&lab.t-b.bake.t>10||b.bake.W!==lifeGridFor(lab.res)[0]) bakeBody(b);
+    if(b.life&&b.life.dirty&&b.lifeTex){ lifePaint(b.life); uploadLife(b); b.life.dirty=false; }
+  });
+}
+function labVerdict(){
+  const e=lab.b&&lab.b.evo; if(!e) return '';
+  const ten=gen.ing.tenacity||0;
+  if(e.regime==='magma') return 'Its surface is still molten.';
+  if(e.runaway||e.steam) return 'Its oceans are boiling away — move it further out.';
+  if(!e.W||e.W<0.004) return 'It is bone dry — give it water, or throw comets at it.';
+  if(e.P<0.008) return 'It has almost no air.';
+  if(e.T<258-14*ten) return e.sub?'Frozen on top, but there may be an ocean underneath.':'It is frozen — move it closer in.';
+  if(e.T>350+12*ten) return 'It is too hot for life — move it further out.';
+  return 'It could hold life.';
+}
+function labSeed(){
+  const b=lab.b; if(!b) return;
+  const e=b.evo, L=e.life;
+  if(L.stage>0){ hud('Life is already here.'); return; }
+  const v=labVerdict();
+  if(v!=='It could hold life.'&&!(e.sub&&v.startsWith('Frozen'))){ hud('Seeds would die: '+v); return; }
+  L.chem=L.gate+0.01;
+  withLab(()=>{ labEvoStep(EVO_DT); genLog(e,'Spores you sent have taken hold','life'); });
+  hud('Seeded. Slow the clock down and zoom in to watch the first cells.');
+}
+function labImpact(kind){
+  const b=lab.b; if(!b) return;
+  withLab(()=>{ evoImpact(b.evo,lab.rng,kind==='comet'?0.2:0.32,randDir(lab.rng),kind,lab.sys,genLog,lab.t,kind==='comet'?'A comet you threw struck':'An asteroid you threw struck'); });
+}
+function labStop(){ lab.on=false; lab.b=null; buildUI(); }
+function sendLabToGenesis(){
+  const b=lab.b; if(!b) return;
+  if(gen.phase!=='evolving'){ hud('Form a system in Genesis first — or add it to the System instead.'); return; }
+  if(bodies.length>=MAX_BODIES){ hud('This system is full.'); return; }
+  const shift=gen.t-lab.t;
+  b.name=uniqueName(b.name); b.evo.name=b.name;
+  b.orbit.r=gen.send.au*GEN.AU; b.evo.aAU=gen.send.au; b.gen.aAU=gen.send.au;
+  b.orbit.speed=0.49*Math.sqrt(gen.S.GM/Math.pow(b.orbit.r,3));
+  const L=b.evo.life; for(const k of ['t3','born']) if(typeof L[k]==='number') L[k]+=shift;
+  if(b.bake) b.bake.t=gen.t;
+  // a lab civilisation joins the system's history with a fresh id, and its cities are relabelled to match
+  if(b.evo.civ){
+    const c=b.evo.civ, old=c.id;
+    c.id=gen.civs.length+1; c.col=CIV_COLS[(c.id-1)%CIV_COLS.length]; c.home=b.name; c.born+=shift; if(c.spaceT) c.spaceT+=shift;
+    gen.civs.push(c); fermiMark('tech'); if(c.space) fermiMark('space');
+    if(b.life) for(let i=0;i<b.life.city.length;i++) if(b.life.city[i]===old) b.life.city[i]=c.id;
+  }
+  const sp=b.life?b.life.species.length:0;
+  bodies.push(b);
+  genLog(b.evo,`Arrived from the Life lab after ${fmtAge(lab.t)} on its own clock`+(sp?` — ${sp} species aboard`:''),'life');
+  lab.on=false; lab.b=null;
+  setMode('genesis'); focusBody(bodies.length-1);
+  hud(`${b.name} is in orbit with everything that lives on it.`);
+}
+function addLabToSystem(){
+  const b=lab.b; if(!b) return;
+  if(bodies.length>=MAX_BODIES){ hud('This system is full.'); return; }
+  if(gen.phase==='evolving'&&bodies.some(x=>x.evo)){ sendLabToGenesis(); return; }
+  // a still system doesn't run deep time, so the world goes in as it is right now
+  bakeEvoInto(b);
+  const n=bodies.filter(x=>x.parent<0).length;
+  const world=JSON.parse(JSON.stringify(b.world)); world.p.evoLook=b.world.p.evoLook;
+  bodies.push({name:uniqueName(b.name),world,parent:-1,orbit:{r:3+n*2.2,speed:0.18/Math.sqrt(1+n),phase:Math.random()*6.28,incl:0.02},
+    scale:0.45,spin:0.5,accum:null,flag:b.flag||null});
+  saveSystem(); lab.on=false;
+  setMode('system'); focusBody(bodies.length-1);
+  hud(`${b.name} joined the system as it was at ${fmtAge(lab.t)}. Its life is frozen there — Genesis keeps it living.`);
+}
+/* the panel */
+let labUI=null;
+function buildLifeLab(){
+  const sec=section('Life lab',lab.on);
+  if(lab.justStarted){ sec.parentElement.open=true; lab.justStarted=false; }
+  labUI=null;
+  if(!lab.on){
+    sec.appendChild(el('p','note','Give this planet a climate and its own deep-time clock. Choose a star and a distance, start the clock, seed life, then slow time down and zoom in to watch the automata evolve on a finer grid than Genesis uses. When something good gets going, send the living world into a system.'));
+    const sr=el('div','sel','<label>Star</label>'); const ss=document.createElement('select');
+    const opts=Object.keys(LAB_STARS).concat(gen.phase==='evolving'?['This Genesis star']:[]);
+    ss.innerHTML=opts.map(k=>`<option${k===lab.star?' selected':''}>${k}</option>`).join('');
+    ss.onchange=()=>{ lab.star=ss.value; const hz=labHZ(); gen.send.au=+((hz[0]+hz[1])/2).toFixed(2); buildUI(); };
+    sr.appendChild(ss); sec.appendChild(sr);
+    const hz=labHZ();
+    sliderRow(sec,{l:'Distance from star (AU)',min:+(hz[0]*0.25).toFixed(2),max:+(hz[1]*4).toFixed(1),step:0.01},gen.send,'au',null);
+    sec.appendChild(el('p','note',`Liquid water is likeliest between ${hz[0].toFixed(2)} and ${hz[1].toFixed(2)} AU from this star.`));
+    sliderRow(sec,{l:'Mass (M⊕)',min:0.05,max:8,step:0.01},gen.send,'m',null);
+    sliderRow(sec,{l:'Water (Earth oceans)',min:0,max:30,step:0.05},gen.send,'W',null);
+    sliderRow(sec,{l:'Iron fraction',min:0.05,max:0.65,step:0.01},gen.send,'fe',null);
+    sliderRow(sec,{l:'Volatiles (air & carbon)',min:0.001,max:0.06,step:0.001},gen.send,'vol',null);
+    const gr=el('div','sel','<label>Life grid</label>'); const gs=document.createElement('select');
+    [[2,'320 × 160'],[4,'640 × 320'],[6,'960 × 480'],[8,'1280 × 640 — finest, heavy']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===lab.res) o.selected=true; gs.appendChild(o); });
+    gs.onchange=()=>{ lab.res=+gs.value; }; gr.appendChild(gs); sec.appendChild(gr);
+    const bb=el('div','btns'); const bs=el('button','hotbtn','Start the clock'); bs.onclick=()=>{ labStart(); buildUI(); };
+    bb.appendChild(bs); sec.appendChild(bb);
+    return;
+  }
+  const rd=el('div','lab-read'); sec.appendChild(rd);
+  const b1=el('div','btns');
+  const bp=el('button',null,lab.playing?'Pause':'Play'); bp.onclick=()=>{ lab.playing=!lab.playing; bp.textContent=lab.playing?'Pause':'Play'; };
+  const bseed=el('button','hotbtn','Seed life'); bseed.onclick=()=>labSeed();
+  b1.append(bp,bseed); sec.appendChild(b1);
+  const sp=el('div','sel','<label>Clock speed</label>'); const spS=document.createElement('select');
+  [[0.5,'0.5 Myr/s — every generation'],[2,'2 Myr/s'],[10,'10 Myr/s'],[40,'40 Myr/s'],[150,'150 Myr/s — fast forward']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===lab.speed) o.selected=true; spS.appendChild(o); });
+  spS.onchange=()=>{ lab.speed=+spS.value; }; sp.appendChild(spS); sec.appendChild(sp);
+  sliderRow(sec,{l:'Life tenacity',min:0,max:1,step:0.01},gen.ing,'tenacity',()=>store('genesisIng',gen.ing));
+  sliderRow(sec,{l:'Distance from star (AU)',min:0.05,max:+(labHZ()[1]*4).toFixed(1),step:0.01},gen.send,'au',()=>{ if(lab.b){ lab.b.evo.aAU=gen.send.au; lab.b.gen.aAU=gen.send.au; } });
+  const gr=el('div','sel','<label>Life grid</label>'); const gs=document.createElement('select');
+  [[2,'320 × 160'],[4,'640 × 320'],[6,'960 × 480'],[8,'1280 × 640 — finest, heavy']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===lab.res) o.selected=true; gs.appendChild(o); });
+  gs.onchange=()=>{ lab.res=+gs.value; if(lab.b){ lab.b.lifeRes=lab.res; lab.b.life=null; lab.b.bake=null; } hud('The biosphere restarts on the new grid.'); };
+  gr.appendChild(gs); sec.appendChild(gr);
+  const b2=el('div','btns');
+  const bc=el('button',null,'Comet'); bc.title='Water, CO₂ and organics'; bc.onclick=()=>labImpact('comet');
+  const ba=el('button',null,'Asteroid'); ba.title='Heat, craters, maybe extinction'; ba.onclick=()=>labImpact('rock');
+  b2.append(bc,ba); sec.appendChild(b2);
+  const lg=el('div','gen-log lab-log'); sec.appendChild(lg);
+  const b3=el('div','btns');
+  const live=gen.phase==='evolving'&&bodies.some(x=>x.evo);
+  const bg=el('button','hotbtn',live?'Send to Genesis':'Add to System'); bg.title=live?'Into the evolving system, alive, at the distance set above':'Into the system as it is right now';
+  bg.onclick=()=>live?sendLabToGenesis():addLabToSystem();
+  const bx=el('button',null,'Stop the lab'); bx.onclick=()=>{ labStop(); hud('Lab stopped. The editor shows your planet as designed again.'); };
+  b3.append(bg,bx); sec.appendChild(b3);
+  labUI={rd,lg};
+  labRefresh();
+}
+function labRefresh(){
+  if(!labUI||!labUI.rd.isConnected||!lab.b) return;
+  const b=lab.b, e=b.evo, L=e.life;
+  const rows=[['Age',fmtAge(lab.t)],['Era',e.era||'—'],['Surface',`${Math.round(e.T-273)}°C · `+(e.P<0.001?'no air':(e.P<1?e.P.toFixed(2):e.P.toFixed(1))+' bar')],
+    ['Water',e.W>0.004?(e.liquid?Math.round(e.ocean*100)+'% ocean':'frozen')+(e.seaIce>0.1?' · ice caps':''):'dry'],
+    ['Life',L.stage===0?(L.gone?'extinct':'none yet'):['','microbes','photosynthesis','land life','animals','cities','ready for space'][L.stage]+(b.life?` · ${b.life.species.length} species`:'')],
+    ['Outlook',labVerdict()]];
+  if(e.civ){ const pop=popOf(b); rows.push(['People',`the ${e.civ.name}`+(pop>0?' · ≈ '+fmtPop(pop):'')]); }
+  labUI.rd.innerHTML=rows.map(([k,v])=>`<div class="hc-r"><span>${k}</span><b>${v}</b></div>`).join('');
+  labUI.lg.innerHTML=lab.log.slice(0,8).map(x=>`<div class="gen-ev ${x.kind}"><b>${fmtAge(x.t)}</b> ${x.txt}</div>`).join('');
+}
+setInterval(labRefresh,400);
 
 /* ── boot ─────────────────────────────────────────────────── */
 buildSphere(S.subdiv);
