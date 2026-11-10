@@ -254,6 +254,14 @@ const SCHEMA=[
  {g:'Material', id:'emis',l:'Glow from within',min:0,max:1.5,step:0.005,v:0},
  {g:'Material', id:'emisThresh',l:'Glow depth',min:-0.5,max:0.6,step:0.005,v:0},
  {g:'Material', id:'envAmt',l:'Reflects the sky',min:0,max:2.5,step:0.005,v:0.5},
+ {g:'Flag', id:'flagOn',l:'Wear a flag',min:0,max:1,step:1,v:0,int:true,chk:true},
+ {g:'Flag', id:'flagMap',l:'How it wraps',min:0,max:2,step:1,v:1,int:true,sel:['Wrapped around the globe','Facing out, like a countryball','Tiled all over']},
+ {g:'Flag', id:'flagMix',l:'Flag strength',min:0,max:1,step:0.005,v:1},
+ {g:'Flag', id:'flagSize',l:'Size (facing out)',min:0.3,max:1.8,step:0.005,v:1},
+ {g:'Flag', id:'flagLon',l:'Turn',min:-3.14,max:3.14,step:0.005,v:0},
+ {g:'Flag', id:'flagLat',l:'Tilt',min:-1.4,max:1.4,step:0.005,v:0},
+ {g:'Flag', id:'flagTiles',l:'Tiles around',min:2,max:24,step:1,v:6,int:true},
+ {g:'Flag', id:'flagRelief',l:'Terrain shows through',min:0,max:1,step:0.005,v:0.35},
 
  {g:'Tectonics', id:'plateN',l:'Plates',min:0,max:24,step:1,v:9,int:true},
  {g:'Tectonics', id:'plateAmp',l:'Plate elevation',min:0,max:0.8,step:0.002,v:0.34},
@@ -353,6 +361,8 @@ const COLOR_NAMES={deep:'Deep water',shallow:'Shallows',low:'Lowland',mid:'Midla
 const P={}; SCHEMA.forEach(s=>P[s.id]=s.v);
 // an evolved world's drifted plates, craters and surface layers travel with its parameters (null for a plain 1.0 world)
 P.evoGeo=null; P.evoLook=null;
+// the flag worn on the surface (same structure as world flags), or null
+P.surfFlag=null;
 const S={
   name:"", seed:Math.floor(Math.random()*9999), facet:false, autoRot:true, paintOn:true,
   subdiv:6, pCount:30000, accumSize:2048, resScale:1,
@@ -362,7 +372,7 @@ const S={
 function snapshot(){ return JSON.parse(JSON.stringify({p:P,seed:S.seed,facet:S.facet,colors:S.colors})); }
 function restore(w){
   for(const k in w.p) if(k in P) P[k]=w.p[k];
-  P.evoGeo=w.p.evoGeo||null; P.evoLook=w.p.evoLook||null;
+  P.evoGeo=w.p.evoGeo||null; P.evoLook=w.p.evoLook||null; P.surfFlag=w.p.surfFlag||null;
   S.seed=w.seed; S.facet=!!w.facet; Object.assign(S.colors,w.colors);
 }
 
@@ -653,6 +663,7 @@ uniform int uEyes;
 uniform vec4 uEyePos[50];
 uniform vec4 uEyeBounds;
 uniform float uEyeScale,uBlinkStagger,uFaceSeed;
+uniform float uFlagOn,uFlagMap,uFlagMix,uFlagSize,uFlagLon,uFlagLat,uFlagTiles,uFlagAsp,uFlagRelief; uniform sampler2D uFlag;
 uniform float uFaceOn,uFaceSize,uFaceLat,uFaceLon,uEyeSpace,uEyeSize,uEyeTall,uPupil,
               uBlink,uBrowOn,uBrow,uBrowT,uMouthY,uMouthW,uMouthH,uMouthOpen,uMouthCurve,uFaceGlow,uTime;
 uniform vec2 uFaceLook;
@@ -730,6 +741,29 @@ float cloudField(vec3 d){
   float lo=1.0-uCloud*1.25;
   return smoothstep(lo,lo+0.34,n*0.5+0.55);
 }
+// a flag painted onto the surface: wrapped like a map, projected straight through like a countryball, or tiled
+vec3 flagApply(vec3 col,vec3 d,float h){
+  if(uFlagOn<0.5) return col;
+  vec2 uv; float m=1.0;
+  if(uFlagMap<0.5){
+    vec2 s=sphUV(d); uv=vec2(fract(s.x+uFlagLon*0.15915494),s.y);
+  } else if(uFlagMap<1.5){
+    vec3 F=vec3(cos(uFlagLat)*sin(uFlagLon), sin(uFlagLat), cos(uFlagLat)*cos(uFlagLon));
+    vec3 up=abs(F.y)>0.98?vec3(1.0,0.0,0.0):vec3(0.0,1.0,0.0);
+    vec3 T=normalize(cross(up,F)), B=cross(F,T);
+    vec2 p=vec2(dot(d,T),dot(d,B))/max(uFlagSize,0.05);
+    // the back of the ball shows the flag from behind, mirrored, the way a printed ball would
+    uv=vec2(p.x/uFlagAsp*0.5+0.5,0.5-p.y*0.5);
+    m=step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0);
+  } else {
+    vec2 s=sphUV(d); float n=max(uFlagTiles,1.0);
+    uv=vec2(fract((s.x+uFlagLon*0.15915494)*n), fract(s.y*n*0.5*2.0/uFlagAsp));
+  }
+  vec3 fc=texture(uFlag,clamp(uv,0.0,1.0)).rgb;
+  // relief: let some of the terrain's light and dark through so mountains still read
+  float shade=1.0+clamp(h-uSea,-0.25,0.45)*1.1*uFlagRelief;
+  return mix(col,fc*shade,uFlagMix*m);
+}
 float shadeLam(vec3 n,vec3 L,float nl){
   float lam=pow(clamp(nl*0.5+0.5,0.0,1.0),1.7);
   if(uCel>1.5) lam=clamp(floor(lam*uCel)/max(uCel-1.0,1.0),0.0,1.0);
@@ -762,6 +796,7 @@ void main(){
     float sn=smoothstep(0.62,0.9,t*0.6+abs(vObj.y)*uSnow);
     col=mix(col,vec3(0.94,0.96,0.99),sn*uSnow);
   }
+  if(uEvo<0.5) col=flagApply(col,vObj,h);
   float lifeA=0.0, cityE=0.0, cityHalo=0.0, cityLum=0.0; vec3 lifeC=vec3(0.0), cityCol=vec3(1.0,0.8,0.5);
   if(uEvo>0.5){
     float lat=abs(vObj.y);
@@ -782,6 +817,7 @@ void main(){
       col=mix(col,bio,uVeg*ok*0.92);
       col=mix(col,cIceE,uIceAll*0.85);
     }
+    col=flagApply(col,vObj,h);
     if(uLifeOn>0.5){
       vec2 luv=sphUV(vObj);
       vec4 lf=texture(uLife,luv);
@@ -2151,7 +2187,8 @@ function singState(w){
 const MP={};
 function applyMods(t){
   SCHEMA.forEach(s=>MP[s.id]=P[s.id]);
-  MP.evoGeo=P.evoGeo; MP.evoLook=P.evoLook;
+  if(P.flagOn>0.5&&!P.surfFlag) P.surfFlag=defaultSurfFlag();
+  MP.evoGeo=P.evoGeo; MP.evoLook=P.evoLook; MP.surfFlag=P.surfFlag;
   for(const m of mods){
     if(m.target==='—') continue;
     const s=DEF(m.target); if(!s) continue;
@@ -2336,6 +2373,7 @@ function drawPlanet(w,seed,colors,facet,model,accTex,eye,time,geo,gaps){
   gl.uniform1i(U(pPlanet,'uNumGaps'),gg.n);
   gl.uniform3fv(U(pPlanet,'uRingAxis'),new Float32Array(modelAxis(model)));
   gl.uniform3fv(U(pPlanet,'uCenter'),new Float32Array([model[12],model[13],model[14]]));
+  setFlagUniforms(w);
   gl.uniform1f(U(pPlanet,'uFaceOn'),num(w.faceOn,0)>0.5?1:0);
   gl.uniform1f(U(pPlanet,'uFaceSize'),num(w.faceSize,0.6));
   gl.uniform1f(U(pPlanet,'uFaceLat'),num(w.faceLat,0)); gl.uniform1f(U(pPlanet,'uFaceLon'),num(w.faceLon,0));
@@ -2521,7 +2559,7 @@ function render(now){
     gl.useProgram(pPlanet); gl.uniformMatrix4fv(U(pPlanet,'uVP'),false,VP);
     const w={}; SCHEMA.forEach(s=>w[s.id]=MP[s.id]);
     if(!S.paintOn){ w.paint=0; w.carve=0; }
-    w.evoGeo=P.evoGeo; w.evoLook=P.evoLook;
+    w.evoGeo=P.evoGeo; w.evoLook=P.evoLook; w.surfFlag=P.surfFlag;
     const L=[Math.cos(MP.lightPit)*Math.sin(MP.lightYaw),Math.sin(MP.lightPit),Math.cos(MP.lightPit)*Math.cos(MP.lightYaw)];
     if(linkIdx>=0){
       const lb=linkValid();
@@ -2988,7 +3026,7 @@ function applyMaterial(name,target,cols){
 }
 function applyPreset(src,keepSeed){
   for(const k in src.p) if(k in P) P[k]=src.p[k];
-  P.evoGeo=src.p.evoGeo||null; P.evoLook=src.p.evoLook||null;
+  P.evoGeo=src.p.evoGeo||null; P.evoLook=src.p.evoLook||null; P.surfFlag=src.p.surfFlag||null;
   if(src.colors) Object.assign(S.colors,src.colors);
   if(src.seed!==undefined&&keepSeed) S.seed=src.seed;
   else if(!keepSeed) S.seed=Math.floor(Math.random()*9999);
@@ -3179,6 +3217,7 @@ function buildPlanetUI(){
         applyMaterial(pick); buildUI(); hud('Made of '+pick.toLowerCase()+'.'); };
       mb.append(mk,mrand); body.appendChild(mb);
     }
+    if(g==='Flag') buildSurfaceFlagTop(body);
     if(g==='Body shape'){
       body.appendChild(el('p','note','Not everything is a ball. Flatten the poles for a fast-spinning gas giant, stretch the equator for something like Haumea, add lumps for an asteroid, or push out a second lobe for a contact binary like Arrokoth.'));
     }
@@ -3216,6 +3255,7 @@ function buildPlanetUI(){
       }
       else sliderRow(body,{...s,modded:mods.some(m=>m.target===s.id)},P,s.id);
     }
+    if(g==='Flag') buildSurfaceFlagDesigner(body);
     if(g==='Look'){
       checkbox(body,'Faceted surface',()=>S.facet,v=>S.facet=v);
       body.appendChild(el('p','subhead','Background'));
@@ -5230,6 +5270,81 @@ function giantVisual(b,fx){
   for(let i=0;i<4;i++) fx.flash[i*4+3]=0;
   if(!fx.vegA){ fx.vegA=fx.vegB=fx.vegC=fx.desert=fx.tundra=fx.algaeCol=[0,0,0]; fx.cloudCol=fx.hazeCol=[1,1,1]; }
 }
+// the planet editor's Flag section
+function defaultSurfFlag(){
+  const lb=linkValid();
+  if(lb&&lb.flag) return JSON.parse(JSON.stringify(lb.flag));
+  return genFlag({name:(S.name||'Planet')+'·'+S.seed,world:{colors:S.colors},parent:-1});
+}
+const surfHolder={get flag(){ return P.surfFlag; }, set flag(v){ P.surfFlag=v; },
+  get name(){ return this._n||((S.name||'Planet')+'·'+S.seed); }, set name(v){ this._n=v; }, get world(){ return {colors:S.colors}; }, parent:-1};
+function surfFlagChanged(rebuild){ if(linkIdx>=0) syncLink(false); if(rebuild!==true) buildUI(); }
+function buildSurfaceFlagTop(body){
+  body.appendChild(el('p','note','Paint a flag onto the planet. Wrapped puts it around the globe like a map; facing out projects it straight through the ball so it reads from the front, like a countryball; tiled repeats it all over. Turn on a face as well for the full effect.'));
+  const r=el('div','sel','<label for="flagCountry">Country</label>');
+  const s=document.createElement('select'); s.id='flagCountry';
+  const cur=P.surfFlag&&P.surfFlag.preset;
+  s.innerHTML=`<option value="">${P.surfFlag?(cur?cur:'Your own design'):'Choose…'}</option>`+Object.keys(EARTH_FLAGS).map(k=>`<option${k===cur?' selected':''}>${k}</option>`).join('');
+  s.onchange=()=>{ if(!s.value) return; P.surfFlag=JSON.parse(JSON.stringify(EARTH_FLAGS[s.value])); P.surfFlag.preset=s.value; P.flagOn=1; surfFlagChanged(); hud('Wearing the flag of '+s.value+'.'); };
+  r.appendChild(s); body.appendChild(r);
+  const bb=el('div','btns');
+  const bd=el('button',null,'Design my own'); bd.title='Start from a fresh generated flag and open the designer';
+  bd.onclick=()=>{ P.surfFlag=genFlag({name:'design'+Math.random(),world:{colors:S.colors},parent:-1}); P.surfFlag.gen=false; P.flagOn=1; OPEN['flagDesigner']=true; surfFlagChanged(); };
+  const bc=el('button',null,'Countryball'); bc.title='Smooth ball, flag facing out, and a face';
+  bc.onclick=()=>{ if(!P.surfFlag) P.surfFlag=defaultSurfFlag();
+    Object.assign(P,{flagOn:1,flagMap:1,flagMix:1,flagRelief:0.08,flagSize:1,amp:0.004,sea:-0.4,snow:0,faceOn:1});
+    clearAccum(); surfFlagChanged(); hud('Countryball.'); };
+  bb.append(bd,bc); body.appendChild(bb);
+  const lb=linkValid();
+  if(lb){
+    const b2=el('div','btns');
+    const bu=el('button',null,'Use '+lb.name+'’s flag'); bu.onclick=()=>{ P.surfFlag=JSON.parse(JSON.stringify(flagOf(lb))); P.flagOn=1; surfFlagChanged(); };
+    const bm=el('button',null,'Make it '+lb.name+'’s flag'); bm.title='Use the surface flag as this world’s flag on labels and cards';
+    bm.onclick=()=>{ if(!P.surfFlag) return; lb.flag=JSON.parse(JSON.stringify(P.surfFlag)); saveSystemSoon(); hud(lb.name+' flies it now.'); };
+    b2.append(bu,bm); body.appendChild(b2);
+  }
+}
+function buildSurfaceFlagDesigner(body){
+  if(!P.flagOn&&!P.surfFlag) return;
+  if(!P.surfFlag) P.surfFlag=defaultSurfFlag();
+  const d=el('details','flagdet'); d.open=OPEN['flagDesigner']!==undefined?OPEN['flagDesigner']:false; d.ontoggle=()=>OPEN['flagDesigner']=d.open;
+  const sm=document.createElement('summary'); sm.innerHTML=`<img src="${flagURL(P.surfFlag,14)}"> Design the flag`; d.appendChild(sm);
+  buildFlagEditor(d,surfHolder,{genLabel:'Generated',changed:quiet=>surfFlagChanged(quiet),live:()=>{ sm.querySelector('img').src=flagURL(P.surfFlag,14); }});
+  body.appendChild(d);
+}
+// flag textures, cached by design so a system full of flags only renders each one once
+const flagTexCache=new Map();
+function flagTexFor(f){
+  const key=JSON.stringify([f.pal,f.bands,f.over,f.ems,f.aspect]);
+  let t=flagTexCache.get(key);
+  if(t){ t.used=performance.now(); return t; }
+  const cv=document.createElement('canvas'); cv.width=1024; cv.height=Math.round(1024/f.aspect);
+  drawFlag(cv.getContext('2d',{willReadFrequently:true}),f,cv.width,cv.height);
+  const tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,cv);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  t={tex,used:performance.now()}; flagTexCache.set(key,t);
+  if(flagTexCache.size>40){ let ok=null,ot=1e18; for(const [k,v] of flagTexCache) if(v.used<ot){ ot=v.used; ok=k; } gl.deleteTexture(flagTexCache.get(ok).tex); flagTexCache.delete(ok); }
+  return t;
+}
+function setFlagUniforms(w){
+  const on=num(w.flagOn,0)>0.5&&w.surfFlag;
+  gl.uniform1f(U(pPlanet,'uFlagOn'),on?1:0);
+  gl.activeTexture(gl.TEXTURE6);
+  gl.bindTexture(gl.TEXTURE_2D,on?flagTexFor(w.surfFlag).tex:blankTex);
+  gl.uniform1i(U(pPlanet,'uFlag'),6);
+  gl.activeTexture(gl.TEXTURE0);
+  if(!on) return;
+  gl.uniform1f(U(pPlanet,'uFlagMap'),num(w.flagMap,1)); gl.uniform1f(U(pPlanet,'uFlagMix'),num(w.flagMix,1));
+  gl.uniform1f(U(pPlanet,'uFlagSize'),num(w.flagSize,1)); gl.uniform1f(U(pPlanet,'uFlagLon'),num(w.flagLon,0));
+  gl.uniform1f(U(pPlanet,'uFlagLat'),num(w.flagLat,0)); gl.uniform1f(U(pPlanet,'uFlagTiles'),num(w.flagTiles,6));
+  gl.uniform1f(U(pPlanet,'uFlagAsp'),w.surfFlag.aspect||1.5); gl.uniform1f(U(pPlanet,'uFlagRelief'),num(w.flagRelief,0.35));
+}
 function setEvoUniforms(w){
   const fx=evoFX.get(w)||lookFromP(w);
   if(!blankTex){ blankTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,blankTex);
@@ -6285,39 +6400,42 @@ function flagURL(f,h){
 }
 function flagOf(b){ if(!b) return null; if(!b.flag) b.flag=genFlag(b); return b.flag; }
 /* the flag editor: shown in the panel for the selected world */
-function buildFlagEditor(parent,b){
+// edits the flag held by b (a body, or any object with a flag and a name); opts.changed / opts.live replace the body bookkeeping
+function buildFlagEditor(parent,b,opts){
+  opts=opts||{};
+  const done=()=>opts.changed?opts.changed():flagChanged(b), live=()=>opts.live?opts.live():updateFlagViews(b);
   const f=flagOf(b);
   const box=el('div','flag-ed');
   const img=document.createElement('img'); img.className='flag-big'; box.appendChild(img);
   const refresh=()=>{ img.src=flagURL(b.flag,60); };
   const prow=el('div','sel','<label>Flag</label>'); const ps=document.createElement('select');
-  const o0=document.createElement('option'); o0.value=''; o0.textContent=b.flag.preset?'Earth: '+b.flag.preset:(b.flag.gen?'Made for this world':'Custom'); ps.appendChild(o0);
+  const o0=document.createElement('option'); o0.value=''; o0.textContent=b.flag.preset?'Earth: '+b.flag.preset:(b.flag.gen?(opts.genLabel||'Made for this world'):'Custom'); ps.appendChild(o0);
   const og=document.createElement('optgroup'); og.label='Earth';
   Object.keys(EARTH_FLAGS).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; og.appendChild(o); }); ps.appendChild(og);
-  ps.onchange=()=>{ if(!ps.value) return; b.flag=JSON.parse(JSON.stringify(EARTH_FLAGS[ps.value])); b.flag.preset=ps.value; flagChanged(b); };
+  ps.onchange=()=>{ if(!ps.value) return; b.flag=JSON.parse(JSON.stringify(EARTH_FLAGS[ps.value])); b.flag.preset=ps.value; done(); };
   prow.appendChild(ps); box.appendChild(prow);
-  const row=(lab,opts,val,on)=>{ const r=el('div','sel',`<label>${lab}</label>`); const s=document.createElement('select');
-    opts.forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; if(v===val) o.selected=true; s.appendChild(o); });
+  const row=(lab,choices,val,on)=>{ const r=el('div','sel',`<label>${lab}</label>`); const s=document.createElement('select');
+    choices.forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; if(v===val) o.selected=true; s.appendChild(o); });
     s.onchange=()=>on(s.value); r.appendChild(s); box.appendChild(r); return s; };
-  row('Pattern',FLAG_PATTERNS,f.pattern,v=>{ flagSetPattern(b.flag,v); b.flag.preset=null; b.flag.gen=false; flagChanged(b); });
-  row('Emblem',FLAG_EMBLEMS,f.emT||(f.ems.length?'':'none'),v=>{ setEmblem(b.flag,v); b.flag.preset=null; b.flag.gen=false; flagChanged(b); });
+  row('Pattern',FLAG_PATTERNS,f.pattern,v=>{ flagSetPattern(b.flag,v); b.flag.preset=null; b.flag.gen=false; done(); });
+  row('Emblem',FLAG_EMBLEMS,f.emT||(f.ems.length?'':'none'),v=>{ setEmblem(b.flag,v); b.flag.preset=null; b.flag.gen=false; done(); });
   if(b.flag.emScale===undefined){ b.flag.emScale=1; b.flag._emScale=1; }
   if(f.ems.length) sliderRow(box,{l:'Emblem size',min:0.4,max:2,step:0.01},b.flag,'emScale',()=>{
     const k=b.flag.emScale/(b.flag._emScale||1); b.flag._emScale=b.flag.emScale;
-    for(const m of b.flag.ems){ if(m.s) m.s*=k; if(m.r) m.r*=k; } refresh(); updateFlagViews(b); });
+    for(const m of b.flag.ems){ if(m.s) m.s*=k; if(m.r) m.r*=k; } refresh(); live(); });
   // colours: one swatch per palette slot that is actually used
   const used=new Set([...f.bands.c]); f.over.forEach(o=>{ if(o.c!==undefined) [].concat(o.c).forEach(c=>used.add(c)); if(o.inner) used.add(o.inner.c); if(o.c2!==undefined) used.add(o.c2);
     if(o.union){ used.add(o.union.c); used.add(o.union.c2); } if(o.cross) used.add(o.cross.c); }); f.ems.forEach(m=>used.add(m.c));
   const sw=el('div','flag-sw');
   [...used].sort((a,b)=>a-b).forEach(i=>{ const inp=document.createElement('input'); inp.type='color'; inp.value=normHex(f.pal[i]);
-    inp.oninput=()=>{ b.flag.pal[i]=inp.value; b.flag.gen=false; refresh(); updateFlagViews(b); };
-    inp.onchange=()=>{ saveSystemSoon(); }; sw.appendChild(inp); });
+    inp.oninput=()=>{ b.flag.pal[i]=inp.value; b.flag.gen=false; refresh(); live(); };
+    inp.onchange=()=>{ if(opts.changed) opts.changed(true); else saveSystemSoon(); }; sw.appendChild(inp); });
   box.appendChild(sw);
   const bb=el('div','btns');
   const bn=el('button',null,'New design'); bn.title='Roll a fresh flag for this world';
-  bn.onclick=()=>{ b.flagRoll=(b.flagRoll||0)+1; const nm=b.name; b.name=nm+'#'+b.flagRoll; b.flag=genFlag(b); b.name=nm; flagChanged(b); };
+  bn.onclick=()=>{ b.flagRoll=(b.flagRoll||0)+1; const nm=b.name; b.name=nm+'#'+b.flagRoll; b.flag=genFlag(b); b.name=nm; done(); };
   const br=el('button',null,'Reset'); br.title='Back to the flag generated for it';
-  br.onclick=()=>{ b.flagRoll=0; b.flag=genFlag(b); flagChanged(b); };
+  br.onclick=()=>{ b.flagRoll=0; b.flag=genFlag(b); done(); };
   bb.append(bn,br); box.appendChild(bb);
   parent.appendChild(box);
   refresh();
