@@ -287,6 +287,9 @@ const SCHEMA=[
  {g:'Rings', id:'ringGap',l:'Gap contrast',min:0,max:1,step:0.005,v:0.45},
  {g:'Rings', id:'ringTurb',l:'Density variation',min:0,max:1,step:0.005,v:0.25},
  {g:'Rings', id:'ringRainbow',l:'Rainbow iridescence',min:0,max:1,step:0.005,v:0},
+ {g:'Rings', id:'ringFlag',l:'Flag colours',min:0,max:2,step:1,v:0,int:true,sel:['Off','Flag stripes, inside to outside','The flag, wrapped around the ring']},
+ {g:'Rings', id:'ringFlagMix',l:'Flag colour strength',min:0,max:1,step:0.005,v:1},
+ {g:'Rings', id:'ringFlagRep',l:'Flags around the ring',min:1,max:12,step:1,v:3,int:true},
  {g:'Rings', id:'shepherd',l:'I\u2019m a shepherd moon (carve a gap)',min:0,max:1,step:1,v:0,int:true,chk:true},
 
  {g:'Face', id:'faceOn',l:'Give it a face',min:0,max:1,step:1,v:0,int:true,chk:true},
@@ -1069,10 +1072,10 @@ void main(){
 const RING_VS=`#version 300 es
 precision highp float;
 uniform mat4 uVP,uModel; uniform float uIn,uOut,uSegs;
-out vec3 vWorld; out float vT;
+out vec3 vWorld; out float vT; out float vA;
 void main(){
   int id=gl_VertexID; float seg=float(id>>1); float side=float(id&1);
-  float a=seg/uSegs*6.2831853;
+  float a=seg/uSegs*6.2831853; vA=seg/uSegs;
   float r=mix(uIn,uOut,side);
   vec4 wp=uModel*vec4(cos(a)*r,0.0,sin(a)*r,1.0);
   vWorld=wp.xyz; vT=side;
@@ -1080,8 +1083,9 @@ void main(){
 }`;
 const RING_FS=`#version 300 es
 precision highp float;
-in vec3 vWorld; in float vT;
+in vec3 vWorld; in float vT; in float vA;
 uniform vec3 uCam,uCenter,cRingA,cRingB;
+uniform float uRingFlag,uRingFlagMix,uRingFlagRep,uRingFlagDir; uniform sampler2D uFlag;
 uniform vec3 uLightDir[4],uSunCol[4];
 uniform int uNumLights;
 uniform float uOpacity,uBands,uGap,uRingSeed,uPlanetR,uTurb,uRainbow;
@@ -1095,6 +1099,13 @@ void main(){
   if(d<=0.004) discard;
   vec3 col=mix(cRingA,cRingB,clamp(vT*0.7+d*0.3,0.0,1.0));
   if(uRainbow>0.0) col=mix(col,ringRainbowCol(vT,uRingSeed),clamp(uRainbow,0.0,1.0));
+  if(uRingFlag>0.5){
+    // stripes: a line across the flag (down it for horizontal bands, along it for vertical ones) becomes the rings, inside to outside
+    // wrapped: the whole flag runs around the ring, repeated, with its height spanning the ring's width
+    vec2 fuv=uRingFlag<1.5?(uRingFlagDir<0.5?vec2(0.82,vT):vec2(vT,0.5)):vec2(fract(vA*uRingFlagRep),1.0-vT);
+    vec3 fc=textureLod(uFlag,fuv,uRingFlag<1.5?0.0:1.0).rgb;
+    col=mix(col,fc*(0.82+0.3*d),uRingFlagMix);
+  }
   vec3 rel=vWorld-uCenter;
   float c=dot(rel,rel)-uPlanetR*uPlanetR;
   vec3 Vv=normalize(uCam-vWorld);
@@ -2187,7 +2198,7 @@ function singState(w){
 const MP={};
 function applyMods(t){
   SCHEMA.forEach(s=>MP[s.id]=P[s.id]);
-  if(P.flagOn>0.5&&!P.surfFlag) P.surfFlag=defaultSurfFlag();
+  if((P.flagOn>0.5||P.ringFlag>0.5)&&!P.surfFlag) P.surfFlag=defaultSurfFlag();
   MP.evoGeo=P.evoGeo; MP.evoLook=P.evoLook; MP.surfFlag=P.surfFlag;
   for(const m of mods){
     if(m.target==='—') continue;
@@ -2436,6 +2447,14 @@ function drawRing(w,colors,ringModel,eye,planetR,seed,gaps){
   gl.uniform3fv(U(pRing,'uCenter'),new Float32Array([ringModel[12],ringModel[13],ringModel[14]]));
   gl.uniform3fv(U(pRing,'cRingA'),hex(colOf(colors,'ringA','#d8c9ad')));
   gl.uniform3fv(U(pRing,'cRingB'),hex(colOf(colors,'ringB','#8f7f6b')));
+  const rf=num(w.ringFlag,0)>0.5&&w.surfFlag?num(w.ringFlag,0):0;
+  gl.uniform1f(U(pRing,'uRingFlag'),rf);
+  if(rf){
+    gl.uniform1f(U(pRing,'uRingFlagMix'),num(w.ringFlagMix,1)); gl.uniform1f(U(pRing,'uRingFlagRep'),num(w.ringFlagRep,3));
+    gl.uniform1f(U(pRing,'uRingFlagDir'),(w.surfFlag.bands&&(w.surfFlag.bands.dir==='v'||w.surfFlag.bands.c.length===1))?1:0);
+    gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D,flagTexFor(w.surfFlag).tex); gl.uniform1i(U(pRing,'uFlag'),6);
+    gl.activeTexture(gl.TEXTURE0);
+  }
   gl.disable(gl.CULL_FACE); gl.depthMask(false);
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
   gl.bindVertexArray(emptyVAO);
@@ -3243,6 +3262,7 @@ function buildPlanetUI(){
       mr.appendChild(ms); body.appendChild(mr);
     }
     if(g==='Rings') body.appendChild(el('p','note','Rings sit in the planet\u2019s equatorial plane, so axial tilt swings them. They cast a banded shadow onto the surface. Turn up density variation for a less uniform, clumpier look, or rainbow iridescence for an oil-slick sheen. In System mode, flag a moon as a shepherd and it will carve a real gap in its parent\u2019s rings at its orbit.'));
+    if(g==='Rings') buildRingFlagPick(body);
     for(const s of SCHEMA.filter(x=>x.g===g)){
       if(s.chk) checkbox(body,s.l,()=>P[s.id]>0.5,v=>P[s.id]=v?1:0);
       else if(s.sel){
@@ -5303,6 +5323,16 @@ function buildSurfaceFlagTop(body){
     bm.onclick=()=>{ if(!P.surfFlag) return; lb.flag=JSON.parse(JSON.stringify(P.surfFlag)); saveSystemSoon(); hud(lb.name+' flies it now.'); };
     b2.append(bu,bm); body.appendChild(b2);
   }
+}
+function buildRingFlagPick(body){
+  const r=el('div','sel','<label for="ringCountry">Ring flag</label>');
+  const s=document.createElement('select'); s.id='ringCountry';
+  const cur=P.surfFlag&&P.surfFlag.preset;
+  s.innerHTML=`<option value="">${P.surfFlag?(cur||'The planet’s flag'):'Choose…'}</option>`+Object.keys(EARTH_FLAGS).map(k=>`<option${k===cur?' selected':''}>${k}</option>`).join('');
+  s.onchange=()=>{ if(!s.value) return; P.surfFlag=JSON.parse(JSON.stringify(EARTH_FLAGS[s.value])); P.surfFlag.preset=s.value;
+    if(!(P.ringFlag>0.5)) P.ringFlag=1; P.ringOn=1; surfFlagChanged(); hud('Rings in the colours of '+s.value+'.'); };
+  r.appendChild(s); body.appendChild(r);
+  body.appendChild(el('p','note','The rings use the same flag as the Flag section, so the planet and its rings always match. Design your own there.'));
 }
 function buildSurfaceFlagDesigner(body){
   if(!P.flagOn&&!P.surfFlag) return;
