@@ -30,8 +30,10 @@
    mod.serialize()            -> plain object for your preset JSON
    mod.load(obj)              -> restore
    mod.isModulated('power')   -> true if a slot is driving it
-   mod.source('bass')         -> current band value, 0..1 (auto-ranged)
+   mod.source('bass')         -> current band value, 0..1
    mod.active                 -> true while audio is running
+   mod.beat()                 -> true only on the frame an onset fired
+   mod.beatCount()            -> beats detected since load
 
    ------------------------------------------------------------- TARGETS ----
    span   the +/- swing at depth 1. Set it to a musically useful amount for
@@ -204,27 +206,11 @@ function Modulation(cfg) {
   const bands = { level: 0, bass: 0, mid: 0, high: 0 };
   let clock = 0;
   let gain = cfg.audioGain != null ? cfg.audioGain : 1.6;
+  let beatBand = cfg.beatBand || 'bass';
+  let beatSens = cfg.beatSens != null ? cfg.beatSens : 1.35;
+  let beatGap  = cfg.beatGap  != null ? cfg.beatGap  : 0.18;   // refractory, seconds
+  let beatFloor = cfg.beatFloor != null ? cfg.beatFloor : 0.06;
   let release = cfg.audioRelease != null ? cfg.audioRelease : 0.12;
-  let autoRange = cfg.autoRange !== false;
-
-  /* Raw band energy carries a large constant floor: a steady mix can sit at
-     0.75 and swing only 0.25, and it clips at 1.0 on peaks. Fed straight to a
-     parameter that reads as a DC offset rather than movement — the band looks
-     alive on the meter while the visual barely shifts. This tracks a running
-     floor and ceiling per band and rescales the gap to 0..1, so Depth means
-     the same thing for an audio source as it does for an LFO. */
-  const FLOOR_RISE = 0.25, CEIL_FALL = 0.5, MIN_GAP = 0.02;
-  const envs = {};
-  function resetEnvs() { for (const B of BANDS) envs[B.key] = { lo: 1, hi: 0 }; }
-  resetEnvs();
-  function autoScale(key, v, dt) {
-    const e = envs[key];
-    e.lo = v < e.lo ? v : e.lo + (v - e.lo) * Math.min(1, FLOOR_RISE * dt);
-    e.hi = v > e.hi ? v : e.hi + (v - e.hi) * Math.min(1, CEIL_FALL * dt);
-    const gap = e.hi - e.lo;
-    if (gap < MIN_GAP) return 0;                       // silence, or no dynamics yet
-    return Math.min(1, Math.max(0, (v - e.lo) / gap));
-  }
 
   let AC = null, analyser = null, freq = null, micStream = null, mediaNode = null;
   this.active = false;
@@ -290,7 +276,6 @@ function Modulation(cfg) {
     if (mediaNode) { try { mediaNode.disconnect(analyser); } catch (e) {} }
     if (ui.audioEl) ui.audioEl.pause();
     self.active = false;
-    resetEnvs();
     for (const k in bands) bands[k] = 0;
     if (ui.meters) for (const k in ui.meters) ui.meters[k].style.width = '0%';
     onStatus('', false);
@@ -301,19 +286,47 @@ function Modulation(cfg) {
   this.audioContext = function () { return AC; };
 
   /* ---- per-frame ---- */
+  /* Onset detection. A level says how loud the bass is; a beat says the moment it
+     arrived. Compare the band against its own recent average — an absolute
+     threshold would need retuning for every track — and hold off for a refractory
+     period so one transient cannot fire twice. */
+  const beatHist = [];
+  let beatLast = -1e9, beatCount = 0;
+  this.beatFired = false;
+
   this.tick = function (dt) {
     clock += dt;
+    this.beatFired = false;
     if (!analyser || !self.active) return;
     analyser.getByteFrequencyData(freq);
     const rel = Math.min(1, dt / Math.max(0.01, release));  // fall rate; rise is instant
     for (const B of BANDS) {
-      let v = Math.min(1, bandAvg(B.lo, B.hi) * B.gain * gain);
-      if (autoRange) v = autoScale(B.key, v, dt);
+      const v = Math.min(1, bandAvg(B.lo, B.hi) * B.gain * gain);
       bands[B.key] = v > bands[B.key] ? v : bands[B.key] + (v - bands[B.key]) * rel;
       if (ui.meters && ui.meters[B.key])
         ui.meters[B.key].style.width = (bands[B.key] * 100).toFixed(1) + '%';
     }
+
+    const e = bands[beatBand] || 0;
+    beatHist.push(e);
+    if (beatHist.length > 48) beatHist.shift();
+    let sum = 0;
+    for (let i = 0; i < beatHist.length; i++) sum += beatHist[i];
+    const avg = beatHist.length ? sum / beatHist.length : 0;
+    if (beatHist.length > 8 && e > avg * beatSens && e > beatFloor &&
+        (clock - beatLast) > beatGap) {
+      beatLast = clock; beatCount++; this.beatFired = true;
+      if (ui.beatLamp) {
+        ui.beatLamp.style.opacity = '1';
+        setTimeout(function () { if (ui.beatLamp) ui.beatLamp.style.opacity = '0.15'; }, 90);
+      }
+      if (ui.beatCount) ui.beatCount.textContent = beatCount + ' beats';
+    }
   };
+
+  /* true only on the frame a beat fired */
+  this.beat = function () { return self.beatFired; };
+  this.beatCount = function () { return beatCount; };
 
   this.source = function (k) { return bands[k] || 0; };
   this.clock  = function () { return clock; };
@@ -349,7 +362,8 @@ function Modulation(cfg) {
   /* ---- presets ---- */
   this.serialize = function () {
     return {
-      gain: gain, release: release, autoRange: autoRange,
+      gain: gain, release: release,
+      beatBand: beatBand, beatSens: beatSens, beatGap: beatGap, beatFloor: beatFloor,
       slots: slots.map(L => ({ on: L.on, target: L.target, wave: L.wave,
                                rate: L.rate, depth: L.depth, phase: L.phase }))
     };
@@ -358,7 +372,10 @@ function Modulation(cfg) {
     if (!o) return;
     if (typeof o.gain === 'number') gain = o.gain;
     if (typeof o.release === 'number') release = o.release;
-    if (typeof o.autoRange === 'boolean') { autoRange = o.autoRange; resetEnvs(); }
+    if (typeof o.beatBand === 'string') beatBand = o.beatBand;
+    if (typeof o.beatSens === 'number') beatSens = o.beatSens;
+    if (typeof o.beatGap === 'number') beatGap = o.beatGap;
+    if (typeof o.beatFloor === 'number') beatFloor = o.beatFloor;
     const list = Array.isArray(o.slots) ? o.slots : (Array.isArray(o) ? o : []);
     list.forEach((s, i) => { if (slots[i]) Object.assign(slots[i], s); });
     syncAll();
@@ -423,20 +440,42 @@ function Modulation(cfg) {
     host.append(gs, rs);
     ui.syncs.push(() => { gs._sync(gain); rs._sync(release); });
 
-    const arWrap = document.createElement('label');
-    arWrap.className = 'mod-chk';
-    arWrap.innerHTML = '<input type="checkbox"> Auto-range bands';
-    const arIn = arWrap.querySelector('input');
-    arIn.addEventListener('change', e => { autoRange = e.target.checked; resetEnvs(); });
-    host.appendChild(arWrap);
-    ui.syncs.push(() => { arIn.checked = autoRange; });
+    const bl = document.createElement('div');
+    bl.className = 'mod-meter';
+    bl.innerHTML = '<span>Beat</span><i style="flex:0 0 12px;height:12px;border-radius:50%;' +
+      'background:var(--a);opacity:.15;transition:opacity .08s"></i>' +
+      '<span style="width:auto;flex:1;text-align:right">\u2014</span>';
+    host.appendChild(bl);
+    ui.beatLamp = bl.querySelector('i');
+    ui.beatCount = bl.querySelectorAll('span')[1];
+
+    const bandSel = document.createElement('label');
+    bandSel.innerHTML = '<span class="mod-lab">Beat band</span>';
+    const bs = document.createElement('select');
+    bs.innerHTML = BANDS.map(function (b) {
+      return '<option value="' + b.key + '">' + b.label + '</option>'; }).join('');
+    bs.value = beatBand;
+    bs.addEventListener('change', function (e) { beatBand = e.target.value; beatHist.length = 0; });
+    bandSel.appendChild(bs);
+    host.appendChild(bandSel);
+
+    const sens = slider('bs', 'Beat sensitivity', 1.05, 3, 0.01, beatSens,
+                        function (v) { return v.toFixed(2) + '\u00d7 avg'; },
+                        function (v) { beatSens = v; });
+    const gap = slider('bg', 'Min interval', 0.05, 1.2, 0.005, beatGap,
+                       function (v) { return v.toFixed(3) + 's'; },
+                       function (v) { beatGap = v; });
+    const flr = slider('bf', 'Beat floor', 0, 0.5, 0.005, beatFloor,
+                       function (v) { return v.toFixed(3); },
+                       function (v) { beatFloor = v; });
+    host.append(sens, gap, flr);
+    ui.syncs.push(function () { sens._sync(beatSens); gap._sync(beatGap); flr._sync(beatFloor); });
 
     const note = document.createElement('div');
     note.className = 'mod-note';
     note.textContent = 'Bands rise instantly and fall at the Release rate. ' +
-      'Audio is unipolar, so it only ever adds to a parameter\'s base value. ' +
-      'Auto-range strips the constant floor out of each band so the meter shows ' +
-      'movement rather than loudness — turn it off if you want absolute level.';
+      'Pick them as sources in a slot below; audio is unipolar, so it only ever ' +
+      'adds to a parameter\'s base value.';
     host.appendChild(note);
 
     bMic.addEventListener('click', () => self.startMic());

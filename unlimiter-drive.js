@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.3";
+const VERSION = "1.6";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -106,6 +106,20 @@ function create(opts){
   };
 
   /* ---------------- sources ---------------- */
+  // Other modules (the depth layer, say) register their own scalars here and
+  // they appear in the matrix alongside audio, clock and LFOs.
+  const extra = [];            // {id,label,get}
+  function registerSource(id,label,get){
+    const i=extra.findIndex(e=>e.id===id);
+    const row={id,label,get};
+    if(i>=0) extra[i]=row; else extra.push(row);
+    refreshSourceSelects();
+    return row;
+  }
+  function unregisterSource(id){
+    const i=extra.findIndex(e=>e.id===id);
+    if(i>=0){ extra.splice(i,1); refreshSourceSelects(); }
+  }
   function sourceList(){
     const out=[
       ["audio.low","Audio — low"],["audio.mid","Audio — mid"],["audio.high","Audio — high"],
@@ -115,6 +129,7 @@ function create(opts){
       ["random.beat","Random per beat"]
     ];
     for(let i=0;i<4;i++) out.push(["lfo."+i,"LFO "+(i+1)]);
+    extra.forEach(e=>out.push([e.id,e.label]));
     Object.keys(S.midi.cc).sort((a,b)=>a-b).forEach(n=>out.push(["cc."+n,"MIDI CC "+n]));
     Object.keys(S.midi.notes).sort((a,b)=>a-b).forEach(n=>out.push(["note."+n,"MIDI note "+n]));
     return out;
@@ -134,6 +149,9 @@ function create(opts){
       case "clock.bar": return barPhase();
       case "clock.barPulse": return Math.pow(1-barPhase(),3);
       case "random.beat": return S.randBeat;
+    }
+    for(let i=0;i<extra.length;i++) if(extra[i].id===id){
+      const v=extra[i].get(); return typeof v==="number" && isFinite(v) ? v : 0;
     }
     if(id.startsWith("lfo.")) return S.lfos[+id.slice(4)].val;
     if(id.startsWith("cc.")) return (S.midi.cc[id.slice(3)]||0)/127;
@@ -380,9 +398,17 @@ function create(opts){
     });
     buildMatrix();
   }
+  /* Overrides: a host (the rack) driving this tool from outside. They replace
+     the base value *inside Q only* — P stays the user's, so the tool's own
+     sliders stay honest, its presets save what the user set, and clearing an
+     override returns the tool exactly to where it was. Routes still stack on
+     top, so the tool's own modulation layers over the host's. */
+  const overrides=new Map();
   function resolve(base){
-    if(!S.matrix.length) return base;
+    if(!S.matrix.length && !overrides.size) return base;
     const out=Object.assign({},base);
+    overrides.forEach((v,k)=>{ out[k]=v; });
+    if(!S.matrix.length) return out;
     for(const r of S.matrix){
       if(r.on===false) continue;
       const t=targets[r.target];
@@ -401,7 +427,11 @@ function create(opts){
     return out;
   }
   function isLive(){
+    // an externally driven tool must keep redrawing, or tools that only render
+    // while modulated (Melted World) would freeze on the first override
+    if(overrides.size) return true;
     if(!S.matrix.length || S.master<=0) return false;
+    if(extra.length && S.matrix.some(r=>r.on!==false && extra.some(e=>e.id===r.source))) return true;
     return S.audio.on || S.midi.clockOk || S.midi.on || S.matrix.some(r=>r.source.startsWith("lfo.")||r.source.startsWith("clock.")||r.source==="random.beat");
   }
 
@@ -753,6 +783,8 @@ function create(opts){
     set master(v){ S.master=clamp(v,0,1); },
     clearTargets(){ for(const k in targets) delete targets[k]; },
     resolve, sourceValue, isLive,
+    /** [[id,label], ...] of every source the matrix (and the rack's signal nodes) can read, MIDI included. */
+    sourceList,
     get beatPhase(){ return beatPhase(); },
     get barPhase(){ return barPhase(); },
     get bpm(){ return S.clock.bpm; },
@@ -761,11 +793,17 @@ function create(opts){
     audioContext(){ return S.audio.ac || null; },
     analyserNode(){ return S.audio.analyser || null; },
     modulatedKeys(){
-      const set=new Set();
+      const set=new Set(overrides.keys());   // externally driven counts as modulated
       S.matrix.forEach(r=>{ if(r.on!==false && r.target) set.add(r.target); });
       return [...set];
     },
+    /** A host drives `key` from outside. Applied in resolve(), never written to P. */
+    setOverride(key,value){ overrides.set(key,value); return this; },
+    clearOverride(key){ overrides.delete(key); return this; },
+    clearOverrides(){ overrides.clear(); return this; },
+    hasOverride(key){ return overrides.has(key); },
     isModulated(k){ return this.modulatedKeys().indexOf(k)>=0; },
+    registerSource, unregisterSource,
     mountPanel, openOutput, pushFrame, outputOpen, tap,
     rebuildMatrix:buildMatrix,
     serialize(){
