@@ -109,6 +109,16 @@ const PARTS = ["kick", "clap", "hat", "perc", "bass", "lead", "pad"];
 const DRUMS = ["kick", "clap", "hat", "perc"];
 
 const PARAMS = [
+  // Score — where the melody's geometry comes from
+  P("fluidStir",  "Auto stir",      0, 1,   0.01, 0.35, { group: "Fluid" }),
+  P("fluidSwirl", "Swirl",          0, 1,   0.01, 0.45, { group: "Fluid" }),
+  P("fluidFade",  "Hold",           0.9, 0.999, 0.001, 0.985, { group: "Fluid" }),
+  P("fluidSpeed", "Flow speed",     0.1, 3, 0.01, 1,    { group: "Fluid" }),
+  P("fluidKick",  "Kick push",      0, 1,   0.01, 0.3,  { group: "Fluid" }),
+  P("fluidLife",  "Particle life (s)", 1, 30, 0.1, 8,   { group: "Fluid" }),
+  P("brush",      "Brush size",     0.01, 0.25, 0.005, 0.06, { group: "Fluid" }),
+  P("fluidParticles", "Particles",  50, 3000, 10, 700,  { group: "Fluid", noMod: true }),
+  P("pointsStir", "Stir strength",  0, 1,   0.01, 0.5,  { group: "Points in" }),
   // Transport
   P("swing",    "Swing",        0, 0.5, 0.01, 0.12, { group: "Transport" }),
   P("humanize", "Humanize",     0, 1,   0.01, 0.2,  { group: "Transport" }),
@@ -116,7 +126,7 @@ const PARAMS = [
   P("seed",     "Seed",         0, 9999, 1,   7,    { group: "Transport", noMod: true }),
   // Harmony
   P("root",     "Root note",    0, 11,  1,    9,    { group: "Harmony" }),
-  // Geometry — the score
+  // Geometry — the built-in score
   P("geoDrift", "Evolve rate",  0, 2,   0.01, 0.2,  { group: "Geometry" }),
   P("geoNoise", "Noise warp",   0, 80,  1,    18,   { group: "Geometry" }),
   P("geoRipple","Ripple",       0, 80,  1,    0,    { group: "Geometry" }),
@@ -151,12 +161,18 @@ const PARAMS = [
   P("percLevel","Level",0, 1, 0.01, 0.35, { group: "Perc" }),
   P("percOct","Octave", 2, 6, 1, 4,    { group: "Perc" }),
   P("percDecay","Decay (s)", 0.03, 0.6, 0.01, 0.12, { group: "Perc" }),
-  // Bass — a lens on the geometry
+  // Bass — a lens on the score
   P("bassLevel","Level",0, 1, 0.01, 0.7, { group: "Bass" }),
   P("bassOct",  "Octave",1, 3, 1, 2, { group: "Bass" }),
   P("bassSpan", "Span (oct)", 0.5, 3, 0.25, 1, { group: "Bass" }),
   P("bassDensity","Density",0, 1, 0.01, 0.55, { group: "Bass" }),
+  P("bassEK",   "Euclid hits", 0, 16, 1, 5, { group: "Bass" }),
+  P("bassERot", "Euclid rotate", 0, 15, 1, 1, { group: "Bass" }),
   P("bassGate", "Gate (steps)", 0.25, 4, 0.05, 0.9, { group: "Bass" }),
+  P("bassTable","Wave", 0, 5, 0.01, 2.2, { group: "Bass" }),
+  P("bassMorph","Wave wander", 0, 2.5, 0.01, 0.5, { group: "Bass" }),
+  P("bassRate", "Wander rate", 0, 2, 0.01, 0.12, { group: "Bass" }),
+  P("bassShimmer","Shimmer", 0, 1, 0.01, 0.15, { group: "Bass" }),
   P("bassCut",  "Cutoff (Hz)", 60, 3000, 1, 340, { group: "Bass", log: true }),
   P("bassRes",  "Resonance", 0, 1, 0.01, 0.45, { group: "Bass" }),
   P("bassEnv",  "Filter env", 0, 1, 0.01, 0.55, { group: "Bass" }),
@@ -165,7 +181,13 @@ const PARAMS = [
   P("leadOct",  "Octave",3, 6, 1, 4, { group: "Lead" }),
   P("leadSpan", "Span (oct)", 0.5, 4, 0.25, 2, { group: "Lead" }),
   P("leadDensity","Density",0, 1, 0.01, 0.45, { group: "Lead" }),
+  P("leadEK",   "Euclid hits", 0, 16, 1, 7, { group: "Lead" }),
+  P("leadERot", "Euclid rotate", 0, 15, 1, 2, { group: "Lead" }),
   P("leadGate", "Gate (steps)", 0.25, 6, 0.05, 1.2, { group: "Lead" }),
+  P("leadTable","Wave", 0, 5, 0.01, 2.6, { group: "Lead" }),
+  P("leadMorph","Wave wander", 0, 2.5, 0.01, 0.9, { group: "Lead" }),
+  P("leadRate", "Wander rate", 0, 2, 0.01, 0.25, { group: "Lead" }),
+  P("leadShimmer","Shimmer", 0, 1, 0.01, 0.3, { group: "Lead" }),
   P("leadCut",  "Cutoff (Hz)", 300, 12000, 1, 3200, { group: "Lead", log: true }),
   P("leadRes",  "Resonance", 0, 1, 0.01, 0.2, { group: "Lead" }),
   P("leadDetune","Detune (cents)", 0, 50, 0.5, 9, { group: "Lead" }),
@@ -173,32 +195,60 @@ const PARAMS = [
   // Pad
   P("padLevel", "Level",0, 1, 0.01, 0.35, { group: "Pad" }),
   P("padOct",   "Octave",2, 5, 1, 3, { group: "Pad" }),
+  P("padEK",    "Euclid hits", 0, 16, 1, 3, { group: "Pad" }),
+  P("padERot",  "Euclid rotate", 0, 15, 1, 0, { group: "Pad" }),
+  P("padTable", "Wave", 0, 5, 0.01, 3.4, { group: "Pad" }),
+  P("padMorph", "Wave wander", 0, 2.5, 0.01, 1.2, { group: "Pad" }),
+  P("padRate",  "Wander rate", 0, 2, 0.01, 0.08, { group: "Pad" }),
+  P("padShimmer","Shimmer", 0, 1, 0.01, 0.45, { group: "Pad" }),
   P("padCut",   "Cutoff (Hz)", 200, 8000, 1, 1400, { group: "Pad", log: true }),
   P("padAttack","Attack (s)", 0.02, 3, 0.01, 0.6, { group: "Pad" }),
   P("padRelease","Release (s)", 0.1, 5, 0.01, 1.4, { group: "Pad" }),
   P("padSpread","Detune (cents)", 0, 40, 0.5, 14, { group: "Pad" }),
+  // Master FX — on the whole mix, returns included
+  P("fxCut",    "Filter cutoff (Hz)", 40, 18000, 1, 18000, { group: "FX", log: true }),
+  P("fxRes",    "Filter resonance", 0, 1, 0.01, 0.15, { group: "FX" }),
+  P("fxDrive",  "Drive", 0, 1, 0.01, 0, { group: "FX" }),
+  P("fxCrush",  "Bit crush", 0, 1, 0.01, 0, { group: "FX" }),
+  P("fxWidth",  "Stereo width", 0, 1.5, 0.01, 1, { group: "FX" }),
   // Space
-  P("delayMix", "Delay mix", 0, 1, 0.01, 0.25, { group: "Space" }),
+  P("delayMix", "Delay return", 0, 1, 0.01, 0.6, { group: "Space" }),
   P("delayFb",  "Delay feedback", 0, 0.92, 0.01, 0.5, { group: "Space" }),
   P("delayTone","Delay tone (Hz)", 400, 9000, 10, 3200, { group: "Space", log: true }),
-  P("verbMix",  "Reverb mix", 0, 1, 0.01, 0.3, { group: "Space" }),
+  P("verbMix",  "Reverb return", 0, 1, 0.01, 0.7, { group: "Space" }),
   P("verbSize", "Reverb size (s)", 0.5, 6, 0.1, 2.6, { group: "Space", noMod: true })
 ];
 
+/* every track gets pan and its own delay / reverb sends, in its own group */
+const TRACK_GROUP = { kick: "Kick", clap: "Clap", hat: "Hat", perc: "Perc", bass: "Bass", lead: "Lead", pad: "Pad" };
+const SEND_DEF = { kick:[0,0,0], clap:[0.1,.3,.5], hat:[0.25,.15,.1], perc:[-0.3,.5,.3], bass:[0,0,.02], lead:[-0.1,.6,.4], pad:[0,.3,.7] };
+PARTS.forEach(p => {
+  const g = TRACK_GROUP[p], d = SEND_DEF[p];
+  PARAMS.push(P(p + "Pan", "Pan", -1, 1, 0.01, d[0], { group: g }));
+  PARAMS.push(P(p + "Dly", "Delay send", 0, 1, 0.01, d[1], { group: g }));
+  PARAMS.push(P(p + "Vrb", "Reverb send", 0, 1, 0.01, d[2], { group: g }));
+});
+
 /** Choices that are not numbers: dice flips them, presets save them. */
 const SWITCHES = [
+  { key: "scoreSource", label: "Score from",  group: "Score",    def: "geometry", options: ["geometry", "fluid", "points in"] },
+  { key: "pointsUse", label: "Use points to", group: "Points in", def: "stir + drive", options: ["drive only", "stir + drive"] },
   { key: "scale",     label: "Scale",        group: "Harmony",  def: "Minor pentatonic", options: Object.keys(SCALES) },
   { key: "surface",   label: "Form",         group: "Geometry", def: "torus",
     options: ["sphere", "torus", "supershape", "mobius", "saddle", "cylinder", "disc"] },
   { key: "placement", label: "Placement",    group: "Geometry", def: "grid",
     options: ["grid", "rings", "fibonacci", "jitter"] },
-  { key: "bassTime",  label: "Bass time axis",  group: "Bass", def: "x",      options: ["x", "y", "z", "angle"] },
-  { key: "bassPitch", label: "Bass pitch axis", group: "Bass", def: "z",      options: ["x", "y", "z", "radius"] },
-  { key: "leadSteps", label: "Lead loop (steps)", group: "Lead", def: "32",   options: ["16", "32", "64"] },
-  { key: "leadTime",  label: "Lead time axis",  group: "Lead", def: "angle",  options: ["x", "y", "z", "angle"] },
-  { key: "leadPitch", label: "Lead pitch axis", group: "Lead", def: "y",      options: ["x", "y", "z", "radius"] },
-  { key: "leadWave",  label: "Lead voice",   group: "Lead", def: "saw",       options: ["saw", "square", "fm", "pluck"] },
-  { key: "delayDiv",  label: "Delay time",   group: "Space", def: "3/16",     options: ["1/16", "1/8", "3/16", "1/4"] }
+  { key: "bassRhythm",label: "Rhythm",       group: "Bass", def: "score",  options: ["score", "euclid"] },
+  { key: "bassTime",  label: "Time axis",    group: "Bass", def: "x",      options: ["x", "y", "z", "angle"] },
+  { key: "bassPitch", label: "Pitch axis",   group: "Bass", def: "z",      options: ["x", "y", "z", "radius"] },
+  { key: "leadRhythm",label: "Rhythm",       group: "Lead", def: "score",  options: ["score", "euclid"] },
+  { key: "leadSteps", label: "Loop (steps)", group: "Lead", def: "32",     options: ["16", "32", "64"] },
+  { key: "leadTime",  label: "Time axis",    group: "Lead", def: "angle",  options: ["x", "y", "z", "angle"] },
+  { key: "leadPitch", label: "Pitch axis",   group: "Lead", def: "y",      options: ["x", "y", "z", "radius"] },
+  { key: "leadVoice", label: "Voice",        group: "Lead", def: "table",  options: ["table", "pluck", "fm"] },
+  { key: "padRhythm", label: "Rhythm",       group: "Pad",  def: "bar",    options: ["bar", "euclid"] },
+  { key: "fxFilter",  label: "Filter",       group: "FX",   def: "off",    options: ["off", "lowpass", "highpass", "bandpass"] },
+  { key: "delayDiv",  label: "Delay time",   group: "Space", def: "3/16",  options: ["1/16", "1/8", "3/16", "1/4"] }
 ];
 
 function defaults(){
@@ -240,6 +290,17 @@ function drumHit(part, step, bar, Q){
    ============================================================ */
 function axisValue(frame, i, axis){
   const p = frame.positions;
+  if(frame.space === "uv"){                     // u right, v down: pitch goes up the screen
+    const u = p[i * 3], v = 1 - p[i * 3 + 1];
+    switch(axis){
+      case "x": return u;
+      case "y": return v;
+      case "z": return p[i * 3 + 2];
+      case "angle": return Math.atan2(v - 0.5, u - 0.5);
+      case "radius": return Math.hypot(u - 0.5, v - 0.5);
+    }
+    return 0;
+  }
   switch(axis){
     case "x": return p[i * 3];
     case "y": return p[i * 3 + 1];
@@ -285,7 +346,9 @@ function lens(frame, L, out){
     if(!(hi > lo)){ lo = 0; hi = 1; }
     return [lo, hi - lo];
   };
-  const rt = range(ta), rp = range(pa), rv = range(va);
+  const UVR = { x: [0, 1], y: [0, 1], z: [-1, 2], angle: [-Math.PI, TAU], radius: [0, 0.7072] };
+  const fixed = frame.space === "uv";             // a picture-space frame keeps its picture: no stretching
+  const rt = fixed ? UVR[ta] : range(ta), rp = fixed ? UVR[pa] : range(pa), rv = fixed ? UVR[va] : range(va);
   const poly = Math.max(1, L.poly | 0);
   const npc = L.scaleSize;
   const totalDegrees = Math.max(1, Math.round(L.span * npc));
@@ -330,6 +393,62 @@ function lens(frame, L, out){
 }
 
 /* ============================================================
+   5b · evolving wavetables
+   Six harmonic spectra in a row — sine, triangle, saw, square, vox
+   (two formant humps), glass (sparse partials). A position 0..5 blends
+   neighbours; a slow seeded noise walks the position ("wander") and
+   breathes each harmonic ("shimmer"), so no two notes share a timbre.
+   ============================================================ */
+const HARMONICS = 48;
+const WAVES = ["sine", "triangle", "saw", "square", "vox", "glass"];
+const GLASS = { 1: 1, 2: 0.6, 5: 0.5, 9: 0.42, 14: 0.34, 20: 0.28, 27: 0.22, 35: 0.18, 44: 0.14 };
+function basisAmp(b, h){
+  switch(b){
+    case 0: return h === 1 ? 1 : 0;
+    case 1: return h & 1 ? ((((h - 1) >> 1) & 1) ? -1 : 1) / (h * h) : 0;
+    case 2: return 1 / h;
+    case 3: return h & 1 ? 1 / h : 0;
+    case 4: return 0.22 / h + Math.exp(-Math.pow((h - 7) / 2.2, 2)) + 0.55 * Math.exp(-Math.pow((h - 17) / 3, 2));
+    case 5: return GLASS[h] || 0;
+  }
+  return 0;
+}
+const PART_IDX = { kick: 0, clap: 1, hat: 2, perc: 3, bass: 4, lead: 5, pad: 6 };
+/** Where `part`'s wave sits at time t (seconds): base position plus a seeded wander. */
+function wavePos(Q, part, t){
+  const base = +Q[part + "Table"] || 0, m = +Q[part + "Morph"] || 0, r = +Q[part + "Rate"] || 0;
+  if(m <= 0) return clamp(base, 0, 5);
+  const n = noise3(t * r, PART_IDX[part] * 7.7 + ((Q.seed | 0) % 97) * 0.31, 3.3) * 2 - 1;
+  return clamp(base + m * n, 0, 5);
+}
+/** Harmonic spectrum (sine terms, index 1..HARMONICS) at a wave position and time. */
+function wavetable(pos, t, shimmer, rate, seed, part, out){
+  out = out || new Float32Array(HARMONICS + 1);
+  out.fill(0);
+  pos = clamp(pos, 0, 5);
+  const i0 = Math.min(4, Math.floor(pos)), f = pos - i0;
+  const pid = PART_IDX[part] || 0, tt = t * (0.3 + rate * 2);
+  for(let h = 1; h <= HARMONICS; h++){
+    let a = basisAmp(i0, h) * (1 - f) + basisAmp(i0 + 1, h) * f;
+    if(shimmer > 0 && a !== 0) a *= 1 + shimmer * 1.4 * (noise3(h * 0.53, tt, (seed | 0) * 0.017 + pid * 11) * 2 - 1);
+    out[h] = a;
+  }
+  return out;
+}
+/** One cycle of a spectrum as samples, peak-normalised — for drawing. */
+function waveSamples(spec, n, out){
+  out = out || new Float32Array(n);
+  let pk = 1e-6;
+  for(let i = 0; i < n; i++){
+    const x = i / n * TAU; let v = 0;
+    for(let h = 1; h < spec.length; h++) if(spec[h]) v += spec[h] * Math.sin(h * x);
+    out[i] = v; if(Math.abs(v) > pk) pk = Math.abs(v);
+  }
+  for(let i = 0; i < n; i++) out[i] /= pk;
+  return out;
+}
+
+/* ============================================================
    6 · the composer — params + clock in, events out
    ============================================================ */
 function geometrySpec(Q){
@@ -347,6 +466,21 @@ function geometrySpec(Q){
     colour: "spectrum", colourParams: { hue: 200, range: 220, sat: 0.7 },
     sizeMin: 3, sizeMax: 3
   };
+}
+
+/** A note from a lens grid at index i. gate -1: the grid decides (score rhythm).
+ *  gate 0: silence. gate 1: a hit — take the nearest occupied cell, so the euclid
+ *  pattern decides when and the score decides what. */
+function pickNote(grid, i, gate){
+  const n = grid.length;
+  if(gate === -1) return grid[i] && grid[i].length ? grid[i][0] : null;
+  if(!gate) return null;
+  for(let d = 0; d <= n >> 1; d++){
+    const a = grid[(i + d) % n], b = grid[((i - d) % n + n) % n];
+    if(a && a.length) return a[0];
+    if(b && b.length) return b[0];
+  }
+  return null;
 }
 
 /**
@@ -373,12 +507,13 @@ function createComposer(opts){
       }
       const sz = scaleSize(Q.scale);
       this.leadSteps = parseInt(Q.leadSteps, 10) || 32;
+      const eu = k => Q[k + "Rhythm"] === "euclid";
       this.lead = lens(this.frame, { timeAxis: Q.leadTime, pitchAxis: Q.leadPitch, steps: this.leadSteps,
-        density: Q.leadDensity, poly: 1, cutoff: 0.3, span: Q.leadSpan, scaleSize: sz }, this.lead);
+        density: eu("lead") ? 1 : Q.leadDensity, poly: 1, cutoff: 0.3, span: Q.leadSpan, scaleSize: sz }, this.lead);
       this.bass = lens(this.frame, { timeAxis: Q.bassTime, pitchAxis: Q.bassPitch, steps: 16,
-        density: Q.bassDensity, poly: 1, cutoff: 0.3, span: Q.bassSpan, scaleSize: sz }, this.bass);
-      // pad: four bar-sized bins; the strongest notes of each bin make the chord
-      this.pad = lens(this.frame, { timeAxis: Q.leadTime, pitchAxis: "y", steps: 4,
+        density: eu("bass") ? 1 : Q.bassDensity, poly: 1, cutoff: 0.3, span: Q.bassSpan, scaleSize: sz }, this.bass);
+      // pad: 16 bins; a chord takes the strongest note near its step
+      this.pad = lens(this.frame, { timeAxis: Q.leadTime, pitchAxis: "y", steps: 16,
         density: 1, poly: 1, cutoff: 0.3, span: 1, scaleSize: sz }, this.pad);
       return this;
     },
@@ -403,32 +538,32 @@ function createComposer(opts){
         ev.push(e);
       });
 
-      // bass — lens on the geometry, 16 steps per bar
+      // bass — lens on the score, 16 steps per bar; or euclid hits pitched by the score
       if(Q.bassLevel > 0 && this.bass){
-        const cell = this.bass.grid[step];
-        if(cell && cell.length){
-          const nt = cell[0];
-          ev.push({ part: "bass", step, vel: nt.vel, dur: Q.bassGate * 0.25, hue: nt.hue,
+        const nt = pickNote(this.bass.grid, step, Q.bassRhythm === "euclid" ? euclid(Q.bassEK, 16, Q.bassERot)[step] : -1);
+        if(nt) ev.push({ part: "bass", step, vel: nt.vel, dur: Q.bassGate * 0.25, hue: nt.hue,
             midi: degreeToMidi(nt.deg, root, sc, Math.round(Q.bassOct)), idx: nt.idx });
-        }
       }
       // lead — lens loop of 16/32/64 steps
       if(Q.leadLevel > 0 && this.lead){
         const ls = ((absStep % this.leadSteps) + this.leadSteps) % this.leadSteps;
-        const cell = this.lead.grid[ls];
-        if(cell && cell.length){
-          const nt = cell[0];
-          ev.push({ part: "lead", step, vel: nt.vel, dur: Q.leadGate * 0.25, hue: nt.hue,
+        const nt = pickNote(this.lead.grid, ls, Q.leadRhythm === "euclid" ? euclid(Q.leadEK, 16, Q.leadERot)[step] : -1);
+        if(nt) ev.push({ part: "lead", step, vel: nt.vel, dur: Q.leadGate * 0.25, hue: nt.hue,
             midi: degreeToMidi(nt.deg, root, sc, Math.round(Q.leadOct)), idx: nt.idx });
-        }
       }
-      // pad — a chord on the downbeat of each bar, degree voted by that bin
-      if(Q.padLevel > 0 && this.pad && step === 0){
-        const bin = this.pad.grid[((bar % 4) + 4) % 4];
-        const d = bin && bin.length ? bin[0].deg : 0;
-        const o = Math.round(Q.padOct);
-        const tones = [d, d + 2, d + 4, d + 6].map(x => degreeToMidi(x, root, sc, o));
-        ev.push({ part: "pad", step, vel: 0.7, dur: 4, notes: tones, midi: tones[0] });
+      // pad — a chord per bar, or on euclid hits held to the next hit
+      if(Q.padLevel > 0 && this.pad){
+        let dur = 0;
+        if(Q.padRhythm === "euclid"){
+          const pat = euclid(Q.padEK, 16, Q.padERot);
+          if(pat[step]){ let k = 1; while(k < 16 && !pat[(step + k) & 15]) k++; dur = k * 0.25; }
+        } else if(step === 0) dur = 4;
+        if(dur > 0){
+          const nt = pickNote(this.pad.grid, step, 1);
+          const d = nt ? nt.deg : 0, o = Math.round(Q.padOct);
+          const tones = [d, d + 2, d + 4, d + 6].map(x => degreeToMidi(x, root, sc, o));
+          ev.push({ part: "pad", step, vel: 0.7, dur, notes: tones, midi: tones[0] });
+        }
       }
       return ev;
     }
@@ -503,9 +638,10 @@ function renderEvents(comp, Q, bars, opts){
 
 const api = {
   SCHEMA_VERSION, SCALES, PARTS, DRUMS, PARAMS, SWITCHES,
-  defaults, degreeToMidi, scaleSize,
+  defaults, degreeToMidi, scaleSize, TRACK_GROUP,
+  HARMONICS, WAVES, wavePos, wavetable, waveSamples, pickNote,
   noise3, hash3, mulberry32, euclid,
-  drumHit, lens, geometrySpec, createComposer,
+  drumHit, lens, axisValue, geometrySpec, createComposer,
   toMidiFile, renderEvents
 };
 return api;

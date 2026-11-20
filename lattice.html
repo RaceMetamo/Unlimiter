@@ -168,6 +168,7 @@
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-dice.js"></script>
 <script src="unlimiter-ports.js"></script>
+<script src="unlimiter-link.js"></script>
 <script src="unlimiter-points.js"></script>
 <script src="unlimiter-vision.js"></script>
 <script>
@@ -1773,6 +1774,8 @@ function publishPoints(){
     OUT.ids[i] = ID[i] >>> 0;
   }
   PT.bump(OUT);
+  // other tabs (Overtone…) — throttled, and silent unless a tab is listening
+  if(window.UnlimiterLink) UnlimiterLink.sendPoints("lattice", OUT);
 }
 
 /* ============================ loop ============================ */
