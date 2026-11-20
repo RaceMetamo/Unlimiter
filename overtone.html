@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overtone — generative music from the Unlimiter's geometry</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px;position:relative}
+  #cv{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#0b0d0e}
+
+  #panel{width:352px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  .group{border-bottom:1px solid var(--line)}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:28px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:56px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--accent);margin-top:-4.5px;border:none}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:none}
+  select,input[type=text],input[type=number]{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-size:12px;font-family:inherit}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.warm{border-color:#4a3a34;color:#f0a68e}
+  button.on{border-color:var(--accent);color:var(--accent)}
+  button.primary.on{background:#2b3033;color:var(--accent)}
+  .btnrow{display:flex;gap:6px;padding:6px 0}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
+    border-top:1px solid var(--line);margin-top:8px}
+  .chgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:4px 0}
+  .chgrid div{text-align:center;font-size:10px;color:var(--dim)}
+  .chgrid input{padding:4px 2px;text-align:center}
+  #footer{border-top:1px solid var(--line);padding:12px 16px}
+  .hidden{display:none !important}
+  #playBtn{min-width:84px}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Overtone <span>— generative music from geometry</span></h1>
+    <button id="playBtn" class="primary">▶ Play</button>
+    <button id="bOut">Output window ↗</button>
+    <div id="status">idle</div>
+  </div>
+  <div id="canvasWrap"><canvas id="cv" width="1280" height="720"></canvas></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+    <details class="group" open>
+      <summary>Presets<span class="chev"></span></summary>
+      <div class="body">
+        <div class="row"><label>Preset</label><div class="ctl"><select id="presetSel"></select></div></div>
+        <div class="row"><label>Tempo</label><div class="ctl"><input type="number" id="bpmIn" min="40" max="220" step="0.5"></div></div>
+        <div class="btnrow"><button id="bReseed">New seed</button><button id="bExportPreset">Export preset</button><button id="bImportPreset">Import preset</button></div>
+        <div class="note">The seed fixes every dice-roll inside the music: same seed, same parameters, same notes. Space plays and stops. Tempo here sets the Drive clock, so MIDI clock and tap tempo (in Drive, below) take over when you use them.</div>
+      </div>
+    </details>
+    <div id="groups"></div>
+
+    <details class="group">
+      <summary>Score input<span class="chev"></span></summary>
+      <div class="body" id="g-scorein">
+        <div class="note" id="scoreNote">Using the built-in generated geometry. In the Rack, patch any points cable (a Manifold's 3D or 2D, a Vision node, Lattice) into <b>score</b> and the lead, bass and pad read that instead.</div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary>MIDI out<span class="chev"></span></summary>
+      <div class="body" id="g-midi"></div>
+    </details>
+
+    <details class="group">
+      <summary>Dice — roll &amp; evolve<span class="chev"></span></summary>
+      <div class="body" id="g-dice"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+  </div>
+
+  <div id="footer">
+    <div class="row"><label>Bounce bars</label><div class="ctl"><input type="number" id="bounceBars" min="1" max="64" value="8"></div></div>
+    <div class="btnrow"><button id="bRec" class="primary">● Record</button><button id="bBounce" class="primary">Bounce WAV</button><button id="bMidi" class="primary">Export MIDI</button></div>
+  </div>
+</div>
+<input type="file" id="fPreset" accept="application/json,.json" class="hidden">
+
+<script src="unlimiter-points.js"></script>
+<script src="unlimiter-music.js"></script>
+<script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
+<script src="unlimiter-ports.js"></script>
+<script>
+"use strict";
+
+/* ============================ parameters ============================ */
+const M = UnlimiterMusic;
+const DEFAULTS = M.defaults();
+let P = Object.assign({}, DEFAULTS);
+let Q = P;
+
+const Drive = window.UnlimiterDrive
+  ? UnlimiterDrive.create({ onChange: () => {}, getOutputCanvas: () => cv })
+  : null;
+
+let GRP = "";
+function registerMod(p){
+  if(!Drive || p.noMod) return;
+  Drive.registerTarget(p.key, (GRP ? GRP + " — " : "") + p.label, p.min, p.max);
+}
+
+/* ============================ panel factory ============================ */
+const $ = id => document.getElementById(id);
+const rows = {};          // key -> {input, refresh}
+const switchEls = {};     // key -> <select>
+const fmt = (v, step) => {
+  const d = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
+  return (+v).toFixed(d);
+};
+function slider(parent, p){
+  registerMod(p);
+  const row = document.createElement("div"); row.className = "row";
+  const lab = document.createElement("label"); lab.textContent = p.label;
+  const ctl = document.createElement("div"); ctl.className = "ctl";
+  const inp = document.createElement("input");
+  inp.type = "range"; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = P[p.key];
+  const val = document.createElement("span"); val.className = "val";
+  const refresh = () => { inp.value = P[p.key]; val.textContent = fmt(P[p.key], p.step);
+    row.style.opacity = Drive && Drive.isModulated(p.key) ? 0.75 : 1; };
+  inp.addEventListener("input", () => { P[p.key] = parseFloat(inp.value); refresh(); });
+  ctl.append(inp, val); row.append(lab, ctl); parent.appendChild(row);
+  rows[p.key] = { input: inp, refresh }; refresh();
+}
+function selectRow(parent, s){
+  const row = document.createElement("div"); row.className = "row";
+  const lab = document.createElement("label"); lab.textContent = s.label;
+  const ctl = document.createElement("div"); ctl.className = "ctl";
+  const sel = document.createElement("select");
+  s.options.forEach(o => { const op = document.createElement("option"); op.value = op.textContent = o; sel.appendChild(op); });
+  sel.value = P[s.key];
+  sel.addEventListener("change", () => { P[s.key] = sel.value; onStructure(s.key); });
+  ctl.appendChild(sel); row.append(lab, ctl); parent.appendChild(row);
+  switchEls[s.key] = sel;
+}
+
+// Groups in a fixed, suite-standard order: what you play with first, FX last.
+const ORDER = ["Transport", "Harmony", "Geometry", "Kick", "Clap", "Hat", "Perc", "Bass", "Lead", "Pad", "Space"];
+const OPEN = { Transport: 1, Harmony: 1, Geometry: 1 };
+ORDER.forEach(name => {
+  const det = document.createElement("details"); det.className = "group"; if(OPEN[name]) det.open = true;
+  det.innerHTML = '<summary>' + name + '<span class="chev"></span></summary>';
+  const body = document.createElement("div"); body.className = "body"; det.appendChild(body);
+  $("groups").appendChild(det);
+  GRP = name;
+  M.SWITCHES.filter(s => s.group === name).forEach(s => selectRow(body, s));
+  M.PARAMS.filter(p => p.group === name).forEach(p => slider(body, p));
+  if(name === "Space"){
+    const b = document.createElement("div"); b.className = "btnrow";
+    b.innerHTML = '<button id="bVerb">Rebuild reverb</button>'; body.appendChild(b);
+  }
+});
+GRP = "";
+
+function refreshAll(){
+  for(const k in rows) rows[k].refresh();
+  for(const k in switchEls) switchEls[k].value = P[k];
+  $("bpmIn").value = Drive ? Drive.state.clock.bpm.toFixed(1) : 124;
+}
+
+/* ============================ audio engine ============================ */
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const amp = v => Math.pow(Math.max(0, Math.min(1, v)), 1.4);
+const SEND = { kick:[0,0], clap:[.3,.5], hat:[.15,.1], perc:[.5,.3], bass:[0,.02], lead:[.6,.4], pad:[.3,.7] };
+
+function makeReverbIR(ctx, size){
+  const len = Math.max(1, Math.floor(ctx.sampleRate * size));
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for(let c = 0; c < 2; c++){
+    const d = buf.getChannelData(c);
+    for(let i = 0; i < len; i++){
+      const t = i / len;
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.2) * (i < 400 ? i / 400 : 1);
+    }
+  }
+  return buf;
+}
+
+function makeEngine(ctx, dest, extraDest){
+  const E = { ctx, part: {} };
+  const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0);
+  for(let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  E.noise = nb;
+  E.master = ctx.createGain();
+  E.comp = ctx.createDynamicsCompressor();
+  E.comp.threshold.value = -14; E.comp.knee.value = 18; E.comp.ratio.value = 3.5;
+  E.comp.attack.value = 0.004; E.comp.release.value = 0.16;
+  E.analyser = ctx.createAnalyser(); E.analyser.fftSize = 1024;
+  E.clip = ctx.createWaveShaper();                       // soft ceiling so a hot mix never hard-clips
+  const curve = new Float32Array(2048); for(let i = 0; i < 2048; i++){ const x = i / 1023.5 - 1; curve[i] = Math.tanh(x * 1.4) / Math.tanh(1.4); }
+  E.clip.curve = curve;
+  E.master.connect(E.comp); E.comp.connect(E.clip); E.clip.connect(dest); E.clip.connect(E.analyser);
+  if(extraDest) E.clip.connect(extraDest);
+  E.bus = ctx.createGain(); E.bus.connect(E.master);
+  // delay
+  E.dIn = ctx.createGain(); E.delay = ctx.createDelay(2); E.dFb = ctx.createGain();
+  E.dTone = ctx.createBiquadFilter(); E.dTone.type = "lowpass"; E.dOut = ctx.createGain();
+  E.dIn.connect(E.delay); E.delay.connect(E.dTone); E.dTone.connect(E.dOut); E.dTone.connect(E.dFb);
+  E.dFb.connect(E.delay); E.dOut.connect(E.master);
+  // reverb
+  E.vIn = ctx.createGain(); E.conv = ctx.createConvolver(); E.vOut = ctx.createGain();
+  E.vIn.connect(E.conv); E.conv.connect(E.vOut); E.vOut.connect(E.master);
+  E.verbSize = 0; E.setReverb = size => { E.conv.buffer = makeReverbIR(ctx, size); E.verbSize = size; };
+  M.PARTS.forEach(p => {
+    const g = ctx.createGain(); g.connect(E.bus);
+    const sd = ctx.createGain(); sd.gain.value = SEND[p][0]; g.connect(sd); sd.connect(E.dIn);
+    const sv = ctx.createGain(); sv.gain.value = SEND[p][1]; g.connect(sv); sv.connect(E.vIn);
+    E.part[p] = g;
+  });
+  return E;
+}
+function applyFx(E, Qv, spb, t){
+  const tc = 0.03;
+  E.master.gain.setTargetAtTime(Qv.master * 0.6, t, tc);
+  E.dIn.gain.setTargetAtTime(Qv.delayMix, t, tc);
+  E.dFb.gain.setTargetAtTime(Qv.delayFb, t, tc);
+  E.dTone.frequency.setTargetAtTime(Qv.delayTone, t, tc);
+  E.vIn.gain.setTargetAtTime(Qv.verbMix, t, tc);
+  const div = { "1/16": .25, "1/8": .5, "3/16": .75, "1/4": 1 }[Qv.delayDiv] || .75;
+  E.delay.delayTime.setTargetAtTime(Math.min(1.9, div * spb), t, 0.05);
+}
+function noiseSrc(E, t, dur){
+  const s = E.ctx.createBufferSource(); s.buffer = E.noise; s.loop = true;
+  s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.02); return s;
+}
+function env(g, t, peak, a, dur, rel){          // attack, hold to dur, release
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(Math.max(0.0002, peak), t + a);
+  g.gain.setValueAtTime(Math.max(0.0002, peak), t + Math.max(a, dur));
+  g.gain.exponentialRampToValueAtTime(0.0003, t + Math.max(a, dur) + rel);
+}
+
+const VOICE = {
+  kick(E, t, ev, Qv){
+    const c = E.ctx, o = c.createOscillator(), g = c.createGain();
+    const f = Qv.kickTune, f0 = f * (1.5 + Qv.kickPunch * 4);
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + 0.04 + 0.05 * (1 - Qv.kickPunch));
+    const v = amp(ev.vel) * Qv.kickLevel;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + Qv.kickDecay);
+    o.connect(g); g.connect(E.part.kick); o.start(t); o.stop(t + Qv.kickDecay + 0.05);
+    if(Qv.kickPunch > 0.05){
+      const n = noiseSrc(E, t, 0.012), hp = c.createBiquadFilter(), cg = c.createGain();
+      hp.type = "highpass"; hp.frequency.value = 1800;
+      cg.gain.setValueAtTime(v * Qv.kickPunch * 0.5, t); cg.gain.exponentialRampToValueAtTime(0.0005, t + 0.012);
+      n.connect(hp); hp.connect(cg); cg.connect(E.part.kick);
+    }
+  },
+  clap(E, t, ev, Qv){
+    const c = E.ctx, v = amp(ev.vel) * Qv.clapLevel;
+    [0, 0.011, 0.023].forEach((off, i) => {
+      const last = i === 2, d = last ? Qv.clapDecay : 0.012;
+      const n = noiseSrc(E, t + off, d), bp = c.createBiquadFilter(), g = c.createGain();
+      bp.type = "bandpass"; bp.frequency.value = Qv.clapTone; bp.Q.value = 1.1;
+      g.gain.setValueAtTime(v, t + off); g.gain.exponentialRampToValueAtTime(0.0005, t + off + d);
+      n.connect(bp); bp.connect(g); g.connect(E.part.clap);
+    });
+  },
+  hat(E, t, ev, Qv){
+    const c = E.ctx, d = Qv.hatDecay * (ev.open ? 6 : 1), v = amp(ev.vel) * Qv.hatLevel;
+    const n = noiseSrc(E, t, d), hp = c.createBiquadFilter(), bp = c.createBiquadFilter(), g = c.createGain();
+    hp.type = "highpass"; hp.frequency.value = 6500;
+    bp.type = "bandpass"; bp.frequency.value = Qv.hatTone; bp.Q.value = 0.7;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+    n.connect(hp); hp.connect(bp); bp.connect(g); g.connect(E.part.hat);
+  },
+  perc(E, t, ev, Qv){
+    const c = E.ctx, f = mtof(ev.midi), v = amp(ev.vel) * Qv.percLevel, d = Qv.percDecay;
+    const o = c.createOscillator(), m = c.createOscillator(), mg = c.createGain(), g = c.createGain();
+    o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.025);
+    m.frequency.value = f * 2.7; mg.gain.setValueAtTime(f * 1.2, t); mg.gain.exponentialRampToValueAtTime(1, t + d);
+    m.connect(mg); mg.connect(o.frequency);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+    o.connect(g); g.connect(E.part.perc); o.start(t); m.start(t); o.stop(t + d + 0.03); m.stop(t + d + 0.03);
+  },
+  bass(E, t, ev, Qv, durS){
+    const c = E.ctx, f = mtof(ev.midi), v = amp(ev.vel) * Qv.bassLevel;
+    const o = c.createOscillator(), sub = c.createOscillator(), lp = c.createBiquadFilter();
+    const g = c.createGain(), sg = c.createGain();
+    o.type = "sawtooth"; o.frequency.value = f; sub.type = "sine"; sub.frequency.value = f / 2; sg.gain.value = 0.7;
+    lp.type = "lowpass"; lp.Q.value = 0.7 + Qv.bassRes * 14;
+    const cut = Qv.bassCut, top = Math.min(14000, cut * (1 + Qv.bassEnv * 7));
+    lp.frequency.setValueAtTime(top, t); lp.frequency.exponentialRampToValueAtTime(Math.max(40, cut), t + Math.min(0.35, Math.max(0.06, durS)));
+    env(g, t, v, 0.004, durS, 0.05);
+    o.connect(lp); lp.connect(g); sub.connect(sg); sg.connect(g); g.connect(E.part.bass);
+    const end = t + durS + 0.4; o.start(t); sub.start(t); o.stop(end); sub.stop(end);
+  },
+  lead(E, t, ev, Qv, durS){
+    const c = E.ctx, f = mtof(ev.midi), v = amp(ev.vel) * Qv.leadLevel;
+    const lp = c.createBiquadFilter(), g = c.createGain(), kind = Qv.leadWave;
+    lp.type = "lowpass"; lp.Q.value = 0.6 + Qv.leadRes * 12;
+    let cut = Qv.leadCut, end = t + durS + 0.3;
+    if(kind === "pluck"){ lp.frequency.setValueAtTime(Math.min(14000, cut * 4), t); lp.frequency.exponentialRampToValueAtTime(Math.max(200, cut * 0.6), t + 0.18); durS = Math.min(durS, 0.12); end = t + 0.5; }
+    else lp.frequency.setValueAtTime(cut, t);
+    const oscs = [];
+    if(kind === "fm"){
+      const car = c.createOscillator(), mod = c.createOscillator(), mg = c.createGain();
+      car.frequency.value = f; mod.frequency.value = f * 2;
+      mg.gain.setValueAtTime(f * (0.5 + Qv.leadFM * 5), t); mg.gain.exponentialRampToValueAtTime(Math.max(1, f * 0.3 * Qv.leadFM), t + 0.25);
+      mod.connect(mg); mg.connect(car.frequency); car.connect(lp); oscs.push(car, mod);
+    } else {
+      [-1, 1].forEach(sd => {
+        const o = c.createOscillator(); o.type = kind === "square" ? "square" : "sawtooth";
+        o.frequency.value = f; o.detune.value = sd * Qv.leadDetune; o.connect(lp); oscs.push(o);
+      });
+    }
+    env(g, t, v * 0.6, 0.004, durS, kind === "pluck" ? 0.25 : 0.14);
+    lp.connect(g); g.connect(E.part.lead);
+    oscs.forEach(o => { o.start(t); o.stop(end + 0.2); });
+  },
+  pad(E, t, ev, Qv, durS){
+    const c = E.ctx, lp = c.createBiquadFilter(), g = c.createGain();
+    lp.type = "lowpass"; lp.frequency.value = Qv.padCut; lp.Q.value = 0.5;
+    const a = Qv.padAttack, rel = Qv.padRelease, v = amp(ev.vel) * Qv.padLevel / Math.sqrt(ev.notes.length);
+    env(g, t, v, a, Math.max(a + 0.05, durS), rel);
+    lp.connect(g); g.connect(E.part.pad);
+    const end = t + Math.max(a + 0.05, durS) + rel + 0.1;
+    ev.notes.forEach(m => [-1, 1].forEach(sd => {
+      const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.value = mtof(m);
+      o.detune.value = sd * Qv.padSpread; o.connect(lp); o.start(t); o.stop(end);
+    }));
+  }
+};
+
+/* ============================ live state ============================ */
+const cv = $("cv"), g2 = cv.getContext("2d");
+let AC = null, E = null, recDest = null, recorder = null, recChunks = [];
+const composer = M.createComposer({ points: UnlimiterPoints });
+let playing = false, nextStepBeat = 0, tGeo = 0, curStep = -1, extFrame = null, extDirty = false;
+let timer = 0;
+const queue = [];                       // {t, kind:"hit"|"step", ...} due on the audio clock
+const envs = {}; M.PARTS.forEach(p => envs[p] = 0);
+let flash = new Float32Array(1);
+const LOOKAHEAD = 0.16;
+
+function ensureAudio(){
+  if(AC) return AC;
+  AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+  recDest = AC.createMediaStreamDestination();
+  E = makeEngine(AC, AC.destination, recDest);
+  E.setReverb(P.verbSize);
+  return AC;
+}
+
+/* ---- MIDI out ---- */
+const midi = { access: null, out: null, thru: true, ch: { kick:10, clap:10, hat:10, perc:10, bass:2, lead:3, pad:4 },
+               drums: { kick:36, clap:39, hat:42, perc:37 }, audio: true };
+function midiSend(data, whenAc){
+  if(!midi.out) return;
+  const ms = performance.now() + Math.max(0, (whenAc - AC.currentTime) * 1000);
+  try{ midi.out.send(data, ms); }catch(e){}
+}
+function midiNotes(ev, whenAc, durS){
+  if(!midi.out) return;
+  const ch = (midi.ch[ev.part] - 1) & 15, vel = Math.max(1, Math.round(ev.vel * 127));
+  const notes = ev.notes || [ev.midi != null && ev.part !== "kick" && ev.part !== "clap" && ev.part !== "hat" ? ev.midi : midi.drums[ev.part]];
+  notes.forEach(n => {
+    midiSend([0x90 | ch, n, vel], whenAc);
+    midiSend([0x80 | ch, n, 0], whenAc + Math.max(0.03, durS));
+  });
+}
+
+/* ---- trigger ---- */
+function trigger(ev, t, Qv, spb){
+  const durS = ev.dur * spb;
+  if(E && midi.audio) VOICE[ev.part](E, t, ev, Qv, durS);
+  midiNotes(ev, t, durS);
+  queue.push({ t, kind: "hit", part: ev.part, vel: ev.vel, idx: ev.idx, step: ev.step });
+}
+
+/* ---- scheduler, slaved to the Drive clock so the whole suite agrees on the beat ---- */
+function tick(){
+  if(!playing || !AC) return;
+  const C = Drive.state.clock, bpm = C.bpm, spb = 60 / bpm;
+  const beatsNow = C.beats;
+  if(nextStepBeat < beatsNow - 0.6 || nextStepBeat > beatsNow + 2){          // clock jumped: resync
+    nextStepBeat = Math.ceil(beatsNow * 4) / 4;
+  }
+  const horizon = beatsNow + LOOKAHEAD / spb;
+  Q = Drive.resolve(P);
+  applyFx(E, Q, spb, AC.currentTime);
+  while(nextStepBeat < horizon){
+    const abs = Math.round(nextStepBeat * 4);
+    if(abs % 16 === 0 || !composer.lead || extDirty){
+      composer.refresh(Q, tGeo, extFrame); extDirty = false;
+      if(flash.length < composer.frame.count) flash = new Float32Array(composer.frame.count);
+    }
+    tGeo += Q.geoDrift / 16;
+    let t = AC.currentTime + (nextStepBeat - beatsNow) * spb;
+    if(t < AC.currentTime) t = AC.currentTime + 0.005;
+    const swing = (abs & 1) ? Q.swing * 0.25 * spb : 0;
+    queue.push({ t: t + swing, kind: "step", abs });
+    composer.step(Q, abs).forEach(ev => {
+      const j = (Math.random() - 0.5) * Q.humanize * 0.012;
+      const vj = Math.max(0.05, Math.min(1, ev.vel * (1 + (Math.random() - 0.5) * Q.humanize * 0.25)));
+      trigger(Object.assign({}, ev, { vel: vj }), Math.max(AC.currentTime, t + swing + j), Q, spb);
+    });
+    nextStepBeat += 0.25;
+  }
+  queue.sort((a, b) => a.t - b.t);
+}
+
+function play(){
+  ensureAudio();
+  if(AC.state === "suspended") AC.resume();
+  const C = Drive.state.clock;
+  nextStepBeat = Math.ceil(C.beats * 4) / 4;
+  playing = true; composer.lead = null;
+  if(!timer) timer = setInterval(tick, 25);
+  $("playBtn").textContent = "■ Stop"; $("playBtn").classList.add("on");
+}
+function stop(){
+  playing = false;
+  if(timer){ clearInterval(timer); timer = 0; }
+  queue.length = 0;
+  $("playBtn").textContent = "▶ Play"; $("playBtn").classList.remove("on");
+}
+$("playBtn").addEventListener("click", () => playing ? stop() : play());
+addEventListener("keydown", e => {
+  if(e.code === "Space" && !/INPUT|SELECT|TEXTAREA|BUTTON/.test((e.target.tagName || ""))){ e.preventDefault(); playing ? stop() : play(); }
+});
+
+function onStructure(key){
+  if(playing) composer.lead = null;      // rebuild the score on the next step
+}
+["rows", "cols", "shells", "seed"].forEach(k => rows[k] && rows[k].input.addEventListener("input", () => onStructure(k)));
+
+/* ============================ drawing ============================ */
+let lastDraw = performance.now();
+function drawFrame(now){
+  const dt = Math.min(0.1, (now - lastDraw) / 1000); lastDraw = now;
+  // consume what is now sounding
+  if(AC){
+    const ct = AC.currentTime;
+    while(queue.length && queue[0].t <= ct){
+      const q = queue.shift();
+      if(q.kind === "step") curStep = q.abs;
+      else {
+        envs[q.part] = Math.max(envs[q.part], q.vel);
+        if(q.idx != null && q.idx < flash.length && (q.part === "lead" || q.part === "bass")) flash[q.idx] = 1;
+      }
+    }
+  }
+  const decay = Math.exp(-dt * 7);
+  M.PARTS.forEach(p => { envs[p] *= decay; });
+  for(let i = 0; i < flash.length; i++) flash[i] *= Math.exp(-dt * 3.5);
+  drawScore();
+  if(Drive) refreshModulated();
+  updateStatus();
+  requestAnimationFrame(drawFrame);
+}
+const PCOL = { kick:"#e0714f", clap:"#f0b35a", hat:"#d8d36a", perc:"#7fd1c0", bass:"#5aa7e0", lead:"#c58af0", pad:"#8a95a0" };
+function drawScore(){
+  const W = cv.width, H = cv.height, g = g2;
+  g.fillStyle = "#0b0d0e"; g.fillRect(0, 0, W, H);
+  const L = 70, R = W - 28, top = 24, scoreB = H * 0.64, sw = R - L;
+  // score field: the lead lens over the geometry
+  const lens = composer.lead, fr = composer.frame;
+  g.strokeStyle = "#1c2124"; g.lineWidth = 1;
+  const ls = lens ? lens.steps : 32;
+  for(let s = 0; s <= ls; s += (ls >= 32 ? 4 : 2)){ const x = L + s / ls * sw; g.beginPath(); g.moveTo(x, top); g.lineTo(x, scoreB); g.stroke(); }
+  if(lens && fr){
+    const n = Math.min(lens.n, fr.count);
+    for(let i = 0; i < n; i++){
+      const x = L + lens.u[i] * sw, y = scoreB - 8 - lens.v[i] * (scoreB - top - 16);
+      const kept = lens.kept[i], f = i < flash.length ? flash[i] : 0;
+      const lift = kept ? 0.45 : 0, r = fr.colors ? (fr.colors[i*3] * (1 - lift) + lift) * 255 | 0 : 200, gg = fr.colors ? (fr.colors[i*3+1] * (1 - lift) + lift) * 255 | 0 : 200, b = fr.colors ? (fr.colors[i*3+2] * (1 - lift) + lift) * 255 | 0 : 200;
+      g.fillStyle = "rgba(" + r + "," + gg + "," + b + "," + (kept ? 0.85 : 0.14) + ")";
+      const rad = kept ? 2.6 : 1.4;
+      g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+      if(f > 0.02){
+        g.fillStyle = "rgba(255,255,255," + (f * 0.9) + ")";
+        g.beginPath(); g.arc(x, y, 3 + f * 12, 0, 6.2832); g.fill();
+      }
+    }
+    if(curStep >= 0){
+      const ph = ((curStep % ls) + ls) % ls;
+      const x = L + ph / ls * sw;
+      g.fillStyle = "rgba(127,209,192,.10)"; g.fillRect(x, top, sw / ls, scoreB - top);
+      g.strokeStyle = "#7fd1c0"; g.beginPath(); g.moveTo(x, top); g.lineTo(x, scoreB); g.stroke();
+    }
+  } else {
+    g.fillStyle = "#565b60"; g.font = "15px ui-monospace,monospace"; g.textAlign = "center";
+    g.fillText("press Play — the geometry is the score", (L + R) / 2, (top + scoreB) / 2);
+  }
+  g.fillStyle = "#8d9490"; g.font = "11px ui-monospace,monospace"; g.textAlign = "left";
+  g.fillText("lead lens · time " + P.leadTime + " → pitch " + P.leadPitch + " · " + (composer.source || "—"), L, top - 8);
+  // pattern grid for the current bar
+  const y0 = scoreB + 26, rowH = (H - y0 - 22) / M.PARTS.length, cw = sw / 16;
+  const bar = curStep >= 0 ? Math.floor(curStep / 16) : 0, cs = curStep >= 0 ? ((curStep % 16) + 16) % 16 : -1;
+  M.PARTS.forEach((p, ri) => {
+    const y = y0 + ri * rowH;
+    g.fillStyle = "#8d9490"; g.font = "11px ui-monospace,monospace"; g.textAlign = "right";
+    g.fillText(p, L - 10, y + rowH * 0.62);
+    for(let s = 0; s < 16; s++){
+      let on = 0;
+      if(M.DRUMS.indexOf(p) >= 0 && Q[p + "Level"] > 0) on = M.drumHit(p, s, bar, Q);
+      else if(p === "bass" && composer.bass && composer.bass.grid[s].length) on = composer.bass.grid[s][0].vel;
+      else if(p === "lead" && composer.lead){ const ln = composer.leadSteps; const ls2 = (Math.floor(Math.max(curStep,0) / ln) * ln + s) ; /* show this bar's slice */
+        const base = ((Math.floor(Math.max(curStep, 0) / 16) * 16) % ln); const cell = composer.lead.grid[(base + s) % ln]; if(cell && cell.length) on = cell[0].vel; }
+      else if(p === "pad" && s === 0 && Q.padLevel > 0) on = 0.7;
+      const x = L + s * cw;
+      g.fillStyle = (s & 3) === 0 ? "#171b1d" : "#131618"; g.fillRect(x + 1, y + 1, cw - 2, rowH - 3);
+      if(on > 0){ g.globalAlpha = 0.35 + 0.65 * Math.min(1, on); g.fillStyle = PCOL[p]; g.fillRect(x + 1, y + 1, cw - 2, rowH - 3); g.globalAlpha = 1; }
+      if(s === cs){ g.strokeStyle = "#e8e6e1"; g.lineWidth = 1; g.strokeRect(x + 1.5, y + 1.5, cw - 3, rowH - 4); }
+    }
+    // live envelope meter
+    g.fillStyle = PCOL[p]; g.globalAlpha = 0.9;
+    g.fillRect(R + 6, y + 2, Math.max(0, envs[p]) * 16, rowH - 5); g.globalAlpha = 1;
+  });
+}
+function refreshModulated(){ for(const k in rows) rows[k].refresh(); }
+let stT = 0;
+function updateStatus(){
+  const now = performance.now(); if(now - stT < 200) return; stT = now;
+  const bar = curStep >= 0 ? Math.floor(curStep / 16) + 1 : "-";
+  $("status").textContent = (playing ? "playing" : AC ? "stopped" : "idle") + " · " + Drive.state.clock.bpm.toFixed(1) + " bpm · bar " + bar +
+    " · " + (composer.source || "no score") + (midi.out ? " · midi " + midi.out.name : "");
+}
+
+/* ============================ presets ============================ */
+const PRESETS = {
+  "Hypnotic 126": { bpm: 126, sw: { scale: "Minor pentatonic", surface: "torus", placement: "grid", leadWave: "saw" }, p: {} },
+  "Dub drift 108": { bpm: 108, sw: { scale: "Dorian", surface: "sphere", placement: "rings", leadWave: "fm", delayDiv: "3/16" },
+    p: { kickK: 3, clapK: 1, clapRot: 8, hatK: 5, bassOct: 1, bassDensity: 0.4, leadDensity: 0.25, leadOct: 4, delayMix: 0.5, delayFb: 0.64, verbMix: 0.5, padLevel: 0.5, geoDrift: 0.1, root: 2 } },
+  "Hirajoshi bells 100": { bpm: 100, sw: { scale: "Hirajoshi", surface: "supershape", placement: "fibonacci", leadWave: "pluck", leadSteps: "64", delayDiv: "1/8" },
+    p: { kickK: 2, clapK: 0, hatK: 9, percK: 7, leadOct: 5, leadDensity: 0.7, leadSpan: 2.5, padLevel: 0.4, verbMix: 0.45, delayMix: 0.4, root: 7 } },
+  "Acid 134": { bpm: 134, sw: { scale: "Phrygian", surface: "mobius", placement: "jitter", leadWave: "square" },
+    p: { bassCut: 260, bassRes: 0.8, bassEnv: 0.9, bassDensity: 0.9, bassGate: 0.5, leadLevel: 0.22, hatK: 11, hatChaos: 0.5, kickK: 4, geoNoise: 30, root: 4 } }
+};
+const presetSel = $("presetSel");
+Object.keys(PRESETS).forEach(n => { const o = document.createElement("option"); o.value = o.textContent = n; presetSel.appendChild(o); });
+function applyPreset(name){
+  const pr = PRESETS[name]; if(!pr) return;
+  P = Object.assign({}, DEFAULTS, pr.p, pr.sw);
+  if(Drive) Drive.state.clock.bpm = pr.bpm;
+  refreshAll(); onStructure();
+}
+presetSel.addEventListener("change", () => applyPreset(presetSel.value));
+$("bReseed").addEventListener("click", () => { P.seed = Math.floor(Math.random() * 9999); rows.seed.refresh(); onStructure(); });
+$("bpmIn").addEventListener("change", () => { const v = parseFloat($("bpmIn").value); if(v >= 40 && v <= 220 && Drive) Drive.state.clock.bpm = v; });
+$("bExportPreset").addEventListener("click", () => {
+  const out = Object.assign({}, P, { _bpm: Drive.state.clock.bpm }); if(Drive) out._drive = Drive.serialize();
+  download(new Blob([JSON.stringify(out, null, 1)], { type: "application/json" }), "overtone-preset.json");
+});
+$("bImportPreset").addEventListener("click", () => $("fPreset").click());
+$("fPreset").addEventListener("change", async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const j = JSON.parse(await f.text());
+    if(Drive && j._drive) Drive.load(j._drive);
+    if(j._bpm && Drive) Drive.state.clock.bpm = j._bpm;
+    delete j._drive; delete j._bpm;
+    P = Object.assign({}, DEFAULTS, j); refreshAll(); onStructure();
+  }catch(err){ $("status").textContent = "preset failed: " + err.message; }
+  e.target.value = "";
+});
+function download(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ============================ record / bounce / midi file ============================ */
+$("bRec").addEventListener("click", () => {
+  ensureAudio();
+  if(recorder && recorder.state === "recording"){ recorder.stop(); return; }
+  recChunks = [];
+  const mime = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+  recorder = new MediaRecorder(recDest.stream, mime ? { mimeType: mime } : undefined);
+  recorder.ondataavailable = e => { if(e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => { download(new Blob(recChunks, { type: recorder.mimeType }), "overtone-" + Date.now() + (recorder.mimeType.indexOf("ogg") >= 0 ? ".ogg" : ".webm")); $("bRec").textContent = "● Record"; $("bRec").classList.remove("warm"); };
+  recorder.start(); $("bRec").textContent = "■ Stop recording"; $("bRec").classList.add("warm");
+  if(!playing) play();
+});
+
+function wavBlob(buf){
+  const ch = buf.numberOfChannels, n = buf.length, sr = buf.sampleRate, bytes = n * ch * 2;
+  const ab = new ArrayBuffer(44 + bytes), v = new DataView(ab);
+  const ws = (o, s) => { for(let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, "RIFF"); v.setUint32(4, 36 + bytes, true); ws(8, "WAVE"); ws(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true);
+  v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true); ws(36, "data"); v.setUint32(40, bytes, true);
+  const data = []; for(let c = 0; c < ch; c++) data.push(buf.getChannelData(c));
+  let o = 44; for(let i = 0; i < n; i++) for(let c = 0; c < ch; c++){ const s = Math.max(-1, Math.min(1, data[c][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2; }
+  return new Blob([ab], { type: "audio/wav" });
+}
+/** Offline render of `bars` bars with the current parameters held still (Drive modulation is a live thing). */
+async function bounceBuffer(bars, Pin, bpmIn){
+  const Qv = Object.assign({}, Pin || P), bpm = bpmIn || Drive.state.clock.bpm, spb = 60 / bpm;
+  const secs = bars * 4 * spb + 3.5, sr = 44100;
+  const oc = new OfflineAudioContext(2, Math.ceil(secs * sr), sr);
+  const eng = makeEngine(oc, oc.destination);
+  eng.setReverb(Qv.verbSize); applyFx(eng, Qv, spb, 0);
+  eng.master.gain.value = Qv.master * 0.6; eng.dIn.gain.value = Qv.delayMix; eng.vIn.gain.value = Qv.verbMix;
+  const comp = M.createComposer({ points: UnlimiterPoints }); let tg = 0;
+  for(let abs = 0; abs < bars * 16; abs++){
+    if(abs % 16 === 0) comp.refresh(Qv, tg, extFrame);
+    tg += Qv.geoDrift / 16;
+    const t = abs * 0.25 * spb + ((abs & 1) ? Qv.swing * 0.25 * spb : 0);
+    comp.step(Qv, abs).forEach(ev => VOICE[ev.part](eng, t, ev, Qv, ev.dur * spb));
+  }
+  return oc.startRendering();
+}
+$("bBounce").addEventListener("click", async () => {
+  const bars = Math.max(1, Math.min(64, parseInt($("bounceBars").value, 10) || 8));
+  $("status").textContent = "bouncing " + bars + " bars…";
+  const buf = await bounceBuffer(bars);
+  download(wavBlob(buf), "overtone-" + Date.now() + ".wav"); updateStatus();
+});
+$("bMidi").addEventListener("click", () => {
+  const bars = Math.max(1, Math.min(64, parseInt($("bounceBars").value, 10) || 8));
+  const comp = M.createComposer({ points: UnlimiterPoints });
+  const evs = M.renderEvents(comp, Object.assign({}, P), bars, { external: extFrame });
+  const ch = {}; M.PARTS.forEach(p => { ch[p] = midi.ch[p] - 1; });
+  download(new Blob([M.toMidiFile(evs, Drive.state.clock.bpm, ch)], { type: "audio/midi" }), "overtone-" + Date.now() + ".mid");
+});
+$("bVerb").addEventListener("click", () => { if(E) E.setReverb(P.verbSize); });
+$("bOut").addEventListener("click", () => { if(Drive) Drive.openOutput(() => cv); });
+
+/* ============================ midi panel ============================ */
+(function buildMidi(){
+  const host = $("g-midi");
+  host.innerHTML =
+    '<div class="row"><label>Port</label><div class="ctl"><select id="midiSel"><option value="">— off —</option></select></div></div>' +
+    '<div class="row"><label>Internal audio</label><div class="ctl"><input type="checkbox" id="midiAudio" checked></div></div>' +
+    '<div class="btnrow"><button id="bMidiOn">Enable Web MIDI</button></div>' +
+    '<div class="subhead">Channel per part (1–16)</div><div class="chgrid" id="chgrid"></div>' +
+    '<div class="note">Drum parts send General-MIDI-style notes (kick 36, clap 39, hat 42, perc 37) on their channel; bass, lead and pad send the pitches they play. Needs https or localhost and a Chromium browser. Tempo is not sent — slave the hardware to the Drive clock with MIDI clock, or set the same BPM.</div>';
+  const grid = $("chgrid");
+  M.PARTS.forEach(p => {
+    const d = document.createElement("div"); d.innerHTML = p.slice(0, 4) + '<input type="number" min="1" max="16" value="' + midi.ch[p] + '">';
+    d.querySelector("input").addEventListener("change", e => { midi.ch[p] = Math.max(1, Math.min(16, parseInt(e.target.value, 10) || 1)); });
+    grid.appendChild(d);
+  });
+  $("midiAudio").addEventListener("change", e => { midi.audio = e.target.checked; });
+  $("bMidiOn").addEventListener("click", async () => {
+    if(!navigator.requestMIDIAccess){ $("status").textContent = "Web MIDI is not available in this browser"; return; }
+    try{
+      midi.access = await navigator.requestMIDIAccess();
+      const sel = $("midiSel"); sel.innerHTML = '<option value="">— off —</option>';
+      midi.access.outputs.forEach(o => { const op = document.createElement("option"); op.value = o.id; op.textContent = o.name; sel.appendChild(op); });
+      sel.onchange = () => { midi.out = sel.value ? midi.access.outputs.get(sel.value) : null; };
+    }catch(err){ $("status").textContent = "MIDI blocked: " + (location.protocol === "file:" ? "serve over localhost or https" : err.message); }
+  });
+})();
+
+/* ============================ drive, dice, ports ============================ */
+if(Drive){
+  Drive.mountPanel($("g-drive"));
+  const srcs = { kick: "Kick", clap: "Clap", hat: "Hat", perc: "Perc", bass: "Bass", lead: "Lead", pad: "Pad" };
+  M.PARTS.forEach(p => Drive.registerSource("music." + p, "Music — " + srcs[p] + " hit", () => envs[p]));
+  Drive.registerSource("music.energy", "Music — energy", () => Math.min(1, M.PARTS.reduce((a, p) => a + envs[p], 0) / 3));
+  Drive.registerSource("music.step", "Music — bar position", () => curStep >= 0 ? (((curStep % 16) + 16) % 16) / 16 : 0);
+  Drive.registerSource("music.level", "Music — output level", () => {
+    if(!E) return 0; const d = new Uint8Array(E.analyser.fftSize); E.analyser.getByteTimeDomainData(d);
+    let m = 0; for(let i = 0; i < d.length; i += 4) m = Math.max(m, Math.abs(d[i] - 128)); return Math.min(1, m / 90);
+  });
+} else $("g-drive").innerHTML = '<div class="note">unlimiter-drive.js was not found next to this file.</div>';
+
+// publish music.* to the suite's signal bus too, when a page loads it
+if(typeof UnlimiterBus !== "undefined"){
+  try{
+    M.PARTS.forEach(p => UnlimiterBus.register({ id: "music." + p, type: "envelope", range: [0, 1] }));
+    setInterval(() => M.PARTS.forEach(p => UnlimiterBus.publish("music." + p, envs[p])), 33);
+  }catch(e){}
+}
+
+let dice = null;
+if(window.UnlimiterDice && Drive){
+  dice = UnlimiterDice.create({
+    tool: "overtone",
+    get: k => P[k], set: (k, v) => { P[k] = v; },
+    params: UnlimiterDice.fromDrive(Drive, k => rows[k] && rows[k].input),
+    refresh: k => rows[k] && rows[k].refresh(),
+    switches: M.SWITCHES.map(s => ({ key: s.key, label: s.label, el: switchEls[s.key] })),
+    drive: Drive,
+    off: ["master", "delayFb"],
+    ranges: { delayFb: [0.2, 0.75], master: [0.7, 0.85] }
+  });
+  dice.mountPanel($("g-dice"));
+} else $("g-dice").innerHTML = '<div class="note">unlimiter-dice.js was not found.</div>';
+
+// ports: the score comes out as points (the same geometry the visual tools take), and goes in too
+let scoreOut = null;
+function getScoreOut(){
+  const lens = composer.lead, fr = composer.frame; if(!lens || !fr) return null;
+  const n = Math.min(lens.n, fr.count);
+  scoreOut = UnlimiterPorts.ensurePoints(scoreOut, n, "uv");
+  scoreOut.aspect = cv.width / cv.height; scoreOut.count = n;
+  for(let i = 0; i < n; i++){
+    scoreOut.positions[i*3] = lens.u[i]; scoreOut.positions[i*3+1] = 1 - lens.v[i]; scoreOut.positions[i*3+2] = lens.w[i] * 2 - 1;
+    const f = i < flash.length ? flash[i] : 0;
+    if(fr.colors){ scoreOut.colors[i*3] = fr.colors[i*3]; scoreOut.colors[i*3+1] = fr.colors[i*3+1]; scoreOut.colors[i*3+2] = fr.colors[i*3+2]; }
+    scoreOut.sizes[i] = 1 + f * 5; scoreOut.presence[i] = lens.kept[i] ? 1 : 0.12;
+  }
+  UnlimiterPorts.bump(scoreOut);
+  return scoreOut;
+}
+if(window.UnlimiterPorts){
+  UnlimiterPorts.publish({
+    tool: "overtone", label: "Overtone",
+    outputs: {
+      out:   { type: "image",  label: "image", get: () => cv },
+      score: { type: "points", label: "score", get: getScoreOut }
+    },
+    inputs: {
+      score: { type: "points", label: "score", set: f => {
+        extFrame = f && (f.count | 0) > 0 ? f : null; extDirty = true;
+        $("scoreNote").textContent = extFrame ? "Reading a points cable (" + extFrame.count + " points) as the score." :
+          "Using the built-in generated geometry. In the Rack, patch any points cable into score.";
+      } }
+    }
+  });
+}
+
+/* a small handle for tests and for the console */
+window.Overtone = { P: () => P, Q: () => Q, composer, bounceBuffer, setP: o => { Object.assign(P, o); refreshAll(); onStructure(); },
+  engine: () => E, ctx: () => AC, play, stop, isPlaying: () => playing, envs, wavBlob };
+
+applyPreset("Hypnotic 126");
+requestAnimationFrame(drawFrame);
+</script>
+</body>
+</html>
