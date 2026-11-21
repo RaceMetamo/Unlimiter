@@ -103,5 +103,67 @@ ok(off === mid.length, "chunks tile the file exactly"); ok(nt >= 5, "tracks: " +
   for(const p of M.PARTS) ok(M.PARAMS.some(x => x.key === p + "Pan") && M.PARAMS.some(x => x.key === p + "Vrb"), "track sends " + p);
   M.PARAMS.forEach(p => ok(p.def >= p.min && p.def <= p.max, "default in range " + p.key));
 }
+
+// --- v3: pattern bank, chains, rolls, 3D rotation, depth ---
+{
+  eq(M.parseChain("A A b Ax2 C*3 Z"), ["A","A","B","A","A","C","C","C"], "chain parsing");
+  eq(M.stepsToString(M.parseSteps("x..X..r.")), "x..X..r.........", "steps round-trip");
+  const seq = M.newSeq(); seq.chain = "A B"; seq.follow = true;
+  seq.pats.A.kick = M.parseSteps("x...x...x...x...");
+  seq.pats.B.kick = M.parseSteps("x.x.x.x.x.x.x.x.");
+  eq([0,1,2,3].map(b => M.patternAt(seq, b)), ["A","B","A","B"], "chain follows bars");
+  seq.follow = false; seq.edit = "B"; ok(M.patternAt(seq, 0) === "B", "follow off: the edited pattern loops");
+  seq.follow = true;
+  const Qs = Object.assign({}, Q, { kickSrc: "steps", kickChaos: 0, kickRoll: 0, fillEvery: "off" });
+  const ev = M.renderEvents(M.createComposer({points:PTS}), Qs, 2, { seq }).filter(e => e.part === "kick").map(e => e.beat);
+  eq(ev, [0,1,2,3, 4,4.5,5,5.5,6,6.5,7,7.5], "drawn kick follows the chain A then B");
+  // accents and drawn rolls
+  seq.pats.A.kick = M.parseSteps("X.......r.......");
+  const Qr = Object.assign({}, Qs, { rollRate: "64ths", rollRamp: 0.5 });
+  const rk = M.renderEvents(M.createComposer({points:PTS}), Qr, 1, { seq }).filter(e => e.part === "kick");
+  ok(rk[0].vel === 1 && rk[0].beat === 0, "accent plays at full velocity");
+  eq(rk.slice(1).map(e => e.beat), [2, 2.0625, 2.125, 2.1875], "a drawn roll is 4 64ths across its step");
+  ok(rk[1].vel < rk[4].vel, "roll crescendo");
+  const Qt = Object.assign({}, Qr, { rollRate: "triplets" });
+  ok(M.renderEvents(M.createComposer({points:PTS}), Qt, 1, { seq }).filter(e => e.part === "kick").length === 4, "triplet roll = 3 hits");
+}
+{
+  const Qf = Object.assign({}, Q, { hatRoll: 0, clapRoll: 0, kickRoll: 0, percRoll: 0, fillEvery: "4 bars", rollRate: "32nds", hatChaos: 0, hatK: 16 });
+  const ev = M.renderEvents(M.createComposer({points:PTS}), Qf, 4).filter(e => e.part === "hat");
+  const perBar = [0,1,2,3].map(b => ev.filter(e => e.beat >= b * 4 && e.beat < b * 4 + 4).length);
+  ok(perBar[0] === 16 && perBar[3] > 16, "fills roll only in the 4th bar: " + perBar);
+  const Qc = Object.assign({}, Qf, { fillEvery: "off", hatRoll: 1 });
+  ok(M.renderEvents(M.createComposer({points:PTS}), Qc, 1).filter(e => e.part === "hat").length > 20, "roll chance adds rolls");
+  const Qb = Object.assign({}, Q, { bassRoll: 1, rollRate: "32nds" });
+  const bl = M.renderEvents(M.createComposer({points:PTS}), Qb, 1).filter(e => e.part === "bass");
+  ok(bl.filter(e => e.dur <= 0.125).length >= 2, "bass ratchets: shorter repeats");
+}
+{
+  const f = { type:"points", space:"3d", count:1, positions:new Float32Array([1,0,0]) };
+  const r = M.rotateFrame(f, 0, 90, null);
+  ok(Math.abs(r.positions[0]) < 1e-6 && Math.abs(r.positions[2] + 1) < 1e-6, "turn 90° moves +x to -z");
+  const r2 = M.rotateFrame({ type:"points", space:"3d", count:1, positions:new Float32Array([0,0,1]) }, 90, 0, null);
+  ok(Math.abs(r2.positions[1] - 1) < 1e-6, "tilt 90° lifts +z to +y");
+  const c = M.createComposer({points:PTS});
+  const Q0 = Object.assign({}, Q, { geoRotX: 0, geoRotY: 0 }); c.refresh(Q0, 0);
+  const a = JSON.stringify(c.lead.grid.map(x => x.map(n => n.deg)));
+  c.refresh(Q0, 0, null, 70, true);
+  ok(JSON.stringify(c.lead.grid.map(x => x.map(n => n.deg))) !== a, "spinning the shape changes the melody");
+  ok(c.raw !== c.frame && c.raw.count === c.frame.count, "rotation keeps the raw cloud");
+  const uvf = { type:"points", space:"uv", count:2, positions:new Float32Array([0.2,0.2,0, 0.8,0.8,0]) };
+  c.refresh(Object.assign({}, Q, { geoRotY: 45 }), 0, uvf); ok(c.frame === uvf, "picture-space scores are not rotated");
+}
+{
+  const Qp = Object.assign({}, Q, { depthTo: "pan" });
+  const ev = []; const c = M.createComposer({points:PTS}); c.refresh(Qp, 0);
+  for(let s = 0; s < 32; s++) c.step(Qp, s).forEach(e => ev.push(e));
+  const leads = ev.filter(e => e.part === "lead");
+  ok(leads.length && leads.every(e => e.pan >= -0.9 && e.pan <= 0.9), "depth → pan");
+  ok(new Set(leads.map(e => e.pan.toFixed(2))).size > 1, "pan varies with depth");
+  const Qo = Object.assign({}, Q, { depthTo: "octave" }); const c2 = M.createComposer({points:PTS}); c2.refresh(Qo, 0);
+  const l2 = []; for(let s = 0; s < 32; s++) c2.step(Qo, s).forEach(e => e.part === "lead" && l2.push(e.midi));
+  const c3 = M.createComposer({points:PTS}); c3.refresh(Q, 0); const l3 = []; for(let s = 0; s < 32; s++) c3.step(Q, s).forEach(e => e.part === "lead" && l3.push(e.midi));
+  ok(l2.some((m, i) => Math.abs(m - l3[i]) === 12), "depth → octave jumps");
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

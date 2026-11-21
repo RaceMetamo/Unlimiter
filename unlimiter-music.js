@@ -135,6 +135,13 @@ const PARAMS = [
   P("rows",     "Rows",         6, 60,  1,    24,   { group: "Geometry", noMod: true }),
   P("cols",     "Columns",      6, 80,  1,    36,   { group: "Geometry", noMod: true }),
   P("shells",   "Shells",       1, 6,   1,    2,    { group: "Geometry", noMod: true }),
+  P("geoRotX",  "Tilt (°)",     -90, 90, 1,   20,   { group: "Geometry" }),
+  P("geoRotY",  "Turn (°)",     -180, 180, 1, 0,    { group: "Geometry" }),
+  P("geoSpin",  "Spin (°/bar)", -90, 90, 0.5, 0,    { group: "Geometry" }),
+  // Rolls — drum rolls and synth ratchets
+  P("rollRamp", "Roll crescendo", 0, 1, 0.01, 0.6, { group: "Rolls" }),
+  P("bassRoll", "Bass ratchet chance", 0, 1, 0.01, 0, { group: "Bass" }),
+  P("leadRoll", "Lead ratchet chance", 0, 1, 0.01, 0, { group: "Lead" }),
   // Drums
   P("kickK",  "Hits",   0, 16, 1, 4,   { group: "Kick" }),
   P("kickRot","Rotate", 0, 15, 1, 0,   { group: "Kick" }),
@@ -222,6 +229,7 @@ const PARAMS = [
 /* every track gets pan and its own delay / reverb sends, in its own group */
 const TRACK_GROUP = { kick: "Kick", clap: "Clap", hat: "Hat", perc: "Perc", bass: "Bass", lead: "Lead", pad: "Pad" };
 const SEND_DEF = { kick:[0,0,0], clap:[0.1,.3,.5], hat:[0.25,.15,.1], perc:[-0.3,.5,.3], bass:[0,0,.02], lead:[-0.1,.6,.4], pad:[0,.3,.7] };
+DRUMS.forEach(p => PARAMS.push(P(p + "Roll", "Roll chance", 0, 1, 0.01, 0, { group: TRACK_GROUP[p] })));
 PARTS.forEach(p => {
   const g = TRACK_GROUP[p], d = SEND_DEF[p];
   PARAMS.push(P(p + "Pan", "Pan", -1, 1, 0.01, d[0], { group: g }));
@@ -233,6 +241,10 @@ PARTS.forEach(p => {
 const SWITCHES = [
   { key: "scoreSource", label: "Score from",  group: "Score",    def: "geometry", options: ["geometry", "fluid", "points in"] },
   { key: "pointsUse", label: "Use points to", group: "Points in", def: "stir + drive", options: ["drive only", "stir + drive"] },
+  { key: "depthTo",   label: "Depth →", group: "Score", def: "velocity", options: ["velocity", "pan", "cutoff", "octave"] },
+  { key: "geoView",   label: "View",         group: "Geometry", def: "3d", options: ["3d", "flat"] },
+  { key: "rollRate",  label: "Roll speed",   group: "Rolls", def: "32nds", options: ["32nds", "triplets", "64ths", "mixed"] },
+  { key: "fillEvery", label: "Fill every",   group: "Rolls", def: "8 bars", options: ["off", "2 bars", "4 bars", "8 bars", "16 bars"] },
   { key: "scale",     label: "Scale",        group: "Harmony",  def: "Minor pentatonic", options: Object.keys(SCALES) },
   { key: "surface",   label: "Form",         group: "Geometry", def: "torus",
     options: ["sphere", "torus", "supershape", "mobius", "saddle", "cylinder", "disc"] },
@@ -247,6 +259,10 @@ const SWITCHES = [
   { key: "leadPitch", label: "Pitch axis",   group: "Lead", def: "y",      options: ["x", "y", "z", "radius"] },
   { key: "leadVoice", label: "Voice",        group: "Lead", def: "table",  options: ["table", "pluck", "fm"] },
   { key: "padRhythm", label: "Rhythm",       group: "Pad",  def: "bar",    options: ["bar", "euclid"] },
+  { key: "kickSrc",   label: "Pattern from", group: "Kick", def: "euclid", options: ["euclid", "steps"] },
+  { key: "clapSrc",   label: "Pattern from", group: "Clap", def: "euclid", options: ["euclid", "steps"] },
+  { key: "hatSrc",    label: "Pattern from", group: "Hat",  def: "euclid", options: ["euclid", "steps"] },
+  { key: "percSrc",   label: "Pattern from", group: "Perc", def: "euclid", options: ["euclid", "steps"] },
   { key: "fxFilter",  label: "Filter",       group: "FX",   def: "off",    options: ["off", "lowpass", "highpass", "bandpass"] },
   { key: "delayDiv",  label: "Delay time",   group: "Space", def: "3/16",  options: ["1/16", "1/8", "3/16", "1/4"] }
 ];
@@ -263,26 +279,138 @@ function defaults(){
    ============================================================ */
 const DRUM_IDX = { kick: 0, clap: 1, hat: 2, perc: 3 };
 
-/** The velocity of a drum hit at `step` of `bar` (0 = none). Pure. */
-function drumHit(part, step, bar, Q){
+/* ---- the pattern bank: drawn drum steps, A–H, linked into a chain ----
+   A cell is 0 off, 1 hit, 2 accent, 3 roll. Strings make presets readable:
+   "." off, "x" hit, "X" accent, "r" roll — "x...x...x...x..." is four on the floor. */
+const LETTERS = "ABCDEFGH";
+function newSeq(){
+  const pats = {};
+  for(const L of LETTERS){ pats[L] = {}; DRUMS.forEach(d => { pats[L][d] = new Array(16).fill(0); }); }
+  return { pats, chain: "A", follow: true, edit: "A" };
+}
+function parseSteps(str){
+  const out = new Array(16).fill(0), m = { ".": 0, "-": 0, "x": 1, "X": 2, "r": 3, "R": 3 };
+  String(str || "").replace(/\s+/g, "").slice(0, 16).split("").forEach((c, i) => { out[i] = m[c] != null ? m[c] : 0; });
+  return out;
+}
+function stepsToString(arr){ return arr.map(v => ".xXr"[v | 0] || ".").join(""); }
+/** "A A B Ax2 C*3" → ["A","A","B","A","A","C","C","C"]. Unknown letters are dropped. */
+function parseChain(str){
+  const out = [];
+  String(str || "").toUpperCase().split(/[\s,;|]+/).forEach(tok => {
+    const m = tok.match(/^([A-H])(?:[X*×]?(\d+))?$/);
+    if(!m) return;
+    const n = Math.min(64, Math.max(1, parseInt(m[2] || "1", 10)));
+    for(let i = 0; i < n; i++) out.push(m[1]);
+  });
+  return out;
+}
+/** The pattern letter that plays in `bar`. */
+function patternAt(seq, bar){
+  if(!seq) return "A";
+  if(!seq.follow) return seq.edit || "A";
+  const c = seq._chainStr === seq.chain && seq._chain ? seq._chain : (seq._chain = parseChain(seq.chain), seq._chainStr = seq.chain, seq._chain);
+  if(!c.length) return seq.edit || "A";
+  return c[((bar % c.length) + c.length) % c.length];
+}
+function cloneSeq(seq){
+  const o = newSeq();
+  if(!seq) return o;
+  for(const L of LETTERS) DRUMS.forEach(d => { const src = seq.pats && seq.pats[L] && seq.pats[L][d]; if(src) o.pats[L][d] = Array.from(src).map(v => v | 0); });
+  o.chain = seq.chain || "A"; o.follow = seq.follow !== false; o.edit = seq.edit || "A";
+  return o;
+}
+
+const ROLL_N = { "32nds": 2, "triplets": 3, "64ths": 4 };
+/** How many sub-hits a roll at this step gets (2–4). */
+function rollCount(Q, step, bar, salt){
+  const r = Q.rollRate;
+  if(ROLL_N[r]) return ROLL_N[r];
+  return 2 + Math.floor(hash3(step * 5 + 1, bar * 7 + salt, (Q.seed | 0) + 3) * 3);       // mixed
+}
+/** Is this step of this bar inside a fill (the last beat of every Nth bar)? */
+function inFill(Q, step, bar){
+  const n = parseInt(Q.fillEvery, 10);
+  return n > 0 && ((bar % n) + n) % n === n - 1 && step >= 12;
+}
+/** Deterministic roll decision for a track's hit. */
+function wantsRoll(Q, chance, step, bar, salt){
+  let p = (chance || 0) * (step >= 12 ? 1.4 : step >= 8 ? 1 : 0.6);
+  if(salt < 4 && inFill(Q, step, bar)) p += 0.55;           // fills are a drum thing
+  return p > 0 && hash3(step * 13 + 7, bar * 31 + salt * 5, (Q.seed | 0) + 11) < p;
+}
+
+/**
+ * One drum track at `step` of `bar`: { vel, roll, accent } or null.
+ * Pure. `seq` (the pattern bank) is used when the track's source is "steps".
+ */
+function drumNote(part, step, bar, Q, seq){
   const idx = DRUM_IDX[part];
-  const k = Q[part + "K"], rot = Q[part + "Rot"], chaos = Q[part + "Chaos"];
-  const seed = Q.seed | 0;
-  const base = euclid(k, 16, rot)[step & 15];
+  const chaos = Q[part + "Chaos"], seed = Q.seed | 0;
+  let base, cell = 0;
+  if(Q[part + "Src"] === "steps" && seq){
+    const pat = seq.pats[patternAt(seq, bar)];
+    cell = pat && pat[part] ? pat[part][step & 15] | 0 : 0;
+    base = cell > 0;
+  } else base = !!euclid(Q[part + "K"], 16, Q[part + "Rot"])[step & 15];
   // slow field: moves a little every bar, differs per part and per step
   const field = noise3(step * 0.43 + seed * 7.13, idx * 5.7 + 1.3, bar * 0.19 + seed * 0.37);
   const field2 = noise3(step * 0.91 + 40 + seed * 3.1, idx * 3.3, bar * 0.31);
-  let vel = 0;
+  let vel = 0, ghost = false;
   if(base){
-    if(field2 < chaos * 0.28) return 0;                 // dropped hit
+    if(cell < 2 && field2 < chaos * 0.28) return null;   // dropped hit (drawn accents and rolls always play)
     vel = (step & 3) === 0 ? 1 : (step & 1) ? 0.62 : 0.8;
     vel *= 0.85 + 0.15 * field;
+    if(cell === 2) vel = 1;
   } else if(field > 1 - chaos * 0.32 && part !== "kick"){
-    vel = 0.22 + 0.25 * field2;                         // ghost
+    vel = 0.22 + 0.25 * field2; ghost = true;           // ghost
   } else if(field > 1 - chaos * 0.12 && part === "kick"){
-    vel = 0.45;                                         // rare kick ghost
+    vel = 0.45; ghost = true;                           // rare kick ghost
   }
-  return vel;
+  if(vel <= 0) return null;
+  let roll = 0;
+  if(!ghost && (cell === 3 || wantsRoll(Q, Q[part + "Roll"], step, bar, idx))) roll = rollCount(Q, step, bar, idx);
+  return { vel, roll, accent: cell === 2 };
+}
+/** The velocity of a drum hit at `step` of `bar` (0 = none). Pure. */
+function drumHit(part, step, bar, Q, seq){
+  const n = drumNote(part, step, bar, Q, seq);
+  return n ? n.vel : 0;
+}
+/**
+ * Spread a rolled event into its sub-hits: [{ off (in 16th steps), ev }].
+ * Velocity climbs to the hit (crescendo); synth ratchets shorten to fit.
+ */
+function expandRoll(ev, Q){
+  const n = ev.roll | 0;
+  if(n < 2) return [{ off: 0, ev }];
+  const ramp = Q.rollRamp != null ? Q.rollRamp : 0.6, out = [];
+  for(let k = 0; k < n; k++){
+    const e = Object.assign({}, ev, { roll: 0, vel: ev.vel * ((1 - ramp) + ramp * (k + 1) / n) });
+    if(!ev.notes && DRUMS.indexOf(ev.part) < 0) e.dur = Math.min(ev.dur, 0.25 / n * 0.85);
+    out.push({ off: k / n, ev: e });
+  }
+  return out;
+}
+
+/* ---- 3D: turn the score in space before reading it ---- */
+/** Rotate a 3D points frame (tilt about x, then turn about y, degrees) into `out`. */
+function rotateFrame(fr, tiltDeg, turnDeg, out){
+  const n = fr.count | 0;
+  if(!out || out.positions.length < n * 3) out = { type: "points", space: fr.space, positions: new Float32Array(Math.max(3, n * 3)) };
+  out.count = n; out.space = fr.space; out.capacity = n;
+  out.colors = fr.colors; out.presence = fr.presence; out.sizes = fr.sizes; out.tangents = null;
+  out.version = (fr.version || 0) + 1;
+  const a = turnDeg * Math.PI / 180, b = tiltDeg * Math.PI / 180;
+  const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+  const P = fr.positions, O = out.positions;
+  for(let i = 0; i < n; i++){
+    const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+    const x1 = x * ca + z * sa, z1 = -x * sa + z * ca;            // turn (yaw)
+    const y2 = y * cb + z1 * sb, z2 = -y * sb + z1 * cb;           // tilt (pitch): positive leans the top away
+    O[i * 3] = x1; O[i * 3 + 1] = y2; O[i * 3 + 2] = z2;
+  }
+  return out;
 }
 
 /* ============================================================
@@ -349,6 +477,7 @@ function lens(frame, L, out){
   const UVR = { x: [0, 1], y: [0, 1], z: [-1, 2], angle: [-Math.PI, TAU], radius: [0, 0.7072] };
   const fixed = frame.space === "uv";             // a picture-space frame keeps its picture: no stretching
   const rt = fixed ? UVR[ta] : range(ta), rp = fixed ? UVR[pa] : range(pa), rv = fixed ? UVR[va] : range(va);
+  out.ranges = { t: rt, p: rp, v: rv, axes: [ta, pa, va] };
   const poly = Math.max(1, L.poly | 0);
   const npc = L.scaleSize;
   const totalDegrees = Math.max(1, Math.round(L.span * npc));
@@ -364,7 +493,7 @@ function lens(frame, L, out){
     const cell = out.grid[s];
     const hue = frame.colors ? frame.colors[i * 3] : 0.5;
     const strength = pres * (0.5 + 0.5 * w);
-    const note = { deg: Math.round(v * totalDegrees), vel: 0.35 + 0.65 * w, idx: i, pres: strength, hue };
+    const note = { deg: Math.round(v * totalDegrees), vel: 0.35 + 0.65 * w, idx: i, pres: strength, hue, w, p: pres };
     // keep the `poly` strongest; one note per distinct degree
     if(cell.some(c => c.deg === note.deg)) continue;
     if(cell.length < poly) cell.push(note);
@@ -468,6 +597,18 @@ function geometrySpec(Q){
   };
 }
 
+/** What the score's third axis does to a note. Velocity is the default (the lens already
+ *  maps it); the others free velocity to follow the point's strength instead. */
+function depthNote(e, nt, Q){
+  const to = Q.depthTo, w = nt.w != null ? nt.w : 0.5;
+  if(!to || to === "velocity") return e;
+  e.vel = 0.55 + 0.4 * (nt.p != null ? nt.p : 1);
+  if(to === "pan") e.pan = (w * 2 - 1) * 0.9;
+  else if(to === "cutoff") e.cut = 0.3 + 1.6 * w;
+  else if(to === "octave") e.midi += w > 0.7 ? 12 : w < 0.3 ? -12 : 0;
+  return e;
+}
+
 /** A note from a lens grid at index i. gate -1: the grid decides (score rhythm).
  *  gate 0: silence. gate 1: a hit — take the nearest occupied cell, so the euclid
  *  pattern decides when and the score decides what. */
@@ -497,14 +638,25 @@ function createComposer(opts){
     frame: null, source: "internal",
     lead: null, bass: null, pad: null,
     padChords: [], leadSteps: 32,
-    refresh(Q, tGeo, external){
+    seq: null, raw: null, spin: 0,
+    /**
+     * refresh(Q, tGeo, external, spinDeg, keepGeometry)
+     * spinDeg: extra turn added to Q.geoRotY (the caller accumulates Q.geoSpin).
+     * keepGeometry: re-read the last generated cloud (after a rotation) without regenerating it.
+     */
+    refresh(Q, tGeo, external, spinDeg, keepGeometry){
+      let src;
       if(external && (external.count | 0) > 0){
-        this.frame = external; this.source = "points in";
+        src = external; this.source = "points in";
       } else {
         if(!PTS) throw new Error("createComposer: needs UnlimiterPoints to generate a score");
-        frame = PTS.generate(geometrySpec(Q), tGeo, frame, null);
-        this.frame = frame; this.source = "generated";
+        if(!(keepGeometry && frame)) frame = PTS.generate(geometrySpec(Q), tGeo, frame, null);
+        src = frame; this.source = "generated";
       }
+      this.raw = src; this.spin = spinDeg || 0;
+      // a 3D score is turned in space before it is read: what faces you is what plays
+      const tilt = +Q.geoRotX || 0, turn = (+Q.geoRotY || 0) + (spinDeg || 0);
+      this.frame = src.space !== "uv" && (tilt || turn) ? (this._rot = rotateFrame(src, tilt, turn, this._rot)) : src;
       const sz = scaleSize(Q.scale);
       this.leadSteps = parseInt(Q.leadSteps, 10) || 32;
       const eu = k => Q[k + "Rhythm"] === "euclid";
@@ -527,9 +679,9 @@ function createComposer(opts){
       // drums
       DRUMS.forEach(part => {
         if(!(Q[part + "Level"] > 0)) return;
-        const vel = drumHit(part, step, bar, Q);
-        if(vel <= 0) return;
-        const e = { part, step, vel, dur: 0.25 };
+        const dn = drumNote(part, step, bar, Q, this.seq);
+        if(!dn) return;
+        const e = { part, step, vel: dn.vel, dur: 0.25, roll: dn.roll, accent: dn.accent };
         if(part === "perc"){
           const f = noise3(step * 0.6 + Q.seed, 9.1, bar * 0.13);
           e.midi = degreeToMidi(Math.floor(f * scaleSize(sc) * 2), root, sc, Math.round(Q.percOct));
@@ -541,15 +693,17 @@ function createComposer(opts){
       // bass — lens on the score, 16 steps per bar; or euclid hits pitched by the score
       if(Q.bassLevel > 0 && this.bass){
         const nt = pickNote(this.bass.grid, step, Q.bassRhythm === "euclid" ? euclid(Q.bassEK, 16, Q.bassERot)[step] : -1);
-        if(nt) ev.push({ part: "bass", step, vel: nt.vel, dur: Q.bassGate * 0.25, hue: nt.hue,
-            midi: degreeToMidi(nt.deg, root, sc, Math.round(Q.bassOct)), idx: nt.idx });
+        if(nt) ev.push(depthNote({ part: "bass", step, vel: nt.vel, dur: Q.bassGate * 0.25, hue: nt.hue,
+            midi: degreeToMidi(nt.deg, root, sc, Math.round(Q.bassOct)), idx: nt.idx,
+            roll: wantsRoll(Q, Q.bassRoll, step, bar, 4) ? rollCount(Q, step, bar, 4) : 0 }, nt, Q));
       }
       // lead — lens loop of 16/32/64 steps
       if(Q.leadLevel > 0 && this.lead){
         const ls = ((absStep % this.leadSteps) + this.leadSteps) % this.leadSteps;
         const nt = pickNote(this.lead.grid, ls, Q.leadRhythm === "euclid" ? euclid(Q.leadEK, 16, Q.leadERot)[step] : -1);
-        if(nt) ev.push({ part: "lead", step, vel: nt.vel, dur: Q.leadGate * 0.25, hue: nt.hue,
-            midi: degreeToMidi(nt.deg, root, sc, Math.round(Q.leadOct)), idx: nt.idx });
+        if(nt) ev.push(depthNote({ part: "lead", step, vel: nt.vel, dur: Q.leadGate * 0.25, hue: nt.hue,
+            midi: degreeToMidi(nt.deg, root, sc, Math.round(Q.leadOct)), idx: nt.idx,
+            roll: wantsRoll(Q, Q.leadRoll, step, bar, 5) ? rollCount(Q, step, bar, 5) : 0 }, nt, Q));
       }
       // pad — a chord per bar, or on euclid hits held to the next hit
       if(Q.padLevel > 0 && this.pad){
@@ -624,14 +778,17 @@ function renderEvents(comp, Q, bars, opts){
   opts = opts || {};
   const drumNotes = { kick: 36, clap: 39, hat: 42, perc: 37 };
   const out = [];
+  if(opts.seq) comp.seq = opts.seq;
+  let spin = 0;
   for(let abs = 0; abs < bars * 16; abs++){
-    if(abs % 16 === 0) comp.refresh(Q, abs / 16 * Q.geoDrift * (opts.tScale || 1), opts.external);
-    comp.step(Q, abs).forEach(e => {
-      const beat = abs / 4 + (abs & 1 ? Q.swing * 0.25 : 0);
+    if(abs % 16 === 0) comp.refresh(Q, abs / 16 * Q.geoDrift * (opts.tScale || 1), opts.external, spin);
+    spin += (+Q.geoSpin || 0) / 16;
+    comp.step(Q, abs).forEach(e0 => expandRoll(e0, Q).forEach(({ off, ev: e }) => {
+      const beat = (abs + off) / 4 + (abs & 1 ? Q.swing * 0.25 : 0);
       const base = { part: e.part, beat, dur: e.dur, vel: e.vel };
       if(e.notes) e.notes.forEach(m => out.push(Object.assign({}, base, { midi: m })));
-      else out.push(Object.assign(base, { midi: e.midi != null ? e.midi : drumNotes[e.part] }));
-    });
+      else out.push(Object.assign(base, { midi: e.midi != null && e.part !== "kick" && e.part !== "clap" && e.part !== "hat" ? e.midi : drumNotes[e.part] }));
+    }));
   }
   return out;
 }
@@ -641,7 +798,8 @@ const api = {
   defaults, degreeToMidi, scaleSize, TRACK_GROUP,
   HARMONICS, WAVES, wavePos, wavetable, waveSamples, pickNote,
   noise3, hash3, mulberry32, euclid,
-  drumHit, lens, axisValue, geometrySpec, createComposer,
+  drumHit, drumNote, expandRoll, rollCount, wantsRoll, inFill, lens, axisValue, rotateFrame, depthNote,
+  LETTERS, newSeq, cloneSeq, parseSteps, stepsToString, parseChain, patternAt, geometrySpec, createComposer,
   toMidiFile, renderEvents
 };
 return api;

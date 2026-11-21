@@ -29,6 +29,55 @@ when, the score decides which note — the nearest occupied step). Pad: once a b
 on euclid hits held to the next. Drums are always euclid with a noise carve (*Chaos*).
 The euclid rings beside the score draw every track's pattern for the bar.
 
+## Drawn drums — patterns A–H and the chain
+
+Each drum track's **Pattern from** is *euclid* (hits / rotate) or *steps* (drawn).
+Draw straight into the grid under the score: click a cell to cycle
+**hit → accent → roll → off**, drag to paint, right-click to erase. The first stroke
+on a euclid track turns it into a drawn track and copies its euclid pattern into
+every empty pattern, so nothing goes silent. A ✎ marks drawn tracks.
+
+Eight patterns, **A–H**. The **chain** links them bar by bar: `A A A B`, `Ax3 C`,
+`A*4 B*4`. *Follow chain* plays the chain and edits whichever pattern is playing;
+untick it to loop the selected pattern while you work on it. The strip above the grid
+shows the chain (click a slot to stop and loop that pattern) and the bank (click to
+select, shift-click to append to the chain). *Variation → next* copies the pattern
+into the next letter with kick pickups, a clap roll and hat fills, and sets up
+`A A A B`. Copy / Paste / Clear / From euclid do what they say. Patterns save in
+presets (`"x...x...x...x..."` strings: `.` off, `x` hit, `X` accent, `r` roll).
+Chaos still adds ghost notes and drops plain hits on drawn tracks; drawn accents and
+rolls always play.
+
+## Rolls, fills and ratchets
+
+- A drawn **r** cell always rolls. Each drum also has a **Roll chance**, likelier
+  towards the end of the bar.
+- **Rolls & fills**: *Roll speed* (32nds, triplets, 64ths, mixed), *Roll crescendo*
+  (sub-hits climb to the beat), *Fill every* N bars (the last beat of that bar rolls).
+- Bass and lead have a **ratchet chance**: a note repeats 2–4 times inside its step.
+- Rolls are real notes: they show as ticks in the grid, go to MIDI out, the .mid and
+  the stems.
+
+## The 3D score
+
+The built-in geometry is drawn and read in 3D. **Tilt**, **Turn** and **Spin (°/bar)**
+turn the shape before the lenses read it — what faces you is what plays, so turning
+the sculpture changes the melody. Drag on the score to orbit it by hand. The playhead
+is a plane cutting through the shape (time axis x / y / z), or a half-plane sweeping
+round it (angle). Spin and both angles are Drive targets: an LFO on Turn is a slowly
+rotating melody. *View: flat* brings back the 2D lens plot. 3D points arriving from
+another tool (a Manifold cable) are drawn and turned the same way.
+
+**Depth →** decides what the third axis does to lead and bass notes: velocity (as
+before), **pan** (each note placed in the stereo field by its depth), **cutoff**
+(near notes bright, far notes dark) or **octave** (near jumps up, far drops down).
+
+## Techno presets
+
+Warehouse 132 · Detroit stabs 128 · Acid 303 136 · Dub chords 120 · Industrial 140 ·
+Minimal click 125 · Peak time 138 — each with drawn drum patterns and a chain.
+Presets don't touch your Drive routings.
+
 ## Points as a controller
 
 Points arriving (Rack cable or another tab) always publish Drive sources:
