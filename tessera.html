@@ -103,6 +103,11 @@
       <div class="body" id="g-src"></div>
     </details>
 
+    <details class="group">
+      <summary>Depth sensor — Kinect bridge<span class="chev"></span></summary>
+      <div class="body" id="g-sensor"></div>
+    </details>
+
     <details class="group" open>
       <summary>Depth<span class="chev"></span></summary>
       <div class="body" id="g-depth"></div>
@@ -134,18 +139,13 @@
     </details>
 
     <details class="group">
-      <summary>View<span class="chev"></span></summary>
-      <div class="body" id="g-view"></div>
-    </details>
-
-    <details class="group">
       <summary>Colour<span class="chev"></span></summary>
       <div class="body" id="g-col"></div>
     </details>
 
     <details class="group">
-      <summary>Depth sensor — Kinect bridge<span class="chev"></span></summary>
-      <div class="body" id="g-sensor"></div>
+      <summary>View<span class="chev"></span></summary>
+      <div class="body" id="g-view"></div>
     </details>
 
     <details class="group">
@@ -169,13 +169,14 @@
       <button class="primary" id="bPNG">PNG</button>
       <button class="primary" id="bRec">● Record</button>
       <button id="bPLY">PLY</button>
-      <button id="bOut">Output</button>
+      <button id="bOut" hidden>Output</button>
     </div>
   </div>
 </div>
 <div id="drop">drop a video or an image</div>
 <input type="file" id="fileIn" accept="video/*,image/*" class="hidden">
 
+<script src="unlimiter-ui.js"></script>
 <script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-dice.js"></script>

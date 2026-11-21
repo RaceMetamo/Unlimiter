@@ -113,6 +113,18 @@
     <div class="note"><em id="vSrc">No source</em> · Analysis runs at 320×180 — we only need regions and movement, not detail.</div>
   </details>
 
+  <details class="sec sec-rackdata" open>
+    <summary>Field & mask — from the rack</summary>
+    <div class="note" id="rackDataNote">Nothing patched. In the rack, patch a Vision node's <b>field</b> into <b>field</b> and its <b>mask</b> into <b>mask</b>.</div>
+    <label title="Camera motion (or any field) as a real force on every stroke"><span class="lab">Field push <b id="vFldPush"></b></span>
+      <input type="range" id="rFldPush" min="0" max="4" step="0.01" value="1"></label>
+    <label title="How far strokes turn to run along the field's direction"><span class="lab">Field steer <b id="vFldSteer"></b></span>
+      <input type="range" id="rFldSteer" min="0" max="1" step="0.01" value="0.4"></label>
+    <label title="Strokes only start inside the mask. This is the chance per frame that one leaving it is cut off"><span class="lab">Stay inside mask <b id="vMaskStay"></b></span>
+      <input type="range" id="rMaskStay" min="0" max="1" step="0.01" value="0.6"></label>
+    <label class="chk"><input type="checkbox" id="cMaskInv"> Invert (draw outside the mask)</label>
+  </details>
+
   <details class="sec sec-density">
     <summary>Density</summary>
     <label><span class="lab">View</span>
@@ -145,18 +157,6 @@
     <label><span class="lab">Floor <b id="vFloor"></b></span>
       <input type="range" id="rFloor" min="0" max="0.5" step="0.005" value="0.03"></label>
     <div class="note">Direction uses normal optical flow — strokes get pushed the way things actually moved, not just excited where they moved. The density map is the composition — it decides where agents exist before a single line is drawn. Switch View to see it.</div>
-  </details>
-
-  <details class="sec sec-rackdata" open>
-    <summary>Field & mask — from the rack</summary>
-    <div class="note" id="rackDataNote">Nothing patched. In the rack, patch a Vision node's <b>field</b> into <b>field</b> and its <b>mask</b> into <b>mask</b>.</div>
-    <label title="Camera motion (or any field) as a real force on every stroke"><span class="lab">Field push <b id="vFldPush"></b></span>
-      <input type="range" id="rFldPush" min="0" max="4" step="0.01" value="1"></label>
-    <label title="How far strokes turn to run along the field's direction"><span class="lab">Field steer <b id="vFldSteer"></b></span>
-      <input type="range" id="rFldSteer" min="0" max="1" step="0.01" value="0.4"></label>
-    <label title="Strokes only start inside the mask. This is the chance per frame that one leaving it is cut off"><span class="lab">Stay inside mask <b id="vMaskStay"></b></span>
-      <input type="range" id="rMaskStay" min="0" max="1" step="0.01" value="0.6"></label>
-    <label class="chk"><input type="checkbox" id="cMaskInv"> Invert (draw outside the mask)</label>
   </details>
 
   <details class="sec sec-seed">
@@ -468,6 +468,7 @@
   </details>
 </div>
 
+<script src="unlimiter-ui.js"></script>
 <script src="unlimiter-camera.js"></script>
 <script>
 /* ===== BEGIN modulation.js v1.1 (shared across the suite) ===== */

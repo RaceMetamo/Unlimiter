@@ -73,6 +73,31 @@
     <span>Metamo Industries · incompressible fluid, procedural dye</span></h1>
   <div id="status"></div>
 
+  <details class="sec sec-fld" open>
+    <summary>Force field — from the rack</summary>
+    <div class="note" id="fldNote">No field patched. In the rack, patch a Vision node's <b>field</b> output into this tool's <b>force</b> port.</div>
+    <label><span class="lab">Follow strength <b id="vFldAmt"></b></span>
+      <input type="range" id="rFldAmt" min="0" max="40" step="0.1" value="8"></label>
+    <div class="note">The fluid relaxes toward the field wherever it is moving. Raise it and the fluid tracks the field; low values nudge it. Still parts of the field leave the fluid alone.</div>
+  </details>
+
+  <details class="sec sec-emit" open>
+    <summary>Emitters — points from the rack</summary>
+    <div class="note" id="emitNote">No points patched. In the rack, patch a points generator's <b>2D</b> output into this tool's <b>emitters</b> port and every point becomes a brush.</div>
+    <label class="chk"><input type="checkbox" id="cEmOn" checked> Emit from patched points</label>
+    <label><span class="lab">Force from motion <b id="vEmForce"></b></span>
+      <input type="range" id="rEmForce" min="0" max="120" step="0.5" value="28"></label>
+    <label><span class="lab">Dye <b id="vEmDye"></b></span>
+      <input type="range" id="rEmDye" min="0" max="1" step="0.01" value="0.25"></label>
+    <label><span class="lab">Wet paint <b id="vEmPaint"></b></span>
+      <input type="range" id="rEmPaint" min="0" max="3" step="0.01" value="0.8"></label>
+    <label><span class="lab">Splat size <b id="vEmR"></b></span>
+      <input type="range" id="rEmR" min="0.002" max="0.06" step="0.001" value="0.012"></label>
+    <label><span class="lab">Far side <b id="vEmBack"></b></span>
+      <input type="range" id="rEmBack" min="0" max="1" step="0.01" value="0.15"></label>
+    <div class="note">Each point pushes the fluid the way it is moving, leaves its own colour in the dye, and lays down wet paint that runs like the spray does. <em>Far side</em> weights the points on the back of a 3D form, which move against the front ones — keep it low for clean streaks.</div>
+  </details>
+
   <details class="sec sec-force" open>
     <summary>Forces</summary>
     <div class="row"><button id="bCam">Webcam</button><button id="bClear">Reset</button></div>
@@ -271,31 +296,6 @@
     <div class="note">Particles follow the velocity field and take their colour from the dye beneath them, leaving additive trails — filaments rather than washes. Short lifetimes and long trails give the wispy look; long lifetimes give continuous streamlines.</div>
   </details>
 
-  <details class="sec sec-fld" open>
-    <summary>Force field — from the rack</summary>
-    <div class="note" id="fldNote">No field patched. In the rack, patch a Vision node's <b>field</b> output into this tool's <b>force</b> port.</div>
-    <label><span class="lab">Follow strength <b id="vFldAmt"></b></span>
-      <input type="range" id="rFldAmt" min="0" max="40" step="0.1" value="8"></label>
-    <div class="note">The fluid relaxes toward the field wherever it is moving. Raise it and the fluid tracks the field; low values nudge it. Still parts of the field leave the fluid alone.</div>
-  </details>
-
-  <details class="sec sec-emit" open>
-    <summary>Emitters — points from the rack</summary>
-    <div class="note" id="emitNote">No points patched. In the rack, patch a points generator's <b>2D</b> output into this tool's <b>emitters</b> port and every point becomes a brush.</div>
-    <label class="chk"><input type="checkbox" id="cEmOn" checked> Emit from patched points</label>
-    <label><span class="lab">Force from motion <b id="vEmForce"></b></span>
-      <input type="range" id="rEmForce" min="0" max="120" step="0.5" value="28"></label>
-    <label><span class="lab">Dye <b id="vEmDye"></b></span>
-      <input type="range" id="rEmDye" min="0" max="1" step="0.01" value="0.25"></label>
-    <label><span class="lab">Wet paint <b id="vEmPaint"></b></span>
-      <input type="range" id="rEmPaint" min="0" max="3" step="0.01" value="0.8"></label>
-    <label><span class="lab">Splat size <b id="vEmR"></b></span>
-      <input type="range" id="rEmR" min="0.002" max="0.06" step="0.001" value="0.012"></label>
-    <label><span class="lab">Far side <b id="vEmBack"></b></span>
-      <input type="range" id="rEmBack" min="0" max="1" step="0.01" value="0.15"></label>
-    <div class="note">Each point pushes the fluid the way it is moving, leaves its own colour in the dye, and lays down wet paint that runs like the spray does. <em>Far side</em> weights the points on the back of a 3D form, which move against the front ones — keep it low for clean streaks.</div>
-  </details>
-
   <details class="sec sec-surface">
     <summary>Surface</summary>
     <label><span class="lab">Relief <b id="vRelief"></b></span>
@@ -346,6 +346,7 @@
   </details>
 </div>
 
+<script src="unlimiter-ui.js"></script>
 <script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-dice.js"></script>

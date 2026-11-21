@@ -275,6 +275,7 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 
 <aside id="panel" class="closed" aria-label="Cat editor">
   <div class="phead"><div class="tabs" role="tablist"><button class="tab" id="tabLab" role="tab" type="button" aria-selected="true">LAB</button><button class="tab" id="tabShelf" role="tab" type="button" aria-selected="false">SHELF <span id="shelfCount">0/12</span></button></div><button class="close" id="pClose" type="button" aria-label="Close panel">✕</button></div>
+  <div data-ulx-output style="margin:8px 10px 0"></div>
   <div class="pbody" id="pbody"></div>
   <div class="pbody" id="shelf" hidden></div>
   <div class="draftbar" id="draftbar" hidden>
@@ -285,6 +286,7 @@ input[type=range]{width:100%;accent-color:var(--pink)}
   </div>
 </aside>
 
+<script src="unlimiter-ui.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (()=>{

@@ -90,6 +90,11 @@
     </details>
 
     <details class="group" open>
+      <summary>Input — depth or webcam<span class="chev"></span></summary>
+      <div class="body" id="g-input"></div>
+    </details>
+
+    <details class="group" open>
       <summary>Form<span class="chev"></span></summary>
       <div class="body" id="g-form"></div>
     </details>
@@ -97,11 +102,6 @@
     <details class="group" open>
       <summary>Depth<span class="chev"></span></summary>
       <div class="body" id="g-depth"></div>
-    </details>
-
-    <details class="group" open>
-      <summary>Camera<span class="chev"></span></summary>
-      <div class="body" id="g-cam"></div>
     </details>
 
     <details class="group">
@@ -115,8 +115,8 @@
     </details>
 
     <details class="group" open>
-      <summary>Input — depth or webcam<span class="chev"></span></summary>
-      <div class="body" id="g-input"></div>
+      <summary>Camera<span class="chev"></span></summary>
+      <div class="body" id="g-cam"></div>
     </details>
 
     <details class="group">
@@ -138,11 +138,12 @@
     <div class="btnrow">
       <button class="primary" id="bPNG">PNG</button>
       <button class="primary" id="bRec">● Record</button>
-      <button id="bOut">Output</button>
+      <button id="bOut" hidden>Output</button>
     </div>
   </div>
 </div>
 
+<script src="unlimiter-ui.js"></script>
 <script src="unlimiter-camera.js"></script>
 <script src="unlimiter-drive.js"></script>
 <script src="unlimiter-dice.js"></script>

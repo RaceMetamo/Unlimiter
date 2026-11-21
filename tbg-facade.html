@@ -208,22 +208,6 @@
   </details>
 
   <details class="group" open>
-    <summary>Camera &amp; light<span class="chev"></span></summary>
-    <div class="body">
-      <div class="row"><label>Auto-frame</label><div class="ctl"><input type="checkbox" id="autoFrame"></div></div>
-      <div class="row"><label>Zoom</label><div class="ctl"><input type="range" id="frameZoom" min="0.2" max="2.5" step="0.01"><span class="val"></span></div></div>
-      <div class="row hidden" id="camDistRow"><label>Distance</label><div class="ctl"><input type="range" id="camDist" min="300" max="6000" step="10"><span class="val"></span></div></div>
-      <div class="row"><label>Yaw</label><div class="ctl"><input type="range" id="camYaw" min="-180" max="180" step="1"><span class="val"></span></div></div>
-      <div class="row"><label>Pitch</label><div class="ctl"><input type="range" id="camPitch" min="-89" max="89" step="1"><span class="val"></span></div></div>
-      <div class="row"><label>Perspective</label><div class="ctl"><input type="range" id="camPersp" min="0" max="1" step="0.01"><span class="val"></span></div></div>
-      <div class="row"><label>Idle orbit</label><div class="ctl"><input type="range" id="orbitSpeed" min="-20" max="20" step="0.5"><span class="val"></span></div></div>
-      <div class="row"><label>Light azimuth</label><div class="ctl"><input type="range" id="lightAz" min="-180" max="180" step="1"><span class="val"></span></div></div>
-      <div class="row"><label>Light elevation</label><div class="ctl"><input type="range" id="lightEl" min="-90" max="90" step="1"><span class="val"></span></div></div>
-      <div class="note">Drag the canvas to orbit, scroll to zoom.</div>
-    </div>
-  </details>
-
-  <details class="group" open>
     <summary>Colour<span class="chev"></span></summary>
     <div class="body">
       <div class="swatches">
@@ -238,6 +222,22 @@
         <select id="bgMode"><option value="dark">Dark</option><option value="light">Light</option><option value="custom">Custom</option></select>
       </div></div>
       <div class="row hidden" id="bgColorRow"><label>Background colour</label><div class="ctl"><input type="color" id="bgColor"></div></div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Camera &amp; light<span class="chev"></span></summary>
+    <div class="body">
+      <div class="row"><label>Auto-frame</label><div class="ctl"><input type="checkbox" id="autoFrame"></div></div>
+      <div class="row"><label>Zoom</label><div class="ctl"><input type="range" id="frameZoom" min="0.2" max="2.5" step="0.01"><span class="val"></span></div></div>
+      <div class="row hidden" id="camDistRow"><label>Distance</label><div class="ctl"><input type="range" id="camDist" min="300" max="6000" step="10"><span class="val"></span></div></div>
+      <div class="row"><label>Yaw</label><div class="ctl"><input type="range" id="camYaw" min="-180" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Pitch</label><div class="ctl"><input type="range" id="camPitch" min="-89" max="89" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Perspective</label><div class="ctl"><input type="range" id="camPersp" min="0" max="1" step="0.01"><span class="val"></span></div></div>
+      <div class="row"><label>Idle orbit</label><div class="ctl"><input type="range" id="orbitSpeed" min="-20" max="20" step="0.5"><span class="val"></span></div></div>
+      <div class="row"><label>Light azimuth</label><div class="ctl"><input type="range" id="lightAz" min="-180" max="180" step="1"><span class="val"></span></div></div>
+      <div class="row"><label>Light elevation</label><div class="ctl"><input type="range" id="lightEl" min="-90" max="90" step="1"><span class="val"></span></div></div>
+      <div class="note">Drag the canvas to orbit, scroll to zoom.</div>
     </div>
   </details>
 
@@ -276,6 +276,7 @@
 
 <button id="showPanelBtn" title="Show controls">☰</button>
 
+<script src="unlimiter-ui.js"></script>
 <script src="unlimiter-ports.js"></script>
 <script>
 (function(){

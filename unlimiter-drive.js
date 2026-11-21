@@ -24,7 +24,7 @@
 (function(global){
 "use strict";
 
-const VERSION = "1.6";
+const VERSION = "1.7";
 const TAU = Math.PI*2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -72,6 +72,9 @@ const DIVISIONS = {
 
 function create(opts){
   opts = opts||{};
+  // Shared output window (unlimiter-ui.js) takes over when it is loaded
+  const UIX = (global.UnlimiterUI && global.UnlimiterUI.active) ? global.UnlimiterUI : null;
+  if(UIX && opts.getOutputCanvas) UIX.setSource(opts.getOutputCanvas);
   const targets = {};          // key -> {key,label,min,max}
   let panelEl = null;
   const ui = {};
@@ -442,6 +445,7 @@ function create(opts){
   // context was made with preserveDrawingBuffer. Such tools call pushFrame()
   // at the end of their render instead; that suppresses the pull loop below.
   function pushFrame(src){
+    if(UIX) return UIX.pushFrame(src);
     if(!outWin || outWin.closed || !outCtx || !src || !src.width) return;
     if(outCv.width!==src.width || outCv.height!==src.height){
       outCv.width=src.width; outCv.height=src.height;
@@ -449,9 +453,10 @@ function create(opts){
     outCtx.drawImage(src,0,0);
     lastPush=performance.now();
   }
-  function outputOpen(){ return !!(outWin && !outWin.closed); }
+  function outputOpen(){ return UIX ? UIX.isOpen() : !!(outWin && !outWin.closed); }
 
   function openOutput(getCanvas){
+    if(UIX) return UIX.openOutput(getCanvas || opts.getOutputCanvas);
     if(outWin && !outWin.closed){ outWin.focus(); return; }
     outWin=window.open("","UnlimiterOutput","width=1280,height=720");
     if(!outWin) return;
@@ -616,7 +621,7 @@ function create(opts){
     const outBtn=el("button",null,"Open output window");
     outBtn.addEventListener("click",()=>openOutput(opts.getOutputCanvas));
     orow.appendChild(outBtn); host.appendChild(orow);
-    note(host,"A bare canvas in its own window, titled UNLIMITER OUTPUT. Point an OBS window capture at it. Click inside it for fullscreen.");
+    note(host,"Same as the OUTPUT bar pinned at the top of the panel. A bare canvas in its own window: double-click it or press F for fullscreen, point OBS window capture at it, or add it as a MetaMapper source.");
 
     refreshPanel();
   }
