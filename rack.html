@@ -292,6 +292,8 @@ const TOOLS = [
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
   { id:"gx", file:"galaxy.html",       label:"Galaxy",       sel:"#gpu",  capture:"pump", color:"#d7a6ff",
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
+  { id:"ot", file:"overtone.html",     label:"Overtone",     sel:"#cv",   capture:"pull", color:"#e8935a",
+    prefer:["fxCut","leadTable","fluidStir","delayMix"], boot:[],          accepts:null,       init:"" },
   { id:"ph", file:"phylo-lsystem.html",label:"Phylo L-system", sel:"#stage", capture:"pump", color:"#7bd389",
     prefer:[],                                        boot:[],             accepts:null,       init:"" },
 ];
@@ -331,6 +333,9 @@ let editingTool = null;         // toolId whose own UI is on the stage
 const Drive = (window.UnlimiterDrive)
   ? UnlimiterDrive.create({ onChange: () => {}, getOutputCanvas: () => mixCanvas })
   : null;
+// hosted tools that make signals of their own (Overtone's music.*) register them here,
+// so the rack's Source nodes can patch them — a top-level const is not on window
+window.__rackDrive = Drive;
 
 function registerTarget(key, label, min, max, apply){
   if(targetByKey.has(key)) return targetByKey.get(key);

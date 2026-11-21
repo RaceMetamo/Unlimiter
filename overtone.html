@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overtone — generative music from the Unlimiter's geometry</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --drum:#e8935a; --synth:#9d8cff; --fx:#5fc4e8;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0 8px 0 0}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto;text-align:right}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px;position:relative}
+  #cv{max-width:100%;max-height:100%;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#0b0d0e;touch-action:none}
+  #cv.draw{cursor:crosshair}
+
+  #panel{width:360px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  .group{border-bottom:1px solid var(--line);border-left:3px solid transparent}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px 11px 13px;display:flex;align-items:center;
+    gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);
+    border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto;flex:none}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px 13px}
+  /* section colours: every slider, tick and header in a section takes its colour */
+  .sec-drum{--accent:var(--drum)}  .sec-synth{--accent:var(--synth)}  .sec-fx{--accent:var(--fx)}
+  .group.sec-drum, .group.sec-synth, .group.sec-fx{border-left-color:color-mix(in srgb, var(--accent) 55%, transparent)}
+  .group.sec-drum > summary .gname, .group.sec-synth > summary .gname, .group.sec-fx > summary .gname{color:var(--accent)}
+  .sechead{padding:14px 16px 6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;
+    background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%)}
+  .sechead::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--accent)}
+  .ms{display:flex;gap:4px;margin-left:auto}
+  .ms button{padding:1px 0;width:22px;font-size:10.5px;font-family:var(--mono);line-height:16px}
+  .ms button.mute.on{background:#5a2b25;border-color:#e0714f;color:#ffb39c}
+  .ms button.solo.on{background:#5a5225;border-color:#e8c547;color:#ffe9a0}
+  .ms + .chev{margin-left:8px !important}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:28px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .row.mod label{color:var(--accent)}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:56px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--accent);margin-top:-4.5px;border:none}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:none}
+  select,input[type=text],input[type=number]{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-size:12px;font-family:inherit}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);
+    background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.primary.on{background:#2b3033;color:var(--accent)}
+  button.warm{border-color:#4a3a34;color:#f0a68e}
+  button.rec.on{background:#5a2b25;border-color:#e0714f;color:#ffb39c}
+  button.on{border-color:var(--accent);color:var(--accent)}
+  .btnrow{display:flex;gap:6px;padding:6px 0}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;
+    border-top:1px solid var(--line);margin-top:8px}
+  .scope{display:block;width:100%;height:46px;margin:4px 0 6px;background:#15181a;border:1px solid var(--line);border-radius:3px}
+  .chgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:4px 0}
+  .chgrid div{text-align:center;font-size:10px;color:var(--dim)}
+  .chgrid input{padding:4px 2px;text-align:center}
+  #footer{border-top:1px solid var(--line);padding:12px 16px}
+  .hidden{display:none !important}
+  #playBtn{min-width:84px}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Overtone <span>— generative music from geometry</span></h1>
+    <button id="playBtn" class="primary">▶ Play</button>
+    <button id="bCapture" class="rec">● Capture</button>
+    <button id="bOut">Output window ↗</button>
+    <div id="status">idle</div>
+  </div>
+  <div id="canvasWrap"><canvas id="cv" width="1280" height="720"></canvas></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+    <details class="group" open>
+      <summary><span class="gname">Presets</span><span class="chev"></span></summary>
+      <div class="body">
+        <div class="row"><label>Preset</label><div class="ctl"><select id="presetSel"></select></div></div>
+        <div class="row"><label>Tempo</label><div class="ctl"><input type="number" id="bpmIn" min="40" max="220" step="0.5"></div></div>
+        <div class="btnrow"><button id="bReseed">New seed</button><button id="bExportPreset">Export preset</button><button id="bImportPreset">Import preset</button></div>
+        <div class="note">Space plays and stops. The seed fixes every dice-roll inside the music. Tempo sets the Drive clock; MIDI clock and tap tempo (Drive, below) take over when used. Inside the Rack, Overtone follows the Rack's clock.</div>
+      </div>
+    </details>
+    <div id="groups"></div>
+
+    <details class="group">
+      <summary><span class="gname">MIDI out</span><span class="chev"></span></summary>
+      <div class="body" id="g-midi"></div>
+    </details>
+
+    <details class="group" open>
+      <summary><span class="gname">Export — stems for the DAW</span><span class="chev"></span></summary>
+      <div class="body" id="g-export">
+        <div class="row"><label>From</label><div class="ctl"><select id="expFrom"><option value="capture">the last capture</option><option value="static">N bars, parameters held</option></select></div></div>
+        <div class="row"><label>Bars</label><div class="ctl"><input type="number" id="bounceBars" min="1" max="128" value="8"></div></div>
+        <div class="row"><label>Bit depth</label><div class="ctl"><select id="expBits"><option value="24">24-bit</option><option value="16">16-bit</option></select></div></div>
+        <div class="row"><label>Stems via FX</label><div class="ctl"><input type="checkbox" id="expFx" checked><span class="note" style="padding:0">master filter, drive, crush, width</span></div></div>
+        <div class="btnrow"><button id="bStems" class="primary">Export stems .zip</button><button id="bMidi">MIDI only</button></div>
+        <div class="note" id="capNote">Press <b>● Capture</b> while you play: every note, every Drive move, every fluid stroke and Lattice gesture is logged, then rendered offline into one 44.1 kHz WAV per track (sends to delay and reverb included, no master compressor) plus the full mix, a multitrack .mid and the preset — all in one zip. With no capture, it renders N bars with the parameters held still.</div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary><span class="gname">Dice — roll &amp; evolve</span><span class="chev"></span></summary>
+      <div class="body" id="g-dice"></div>
+    </details>
+
+    <details class="group" open>
+      <summary><span class="gname">Drive — audio, MIDI, modulation</span><span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
+    </details>
+  </div>
+
+  <div id="footer">
+    <div class="btnrow"><button id="bRec" class="primary">● Record live</button><button id="bStems2" class="primary">Export stems</button><button id="bWav" class="primary">Mix WAV</button></div>
+  </div>
+</div>
+<input type="file" id="fPreset" accept="application/json,.json" class="hidden">
+
+<script src="unlimiter-points.js"></script>
+<script src="unlimiter-music.js"></script>
+<script src="unlimiter-drive.js"></script>
+<script src="unlimiter-dice.js"></script>
+<script src="unlimiter-ports.js"></script>
+<script src="unlimiter-link.js"></script>
+<script>
+"use strict";
+
+/* ============================ parameters ============================ */
+const M = UnlimiterMusic;
+const DEFAULTS = M.defaults();
+let P = Object.assign({}, DEFAULTS);
+let Q = P;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+const Drive = window.UnlimiterDrive
+  ? UnlimiterDrive.create({ onChange: () => {}, getOutputCanvas: () => cv })
+  : null;
+// Hosted in the Rack: follow the Rack's clock, and offer our signals to its Source nodes.
+let hostDrive = null;
+try{ if(window.parent !== window && window.parent.__rackDrive) hostDrive = window.parent.__rackDrive; }catch(e){}
+const clockDrive = () => hostDrive || Drive;
+
+let GRP = "";
+function registerMod(p){
+  if(!Drive || p.noMod) return;
+  Drive.registerTarget(p.key, (GRP ? GRP + " — " : "") + p.label, p.min, p.max);
+}
+
+/* ============================ sidebar ============================ */
+const rows = {};          // key -> {input, refresh, row}
+const switchEls = {};     // key -> <select>
+const groupEls = {};      // group -> <details>
+const scopes = {};        // synth part -> canvas
+const fmt = (v, step) => {
+  const d = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
+  return (+v).toFixed(d);
+};
+function slider(parent, p){
+  registerMod(p);
+  const row = document.createElement("div"); row.className = "row";
+  const lab = document.createElement("label"); lab.textContent = p.label;
+  const ctl = document.createElement("div"); ctl.className = "ctl";
+  const inp = document.createElement("input");
+  inp.type = "range"; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = P[p.key];
+  const val = document.createElement("span"); val.className = "val";
+  let lastMod = null;
+  const refresh = () => {
+    if(document.activeElement !== inp) inp.value = P[p.key];
+    const shown = Q && Q[p.key] != null ? Q[p.key] : P[p.key];
+    val.textContent = fmt(shown, p.step);
+    const m = Drive ? Drive.isModulated(p.key) : false;
+    if(m !== lastMod){ row.classList.toggle("mod", m); lastMod = m; }
+  };
+  inp.addEventListener("input", () => { P[p.key] = parseFloat(inp.value); refresh(); });
+  ctl.append(inp, val); row.append(lab, ctl); parent.appendChild(row);
+  rows[p.key] = { input: inp, refresh, row }; refresh();
+}
+function selectRow(parent, s){
+  const row = document.createElement("div"); row.className = "row";
+  const lab = document.createElement("label"); lab.textContent = s.label;
+  const ctl = document.createElement("div"); ctl.className = "ctl";
+  const sel = document.createElement("select");
+  s.options.forEach(o => { const op = document.createElement("option"); op.value = op.textContent = o; sel.appendChild(op); });
+  sel.value = P[s.key];
+  sel.addEventListener("change", () => { P[s.key] = sel.value; onStructure(s.key); vis(); });
+  ctl.appendChild(sel); row.append(lab, ctl); parent.appendChild(row);
+  switchEls[s.key] = sel; rows[s.key] = { row, refresh(){} };
+}
+
+const SECTIONS = [
+  { title: null,     cls: "",          groups: ["Score", "Fluid", "Points in", "Transport", "Harmony", "Geometry"] },
+  { title: "Drums",  cls: "sec-drum",  groups: ["Kick", "Clap", "Hat", "Perc"] },
+  { title: "Synths", cls: "sec-synth", groups: ["Bass", "Lead", "Pad"] },
+  { title: "FX",     cls: "sec-fx",    groups: ["FX", "Space"] }
+];
+const TITLES = { "Score": "Score — where the melody comes from", "Fluid": "Fluid — draw the score",
+  "Points in": "Points in — Lattice, Vision, Manifold", "FX": "Master FX — filter, drive, crush, width", "Space": "Space — delay & reverb" };
+const OPEN = { Score: 1, Fluid: 1, Transport: 1, Bass: 1, Lead: 1, FX: 1 };
+const PART_OF = { Kick: "kick", Clap: "clap", Hat: "hat", Perc: "perc", Bass: "bass", Lead: "lead", Pad: "pad" };
+const msBtns = {};        // part -> {m, s}
+
+SECTIONS.forEach(sec => {
+  if(sec.title){
+    const h = document.createElement("div"); h.className = "sechead " + sec.cls; h.textContent = sec.title;
+    $("groups").appendChild(h);
+  }
+  sec.groups.forEach(name => {
+    const det = document.createElement("details"); det.className = "group " + sec.cls; if(OPEN[name]) det.open = true;
+    const sum = document.createElement("summary");
+    const gn = document.createElement("span"); gn.className = "gname"; gn.textContent = TITLES[name] || name;
+    sum.appendChild(gn);
+    const part = PART_OF[name];
+    if(part){
+      const ms = document.createElement("span"); ms.className = "ms";
+      const bm = document.createElement("button"); bm.className = "mute"; bm.textContent = "M"; bm.title = "Mute";
+      const bs = document.createElement("button"); bs.className = "solo"; bs.textContent = "S"; bs.title = "Solo (shift: add to solo)";
+      bm.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleMute(part); });
+      bs.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleSolo(part, e.shiftKey); });
+      ms.append(bm, bs); sum.appendChild(ms); msBtns[part] = { m: bm, s: bs };
+    }
+    const chev = document.createElement("span"); chev.className = "chev"; sum.appendChild(chev);
+    det.appendChild(sum);
+    const body = document.createElement("div"); body.className = "body"; det.appendChild(body);
+    $("groups").appendChild(det); groupEls[name] = det;
+    GRP = name;
+    if(part === "bass" || part === "lead" || part === "pad"){
+      const sc = document.createElement("canvas"); sc.className = "scope"; sc.width = 640; sc.height = 92;
+      sc.title = "the wave this synth is playing right now"; body.appendChild(sc); scopes[part] = sc;
+    }
+    M.SWITCHES.filter(s => s.group === name).forEach(s => selectRow(body, s));
+    M.PARAMS.filter(p => p.group === name).forEach(p => slider(body, p));
+    if(name === "Score"){
+      const n = document.createElement("div"); n.className = "note"; n.id = "scoreNote"; body.appendChild(n);
+    }
+    if(name === "Fluid"){
+      const b = document.createElement("div"); b.className = "btnrow";
+      b.innerHTML = '<button id="bCalm">Calm</button><button id="bScatter">Scatter</button><button id="bClearInk">Clear drawing</button>';
+      body.appendChild(b);
+      const n = document.createElement("div"); n.className = "note";
+      n.textContent = "Drag on the score to stir the fluid and draw particles into it — each particle is a note waiting for the playhead. Shift-drag scatters. Kicks push the fluid back.";
+      body.appendChild(n);
+    }
+    if(name === "Points in"){
+      const r = document.createElement("div"); r.className = "row";
+      r.innerHTML = '<label>Listen to</label><div class="ctl"><select id="ptsSel"><option value="auto">auto — Rack cable, else a tab</option></select></div>';
+      body.insertBefore(r, body.firstChild);
+      const n = document.createElement("div"); n.className = "note"; n.id = "ptsNote"; body.appendChild(n);
+    }
+    if(name === "Space"){
+      const b = document.createElement("div"); b.className = "btnrow";
+      b.innerHTML = '<button id="bVerb">Rebuild reverb</button>'; body.appendChild(b);
+    }
+  });
+});
+GRP = "";
+
+/* show what matters for the current choices */
+function vis(){
+  const src = P.scoreSource;
+  groupEls["Fluid"].classList.toggle("hidden", src !== "fluid");
+  groupEls["Geometry"].classList.toggle("hidden", src !== "geometry");
+  ["bass", "lead"].forEach(p => {
+    const eu = P[p + "Rhythm"] === "euclid";
+    rows[p + "EK"].row.classList.toggle("hidden", !eu);
+    rows[p + "ERot"].row.classList.toggle("hidden", !eu);
+    rows[p + "Density"].row.classList.toggle("hidden", eu);
+  });
+  const peu = P.padRhythm === "euclid";
+  rows.padEK.row.classList.toggle("hidden", !peu); rows.padERot.row.classList.toggle("hidden", !peu);
+  rows.leadFM.row.classList.toggle("hidden", P.leadVoice !== "fm");
+  rows.leadDetune.row.classList.toggle("hidden", P.leadVoice === "fm");
+  const filt = P.fxFilter !== "off";
+  rows.fxCut.row.classList.toggle("hidden", !filt); rows.fxRes.row.classList.toggle("hidden", !filt);
+  $("scoreNote").innerHTML = src === "geometry"
+    ? "A Manifold-style point cloud is the score. Each synth reads it through its own lens: one axis is time, one is pitch."
+    : src === "fluid"
+    ? "A fluid you draw into is the score. Particles drift on it; the playhead plays whatever particles it crosses. Set a synth's time axis to <b>x</b> for a scanning bar, <b>angle</b> for a radar sweep."
+    : "Points from another tool are the score — a Lattice tracking your hands, a Vision node, a Manifold. Move, and the melody moves.";
+}
+
+function refreshAll(){
+  for(const k in rows) rows[k].refresh();
+  for(const k in switchEls) switchEls[k].value = P[k];
+  $("bpmIn").value = clockDrive() ? clockDrive().state.clock.bpm.toFixed(1) : 124;
+  vis();
+}
+
+/* ============================ mute / solo ============================ */
+const mute = {}, solo = {};
+M.PARTS.forEach(p => { mute[p] = false; solo[p] = false; });
+function audible(p){
+  const anySolo = M.PARTS.some(x => solo[x]);
+  return !mute[p] && (!anySolo || solo[p]);
+}
+function toggleMute(p){ mute[p] = !mute[p]; msRefresh(); }
+function toggleSolo(p, add){
+  const was = solo[p];
+  if(!add) M.PARTS.forEach(x => solo[x] = false);    // plain click: exclusive; shift-click: add to the soloed set
+  solo[p] = !was; msRefresh();
+}
+function msRefresh(){
+  M.PARTS.forEach(p => {
+    if(msBtns[p]){ msBtns[p].m.classList.toggle("on", mute[p]); msBtns[p].s.classList.toggle("on", solo[p]); }
+    if(E) E.mute[p].gain.setTargetAtTime(audible(p) ? 1 : 0, E.ctx.currentTime, 0.008);
+  });
+}
+
+/* ============================ audio engine ============================ */
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const amp = v => Math.pow(clamp(v, 0, 1), 1.4);
+
+function makeReverbIR(ctx, size){
+  const len = Math.max(1, Math.floor(ctx.sampleRate * size));
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  const rnd = M.mulberry32(1234);                       // the same room every time, so bounces match
+  for(let c = 0; c < 2; c++){
+    const d = buf.getChannelData(c);
+    for(let i = 0; i < len; i++){
+      const t = i / len;
+      d[i] = (rnd() * 2 - 1) * Math.pow(1 - t, 3.2) * (i < 400 ? i / 400 : 1);
+    }
+  }
+  return buf;
+}
+function driveCurve(a){
+  const n = 2048, c = new Float32Array(n), k = 1 + a * 18, norm = Math.tanh(k);
+  for(let i = 0; i < n; i++){ const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / norm; }
+  return c;
+}
+function crushCurve(a){
+  const bits = 16 - a * 13, lv = Math.pow(2, bits - 1), n = 8192, c = new Float32Array(n);
+  for(let i = 0; i < n; i++){ const x = i / (n - 1) * 2 - 1; c[i] = Math.round(x * lv) / lv; }
+  return c;
+}
+
+/**
+ * The signal path. Every track: voice → mute → pan → bus, with its own
+ * delay and reverb sends. Then bus + returns → master filter → drive →
+ * crush → width → master → compressor → soft clip. A stem render skips the
+ * compressor and clip (and, if asked, the master FX) so the DAW gets clean tracks.
+ */
+function makeEngine(ctx, dest, opts){
+  opts = opts || {};
+  const E = { ctx, mute: {}, pan: {}, dS: {}, vS: {}, inp: {}, waves: new Map(), cur: {} };
+  const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0);
+  const rnd = M.mulberry32(99);
+  for(let i = 0; i < nd.length; i++) nd[i] = rnd() * 2 - 1;
+  E.noise = nb;
+  E.sum = ctx.createGain();
+  E.bus = ctx.createGain(); E.bus.connect(E.sum);
+  // delay
+  E.dIn = ctx.createGain(); E.delay = ctx.createDelay(2); E.dFb = ctx.createGain();
+  E.dTone = ctx.createBiquadFilter(); E.dTone.type = "lowpass"; E.dOut = ctx.createGain();
+  E.dIn.connect(E.delay); E.delay.connect(E.dTone); E.dTone.connect(E.dOut); E.dTone.connect(E.dFb);
+  E.dFb.connect(E.delay); E.dOut.connect(E.sum);
+  // reverb
+  E.vIn = ctx.createGain(); E.conv = ctx.createConvolver(); E.vOut = ctx.createGain();
+  E.vIn.connect(E.conv); E.conv.connect(E.vOut); E.vOut.connect(E.sum);
+  E.setReverb = size => { E.conv.buffer = makeReverbIR(ctx, size); E.verbSize = size; };
+  // master FX
+  E.filt = ctx.createBiquadFilter(); E.filt.type = "allpass";
+  E.drv = ctx.createWaveShaper(); E.drvGain = ctx.createGain();
+  E.crush = ctx.createWaveShaper();
+  // width: mid/side
+  const split = ctx.createChannelSplitter(2), merge = ctx.createChannelMerger(2);
+  const mid = ctx.createGain(), side = ctx.createGain(), inv = ctx.createGain();
+  const lm = ctx.createGain(), rm = ctx.createGain(), ls = ctx.createGain(), rs = ctx.createGain();
+  lm.gain.value = 0.5; rm.gain.value = 0.5; ls.gain.value = 0.5; rs.gain.value = -0.5; inv.gain.value = -1;
+  split.connect(lm, 0); split.connect(ls, 0); split.connect(rm, 1); split.connect(rs, 1);
+  lm.connect(mid); rm.connect(mid); ls.connect(side); rs.connect(side);
+  mid.connect(merge, 0, 0); side.connect(merge, 0, 0); mid.connect(merge, 0, 1); side.connect(inv); inv.connect(merge, 0, 1);
+  E.side = side;
+  E.master = ctx.createGain();
+  if(opts.noFx){ E.sum.connect(E.master); }
+  else {
+    E.sum.connect(E.filt); E.filt.connect(E.drv); E.drv.connect(E.drvGain); E.drvGain.connect(E.crush);
+    E.crush.connect(split); merge.connect(E.master);
+  }
+  E.analyser = ctx.createAnalyser(); E.analyser.fftSize = 1024;
+  if(opts.stem){ E.master.connect(dest); E.master.connect(E.analyser); }
+  else {
+    E.comp = ctx.createDynamicsCompressor();
+    E.comp.threshold.value = -14; E.comp.knee.value = 18; E.comp.ratio.value = 3.5;
+    E.comp.attack.value = 0.004; E.comp.release.value = 0.16;
+    E.clip = ctx.createWaveShaper();
+    const curve = new Float32Array(2048);
+    for(let i = 0; i < 2048; i++){ const x = i / 1023.5 - 1; curve[i] = Math.tanh(x * 1.4) / Math.tanh(1.4); }
+    E.clip.curve = curve;
+    E.master.connect(E.comp); E.comp.connect(E.clip); E.clip.connect(dest); E.clip.connect(E.analyser);
+    if(opts.extra) E.clip.connect(opts.extra);
+  }
+  M.PARTS.forEach(p => {
+    const m = ctx.createGain(), pn = ctx.createStereoPanner(), ds = ctx.createGain(), vs = ctx.createGain();
+    m.connect(pn); pn.connect(E.bus); pn.connect(ds); ds.connect(E.dIn); pn.connect(vs); vs.connect(E.vIn);
+    E.mute[p] = m; E.pan[p] = pn; E.dS[p] = ds; E.vS[p] = vs; E.inp[p] = m;
+  });
+  return E;
+}
+/** Bring the mixer and FX to Qv at time t. Curves (drive, crush) can't ramp, so they snap. */
+function applyFx(E, Qv, spb, t, snap){
+  const set = (prm, v, tc) => snap ? prm.setValueAtTime(v, t) : prm.setTargetAtTime(v, t, tc || 0.03);
+  set(E.master.gain, Qv.master * 0.6);
+  set(E.dOut.gain, Qv.delayMix); set(E.dFb.gain, Qv.delayFb); set(E.dTone.frequency, Qv.delayTone);
+  set(E.vOut.gain, Qv.verbMix);
+  const div = { "1/16": .25, "1/8": .5, "3/16": .75, "1/4": 1 }[Qv.delayDiv] || .75;
+  set(E.delay.delayTime, Math.min(1.9, div * spb), 0.05);
+  M.PARTS.forEach(p => {
+    set(E.pan[p].pan, Qv[p + "Pan"]); set(E.dS[p].gain, Qv[p + "Dly"]); set(E.vS[p].gain, Qv[p + "Vrb"]);
+  });
+  const ft = Qv.fxFilter === "off" ? "allpass" : Qv.fxFilter;
+  if(E.cur.ft !== ft){ E.filt.type = ft; E.cur.ft = ft; }
+  set(E.filt.frequency, ft === "allpass" ? 1000 : Qv.fxCut, 0.02);
+  set(E.filt.Q, ft === "allpass" ? 0.0001 : 0.5 + Qv.fxRes * (ft === "bandpass" ? 12 : 18), 0.02);
+  const dr = Math.round(Qv.fxDrive * 50) / 50;
+  if(E.cur.dr !== dr){ E.drv.curve = dr > 0 ? driveCurve(dr) : null; E.cur.dr = dr; set(E.drvGain.gain, 1 - dr * 0.35); }
+  const cr = Math.round(Qv.fxCrush * 40) / 40;
+  if(E.cur.cr !== cr){ E.crush.curve = cr > 0 ? crushCurve(cr) : null; E.cur.cr = cr; }
+  set(E.side.gain, Qv.fxWidth);
+}
+function noiseSrc(E, t, dur){
+  const s = E.ctx.createBufferSource(); s.buffer = E.noise; s.loop = true;
+  s.start(t, (t * 7.31) % 1.5); s.stop(t + dur + 0.02); return s;
+}
+function env(g, t, peak, a, dur, rel){          // attack, hold to dur, release
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(Math.max(0.0002, peak), t + a);
+  g.gain.setValueAtTime(Math.max(0.0002, peak), t + Math.max(a, dur));
+  g.gain.exponentialRampToValueAtTime(0.0003, t + Math.max(a, dur) + rel);
+}
+
+/* ---- evolving wavetables ---- */
+const SYNTHS = ["bass", "lead", "pad"];
+/** Fix where a synth note's wave starts and ends, onto the event itself — so a capture renders the very same timbre. */
+function stampWave(ev, Qv, tSec, durS){
+  if(SYNTHS.indexOf(ev.part) < 0) return ev;
+  ev.wt = tSec; ev.wp0 = M.wavePos(Qv, ev.part, tSec); ev.wp1 = M.wavePos(Qv, ev.part, tSec + durS);
+  ev.wsh = Qv[ev.part + "Shimmer"]; ev.wr = Qv[ev.part + "Rate"]; ev.wseed = Qv.seed;
+  return ev;
+}
+function getWave(E, part, pos, t, sh, rate, seed){
+  const key = part + "|" + Math.round(pos * 40) + "|" + (sh > 0 ? Math.floor(t * (0.3 + rate * 2) * 6) + "|" + Math.round(sh * 20) : "s");
+  let w = E.waves.get(key);
+  if(w) return w;
+  const imag = M.wavetable(Math.round(pos * 40) / 40, t, sh, rate, seed, part);
+  w = E.ctx.createPeriodicWave(new Float32Array(imag.length), imag);
+  if(E.waves.size > 600) E.waves.clear();
+  E.waves.set(key, w);
+  return w;
+}
+/** One table voice: two oscillators crossfading from the note-on wave to the note-off wave. */
+function tableOsc(E, ev, f, t, len, detune, dest, oscs){
+  const c = E.ctx;
+  const w0 = getWave(E, ev.part, ev.wp0, ev.wt, ev.wsh, ev.wr, ev.wseed);
+  const one = Math.abs(ev.wp1 - ev.wp0) < 0.03 && !(ev.wsh > 0);
+  const a = c.createOscillator(); a.setPeriodicWave(w0); a.frequency.value = f; a.detune.value = detune || 0;
+  if(one){ a.connect(dest); oscs.push(a); return; }
+  const w1 = getWave(E, ev.part, ev.wp1, ev.wt + len, ev.wsh, ev.wr, ev.wseed);
+  const b = c.createOscillator(); b.setPeriodicWave(w1); b.frequency.value = f; b.detune.value = detune || 0;
+  const ga = c.createGain(), gb = c.createGain(), L = Math.max(0.03, len);
+  ga.gain.setValueAtTime(1, t); ga.gain.linearRampToValueAtTime(0, t + L);
+  gb.gain.setValueAtTime(0, t); gb.gain.linearRampToValueAtTime(1, t + L);
+  a.connect(ga); ga.connect(dest); b.connect(gb); gb.connect(dest); oscs.push(a, b);
+}
+
+const VOICE = {
+  kick(E, t, ev, Qv){
+    const c = E.ctx, o = c.createOscillator(), g = c.createGain();
+    const f = Qv.kickTune, f0 = f * (1.5 + Qv.kickPunch * 4);
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + 0.04 + 0.05 * (1 - Qv.kickPunch));
+    const v = amp(ev.vel) * Qv.kickLevel;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + Qv.kickDecay);
+    o.connect(g); g.connect(E.inp.kick); o.start(t); o.stop(t + Qv.kickDecay + 0.05);
+    if(Qv.kickPunch > 0.05){
+      const n = noiseSrc(E, t, 0.012), hp = c.createBiquadFilter(), cg = c.createGain();
+      hp.type = "highpass"; hp.frequency.value = 1800;
+      cg.gain.setValueAtTime(v * Qv.kickPunch * 0.5, t); cg.gain.exponentialRampToValueAtTime(0.0005, t + 0.012);
+      n.connect(hp); hp.connect(cg); cg.connect(E.inp.kick);
+    }
+  },
+  clap(E, t, ev, Qv){
+    const c = E.ctx, v = amp(ev.vel) * Qv.clapLevel;
+    [0, 0.011, 0.023].forEach((off, i) => {
+      const last = i === 2, d = last ? Qv.clapDecay : 0.012;
+      const n = noiseSrc(E, t + off, d), bp = c.createBiquadFilter(), g = c.createGain();
+      bp.type = "bandpass"; bp.frequency.value = Qv.clapTone; bp.Q.value = 1.1;
+      g.gain.setValueAtTime(v, t + off); g.gain.exponentialRampToValueAtTime(0.0005, t + off + d);
+      n.connect(bp); bp.connect(g); g.connect(E.inp.clap);
+    });
+  },
+  hat(E, t, ev, Qv){
+    const c = E.ctx, d = Qv.hatDecay * (ev.open ? 6 : 1), v = amp(ev.vel) * Qv.hatLevel;
+    const n = noiseSrc(E, t, d), hp = c.createBiquadFilter(), bp = c.createBiquadFilter(), g = c.createGain();
+    hp.type = "highpass"; hp.frequency.value = 6500;
+    bp.type = "bandpass"; bp.frequency.value = Qv.hatTone; bp.Q.value = 0.7;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+    n.connect(hp); hp.connect(bp); bp.connect(g); g.connect(E.inp.hat);
+  },
+  perc(E, t, ev, Qv){
+    const c = E.ctx, f = mtof(ev.midi), v = amp(ev.vel) * Qv.percLevel, d = Qv.percDecay;
+    const o = c.createOscillator(), m = c.createOscillator(), mg = c.createGain(), g = c.createGain();
+    o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.025);
+    m.frequency.value = f * 2.7; mg.gain.setValueAtTime(f * 1.2, t); mg.gain.exponentialRampToValueAtTime(1, t + d);
+    m.connect(mg); mg.connect(o.frequency);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+    o.connect(g); g.connect(E.inp.perc); o.start(t); m.start(t); o.stop(t + d + 0.03); m.stop(t + d + 0.03);
+  },
+  bass(E, t, ev, Qv, durS){
+    const c = E.ctx, f = mtof(ev.midi), v = amp(ev.vel) * Qv.bassLevel;
+    const lp = c.createBiquadFilter(), g = c.createGain(), sub = c.createOscillator(), sg = c.createGain();
+    sub.type = "sine"; sub.frequency.value = f / 2; sg.gain.value = 0.6;
+    lp.type = "lowpass"; lp.Q.value = 0.7 + Qv.bassRes * 14;
+    const cut = Qv.bassCut, top = Math.min(14000, cut * (1 + Qv.bassEnv * 7));
+    lp.frequency.setValueAtTime(top, t); lp.frequency.exponentialRampToValueAtTime(Math.max(40, cut), t + Math.min(0.35, Math.max(0.06, durS)));
+    env(g, t, v, 0.004, durS, 0.05);
+    const oscs = [];
+    tableOsc(E, ev, f, t, durS, 0, lp, oscs);
+    lp.connect(g); sub.connect(sg); sg.connect(g); g.connect(E.inp.bass);
+    const end = t + durS + 0.4; oscs.push(sub); oscs.forEach(o => { o.start(t); o.stop(end); });
+  },
+  lead(E, t, ev, Qv, durS){
+    const c = E.ctx, f = mtof(ev.midi), v = amp(ev.vel) * Qv.leadLevel;
+    const lp = c.createBiquadFilter(), g = c.createGain(), kind = Qv.leadVoice;
+    lp.type = "lowpass"; lp.Q.value = 0.6 + Qv.leadRes * 12;
+    const cut = Qv.leadCut; let end = t + durS + 0.3;
+    if(kind === "pluck"){ lp.frequency.setValueAtTime(Math.min(14000, cut * 4), t); lp.frequency.exponentialRampToValueAtTime(Math.max(200, cut * 0.6), t + 0.18); durS = Math.min(durS, 0.12); end = t + 0.5; }
+    else lp.frequency.setValueAtTime(cut, t);
+    const oscs = [];
+    if(kind === "fm"){
+      // the carrier is the wavetable; a sine modulator on top
+      const car = [], mod = c.createOscillator(), mg = c.createGain();
+      tableOsc(E, ev, f, t, durS, 0, lp, car);
+      mod.frequency.value = f * 2;
+      mg.gain.setValueAtTime(f * (0.5 + Qv.leadFM * 5), t); mg.gain.exponentialRampToValueAtTime(Math.max(1, f * 0.3 * Qv.leadFM), t + 0.25);
+      mod.connect(mg); car.forEach(o => mg.connect(o.frequency)); oscs.push(...car, mod);
+    } else {
+      [-1, 1].forEach(sd => tableOsc(E, ev, f, t, durS, sd * Qv.leadDetune, lp, oscs));
+    }
+    env(g, t, v * 0.6, 0.004, durS, kind === "pluck" ? 0.25 : 0.14);
+    lp.connect(g); g.connect(E.inp.lead);
+    oscs.forEach(o => { o.start(t); o.stop(end + 0.2); });
+  },
+  pad(E, t, ev, Qv, durS){
+    const c = E.ctx, lp = c.createBiquadFilter(), g = c.createGain();
+    lp.type = "lowpass"; lp.frequency.value = Qv.padCut; lp.Q.value = 0.5;
+    const a = Qv.padAttack, rel = Qv.padRelease, v = amp(ev.vel) * Qv.padLevel / Math.sqrt(ev.notes.length);
+    const hold = Math.max(a + 0.05, durS);
+    env(g, t, v, a, hold, rel);
+    lp.connect(g); g.connect(E.inp.pad);
+    const end = t + hold + rel + 0.1, oscs = [];
+    ev.notes.forEach(m => [-1, 1].forEach(sd => tableOsc(E, ev, mtof(m), t, hold + rel, sd * Qv.padSpread, lp, oscs)));
+    oscs.forEach(o => { o.start(t); o.stop(end); });
+  }
+};
+
+/* ============================ fluid — the drawable score ============================
+   A small stable-fluids solver on the CPU (semi-Lagrangian advection, Jacobi
+   pressure, vorticity confinement), like the Flow Field Plotter's. Particles
+   ride it; their positions are a "uv" points frame, the same type every other
+   tool speaks, and that frame is the score. */
+const FL = (() => {
+  const nx = 128, ny = 57, N = nx * ny;
+  const u = new Float32Array(N), v = new Float32Array(N), u0 = new Float32Array(N), v0 = new Float32Array(N);
+  const p = new Float32Array(N), dv = new Float32Array(N), cu = new Float32Array(N);
+  const fu = new Float32Array(N), fv = new Float32Array(N);              // forces gathered this step
+  const MAXP = 3000;
+  const px = new Float32Array(MAXP), py = new Float32Array(MAXP), age = new Float32Array(MAXP),
+        life = new Float32Array(MAXP), hue = new Float32Array(MAXP), spd = new Float32Array(MAXP), ink = new Float32Array(MAXP);
+  let np = 0, spawnAt = 0, t = 0, energy = 0, inkHue = 0.55;
+  const rnd = M.mulberry32(77);
+  const frame = UnlimiterPorts.makePoints(MAXP, "uv");
+  frame.aspect = 940 / 420;
+  const I = (i, j) => i + j * nx;
+  function sample(f, x, y){
+    x = clamp(x - 0.5, 0, nx - 1.001); y = clamp(y - 0.5, 0, ny - 1.001);
+    const i = x | 0, j = y | 0, a = x - i, b = y - j, k = I(i, j);
+    return (f[k] * (1 - a) + f[k + 1] * a) * (1 - b) + (f[k + nx] * (1 - a) + f[k + nx + 1] * a) * b;
+  }
+  function splat(x, y, fx, fy, r){
+    const r2 = r * r, i0 = Math.max(1, Math.floor(x - r * 2)), i1 = Math.min(nx - 2, Math.ceil(x + r * 2));
+    const j0 = Math.max(1, Math.floor(y - r * 2)), j1 = Math.min(ny - 2, Math.ceil(y + r * 2));
+    for(let j = j0; j <= j1; j++) for(let i = i0; i <= i1; i++){
+      const dx = i + 0.5 - x, dy = j + 0.5 - y, w = Math.exp(-(dx * dx + dy * dy) / r2);
+      fu[I(i, j)] += fx * w; fv[I(i, j)] += fy * w;
+    }
+  }
+  function radial(x, y, s, r){
+    const r2 = r * r;
+    for(let j = 1; j < ny - 1; j++) for(let i = 1; i < nx - 1; i++){
+      const dx = i + 0.5 - x, dy = j + 0.5 - y, d2 = dx * dx + dy * dy;
+      if(d2 > r2 * 6) continue;
+      const d = Math.sqrt(d2) + 0.5, w = Math.exp(-d2 / r2) * s;
+      fu[I(i, j)] += dx / d * w; fv[I(i, j)] += dy / d * w;
+    }
+  }
+  function respawn(k){
+    px[k] = 1 + rnd() * (nx - 2); py[k] = 1 + rnd() * (ny - 2); age[k] = 0;
+    life[k] = (+P.fluidLife || 8) * (0.6 + 0.8 * rnd()); hue[k] = 0.5 + 0.38 * (1 - py[k] / ny); spd[k] = 0; ink[k] = 0;
+  }
+  function setCount(n){
+    n = clamp(n | 0, 1, MAXP);
+    for(let k = np; k < n; k++){ respawn(k); age[k] = rnd() * life[k]; }
+    np = n; spawnAt = spawnAt % np;
+  }
+  function boundary(f, sx, sy){
+    for(let i = 0; i < nx; i++){ f[I(i, 0)] = sy ? -f[I(i, 1)] : f[I(i, 1)]; f[I(i, ny - 1)] = sy ? -f[I(i, ny - 2)] : f[I(i, ny - 2)]; }
+    for(let j = 0; j < ny; j++){ f[I(0, j)] = sx ? -f[I(1, j)] : f[I(1, j)]; f[I(nx - 1, j)] = sx ? -f[I(nx - 2, j)] : f[I(nx - 2, j)]; }
+  }
+  function step(dtReal, Qv){
+    if(np !== Math.round(P.fluidParticles)) setCount(Math.round(P.fluidParticles));
+    const dt = Math.min(0.05, dtReal) * Qv.fluidSpeed;
+    t += dt;
+    // auto stir: three jets wandering on seeded noise paths
+    if(Qv.fluidStir > 0){
+      const sd = (Qv.seed | 0) * 0.13;
+      for(let k = 0; k < 3; k++){
+        const x = nx * (0.1 + 0.8 * M.noise3(k * 3.1 + sd, t * 0.07, 1.7));
+        const y = ny * (0.1 + 0.8 * M.noise3(k * 5.3 + sd, t * 0.07, 8.2));
+        const a = M.noise3(k * 1.9, t * 0.11, 4.4 + sd) * Math.PI * 4;
+        const s = Qv.fluidStir * 70;
+        splat(x, y, Math.cos(a) * s, Math.sin(a) * s, 4);
+      }
+    }
+    for(let k = 0; k < N; k++){ u[k] += fu[k] * dt; v[k] += fv[k] * dt; fu[k] = 0; fv[k] = 0; }
+    // vorticity confinement: keeps the swirls alive on a coarse grid
+    if(Qv.fluidSwirl > 0){
+      for(let j = 1; j < ny - 1; j++) for(let i = 1; i < nx - 1; i++){
+        const k = I(i, j); cu[k] = (v[k + 1] - v[k - 1] - u[k + nx] + u[k - nx]) * 0.5;
+      }
+      const eps = Qv.fluidSwirl * 9;
+      for(let j = 2; j < ny - 2; j++) for(let i = 2; i < nx - 2; i++){
+        const k = I(i, j);
+        let gx = (Math.abs(cu[k + 1]) - Math.abs(cu[k - 1])) * 0.5, gy = (Math.abs(cu[k + nx]) - Math.abs(cu[k - nx])) * 0.5;
+        const l = Math.hypot(gx, gy) + 1e-5; gx /= l; gy /= l;
+        u[k] += eps * gy * cu[k] * dt; v[k] -= eps * gx * cu[k] * dt;
+      }
+    }
+    // advect velocity
+    u0.set(u); v0.set(v);
+    for(let j = 1; j < ny - 1; j++) for(let i = 1; i < nx - 1; i++){
+      const k = I(i, j), x = i + 0.5 - dt * u0[k], y = j + 0.5 - dt * v0[k];
+      u[k] = sample(u0, x, y); v[k] = sample(v0, x, y);
+    }
+    boundary(u, 1, 0); boundary(v, 0, 1);
+    // project: make it divergence-free
+    for(let j = 1; j < ny - 1; j++) for(let i = 1; i < nx - 1; i++){
+      const k = I(i, j); dv[k] = -0.5 * (u[k + 1] - u[k - 1] + v[k + nx] - v[k - nx]); p[k] = 0;
+    }
+    boundary(dv, 0, 0);
+    for(let it = 0; it < 18; it++){
+      for(let j = 1; j < ny - 1; j++) for(let i = 1; i < nx - 1; i++){
+        const k = I(i, j); p[k] = (dv[k] + p[k - 1] + p[k + 1] + p[k - nx] + p[k + nx]) * 0.25;
+      }
+      boundary(p, 0, 0);
+    }
+    const fade = Math.pow(Qv.fluidFade, dtReal * 60);
+    let en = 0;
+    for(let j = 1; j < ny - 1; j++) for(let i = 1; i < nx - 1; i++){
+      const k = I(i, j);
+      u[k] = (u[k] - 0.5 * (p[k + 1] - p[k - 1])) * fade;
+      v[k] = (v[k] - 0.5 * (p[k + nx] - p[k - nx])) * fade;
+      en += u[k] * u[k] + v[k] * v[k];
+    }
+    boundary(u, 1, 0); boundary(v, 0, 1);
+    energy = energy * 0.9 + 0.1 * Math.min(1, Math.sqrt(en / N) / 25);
+    // particles
+    for(let k = 0; k < np; k++){
+      const vx = sample(u, px[k], py[k]), vy = sample(v, px[k], py[k]);
+      px[k] += vx * dt; py[k] += vy * dt; age[k] += dtReal;
+      spd[k] = spd[k] * 0.85 + 0.15 * Math.hypot(vx, vy);
+      if(px[k] < 0.5 || px[k] > nx - 0.5) px[k] = clamp(px[k], 0.5, nx - 0.5);
+      if(py[k] < 0.5 || py[k] > ny - 0.5) py[k] = clamp(py[k], 0.5, ny - 0.5);
+      if(age[k] > life[k]) respawn(k);
+    }
+  }
+  /** The particles as a points frame: u right, v down, z = speed. */
+  const rgb = [0, 0, 0];
+  function toFrame(){
+    UnlimiterPorts.ensurePoints(frame, np, "uv");
+    for(let k = 0; k < np; k++){
+      frame.positions[k * 3] = px[k] / nx; frame.positions[k * 3 + 1] = py[k] / ny;
+      frame.positions[k * 3 + 2] = clamp(spd[k] / 30, 0, 1) * 2 - 1;
+      const a = age[k], L = life[k];
+      frame.presence[k] = Math.min(1, a / 0.4) * Math.min(1, (L - a) / Math.max(0.3, L * 0.2));
+      UnlimiterPoints.hsb2rgb(hue[k] * 360, ink[k] ? 0.4 : 0.65, 1, rgb);
+      frame.colors[k * 3] = rgb[0]; frame.colors[k * 3 + 1] = rgb[1]; frame.colors[k * 3 + 2] = rgb[2];
+      frame.sizes[k] = 1 + Math.min(1, spd[k] / 30) + ink[k] * 0.9;
+    }
+    UnlimiterPorts.bump(frame);
+    return frame;
+  }
+  /** Drawing: push the fluid along the stroke and lay particles on it. */
+  function stroke(x, y, dx, dy, dtS, Qv, erase){
+    const r = Math.max(1.5, Qv.brush * nx);
+    const k = 1 / Math.max(0.008, dtS);
+    splat(x, y, dx * k * 3, dy * k * 3, r);
+    if(erase){
+      for(let q = 0; q < np; q++) if(Math.hypot(px[q] - x, py[q] - y) < r){ px[q] = 1 + rnd() * (nx - 2); py[q] = 1 + rnd() * (ny - 2); }
+      return;
+    }
+    const n = Math.max(1, Math.round(Math.hypot(dx, dy) * 1.5));
+    inkHue = (inkHue + 0.003) % 1;
+    for(let s = 0; s < n; s++){
+      const q = spawnAt; spawnAt = (spawnAt + 1) % Math.max(1, np);
+      const f = s / n;
+      px[q] = clamp(x - dx * f + (rnd() - 0.5) * r, 0.5, nx - 0.5); py[q] = clamp(y - dy * f + (rnd() - 0.5) * r, 0.5, ny - 0.5);
+      age[q] = 0; life[q] = (+P.fluidLife || 8) * 1.6; hue[q] = inkHue; spd[q] = Math.hypot(dx, dy) * k * 0.5; ink[q] = 1;
+    }
+  }
+  function kick(vel, Qv){
+    if(Qv.fluidKick <= 0) return;
+    const x = nx * (0.2 + 0.6 * M.noise3(t * 0.3, 2.2, 1)), y = ny * (0.2 + 0.6 * M.noise3(t * 0.3, 7.7, 1));
+    radial(x, y, Qv.fluidKick * vel * 900, 7);
+  }
+  /** Points from another tool: each one pushes the fluid along its own direction of travel. */
+  const prevPts = { n: 0, x: new Float32Array(512), y: new Float32Array(512), ver: -1 };
+  function stirPoints(fr, strength){
+    if(!fr || strength <= 0) return;
+    const n = Math.min(256, fr.count | 0), stride = (fr.count | 0) / Math.max(1, n);
+    const fresh = fr.version !== prevPts.ver; prevPts.ver = fr.version;
+    for(let i = 0; i < n; i++){
+      const j = Math.floor(i * stride);
+      const xy = toUV(fr, j);
+      const x = xy[0] * nx, y = xy[1] * ny;
+      let tx = 0, ty = 0;
+      if(fr.tangents){
+        const sp = Math.max(0, ((fr.sizes ? fr.sizes[j] : 1) - 1));
+        tx = fr.tangents[j * 3] * sp; ty = fr.tangents[j * 3 + 1] * sp;
+        if(fr.space !== "uv") ty = -ty;
+      } else if(fresh && prevPts.n === n){
+        tx = (x - prevPts.x[i]) * 0.5; ty = (y - prevPts.y[i]) * 0.5;
+      }
+      if(fresh){ prevPts.x[i] = x; prevPts.y[i] = y; }
+      if(tx || ty) splat(x, y, tx * strength * 260, ty * strength * 260, 3);
+    }
+    if(fresh) prevPts.n = n;
+  }
+  function stirField(fd, strength){
+    if(!fd || strength <= 0) return;
+    for(let j = 1; j < ny - 1; j++) for(let i = 1; i < nx - 1; i++){
+      const fi = Math.min(fd.w - 1, (i / nx * fd.w) | 0), fj = Math.min(fd.h - 1, (j / ny * fd.h) | 0);
+      const q = (fi + fj * fd.w) * 2;
+      fu[I(i, j)] += fd.data[q] * nx * strength * 6; fv[I(i, j)] += fd.data[q + 1] * ny * strength * 6;
+    }
+  }
+  function calm(){ u.fill(0); v.fill(0); }
+  function scatter(){ for(let k = 0; k < np; k++){ respawn(k); age[k] = rnd() * life[k]; } }
+  return { nx, ny, u, v, step, toFrame, stroke, kick, stirPoints, stirField, calm, scatter, setCount,
+    get energy(){ return energy; }, get count(){ return np; }, frame };
+})();
+
+/** uv of point j of any frame (3d frames are read front-on). */
+function toUV(fr, j){
+  const p = fr.positions;
+  if(fr.space === "uv") return [p[j * 3], p[j * 3 + 1]];
+  return [clamp((p[j * 3] + 1) / 2, 0, 1), clamp((1 - p[j * 3 + 1]) / 2, 0, 1)];
+}
+
+/* ============================ points in — Rack cable or another tab ============================ */
+let rackPts = null, rackField = null;
+const ptsStats = { count: 0, x: 0.5, y: 0.5, speed: 0, spread: 0, motion: 0, lx: 0.5, ly: 0.5 };
+function inPts(){
+  const sel = $("ptsSel") ? $("ptsSel").value : "auto";
+  if(sel === "auto") return rackPts || (window.UnlimiterLink ? firstLink() : null);
+  if(sel === "rack") return rackPts;
+  return window.UnlimiterLink ? UnlimiterLink.latest(sel) : null;
+}
+function firstLink(){
+  const s = UnlimiterLink.senders().filter(x => x.age < 1.5);
+  return s.length ? UnlimiterLink.latest(s[0].name) : null;
+}
+function updatePtsStats(dt){
+  const fr = inPts(), S = ptsStats;
+  const k = 1 - Math.exp(-dt * 8);
+  if(!fr || !(fr.count > 0)){
+    S.count += (0 - S.count) * k; S.speed += (0 - S.speed) * k; S.motion += (0 - S.motion) * k; return;
+  }
+  const n = Math.min(512, fr.count), stride = fr.count / n;
+  let sx = 0, sy = 0, sp = 0, w = 0;
+  for(let i = 0; i < n; i++){
+    const j = Math.floor(i * stride), pr = fr.presence ? fr.presence[j] : 1; if(pr < 0.2) continue;
+    const xy = toUV(fr, j); sx += xy[0]; sy += xy[1]; w++;
+    sp += fr.sizes ? Math.max(0, fr.sizes[j] - 1) / 3 : 0;
+  }
+  if(!w) return;
+  const cx = sx / w, cy = 1 - sy / w;
+  let spr = 0;
+  for(let i = 0; i < n; i++){ const j = Math.floor(i * stride), xy = toUV(fr, j); spr += Math.hypot(xy[0] - cx, 1 - xy[1] - cy); }
+  S.count += (Math.min(1, w / 200) - S.count) * k;
+  S.x += (cx - S.x) * k; S.y += (cy - S.y) * k;
+  S.speed += (Math.min(1, sp / w) - S.speed) * k;
+  S.spread += (Math.min(1, spr / n * 2) - S.spread) * k;
+  const mv = Math.hypot(cx - S.lx, cy - S.ly) / Math.max(0.001, dt);
+  S.motion += (Math.min(1, mv * 0.6) - S.motion) * k; S.lx = cx; S.ly = cy;
+}
+
+/* ============================ live state ============================ */
+const cv = $("cv"), g2 = cv.getContext("2d");
+let AC = null, E = null, recDest = null, recorder = null, recChunks = [];
+const composer = M.createComposer({ points: UnlimiterPoints });
+let playing = false, nextStepBeat = 0, tGeo = 0, curStep = -1, extDirty = false;
+let timer = 0;
+const queue = [];                       // {t, kind:"hit"|"step", ...} due on the audio clock
+const envs = {}; M.PARTS.forEach(p => envs[p] = 0);
+let flash = new Float32Array(1);
+const LOOKAHEAD = 0.16;
+const capture = { on: false, t0: 0, steps: [], events: [], bpm: 0, dur: 0 };
+
+function ensureAudio(){
+  if(AC) return AC;
+  AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+  recDest = AC.createMediaStreamDestination();
+  E = makeEngine(AC, AC.destination, { extra: recDest });
+  E.setReverb(P.verbSize);
+  applyFx(E, Q, 0.5, AC.currentTime, true);
+  msRefresh();
+  return AC;
+}
+
+/* ---- MIDI out ---- */
+const midi = { access: null, out: null, ch: { kick:10, clap:10, hat:10, perc:10, bass:2, lead:3, pad:4 },
+               drums: { kick:36, clap:39, hat:42, perc:37 }, audio: true };
+function midiSend(data, whenAc){
+  if(!midi.out) return;
+  const ms = performance.now() + Math.max(0, (whenAc - AC.currentTime) * 1000);
+  try{ midi.out.send(data, ms); }catch(e){}
+}
+function midiNotes(ev, whenAc, durS){
+  if(!midi.out) return;
+  const ch = (midi.ch[ev.part] - 1) & 15, vel = Math.max(1, Math.round(ev.vel * 127));
+  const notes = ev.notes || [M.DRUMS.indexOf(ev.part) >= 0 && ev.part !== "perc" ? midi.drums[ev.part] : ev.midi];
+  notes.forEach(n => { midiSend([0x90 | ch, n, vel], whenAc); midiSend([0x80 | ch, n, 0], whenAc + Math.max(0.03, durS)); });
+}
+
+/* ---- trigger ---- */
+function trigger(ev, t, Qv, spb){
+  const durS = ev.dur * spb;
+  stampWave(ev, Qv, t, durS);
+  if(capture.on) capture.events.push({ t: t - capture.t0, ev });
+  if(!audible(ev.part)) return;
+  if(E && midi.audio) VOICE[ev.part](E, t, ev, Qv, durS);
+  midiNotes(ev, t, durS);
+  queue.push({ t, kind: "hit", part: ev.part, vel: ev.vel, idx: ev.idx });
+}
+
+/* ---- which frame is the score right now ---- */
+function scoreFrame(){
+  if(P.scoreSource === "fluid") return FL.toFrame();
+  if(P.scoreSource === "points in") return inPts();
+  return null;                                   // built-in geometry
+}
+
+/* ---- scheduler, slaved to the Drive clock so the whole suite agrees on the beat ---- */
+function tick(){
+  if(!playing || !AC) return;
+  const CD = clockDrive(), C = CD.state.clock, bpm = C.bpm, spb = 60 / bpm;
+  const beatsNow = C.beats;
+  if(nextStepBeat < beatsNow - 0.6 || nextStepBeat > beatsNow + 2) nextStepBeat = Math.ceil(beatsNow * 4) / 4;
+  const horizon = beatsNow + LOOKAHEAD / spb;
+  Q = Drive ? Drive.resolve(P) : P;
+  applyFx(E, Q, spb, AC.currentTime);
+  while(nextStepBeat < horizon){
+    const abs = Math.round(nextStepBeat * 4);
+    const live = P.scoreSource !== "geometry";
+    if(live || abs % 16 === 0 || !composer.lead || extDirty){
+      composer.refresh(Q, tGeo, scoreFrame()); extDirty = false;
+      if(flash.length < composer.frame.count) flash = new Float32Array(composer.frame.capacity || composer.frame.count);
+    }
+    tGeo += Q.geoDrift / 16;
+    let t = AC.currentTime + (nextStepBeat - beatsNow) * spb;
+    if(t < AC.currentTime) t = AC.currentTime + 0.005;
+    const swing = (abs & 1) ? Q.swing * 0.25 * spb : 0;
+    queue.push({ t: t + swing, kind: "step", abs });
+    if(capture.on){
+      if(!capture.steps.length){ capture.t0 = t; capture.bpm = bpm; }
+      capture.steps.push({ t: t - capture.t0, Q: Object.assign({}, Q), spb });
+    }
+    composer.step(Q, abs).forEach(ev => {
+      const j = (Math.random() - 0.5) * Q.humanize * 0.012;
+      const vj = clamp(ev.vel * (1 + (Math.random() - 0.5) * Q.humanize * 0.25), 0.05, 1);
+      trigger(Object.assign({}, ev, { vel: vj }), Math.max(AC.currentTime, t + swing + j), Q, spb);
+    });
+    nextStepBeat += 0.25;
+  }
+  queue.sort((a, b) => a.t - b.t);
+}
+
+function play(){
+  ensureAudio();
+  if(AC.state === "suspended") AC.resume();
+  const C = clockDrive().state.clock;
+  nextStepBeat = Math.ceil(C.beats * 4) / 4;
+  playing = true; composer.lead = null;
+  if(!timer) timer = setInterval(tick, 25);
+  $("playBtn").textContent = "■ Stop"; $("playBtn").classList.add("on");
+}
+function stop(){
+  playing = false;
+  if(timer){ clearInterval(timer); timer = 0; }
+  queue.length = 0;
+  if(capture.on) toggleCapture();
+  $("playBtn").textContent = "▶ Play"; $("playBtn").classList.remove("on");
+}
+$("playBtn").addEventListener("click", () => playing ? stop() : play());
+addEventListener("keydown", e => {
+  if(e.code === "Space" && !/INPUT|SELECT|TEXTAREA|BUTTON/.test((e.target.tagName || ""))){ e.preventDefault(); playing ? stop() : play(); }
+});
+function onStructure(){ if(playing) composer.lead = null; }
+["rows", "cols", "shells", "seed"].forEach(k => rows[k] && rows[k].input.addEventListener("input", onStructure));
+
+function toggleCapture(){
+  if(capture.on){
+    capture.on = false;
+    const lastS = capture.steps[capture.steps.length - 1];
+    capture.dur = lastS ? lastS.t + 0.25 * lastS.spb : 0;
+    $("bCapture").textContent = "● Capture"; $("bCapture").classList.remove("on");
+    $("expFrom").value = capture.events.length ? "capture" : "static";
+    capNote();
+    return;
+  }
+  capture.on = true; capture.steps = []; capture.events = []; capture.dur = 0;
+  $("bCapture").textContent = "■ Stop capture"; $("bCapture").classList.add("on");
+  if(!playing) play();
+}
+$("bCapture").addEventListener("click", toggleCapture);
+function capNote(){
+  if(!capture.events.length) return;
+  const bars = capture.steps.length / 16;
+  $("capNote").innerHTML = "Captured <b>" + bars.toFixed(1) + " bars</b> (" + capture.dur.toFixed(1) + " s, " + capture.events.length +
+    " notes) — ready to export. Capture again to replace it.";
+}
+
+/* ============================ the canvas ============================ */
+const SA = { x: 70, y: 28, w: 940, h: 420 };                  // score area
+const RA = { x: 1030, y: 28, w: 236, h: 420 };                // euclid rings
+const GA = { y: 478, h: 228, lab: 8, mx: 58, sx: 84, bw: 22, x: 112, r: 1236 };   // pattern grid
+const PCOL = { kick:"#e0714f", clap:"#f0b35a", hat:"#d8d36a", perc:"#e88a6a", bass:"#7d8cff", lead:"#c58af0", pad:"#8fb0ff" };
+let lastDraw = performance.now(), lastPanel = 0;
+function drawFrame(now){
+  const dt = Math.min(0.1, (now - lastDraw) / 1000); lastDraw = now;
+  if(!playing) Q = Drive ? Drive.resolve(P) : P;
+  // consume what is now sounding
+  if(AC){
+    const ct = AC.currentTime;
+    while(queue.length && queue[0].t <= ct){
+      const q = queue.shift();
+      if(q.kind === "step") curStep = q.abs;
+      else {
+        envs[q.part] = Math.max(envs[q.part], q.vel);
+        if(q.idx != null && q.idx < flash.length && (q.part === "lead" || q.part === "bass")) flash[q.idx] = 1;
+        if(q.part === "kick" && P.scoreSource === "fluid") FL.kick(q.vel, Q);
+      }
+    }
+  }
+  updatePtsStats(dt);
+  if(P.scoreSource === "fluid"){
+    const fr = inPts();
+    if(fr && P.pointsUse !== "drive only") FL.stirPoints(fr, Q.pointsStir);
+    if(rackField && P.pointsUse !== "drive only") FL.stirField(rackField, Q.pointsStir);
+    FL.step(dt, Q);
+  }
+  const decay = Math.exp(-dt * 7);
+  M.PARTS.forEach(p => { envs[p] *= decay; });
+  for(let i = 0; i < flash.length; i++) flash[i] *= Math.exp(-dt * 3.5);
+  draw();
+  if(now - lastPanel > 120){ lastPanel = now; for(const k in rows) rows[k].refresh(); drawScopes(); refreshPtsUI(); }
+  updateStatus();
+  if(Drive) Drive.pushFrame(cv);
+  requestAnimationFrame(drawFrame);
+}
+
+const fluidImg = document.createElement("canvas"); fluidImg.width = FL.nx; fluidImg.height = FL.ny;
+const fctx = fluidImg.getContext("2d"), fdata = fctx.createImageData(FL.nx, FL.ny);
+const frgb = [0, 0, 0];
+function drawFluid(g){
+  const d = fdata.data;
+  for(let k = 0; k < FL.nx * FL.ny; k++){
+    const vx = FL.u[k], vy = FL.v[k], s = Math.min(1, Math.sqrt(Math.hypot(vx, vy) / 30));
+    const h = (Math.atan2(vy, vx) / 6.2832 + 1) % 1;
+    UnlimiterPoints.hsb2rgb(180 + h * 160, 0.7, s * 0.42, frgb);
+    d[k * 4] = frgb[0] * 255; d[k * 4 + 1] = frgb[1] * 255; d[k * 4 + 2] = frgb[2] * 255; d[k * 4 + 3] = 255;
+  }
+  fctx.putImageData(fdata, 0, 0);
+  g.imageSmoothingEnabled = true; g.drawImage(fluidImg, SA.x, SA.y, SA.w, SA.h);
+}
+
+function draw(){
+  const W = cv.width, H = cv.height, g = g2;
+  g.fillStyle = "#0b0d0e"; g.fillRect(0, 0, W, H);
+  const src = P.scoreSource;
+  const lens = composer.lead, fr = composer.frame;
+  const uvScore = src !== "geometry";
+  g.fillStyle = "#0f1213"; g.fillRect(SA.x, SA.y, SA.w, SA.h);
+  if(src === "fluid") drawFluid(g);
+  const ls = lens ? lens.steps : 32;
+  // the score's points
+  if(src === "fluid" && (!lens || !playing)){
+    drawPoints(g, FL.toFrame(), null);
+  } else if(src === "points in" && !inPts()){
+    g.fillStyle = "#565b60"; g.font = "14px ui-monospace,monospace"; g.textAlign = "center";
+    g.fillText("waiting for points — patch a cable in the Rack, or open Lattice in another tab", SA.x + SA.w / 2, SA.y + SA.h / 2);
+  } else if(src === "points in" && (!lens || !playing)){
+    drawPoints(g, inPts(), null);
+  } else if(lens && fr){
+    drawPoints(g, fr, lens);
+  } else {
+    g.fillStyle = "#565b60"; g.font = "15px ui-monospace,monospace"; g.textAlign = "center";
+    g.fillText("press Play — the geometry is the score", SA.x + SA.w / 2, SA.y + SA.h / 2);
+  }
+  // playhead
+  if(lens && curStep >= 0 && playing){
+    const ph = (((curStep % ls) + ls) % ls) / ls, ax = P.leadTime;
+    g.strokeStyle = "#7fd1c0"; g.lineWidth = 1.2; g.beginPath();
+    if(!uvScore || ax === "x"){ const x = SA.x + ph * SA.w; g.fillStyle = "rgba(127,209,192,.08)"; g.fillRect(x, SA.y, SA.w / ls, SA.h); g.moveTo(x, SA.y); g.lineTo(x, SA.y + SA.h); }
+    else if(ax === "y"){ const y = SA.y + (1 - ph) * SA.h; g.moveTo(SA.x, y); g.lineTo(SA.x + SA.w, y); }
+    else if(ax === "angle"){
+      const a = -Math.PI + ph * Math.PI * 2, cx = SA.x + SA.w / 2, cy = SA.y + SA.h / 2, R = Math.hypot(SA.w, SA.h) / 2;
+      g.save(); g.beginPath(); g.rect(SA.x, SA.y, SA.w, SA.h); g.clip();
+      g.fillStyle = "rgba(127,209,192,.10)"; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, -a - Math.PI * 2 / ls, -a); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(-a) * R, cy + Math.sin(-a) * R); g.stroke(); g.restore();
+      g.beginPath();
+    }
+    g.stroke();
+  }
+  g.strokeStyle = "#20262a"; g.lineWidth = 1; g.strokeRect(SA.x + 0.5, SA.y + 0.5, SA.w - 1, SA.h - 1);
+  g.fillStyle = "#8d9490"; g.font = "11px ui-monospace,monospace"; g.textAlign = "left";
+  g.fillText("score: " + src + " · lead lens time " + P.leadTime + " → pitch " + P.leadPitch +
+    (src === "fluid" ? " · drag to draw, shift-drag to scatter" : ""), SA.x, SA.y - 9);
+  drawRings(g);
+  drawGrid(g);
+}
+function drawPoints(g, fr, lens){
+  if(!fr) return;
+  const n = Math.min(fr.count | 0, lens ? lens.n : 1e9), uv = fr.space === "uv";
+  for(let i = 0; i < n; i++){
+    let x, y;
+    if(uv){ x = SA.x + fr.positions[i * 3] * SA.w; y = SA.y + fr.positions[i * 3 + 1] * SA.h; }
+    else if(lens){ x = SA.x + lens.u[i] * SA.w; y = SA.y + SA.h - 8 - lens.v[i] * (SA.h - 16); }
+    else { const xy = toUV(fr, i); x = SA.x + xy[0] * SA.w; y = SA.y + xy[1] * SA.h; }
+    const pres = fr.presence ? fr.presence[i] : 1;
+    const kept = lens ? lens.kept[i] : 0, f = lens && i < flash.length ? flash[i] : 0;
+    const lift = kept ? 0.45 : 0, c = fr.colors;
+    const r = c ? (c[i*3] * (1 - lift) + lift) * 255 | 0 : 200, gg = c ? (c[i*3+1] * (1 - lift) + lift) * 255 | 0 : 200, b = c ? (c[i*3+2] * (1 - lift) + lift) * 255 | 0 : 200;
+    g.fillStyle = "rgba(" + r + "," + gg + "," + b + "," + ((kept ? 0.95 : uv ? 0.55 : lens ? 0.25 : 0.6) * Math.max(0.15, pres)) + ")";
+    const rad = (kept ? 2.6 : uv ? 1.7 : 1.4) * (uv && fr.sizes ? Math.min(2.2, fr.sizes[i]) : 1);
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    if(f > 0.02){
+      g.fillStyle = "rgba(255,255,255," + (f * 0.9) + ")";
+      g.beginPath(); g.arc(x, y, 3 + f * 12, 0, 6.2832); g.fill();
+    }
+  }
+}
+/** What a track plays this bar, as 16 velocities (0 = silent). The same view the rings and the grid draw. */
+function barPattern(p, bar){
+  const out = new Float32Array(16);
+  if(M.DRUMS.indexOf(p) >= 0){ for(let s = 0; s < 16; s++) out[s] = Q[p + "Level"] > 0 ? M.drumHit(p, s, bar, Q) : 0; return out; }
+  if(p === "bass" && composer.bass){
+    const eu = P.bassRhythm === "euclid" ? M.euclid(Q.bassEK, 16, Q.bassERot) : null;
+    for(let s = 0; s < 16; s++){ const nt = M.pickNote(composer.bass.grid, s, eu ? eu[s] : -1); out[s] = nt ? nt.vel : 0; }
+  } else if(p === "lead" && composer.lead){
+    const ln = composer.leadSteps, base = (bar * 16) % ln;
+    const eu = P.leadRhythm === "euclid" ? M.euclid(Q.leadEK, 16, Q.leadERot) : null;
+    for(let s = 0; s < 16; s++){ const nt = M.pickNote(composer.lead.grid, (base + s) % ln, eu ? eu[s] : -1); out[s] = nt ? nt.vel : 0; }
+  } else if(p === "pad" && Q.padLevel > 0){
+    if(P.padRhythm === "euclid"){ const eu = M.euclid(Q.padEK, 16, Q.padERot); for(let s = 0; s < 16; s++) out[s] = eu[s] ? 0.7 : 0; }
+    else out[0] = 0.7;
+  }
+  return out;
+}
+const RING_POS = [];
+function drawRings(g){
+  const bar = curStep >= 0 ? Math.floor(curStep / 16) : 0, cs = curStep >= 0 && playing ? ((curStep % 16) + 16) % 16 : -1;
+  const cw = RA.w / 2, ch = RA.h / 4;
+  RING_POS.length = 0;
+  M.PARTS.forEach((p, i) => {
+    const col = i < 4 ? 0 : 1, row = i < 4 ? i : i - 4;
+    const cx = RA.x + col * cw + cw / 2, cy = RA.y + row * ch + ch / 2 - 4, R = Math.min(cw, ch) * 0.34;
+    RING_POS.push({ p, cx, cy, R });
+    const on = audible(p), pat = barPattern(p, bar);
+    const synth = M.DRUMS.indexOf(p) < 0;
+    const base = !synth ? M.euclid(Q[p + "K"], 16, Q[p + "Rot"])
+               : P[p + "Rhythm"] === "euclid" ? M.euclid(Q[p + "EK"], 16, Q[p + "ERot"]) : null;
+    g.globalAlpha = on ? 1 : 0.3;
+    g.strokeStyle = "#262c30"; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, R, 0, 6.2832); g.stroke();
+    // polygon through the hits: the euclidean shape
+    g.strokeStyle = PCOL[p]; g.globalAlpha = on ? 0.4 : 0.12; g.beginPath();
+    let first = true;
+    for(let s = 0; s < 16; s++) if(pat[s] > 0){
+      const a = -Math.PI / 2 + s / 16 * Math.PI * 2, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R;
+      if(first){ g.moveTo(x, y); first = false; } else g.lineTo(x, y);
+    }
+    g.closePath(); g.stroke();
+    g.globalAlpha = on ? 1 : 0.3;
+    for(let s = 0; s < 16; s++){
+      const a = -Math.PI / 2 + s / 16 * Math.PI * 2, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R;
+      if(pat[s] > 0){ g.fillStyle = PCOL[p]; g.beginPath(); g.arc(x, y, 2 + pat[s] * 2.5 + (s === cs ? envs[p] * 4 : 0), 0, 6.2832); g.fill(); }
+      else if(base && base[s]){ g.strokeStyle = PCOL[p]; g.beginPath(); g.arc(x, y, 3, 0, 6.2832); g.stroke(); }
+      else { g.fillStyle = "#2a3034"; g.fillRect(x - 1, y - 1, 2, 2); }
+    }
+    if(cs >= 0){
+      const a = -Math.PI / 2 + (cs + 0.5) / 16 * Math.PI * 2;
+      g.strokeStyle = "rgba(232,230,225,.5)"; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * R * 0.8, cy + Math.sin(a) * R * 0.8); g.stroke();
+    }
+    g.fillStyle = PCOL[p]; g.font = "10.5px ui-monospace,monospace"; g.textAlign = "center";
+    g.fillText(p + (mute[p] ? " · M" : solo[p] ? " · S" : ""), cx, cy + R + 15);
+    g.globalAlpha = 1;
+  });
+  g.fillStyle = "#565b60"; g.font = "10px ui-monospace,monospace"; g.textAlign = "left";
+  g.fillText("click a ring: mute · shift-click: solo", RA.x + 4, RA.y + RA.h + 12);
+}
+function drawGrid(g){
+  const rowH = (GA.h - 8) / M.PARTS.length, cw = (GA.r - GA.x) / 16;
+  const bar = curStep >= 0 ? Math.floor(curStep / 16) : 0, cs = curStep >= 0 && playing ? ((curStep % 16) + 16) % 16 : -1;
+  g.fillStyle = "#565b60"; g.font = "10px ui-monospace,monospace"; g.textAlign = "left";
+  g.fillText("DRUMS", GA.lab, GA.y - 6);
+  M.PARTS.forEach((p, ri) => {
+    const y = gridRowY(ri), h = rowH - 4;
+    if(ri === 4){ g.fillStyle = "#565b60"; g.font = "10px ui-monospace,monospace"; g.textAlign = "left"; g.fillText("SYNTHS", GA.lab, y - 3); }
+    const on = audible(p), pat = barPattern(p, bar);
+    g.fillStyle = on ? PCOL[p] : "#4a5056"; g.font = "11px ui-monospace,monospace"; g.textAlign = "left";
+    g.fillText(p, GA.lab, y + h * 0.65);
+    [["M", GA.mx, mute[p], "#e0714f"], ["S", GA.sx, solo[p], "#e8c547"]].forEach(([l, x, st, c]) => {
+      g.fillStyle = st ? c : "#1c2124"; g.fillRect(x, y + 2, GA.bw, h - 4);
+      g.strokeStyle = st ? c : "#2e3338"; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 2.5, GA.bw - 1, h - 5);
+      g.fillStyle = st ? "#121718" : "#8d9490"; g.textAlign = "center"; g.fillText(l, x + GA.bw / 2, y + h * 0.65);
+    });
+    g.globalAlpha = on ? 1 : 0.3;
+    for(let s = 0; s < 16; s++){
+      const x = GA.x + s * cw;
+      g.fillStyle = (s & 3) === 0 ? "#171b1d" : "#131618"; g.fillRect(x + 1, y + 1, cw - 2, h - 2);
+      if(pat[s] > 0){ g.globalAlpha = (on ? 1 : 0.3) * (0.35 + 0.65 * Math.min(1, pat[s])); g.fillStyle = PCOL[p]; g.fillRect(x + 1, y + 1, cw - 2, h - 2); g.globalAlpha = on ? 1 : 0.3; }
+      if(s === cs){ g.strokeStyle = "#e8e6e1"; g.lineWidth = 1; g.strokeRect(x + 1.5, y + 1.5, cw - 3, h - 3); }
+    }
+    g.globalAlpha = 0.9; g.fillStyle = PCOL[p];
+    g.fillRect(GA.r + 6, y + 2, Math.max(0, envs[p]) * 30, h - 4); g.globalAlpha = 1;
+  });
+}
+function gridRowY(ri){ const rowH = (GA.h - 8) / M.PARTS.length; return GA.y + ri * rowH + (ri >= 4 ? 8 : 0); }
+
+/* ---- pointer: draw into the fluid, click M/S and rings ---- */
+function canvasXY(e){
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * cv.width, (e.clientY - r.top) / r.height * cv.height];
+}
+let drag = null;
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = canvasXY(e);
+  const rowH = (GA.h - 8) / M.PARTS.length;
+  for(let ri = 0; ri < M.PARTS.length; ri++){
+    const yy = gridRowY(ri);
+    if(y >= yy && y < yy + rowH - 4){
+      if(x >= GA.mx && x < GA.mx + GA.bw){ toggleMute(M.PARTS[ri]); return; }
+      if(x >= GA.sx && x < GA.sx + GA.bw){ toggleSolo(M.PARTS[ri], e.shiftKey); return; }
+    }
+  }
+  for(const r of RING_POS) if(Math.hypot(x - r.cx, y - r.cy) < r.R + 10){ e.shiftKey ? toggleSolo(r.p, false) : toggleMute(r.p); return; }
+  if(P.scoreSource === "fluid" && x >= SA.x && x < SA.x + SA.w && y >= SA.y && y < SA.y + SA.h){
+    drag = { x, y, t: performance.now(), erase: e.shiftKey };
+    try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  }
+});
+cv.addEventListener("pointermove", e => {
+  const [x, y] = canvasXY(e);
+  cv.classList.toggle("draw", P.scoreSource === "fluid" && x >= SA.x && x < SA.x + SA.w && y >= SA.y && y < SA.y + SA.h);
+  if(!drag) return;
+  const now = performance.now(), sx = FL.nx / SA.w, sy = FL.ny / SA.h;
+  FL.stroke((x - SA.x) * sx, (y - SA.y) * sy, (x - drag.x) * sx, (y - drag.y) * sy, (now - drag.t) / 1000, Q, drag.erase || e.shiftKey);
+  drag.x = x; drag.y = y; drag.t = now;
+});
+const endDrag = () => { drag = null; };
+cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+
+/* ---- wave scopes ---- */
+const scopeBuf = new Float32Array(160);
+function drawScopes(){
+  const t = AC ? AC.currentTime : performance.now() / 1000;
+  SYNTHS.forEach(p => {
+    const sc = scopes[p]; if(!sc || !sc.offsetParent) return;
+    const g = sc.getContext("2d"), W = sc.width, H = sc.height;
+    g.fillStyle = "#15181a"; g.fillRect(0, 0, W, H);
+    const pos = M.wavePos(Q, p, t);
+    const spec = M.wavetable(pos, t, Q[p + "Shimmer"], Q[p + "Rate"], Q.seed, p);
+    M.waveSamples(spec, scopeBuf.length, scopeBuf);
+    g.strokeStyle = "#2a2f33"; g.lineWidth = 1; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+    g.strokeStyle = PCOL[p]; g.lineWidth = 2.5; g.beginPath();
+    const L = scopeBuf.length * 2;
+    for(let i = 0; i < L; i++){
+      const x = i / (L - 1) * W, y = H / 2 - scopeBuf[i % scopeBuf.length] * H * 0.38;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+    const xi = pos / 5 * (W - 8) + 4;
+    g.fillStyle = "rgba(255,255,255,.10)"; g.fillRect(0, H - 6, W, 6);
+    g.fillStyle = PCOL[p]; g.fillRect(xi - 3, H - 6, 6, 6);
+    g.fillStyle = "#8d9490"; g.font = "18px ui-monospace,monospace"; g.textAlign = "right";
+    g.fillText(M.WAVES[Math.min(5, Math.round(pos))] + " " + pos.toFixed(2), W - 8, 22);
+  });
+}
+
+let stT = 0;
+function updateStatus(){
+  const now = performance.now(); if(now - stT < 200) return; stT = now;
+  const bar = curStep >= 0 ? Math.floor(curStep / 16) + 1 : "-";
+  const C = clockDrive().state.clock;
+  $("status").textContent = (playing ? "playing" : AC ? "stopped" : "idle") + " · " + C.bpm.toFixed(1) + " bpm" + (hostDrive ? " (rack)" : "") +
+    " · bar " + bar + (capture.on ? " · ● capturing " + (capture.steps.length / 16).toFixed(1) + " bars" : "") +
+    (midi.out ? " · midi " + midi.out.name : "");
+}
+
+/* ---- points-in UI ---- */
+function refreshPtsUI(){
+  const sel = $("ptsSel"); if(!sel) return;
+  const names = window.UnlimiterLink ? UnlimiterLink.senders().map(s => s.name) : [];
+  const want = ["auto", "rack"].concat(names);
+  const have = Array.from(sel.options).map(o => o.value);
+  if(want.join() !== have.join()){
+    const cur = sel.value; sel.innerHTML = "";
+    want.forEach(v => { const o = document.createElement("option"); o.value = v;
+      o.textContent = v === "auto" ? "auto — Rack cable, else a tab" : v === "rack" ? "Rack cable" : v + " (other tab)"; sel.appendChild(o); });
+    sel.value = want.indexOf(cur) >= 0 ? cur : "auto";
+  }
+  const fr = inPts(), S = ptsStats;
+  $("ptsNote").innerHTML = fr
+    ? "Receiving <b>" + fr.count + "</b> points. Drive sources now: count " + S.count.toFixed(2) + " · x " + S.x.toFixed(2) + " · y " + S.y.toFixed(2) +
+      " · speed " + S.speed.toFixed(2) + " · motion " + S.motion.toFixed(2) + ". Route them in Drive below (<i>Points — …</i>)."
+    : "Nothing arriving. In the Rack, patch Lattice's (or any) <b>points</b> output into Overtone's points input. Outside the Rack, open <b>lattice.html</b> in another tab of this browser — it is found automatically.";
+}
+
+/* ============================ presets ============================ */
+const PRESETS = {
+  "Hypnotic 126": { bpm: 126, sw: { scale: "Minor pentatonic", surface: "torus", placement: "grid" }, p: {} },
+  "Fluid drawing 118": { bpm: 118, sw: { scoreSource: "fluid", leadTime: "x", leadPitch: "y", bassTime: "x", bassPitch: "y", bassRhythm: "euclid", scale: "Dorian", leadVoice: "table" },
+    p: { leadDensity: 0.55, bassEK: 5, padLevel: 0.3, leadMorph: 1.4, leadShimmer: 0.45, delayMix: 0.7, root: 2 } },
+  "Radar 122": { bpm: 122, sw: { scoreSource: "fluid", leadTime: "angle", leadPitch: "radius", leadSteps: "16", bassTime: "angle", bassPitch: "y", scale: "In-sen", leadVoice: "pluck", padRhythm: "euclid" },
+    p: { leadDensity: 0.7, leadOct: 5, fluidStir: 0.5, fluidKick: 0.5, padEK: 3, padTable: 4.4, root: 4 } },
+  "Lattice hands 120": { bpm: 120, sw: { scoreSource: "points in", pointsUse: "stir + drive", leadTime: "x", leadPitch: "y", bassTime: "x", bassPitch: "y", leadRhythm: "euclid", bassRhythm: "euclid", scale: "Hirajoshi" },
+    p: { leadEK: 9, bassEK: 4, leadOct: 4, padLevel: 0.4, verbMix: 0.8, root: 9 } },
+  "Dub drift 108": { bpm: 108, sw: { scale: "Dorian", surface: "sphere", placement: "rings", leadVoice: "fm", delayDiv: "3/16" },
+    p: { kickK: 3, clapK: 1, clapRot: 8, hatK: 5, bassOct: 1, bassDensity: 0.4, leadDensity: 0.25, leadOct: 4, delayMix: 0.85, delayFb: 0.64, verbMix: 0.8, padLevel: 0.5, geoDrift: 0.1, root: 2, leadDly: 0.8 } },
+  "Hirajoshi bells 100": { bpm: 100, sw: { scale: "Hirajoshi", surface: "supershape", placement: "fibonacci", leadVoice: "pluck", leadSteps: "64", delayDiv: "1/8" },
+    p: { kickK: 2, clapK: 0, hatK: 9, percK: 7, leadOct: 5, leadDensity: 0.7, leadSpan: 2.5, leadTable: 5, padLevel: 0.4, root: 7 } },
+  "Acid 134": { bpm: 134, sw: { scale: "Phrygian", surface: "mobius", placement: "jitter", leadVoice: "table", fxFilter: "lowpass" },
+    p: { bassCut: 260, bassRes: 0.8, bassEnv: 0.9, bassDensity: 0.9, bassGate: 0.5, bassTable: 2.9, bassMorph: 0.2, leadLevel: 0.22, leadTable: 3,
+         hatK: 11, hatChaos: 0.5, kickK: 4, geoNoise: 30, root: 4, fxCut: 9000, fxRes: 0.3, fxDrive: 0.25 } }
+};
+const presetSel = $("presetSel");
+Object.keys(PRESETS).forEach(n => { const o = document.createElement("option"); o.value = o.textContent = n; presetSel.appendChild(o); });
+function applyPreset(name, initial){
+  const pr = PRESETS[name]; if(!pr) return;
+  P = Object.assign({}, DEFAULTS, pr.p, pr.sw); Q = P;
+  // loading inside the Rack must not retune the whole room; picking a preset by hand may
+  if(clockDrive() && !(initial && hostDrive)) clockDrive().state.clock.bpm = pr.bpm;
+  refreshAll(); onStructure();
+}
+/** Presets saved by the first Overtone: "leadWave" became a voice plus a wave position. */
+function migrate(j){
+  if(j.leadWave){
+    const w = j.leadWave; delete j.leadWave;
+    j.leadVoice = w === "fm" ? "fm" : w === "pluck" ? "pluck" : "table";
+    if(w === "saw") j.leadTable = 2;
+    if(w === "square") j.leadTable = 3;
+  }
+  return j;
+}
+presetSel.addEventListener("change", () => applyPreset(presetSel.value));
+$("bReseed").addEventListener("click", () => { P.seed = Math.floor(Math.random() * 9999); rows.seed.refresh(); onStructure(); });
+$("bpmIn").addEventListener("change", () => { const v = parseFloat($("bpmIn").value); if(v >= 40 && v <= 220 && clockDrive()) clockDrive().state.clock.bpm = v; });
+function presetJSON(){
+  const out = Object.assign({}, P, { _bpm: clockDrive().state.clock.bpm, _mute: Object.assign({}, mute), _solo: Object.assign({}, solo) });
+  if(Drive) out._drive = Drive.serialize();
+  return out;
+}
+$("bExportPreset").addEventListener("click", () => download(new Blob([JSON.stringify(presetJSON(), null, 1)], { type: "application/json" }), "overtone-preset.json"));
+$("bImportPreset").addEventListener("click", () => $("fPreset").click());
+$("fPreset").addEventListener("change", async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const j = migrate(JSON.parse(await f.text()));
+    if(Drive && j._drive) Drive.load(j._drive);
+    if(j._bpm && clockDrive()) clockDrive().state.clock.bpm = j._bpm;
+    if(j._mute) Object.assign(mute, j._mute);
+    if(j._solo) Object.assign(solo, j._solo);
+    delete j._drive; delete j._bpm; delete j._mute; delete j._solo;
+    P = Object.assign({}, DEFAULTS, j); Q = P; refreshAll(); onStructure(); msRefresh();
+  }catch(err){ $("status").textContent = "preset failed: " + err.message; }
+  e.target.value = "";
+});
+function download(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+$("bVerb").addEventListener("click", () => { if(E) E.setReverb(P.verbSize); });
+$("bOut").addEventListener("click", () => { if(Drive) Drive.openOutput(() => cv); });
+$("bCalm").addEventListener("click", () => FL.calm());
+$("bScatter").addEventListener("click", () => FL.scatter());
+$("bClearInk").addEventListener("click", () => { FL.calm(); FL.scatter(); });
+
+/* ============================ offline render, stems, zip ============================ */
+function wavBlob(buf, bits){
+  bits = bits === 24 ? 24 : 16;
+  const ch = buf.numberOfChannels, n = buf.length, sr = buf.sampleRate, by = bits / 8, bytes = n * ch * by;
+  const ab = new ArrayBuffer(44 + bytes), v = new DataView(ab);
+  const ws = (o, s) => { for(let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, "RIFF"); v.setUint32(4, 36 + bytes, true); ws(8, "WAVE"); ws(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, sr, true); v.setUint32(28, sr * ch * by, true);
+  v.setUint16(32, ch * by, true); v.setUint16(34, bits, true); ws(36, "data"); v.setUint32(40, bytes, true);
+  const data = []; for(let c = 0; c < ch; c++) data.push(buf.getChannelData(c));
+  let o = 44;
+  for(let i = 0; i < n; i++) for(let c = 0; c < ch; c++){
+    const s = clamp(data[c][i], -1, 1);
+    if(bits === 16){ v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2; }
+    else { const x = Math.round(s < 0 ? s * 0x800000 : s * 0x7fffff); v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255); o += 3; }
+  }
+  return new Blob([ab], { type: "audio/wav" });
+}
+function snapshotFrame(f){
+  if(!f) return null;
+  const n = f.count | 0;
+  return { type: "points", space: f.space, count: n, version: 1,
+    positions: f.positions.slice(0, n * 3), colors: f.colors ? f.colors.slice(0, n * 3) : null, presence: f.presence ? f.presence.slice(0, n) : null };
+}
+/** A take to render: steps (time + the parameters at that moment) and the notes in it. */
+function staticTake(bars){
+  const Qv = Object.assign({}, P), bpm = clockDrive().state.clock.bpm, spb = 60 / bpm;
+  const comp = M.createComposer({ points: UnlimiterPoints }), frozen = snapshotFrame(scoreFrame());
+  const steps = [], events = []; let tg = 0;
+  for(let abs = 0; abs < bars * 16; abs++){
+    if(abs % 16 === 0) comp.refresh(Qv, tg, frozen);
+    tg += Qv.geoDrift / 16;
+    const t = abs * 0.25 * spb, sw = (abs & 1) ? Qv.swing * 0.25 * spb : 0;
+    steps.push({ t, Q: Qv, spb });
+    comp.step(Qv, abs).forEach(ev => events.push({ t: t + sw, ev: stampWave(ev, Qv, t + sw, ev.dur * spb) }));
+  }
+  return { steps, events, bpm, dur: bars * 4 * spb };
+}
+const qdr = Qv => Math.round(Qv.fxDrive * 50) / 50, qcr = Qv => Math.round(Qv.fxCrush * 40) / 40;
+/** Render a take offline. parts: the tracks to include; stem: bypass compressor + clip; fx: keep master FX on stems. */
+async function renderTake(take, parts, opts){
+  opts = opts || {};
+  const sr = 44100, tail = 4, secs = take.dur + tail;
+  const oc = new OfflineAudioContext(2, Math.ceil(secs * sr), sr);
+  const eng = makeEngine(oc, oc.destination, { stem: !!opts.stem, noFx: !!opts.stem && !opts.fx });
+  const first = take.steps[0] ? take.steps[0].Q : P;
+  eng.setReverb(first.verbSize);
+  applyFx(eng, first, take.steps[0] ? take.steps[0].spb : 0.5, 0, true);
+  // the mixer and FX follow the take step by step; the curves (drive, crush) can't ramp, so they change at suspends
+  let prev = first;
+  const suspends = new Set();
+  for(let i = 1; i < take.steps.length; i++){
+    const s = take.steps[i], Qv = s.Q;
+    if(Qv === prev) continue;
+    eng.cur.dr = qdr(Qv); eng.cur.cr = qcr(Qv);          // ramps only here; curves below
+    eng.cur.ft = Qv.fxFilter === "off" ? "allpass" : Qv.fxFilter;
+    applyFx(eng, Qv, s.spb, s.t);
+    if(qdr(Qv) !== qdr(prev) || qcr(Qv) !== qcr(prev) || Qv.fxFilter !== prev.fxFilter){
+      const at = Math.round(s.t * sr / 128) * 128 / sr;
+      if(at > 0 && at < secs && !suspends.has(at)){
+        suspends.add(at);
+        oc.suspend(at).then(() => {
+          eng.filt.type = Qv.fxFilter === "off" ? "allpass" : Qv.fxFilter;
+          eng.drv.curve = qdr(Qv) > 0 ? driveCurve(qdr(Qv)) : null; eng.drvGain.gain.setValueAtTime(1 - qdr(Qv) * 0.35, at);
+          eng.crush.curve = qcr(Qv) > 0 ? crushCurve(qcr(Qv)) : null;
+          oc.resume();
+        });
+      }
+    }
+    prev = Qv;
+  }
+  if(first.fxFilter !== undefined){ eng.filt.type = first.fxFilter === "off" ? "allpass" : first.fxFilter; }
+  eng.drv.curve = qdr(first) > 0 ? driveCurve(qdr(first)) : null;
+  eng.crush.curve = qcr(first) > 0 ? crushCurve(qcr(first)) : null;
+  // the notes, each with the parameters of the step it fell in
+  let si = 0;
+  take.events.forEach(({ t, ev }) => {
+    if(parts && parts.indexOf(ev.part) < 0) return;
+    while(si + 1 < take.steps.length && take.steps[si + 1].t <= t + 1e-6) si++;
+    const st = take.steps[si] || { Q: P, spb: 0.5 };
+    if(t >= 0 && t < secs - 0.1) VOICE[ev.part](eng, t, ev, st.Q, ev.dur * st.spb);
+  });
+  return oc.startRendering();
+}
+/* ---- a minimal zip writer (stored, no compression — WAVs barely compress anyway) ---- */
+const CRC = (() => { const t = new Uint32Array(256); for(let n = 0; n < 256; n++){ let c = n; for(let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8){ let c = 0xFFFFFFFF; for(let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipBlob(files){            // [{name, data: Uint8Array}]
+  const parts = [], central = []; let off = 0;
+  const enc = new TextEncoder();
+  for(const f of files){
+    const nm = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true);
+    h.setUint32(14, crc, true); h.setUint32(18, sz, true); h.setUint32(22, sz, true); h.setUint16(26, nm.length, true);
+    parts.push(new Uint8Array(h.buffer), nm, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+    c.setUint32(16, crc, true); c.setUint32(20, sz, true); c.setUint32(24, sz, true); c.setUint16(28, nm.length, true);
+    c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), nm);
+    off += 30 + nm.length + sz;
+  }
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: "application/zip" });
+}
+function currentTake(){
+  if($("expFrom").value === "capture" && capture.events.length && !capture.on)
+    return { steps: capture.steps, events: capture.events, bpm: capture.bpm, dur: capture.dur };
+  const bars = clamp(parseInt($("bounceBars").value, 10) || 8, 1, 128);
+  return staticTake(bars);
+}
+function takeMidi(take){
+  const ch = {}; M.PARTS.forEach(p => { ch[p] = midi.ch[p] - 1; });
+  const drumNotes = { kick: 36, clap: 39, hat: 42, perc: 37 }, evs = [];
+  take.events.forEach(({ t, ev }) => {
+    const beat = Math.max(0, t) * take.bpm / 60, base = { part: ev.part, beat, dur: ev.dur, vel: ev.vel };
+    if(ev.notes) ev.notes.forEach(m => evs.push(Object.assign({}, base, { midi: m })));
+    else evs.push(Object.assign(base, { midi: M.DRUMS.indexOf(ev.part) >= 0 && ev.part !== "perc" ? drumNotes[ev.part] : ev.midi }));
+  });
+  return M.toMidiFile(evs, take.bpm, ch);
+}
+let exporting = false;
+async function exportStems(opts){
+  if(exporting) return null; exporting = true;
+  opts = opts || {};
+  try{
+    const take = currentTake(), bits = parseInt($("expBits").value, 10), fx = $("expFx").checked;
+    const used = M.PARTS.filter(p => take.events.some(e => e.ev.part === p));
+    const files = [], stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-"), base = "overtone-" + stamp;
+    const toU8 = async b => new Uint8Array(await b.arrayBuffer());
+    const say = s => { $("status").textContent = s; };
+    for(let i = 0; i < used.length; i++){
+      say("rendering stem " + (i + 1) + "/" + used.length + " — " + used[i] + "…");
+      const buf = await renderTake(take, [used[i]], { stem: true, fx });
+      files.push({ name: base + "/" + String(i + 1).padStart(2, "0") + "-" + used[i] + ".wav", data: await toU8(wavBlob(buf, bits)) });
+    }
+    say("rendering the mix…");
+    const mixParts = M.PARTS.filter(audible);
+    const mix = await renderTake(take, mixParts, {});
+    files.push({ name: base + "/00-mix.wav", data: await toU8(wavBlob(mix, bits)) });
+    files.push({ name: base + "/overtone.mid", data: takeMidi(take) });
+    files.push({ name: base + "/preset.json", data: new TextEncoder().encode(JSON.stringify(presetJSON(), null, 1)) });
+    files.push({ name: base + "/README.txt", data: new TextEncoder().encode(
+      "Overtone stems — " + take.bpm.toFixed(2) + " bpm, 44.1 kHz, " + bits + "-bit, " + take.dur.toFixed(2) + " s plus a 4 s tail.\n" +
+      "Every stem starts at 0:00 — drop them all in at bar 1 and they line up.\n" +
+      "Stems carry their own pan and delay/reverb sends" + (fx ? " and the master filter / drive / crush / width" : "") + ", without the master compressor and clip.\n" +
+      "00-mix.wav is the full chain (tracks: " + mixParts.join(", ") + ").\n") });
+    say("zipping…");
+    const zip = zipBlob(files);
+    if(!opts.noDownload) download(zip, base + ".zip");
+    say("exported " + used.length + " stems + mix (" + (zip.size / 1048576).toFixed(1) + " MB)");
+    exporting = false;
+    return { zip, files: files.map(f => ({ name: f.name, size: f.data.length })) };
+  } catch(err){ $("status").textContent = "export failed: " + err.message; console.error(err); exporting = false; return null; }
+}
+$("bStems").addEventListener("click", () => exportStems());
+$("bStems2").addEventListener("click", () => exportStems());
+$("bMidi").addEventListener("click", () => download(new Blob([takeMidi(currentTake())], { type: "audio/midi" }), "overtone-" + Date.now() + ".mid"));
+$("bWav").addEventListener("click", async () => {
+  $("status").textContent = "rendering mix…";
+  const take = currentTake(), buf = await renderTake(take, M.PARTS.filter(audible), {});
+  download(wavBlob(buf, parseInt($("expBits").value, 10)), "overtone-mix-" + Date.now() + ".wav");
+  $("status").textContent = "mix rendered";
+});
+$("bRec").addEventListener("click", () => {
+  ensureAudio();
+  if(recorder && recorder.state === "recording"){ recorder.stop(); return; }
+  recChunks = [];
+  const mime = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+  recorder = new MediaRecorder(recDest.stream, mime ? { mimeType: mime } : undefined);
+  recorder.ondataavailable = e => { if(e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => { download(new Blob(recChunks, { type: recorder.mimeType }), "overtone-" + Date.now() + (recorder.mimeType.indexOf("ogg") >= 0 ? ".ogg" : ".webm")); $("bRec").textContent = "● Record live"; $("bRec").classList.remove("warm"); };
+  recorder.start(); $("bRec").textContent = "■ Stop recording"; $("bRec").classList.add("warm");
+  if(!playing) play();
+});
+
+/* ============================ midi panel ============================ */
+(function buildMidi(){
+  const host = $("g-midi");
+  host.innerHTML =
+    '<div class="row"><label>Port</label><div class="ctl"><select id="midiSel"><option value="">— off —</option></select></div></div>' +
+    '<div class="row"><label>Internal audio</label><div class="ctl"><input type="checkbox" id="midiAudio" checked></div></div>' +
+    '<div class="btnrow"><button id="bMidiOn">Enable Web MIDI</button></div>' +
+    '<div class="subhead">Channel per part (1–16) — also used in exported .mid files</div><div class="chgrid" id="chgrid"></div>' +
+    '<div class="note">Drums send kick 36, clap 39, hat 42; perc, bass, lead and pad send the pitches they play. Muted tracks send nothing. Needs https or localhost and a Chromium browser. Tempo is not sent — slave the hardware to the Drive clock, or set the same BPM.</div>';
+  const grid = $("chgrid");
+  M.PARTS.forEach(p => {
+    const d = document.createElement("div"); d.innerHTML = p.slice(0, 4) + '<input type="number" min="1" max="16" value="' + midi.ch[p] + '">';
+    d.querySelector("input").addEventListener("change", e => { midi.ch[p] = clamp(parseInt(e.target.value, 10) || 1, 1, 16); });
+    grid.appendChild(d);
+  });
+  $("midiAudio").addEventListener("change", e => { midi.audio = e.target.checked; });
+  $("bMidiOn").addEventListener("click", async () => {
+    if(!navigator.requestMIDIAccess){ $("status").textContent = "Web MIDI is not available in this browser"; return; }
+    try{
+      midi.access = await navigator.requestMIDIAccess();
+      const sel = $("midiSel"); sel.innerHTML = '<option value="">— off —</option>';
+      midi.access.outputs.forEach(o => { const op = document.createElement("option"); op.value = o.id; op.textContent = o.name; sel.appendChild(op); });
+      sel.onchange = () => { midi.out = sel.value ? midi.access.outputs.get(sel.value) : null; };
+    }catch(err){ $("status").textContent = "MIDI blocked: " + (location.protocol === "file:" ? "serve over localhost or https" : err.message); }
+  });
+})();
+
+/* ============================ drive sources, dice, ports, link ============================ */
+const LABEL = { kick: "Kick", clap: "Clap", hat: "Hat", perc: "Perc", bass: "Bass", lead: "Lead", pad: "Pad" };
+const SOURCES = [];
+M.PARTS.forEach(p => SOURCES.push(["music." + p, "Music — " + LABEL[p] + " hit", () => envs[p]]));
+SOURCES.push(["music.energy", "Music — energy", () => Math.min(1, M.PARTS.reduce((a, p) => a + envs[p], 0) / 3)]);
+SOURCES.push(["music.step", "Music — bar position", () => curStep >= 0 ? (((curStep % 16) + 16) % 16) / 16 : 0]);
+const lvlBuf = new Uint8Array(1024);
+SOURCES.push(["music.level", "Music — output level", () => {
+  if(!E) return 0; E.analyser.getByteTimeDomainData(lvlBuf);
+  let m = 0; for(let i = 0; i < lvlBuf.length; i += 4) m = Math.max(m, Math.abs(lvlBuf[i] - 128)); return Math.min(1, m / 90);
+}]);
+[["count", "Points — count"], ["x", "Points — centre x"], ["y", "Points — centre y"], ["speed", "Points — speed"],
+ ["spread", "Points — spread"], ["motion", "Points — motion"]].forEach(([k, l]) => SOURCES.push(["points." + k, l, () => ptsStats[k]]));
+SOURCES.push(["fluid.energy", "Fluid — energy", () => P.scoreSource === "fluid" ? FL.energy : 0]);
+if(Drive){
+  Drive.mountPanel($("g-drive"));
+  SOURCES.forEach(([id, label, get]) => Drive.registerSource(id, label, get));
+} else $("g-drive").innerHTML = '<div class="note">unlimiter-drive.js was not found next to this file.</div>';
+// inside the Rack: the same signals appear in its Source nodes, prefixed so they can't collide
+if(hostDrive && typeof hostDrive.registerSource === "function"){
+  SOURCES.forEach(([id, label, get]) => { try{ hostDrive.registerSource("overtone." + id, "Overtone · " + label, get); }catch(e){} });
+  addEventListener("pagehide", () => SOURCES.forEach(([id]) => { try{ hostDrive.unregisterSource("overtone." + id); }catch(e){} }));
+}
+if(typeof UnlimiterBus !== "undefined"){
+  try{
+    M.PARTS.forEach(p => UnlimiterBus.register({ id: "music." + p, type: "envelope", range: [0, 1] }));
+    setInterval(() => M.PARTS.forEach(p => UnlimiterBus.publish("music." + p, envs[p])), 33);
+  }catch(e){}
+}
+
+let dice = null;
+if(window.UnlimiterDice && Drive){
+  dice = UnlimiterDice.create({
+    tool: "overtone",
+    get: k => P[k], set: (k, v) => { P[k] = v; },
+    params: UnlimiterDice.fromDrive(Drive, k => rows[k] && rows[k].input),
+    refresh: k => rows[k] && rows[k].refresh(),
+    switches: M.SWITCHES.filter(s => s.key !== "scoreSource" && s.key !== "pointsUse").map(s => ({ key: s.key, label: s.label, el: switchEls[s.key] })),
+    drive: Drive,
+    off: ["master", "delayFb", "fxCrush", "fxDrive", "*Pan"],
+    ranges: { delayFb: [0.2, 0.75], master: [0.7, 0.85], fxCut: [600, 18000] }
+  });
+  dice.mountPanel($("g-dice"));
+} else $("g-dice").innerHTML = '<div class="note">unlimiter-dice.js was not found.</div>';
+
+// ports: the score and the fluid's particles go out as points; points and a field come in
+let scoreOut = null;
+function getScoreOut(){
+  const lens = composer.lead, fr = composer.frame; if(!lens || !fr) return null;
+  const n = Math.min(lens.n, fr.count);
+  scoreOut = UnlimiterPorts.ensurePoints(scoreOut, n, "uv");
+  scoreOut.aspect = SA.w / SA.h; scoreOut.count = n;
+  const uv = fr.space === "uv";
+  for(let i = 0; i < n; i++){
+    scoreOut.positions[i*3] = uv ? fr.positions[i*3] : lens.u[i];
+    scoreOut.positions[i*3+1] = uv ? fr.positions[i*3+1] : 1 - lens.v[i];
+    scoreOut.positions[i*3+2] = lens.w[i] * 2 - 1;
+    const f = i < flash.length ? flash[i] : 0;
+    if(fr.colors){ scoreOut.colors[i*3] = fr.colors[i*3]; scoreOut.colors[i*3+1] = fr.colors[i*3+1]; scoreOut.colors[i*3+2] = fr.colors[i*3+2]; }
+    scoreOut.sizes[i] = 1 + f * 5; scoreOut.presence[i] = lens.kept[i] ? 1 : 0.12;
+  }
+  UnlimiterPorts.bump(scoreOut);
+  return scoreOut;
+}
+if(window.UnlimiterPorts){
+  UnlimiterPorts.publish({
+    tool: "overtone", label: "Overtone",
+    outputs: {
+      out:       { type: "image",  label: "image", get: () => cv },
+      score:     { type: "points", label: "score", get: getScoreOut },
+      particles: { type: "points", label: "fluid particles", get: () => P.scoreSource === "fluid" ? FL.frame : null }
+    },
+    inputs: {
+      points: { type: "points", label: "points", set: f => { rackPts = f && (f.count | 0) > 0 ? f : null; extDirty = true; } },
+      field:  { type: "field",  label: "field (stirs the fluid)", set: f => { rackField = f || null; } }
+    }
+  });
+}
+if(window.UnlimiterLink) UnlimiterLink.listen(() => refreshPtsUI(), null);
+
+/* a small handle for tests and for the console */
+window.Overtone = { P: () => P, Q: () => Q, composer, renderTake, staticTake, exportStems, capture, FL, ptsStats, toggleCapture,
+  setP: o => { Object.assign(P, o); refreshAll(); onStructure(); }, mute, solo, toggleMute, toggleSolo, audible,
+  engine: () => E, ctx: () => AC, play, stop, isPlaying: () => playing, envs, wavBlob, zipBlob, crc32, inPts, applyPreset };
+
+applyPreset("Hypnotic 126", true);
+requestAnimationFrame(drawFrame);
+</script>
+</body>
+</html>

@@ -74,9 +74,6 @@ input[type=range]{ width:100%; accent-color:var(--env); }
 #nogpu b{ color:var(--text); font-weight:500; }
 #drop{ position:fixed; inset:0; z-index:8; display:none; place-items:center; background:rgba(20,22,29,.7); border:2px dashed var(--env); font-size:1rem; color:var(--env); }
 @media (max-width:820px){ #paramPanel{ display:none; } .panel{ width:200px; } }
-/* embed mode: the rack supplies the controls, so the renderer shows only the view.
-   Panels stay in the DOM (the API and their listeners keep working) but hidden. */
-body.embed #topbar, body.embed #srcPanel, body.embed #paramPanel{ display:none; }
 </style>
 </head>
 <body>
@@ -878,8 +875,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
 `;
 
 const Renderer = (() => {
-  let device = null, context = null, pipeline = null, pipelineHDR = null, format = null;
-  let splatGroup0Layout = null, splatGroup1Layout = null;
+  let device = null, context = null, pipeline = null, format = null;
   let uniformBuf = null, globalBind = null;
   let initPipeline = null, bitonicPipeline = null, scatterPipeline = null;
   let raymarchPipeline = null, rmGlobalBuf = null, rmGlobalBind = null;
@@ -908,40 +904,25 @@ const Renderer = (() => {
     context.configure({ device, format, alphaMode:"opaque" });
 
     const module = device.createShaderModule({ code: SHADER });
-    // explicit layouts shared by both splat pipeline variants, so one set of
-    // bind groups serves the direct (canvas-format) and offscreen (rgba16float) paths
-    splatGroup0Layout = device.createBindGroupLayout({ entries: [
-      { binding:0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer:{ type:"uniform" } },
-    ]});
-    splatGroup1Layout = device.createBindGroupLayout({ entries: [
-      { binding:0, visibility: GPUShaderStage.VERTEX, buffer:{ type:"read-only-storage" } },
-      { binding:1, visibility: GPUShaderStage.VERTEX, buffer:{ type:"read-only-storage" } },
-      { binding:2, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer:{ type:"uniform" } },
-      { binding:3, visibility: GPUShaderStage.VERTEX, buffer:{ type:"read-only-storage" } },
-    ]});
-    const splatLayout = device.createPipelineLayout({ bindGroupLayouts: [splatGroup0Layout, splatGroup1Layout] });
-    const splatBlend = {
-      color: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
-      alpha: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
-    };
-    const splatDepth = { format:"depth24plus", depthWriteEnabled:false, depthCompare:"less-equal" };
     pipeline = device.createRenderPipeline({
-      layout: splatLayout,
+      layout: "auto",
       vertex: { module, entryPoint: "vs" },
-      fragment: { module, entryPoint: "fs", targets: [{ format, blend: splatBlend }] },
+      fragment: {
+        module, entryPoint: "fs",
+        targets: [{
+          format,
+          blend: {
+            color: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
+            alpha: { srcFactor:"one", dstFactor:"one-minus-src-alpha", operation:"add" },
+          },
+        }],
+      },
       primitive: { topology:"triangle-list", cullMode:"none" },
-      depthStencil: splatDepth,
-    });
-    pipelineHDR = device.createRenderPipeline({
-      layout: splatLayout,
-      vertex: { module, entryPoint: "vs" },
-      fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float", blend: splatBlend }] },
-      primitive: { topology:"triangle-list", cullMode:"none" },
-      depthStencil: splatDepth,
+      depthStencil: { format:"depth24plus", depthWriteEnabled:false, depthCompare:"less-equal" },
     });
     uniformBuf = device.createBuffer({ size: 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     globalBind = device.createBindGroup({
-      layout: splatGroup0Layout,
+      layout: pipeline.getBindGroupLayout(0),
       entries: [{ binding:0, resource:{ buffer: uniformBuf } }],
     });
 
@@ -1124,7 +1105,7 @@ const Renderer = (() => {
       : device.createBuffer({ size: 48, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     if(srcData.sh) device.queue.writeBuffer(shBuf, 0, srcData.sh);
     const bind = device.createBindGroup({
-      layout: splatGroup1Layout,
+      layout: pipeline.getBindGroupLayout(1),
       entries: [
         { binding:0, resource:{ buffer: splatBuf } },
         { binding:1, resource:{ buffer: orderBuf } },
@@ -1136,10 +1117,6 @@ const Renderer = (() => {
   }
   function writeOrder(gpuSrc, orderArray){
     device.queue.writeBuffer(gpuSrc.orderBuf, 0, orderArray);
-  }
-  // re-upload a source's primitive data in place (live sources: the rack mix feed)
-  function updateSourceGPU(gpuSrc, packed){
-    device.queue.writeBuffer(gpuSrc.splatBuf, 0, packed);
   }
   function writeSrcU(gpuSrc, tintR, tintG, tintB, opacity, kind, pointSize, animAmp, seed, shOn){
     device.queue.writeBuffer(gpuSrc.srcUBuf, 0, new Float32Array([tintR, tintG, tintB, opacity, kind, pointSize, animAmp, seed, shOn || 0, 0, 0, 0]));
@@ -1309,7 +1286,7 @@ const Renderer = (() => {
         pass.drawIndexed(m.gpu.indexCount);
       }
     }
-    pass.setPipeline(useOffscreen ? pipelineHDR : pipeline);
+    pass.setPipeline(pipeline);
     pass.setBindGroup(0, globalBind);
     for(const d of drawList){
       pass.setBindGroup(1, d.gpu.bind);
@@ -1351,7 +1328,7 @@ const Renderer = (() => {
 
   return {
     init, resize, frame,
-    createSourceGPU, writeOrder, writeSrcU, destroySourceGPU, updateSourceGPU,
+    createSourceGPU, writeOrder, writeSrcU, destroySourceGPU,
     createSortGPU, runSort, destroySortGPU,
     createRaymarchGPU, destroyRaymarchGPU,
     createMeshGPU, destroyMeshGPU,
@@ -1523,76 +1500,6 @@ function genShell(){
   }
   src.pointSize = 1.6;
   return finalizeSource(src);
-}
-
-/* ============================================================
-   Live source — the rack mix as a volumetric relief of points.
-   A 2D mix canvas is sampled on a fixed grid: luminance becomes
-   depth + opacity, pixel color becomes point color. Positions for
-   x/y are built once; only z, color and alpha change per frame,
-   so the per-frame cost is one writeBuffer of an existing source.
-   Uses the pointcloud kind, so no shader path changes.
-   ============================================================ */
-const MIX_W = 160, MIX_H = 90;
-function genMixSource(){
-  const n = MIX_W * MIX_H;
-  const src = makeSource("pointcloud", "Rack mix (live)", n);
-  src.isLive = true;
-  src.pointSize = 2.4;
-  src.relief = 0.55;
-  src.gain = 1.0;
-  const P = src.packed, POS = src.positions;
-  const ar = MIX_W / MIX_H;
-  for(let y = 0; y < MIX_H; y++) for(let x = 0; x < MIX_W; x++){
-    const i = y * MIX_W + x;
-    const px = (x / (MIX_W - 1) - 0.5) * 2 * ar * 0.55;
-    const py = -(y / (MIX_H - 1) - 0.5) * 2 * 0.55;
-    POS[i*3] = px; POS[i*3+1] = py; POS[i*3+2] = 0;
-    const o = i * 16;
-    P[o] = px; P[o+1] = py; P[o+2] = 0;
-    P[o+4] = 0; P[o+5] = 0; P[o+6] = 0; P[o+7] = 0;
-  }
-  finalizeSource(src);
-  // fixed bounds: z animates, so a bbox measured at z=0 would be degenerate
-  const hw = ar * 0.55, hh = 0.55, hz = 1.0;
-  src.bbox = [-hw, -hh, -hz, hw, hh, hz];
-  src.centroid = [0, 0, 0];
-  src.radius = Math.hypot(hw, hh, hz);
-  return src;
-}
-function updateMixSource(src, data){
-  const P = src.packed, POS = src.positions;
-  const relief = src.relief, gain = src.gain;
-  const n = MIX_W * MIX_H;
-  for(let i = 0; i < n; i++){
-    const r = data[i*4] / 255, g = data[i*4+1] / 255, b = data[i*4+2] / 255;
-    const lum = 0.299*r + 0.587*g + 0.114*b;
-    const z = (lum - 0.5) * 2 * relief;
-    const o = i * 16;
-    P[o+2] = z; POS[i*3+2] = z;
-    P[o+4] = r * gain; P[o+5] = g * gain; P[o+6] = b * gain;
-    P[o+7] = lum > 0.015 ? Math.min(1, 0.12 + lum * 1.25) : 0;
-  }
-  src.lastSortFwd = [0, 0, 0]; // depth changed — force a resort next frame
-}
-
-/* ============================================================
-   Live source — real 3D points from the rack (unlimiter-ports.js).
-   Allocated once at a power-of-two capacity and reused. The GPU sort
-   bakes its point count in at creation, so the count never changes:
-   slots past the live count are written invisible (alpha 0), and the
-   source is only rebuilt when a frame outgrows its capacity.
-   ============================================================ */
-function genLivePoints(capacity){
-  const src = makeSource("pointcloud", "Rack points (live)", capacity);
-  src.isLive = true;
-  src.pointSize = 2.2;
-  finalizeSource(src);
-  // points arrive in unit space; fixed bounds, so a moving cloud doesn't refit the camera
-  src.bbox = [-1.2, -1.2, -1.2, 1.2, 1.2, 1.2];
-  src.centroid = [0, 0, 0];
-  src.radius = Math.hypot(1.2, 1.2, 1.2);
-  return src;
 }
 
 /* ---- procedural: GI test scene (meshes lit by the volumes) ---- */
@@ -2024,14 +1931,6 @@ function loadPlyFile(file){
   const ok = await Renderer.init().catch(() => false);
   if(!ok){
     document.getElementById("nogpu").style.display = "grid";
-    // Still publish the API so a host page (the rack) gets a definite answer
-    // instead of waiting forever for a renderer that will never start.
-    window.UnlimiterVolumeAPI = {
-      ready: false, reason: "webgpu-unavailable",
-      pushMixFrame(){ return false; }, setMix(){}, setParam(){},
-      params(){ return []; }, addScene(){}, clearScene(){}, hasMix(){ return false; },
-      pushPoints(){ return false; }, hasPoints(){ return false; },
-    };
     return;
   }
   UI.buildSourceList();
@@ -2065,93 +1964,9 @@ function loadPlyFile(file){
     setTimeout(() => beatDot.classList.remove("hit"), 90);
   });
 
-  // opening scene: a splat cloud + a voxel field, proving multi-source compositing.
-  // In embed mode (the rack hosts this in an iframe) the scene starts empty —
-  // the rack's live mix becomes the first source instead.
-  const EMBED = new URLSearchParams(location.search).has("embed");
-  if(EMBED){
-    document.body.classList.add("embed");
-  } else {
-    Scene.add(genGalaxy());
-    Scene.add(genNebula());
-  }
-
-  /* ---- public API: how the rack (or any host page) drives this renderer ---- */
-  let mixSrc = null, mixScratch = null, mixCtx = null;
-  let ptsSrc = null, ptsLive = 0;
-  window.UnlimiterVolumeAPI = {
-    /** Push a 2D canvas (the rack mix) in as a live volumetric source. */
-    pushMixFrame(srcCanvas){
-      if(!srcCanvas || !srcCanvas.width) return false;
-      if(!mixScratch){
-        mixScratch = document.createElement("canvas");
-        mixScratch.width = MIX_W; mixScratch.height = MIX_H;
-        mixCtx = mixScratch.getContext("2d", { willReadFrequently: true });
-      }
-      if(!mixSrc){
-        mixSrc = genMixSource();
-        Scene.add(mixSrc);
-      }
-      try{
-        mixCtx.drawImage(srcCanvas, 0, 0, MIX_W, MIX_H);
-        const d = mixCtx.getImageData(0, 0, MIX_W, MIX_H).data;
-        updateMixSource(mixSrc, d);
-        if(mixSrc.gpu) Renderer.updateSourceGPU(mixSrc.gpu, mixSrc.packed);
-      }catch(e){ return false; }
-      return true;
-    },
-    /** relief = depth from luminance, gain = colour gain, size = point size */
-    setMix(opts){
-      if(!mixSrc || !opts) return;
-      if(isFinite(+opts.relief)) mixSrc.relief = +opts.relief;
-      if(isFinite(+opts.gain))   mixSrc.gain   = +opts.gain;
-      if(isFinite(+opts.size))   mixSrc.pointSize = +opts.size;
-      if(isFinite(+opts.opacity))mixSrc.opacity = +opts.opacity;
-    },
-    /** Drive any renderer parameter by manifest id (same ids as the Control Surface). */
-    setParam(id, value){ window.UnlimiterParams.setParam(id, value); },
-    params(){ return window.UnlimiterParams.params; },
-    addScene(which){
-      if(which === "galaxy") Scene.add(genGalaxy());
-      else if(which === "nebula") Scene.add(genNebula());
-      else if(which === "shell") Scene.add(genShell());
-      else if(which === "gi") Scene.add(genGITestScene());
-    },
-    clearScene(){ [...Scene.sources].forEach(s => Scene.remove(s.id)); mixSrc = null; ptsSrc = null; ptsLive = 0; },
-    hasMix(){ return !!mixSrc; },
-    /** Push a live point cloud: `packed` in this renderer's 16-float layout
-     *  (xyz 0-2, rgb 4-6, alpha 7), points in unit space, `n` of them.
-     *  unlimiter-ports.js's packVolume() produces exactly this.
-     *  pushPoints(null, 0) removes the source. opts: { size } point size. */
-    pushPoints(packed, n, opts){
-      opts = opts || {};
-      // the source can be removed from under us (clearScene, the × in the list)
-      if(ptsSrc && !Scene.sources.includes(ptsSrc)){ ptsSrc = null; ptsLive = 0; }
-      if(!packed || !(n > 0)){
-        if(ptsSrc){ Scene.remove(ptsSrc.id); ptsSrc = null; ptsLive = 0; }
-        return true;
-      }
-      n = Math.min(n, Math.floor(packed.length / 16));
-      if(!ptsSrc || ptsSrc.count < n){
-        if(ptsSrc) Scene.remove(ptsSrc.id);
-        ptsSrc = genLivePoints(nextPow2(Math.max(1024, n)));
-        ptsLive = 0;
-        Scene.add(ptsSrc);
-      }
-      const K = ptsSrc.packed, POS = ptsSrc.positions;
-      K.set(packed.subarray(0, n * 16));
-      for(let i = 0; i < n; i++){ const o = i * 16, i3 = i * 3; POS[i3] = K[o]; POS[i3 + 1] = K[o + 1]; POS[i3 + 2] = K[o + 2]; }
-      // retire whatever the last frame had beyond this one's count
-      if(ptsLive > n){ K.fill(0, n * 16, ptsLive * 16); POS.fill(0, n * 3, ptsLive * 3); }
-      ptsLive = n;
-      if(isFinite(+opts.size)) ptsSrc.pointSize = +opts.size;
-      if(ptsSrc.gpu) Renderer.updateSourceGPU(ptsSrc.gpu, K);
-      ptsSrc.lastSortFwd = [0, 0, 0];          // positions moved — resort next frame
-      return true;
-    },
-    hasPoints(){ return !!ptsSrc && Scene.sources.includes(ptsSrc); },
-    ready: true,
-  };
+  // opening scene: a splat cloud + a voxel field, proving multi-source compositing
+  Scene.add(genGalaxy());
+  Scene.add(genNebula());
 
   let last = performance.now(), fpsEma = 0, persistAt = 0;
   const fpsEl = document.getElementById("fps");

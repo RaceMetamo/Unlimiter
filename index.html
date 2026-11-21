@@ -205,6 +205,9 @@ const TOOLS = [
   { file:"nekogacha.html", name:"Neko Gacha", motif:"neko",
     desc:"A gachapon for Geylang Crunk cats, now a full gacha economy. Spend from your bank on Standard, Premium or Mythic capsules, tap them open for pulls graded Mid to Absolutely GOATed, and chase shiny gear and bodies in jelly, chrome, gold, liquid metal or diamond \u2014 plus one iridescent ultimate that breaks the bank for good. Customise, display favourites, watch the market for hot traits and sell to grow your net worth.",
     tags:["3d","character","gacha","game","economy","procedural animation","fur"] },
+  { file:"overtone.html", name:"Overtone", motif:"overtone",
+    desc:"Generative music from the suite's own systems. The score is a Manifold point cloud, a fluid you draw into, or live points from Lattice \u2014 move your hands, the melody moves. Euclidean drums and synths, evolving wavetables, mute/solo, master filter and FX, Drive and Dice on everything, Web MIDI out, and captured stems for the DAW.",
+    tags:["music","audio","midi","fluid","procedural","points","drive"] },
   { file:"tbg-facade.html", name:"TBG Facade", motif:"facade",
     desc:"Generative AV built on The Bridge Gallery's folded-panel identity, for the wall it came from.",
     tags:["brand","av"] }
@@ -553,6 +556,23 @@ const MOTIF = {
       g.fillRect(i*(w/bins), h-8-v*(h-26), w/bins-1.5, v*(h-26));
     }
     g.fillStyle="#8d9490"; g.fillRect(0,h-7,w,1);
+  },
+  overtone(g,w,h,t){
+    // a point cloud read as a score: dots on a sine-ish surface, a playhead sweeping across,
+    // the points it touches flaring
+    const L=w*0.08, R=w*0.92, T=h*0.16, B=h*0.84, ph=((t*0.12)%1);
+    for(let i=0;i<150;i++){
+      const u=(i*0.6180339)%1;
+      const v=0.5+0.34*Math.sin(u*TAU*1.5+t*0.3)*Math.cos(i*0.7)+0.1*(vnoise(i*0.3,t*0.4)-0.5);
+      const x=L+u*(R-L), y=B-(Math.max(0,Math.min(1,v)))*(B-T);
+      const near=Math.abs(u-ph); const f=Math.max(0,1-near*14);
+      const kept=vnoise(i*0.9,3)>0.45;
+      g.fillStyle="hsla("+(170+u*160)+",55%,"+(kept?62:30)+"%,"+(kept?0.9:0.35)+")";
+      g.fillRect(x-1.5,y-1.5,3,3);
+      if(f>0&&kept){ g.fillStyle="rgba(255,255,255,"+f*0.8+")"; g.beginPath(); g.arc(x,y,2+f*7,0,TAU); g.fill(); }
+    }
+    g.strokeStyle="rgba(127,209,192,.8)"; g.lineWidth=1; g.beginPath(); g.moveTo(L+ph*(R-L),T-6); g.lineTo(L+ph*(R-L),B+6); g.stroke();
+    for(let s=0;s<16;s++){ g.fillStyle=(s%4===0)?"rgba(224,113,79,.85)":"rgba(255,255,255,.07)"; g.fillRect(L+s*(R-L)/16+1,B+12,(R-L)/16-2,5); }
   },
   scope(g,w,h,t){
     const rows=5;
