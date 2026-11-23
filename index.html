@@ -175,6 +175,9 @@ const TOOLS = [
   { file:"tessera.html", name:"Tessera", motif:"tessera",
     desc:"Depth as cells. Takes depth from AI estimation, a Kinect, brightness or a Rack cable and unprojects it through a lens into a true 3D point cloud, then runs a Voronoi cell field through it \u2014 in 3D, or in 4D with time as the fourth axis \u2014 so the picture gathers into nuclei, foams onto cell walls, facets, shatters and dissolves. Plexus and a nucleus lattice grow on the moved points; echoes lay time out as space.",
     tags:["depth","ai","kinect","point clouds","voronoi","4d","3d","drive"] },
+  { file:"ghost-tag.html", name:"Ghost Tag", motif:"ghosttag",
+    desc:"Spray paint that behaves like spray paint. Seven caps and six paints, laid down by hand with speed, tilt and pressure, or typed as a single-line tag or an outline-and-fill throw-up that a robot hand paints stroke by stroke. Hold too close and it pools and runs; drips follow the grooves of brick, corrugated metal, roller shutters or your own normal maps, and catch on ledges. Layers, lit relief, decal export. Proof of concept for the LASALLE VR residency.",
+    tags:["graffiti","spray","drips","typography","normal maps","draw"] },
   { file:"anchor.html", name:"Anchor", motif:"anchor",
     desc:"Turns type, point clouds, images or your own drawn strokes into ordered anchor points, then stamps shapes — or characters — on every one. Anchors carry depth, so the whole thing can be orbited in 3D. Exports real vector.",
     tags:["typography","ascii","point clouds","3d","draw","svg","drive"] },
@@ -267,6 +270,18 @@ const MOTIF = {
         g.beginPath(); g.arc(x,y,1.5-sf*0.35,0,TAU); g.fill();
       }
     }
+  },
+  ghosttag(g,w,h,t){
+    // a single-line tag sprayed on, a couple of drips running from the pooled starts
+    const pts=[];for(let i=0;i<=140;i++){const u=i/140;pts.push([w*0.14+u*w*0.72,h*0.48+Math.sin(u*TAU*2.6+0.6)*h*0.2*Math.cos(u*3)+Math.sin(u*41)*2])}
+    const n=Math.floor(((t*0.25)%1.2)/1*pts.length);
+    for(let i=0;i<Math.min(n,pts.length);i++){const [x,y]=pts[i];
+      for(let k=0;k<6;k++){const a=vnoise(i*1.3,k*7.1)*TAU,r=vnoise(k*3.3,i*0.7)*5;
+        g.fillStyle="rgba(127,209,192,"+(0.25+0.4*vnoise(i,k))+")";g.fillRect(x+Math.cos(a)*r,y+Math.sin(a)*r,1.3,1.3)}
+      g.fillStyle="rgba(232,230,225,.9)";g.beginPath();g.arc(x,y,1.6,0,TAU);g.fill()}
+    [[0.18,0.6],[0.52,0.9],[0.8,0.4]].forEach(([u,len],j)=>{const i=Math.floor(u*140);if(i>=n)return;const [x,y]=pts[i];
+      const run=Math.min(1,(n-i)/50)*len*h*0.4;g.strokeStyle="rgba(224,113,79,.85)";g.lineWidth=1.6;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.sin(j)*1.5,y+run);g.stroke();
+      g.fillStyle="rgba(224,113,79,.95)";g.beginPath();g.arc(x+Math.sin(j)*1.5,y+run,2.2,0,TAU);g.fill()});
   },
   anchor(g,w,h,t){
     // stamps walking a closed contour, offset outward in passes

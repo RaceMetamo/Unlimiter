@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghost Tag — spray paint, drips &amp; walls</title>
+<style>
+  :root{
+    --stage:#16181a; --panel:#1e2124; --panel-2:#24282b; --line:#2e3338;
+    --text:#e8e6e1; --dim:#8d9490; --accent:#7fd1c0; --hot:#e0714f; --radius:3px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--stage);color:var(--text);font-family:var(--sans);font-size:13px;
+    line-height:1.45;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{flex:1;min-width:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 50% 0%, #1c2023 0%, #131517 70%)}
+  #stageBar{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line)}
+  #stageBar h1{font-size:15px;font-weight:600;letter-spacing:.2px;margin:0}
+  #stageBar h1 span{color:var(--dim);font-weight:400}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto}
+  #canvasWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:22px}
+  #frame{position:relative;box-shadow:0 20px 60px rgba(0,0,0,.55);background:#0d0f10}
+  #frame canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+  #ov{cursor:none;touch-action:none}
+  body.typing #ov{cursor:crosshair}
+
+  #panel{width:356px;flex:none;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column}
+  #panelScroll{flex:1;overflow-y:auto;overscroll-behavior:contain;padding-top:8px}
+  #panelScroll::-webkit-scrollbar{width:9px}
+  #panelScroll::-webkit-scrollbar-thumb{background:#33383c;border-radius:9px}
+  #panelScroll > .ulx-bar{margin:0 12px 8px}
+  .group{border-bottom:1px solid var(--line)}
+  .group > summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;user-select:none}
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary:hover{background:var(--panel-2)}
+  .group > summary .chev{width:8px;height:8px;border-right:1.5px solid var(--dim);border-bottom:1.5px solid var(--dim);transform:rotate(-45deg);transition:transform .15s ease;margin-left:auto}
+  .group[open] > summary .chev{transform:rotate(45deg)}
+  .group .body{padding:2px 16px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:4px 0;min-height:27px}
+  .row label{flex:none;width:104px;color:var(--dim);font-size:12px}
+  .row .ctl{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--text);width:46px;text-align:right;flex:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--accent);margin-top:-4.5px;border:none}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:none}
+  select,input[type=text]{width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);padding:5px 7px;font-family:var(--sans);font-size:12px}
+  input[type=text].big{font-size:15px;font-weight:600;letter-spacing:.04em;padding:7px 9px}
+  select:focus,input:focus{outline:1px solid var(--accent)}
+  input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel-2);cursor:pointer;flex:none}
+  input[type=checkbox]{appearance:none;width:15px;height:15px;border:1px solid #454b50;border-radius:var(--radius);background:var(--panel-2);cursor:pointer;flex:none;position:relative}
+  input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border-right:2px solid #14181a;border-bottom:2px solid #14181a;transform:rotate(42deg)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);padding:6px 10px;font-family:var(--sans);font-size:12px;cursor:pointer;white-space:nowrap}
+  button:hover{border-color:#4a5157;background:#2b3033}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#121718;font-weight:600}
+  button.primary:hover{background:#95dccd}
+  button.warm{border-color:#4a3a34;color:#f0a68e}
+  .btnrow{display:flex;gap:6px;padding:6px 0}
+  .btnrow button{flex:1}
+  .note{color:var(--dim);font-size:11.5px;padding:2px 0 6px;line-height:1.5}
+  .subhead{color:var(--text);font-size:11.5px;font-weight:600;padding:10px 0 2px;border-top:1px solid var(--line);margin-top:8px}
+  .tabs{display:flex;gap:4px;padding:4px 0 8px;flex-wrap:wrap}
+  .tabs button{flex:1;font-size:11.5px;padding:5px 4px}
+  .tabs button.on{border-color:var(--accent);color:var(--accent)}
+  .swatches{display:flex;flex-wrap:wrap;gap:4px;padding:4px 0 4px 114px}
+  .swatches i{width:17px;height:17px;border-radius:2px;cursor:pointer;border:1px solid rgba(255,255,255,.12)}
+  .swatches i:hover{outline:1px solid var(--accent)}
+  #layerList{display:flex;flex-direction:column;gap:3px;padding:4px 0}
+  .lyr{display:flex;align-items:center;gap:8px;padding:5px 7px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel-2);cursor:pointer}
+  .lyr.on{border-color:var(--accent)}
+  .lyr .nm{flex:1;min-width:0;background:transparent;border:none;padding:0;font-size:12px}
+  .lyr .op{width:64px;flex:none}
+  .lyr .tag{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  #footer{border-top:1px solid var(--line);padding:10px 16px 12px;background:var(--panel)}
+  .hidden{display:none !important}
+  #busy{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:rgba(15,17,18,.9);border:1px solid var(--line);
+    padding:7px 14px;border-radius:4px;font-family:var(--mono);font-size:12px;color:var(--accent);display:none;z-index:40}
+  kbd{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line);border-radius:2px;padding:0 4px;color:var(--text)}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="stageBar">
+    <h1>Ghost Tag <span>— spray, drips &amp; walls</span></h1>
+    <div id="status">—</div>
+  </div>
+  <div id="canvasWrap"><div id="frame"><canvas id="gl"></canvas><canvas id="ov"></canvas></div></div>
+</div>
+
+<div id="panel">
+  <div id="panelScroll">
+
+    <details class="group" open>
+      <summary>Input<span class="chev"></span></summary>
+      <div class="body">
+        <div class="tabs" id="inTabs">
+          <button data-in="hand">Hand — draw</button>
+          <button data-in="type">Type — tag / throw-up</button>
+        </div>
+        <div id="inHand"></div>
+        <div id="inType"></div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Can — cap, paint, colour<span class="chev"></span></summary>
+      <div class="body">
+        <div class="tabs" id="canTabs"></div>
+        <div id="canBody"></div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Layers<span class="chev"></span></summary>
+      <div class="body" id="g-layers"></div>
+    </details>
+
+    <details class="group">
+      <summary>Drips &amp; drying<span class="chev"></span></summary>
+      <div class="body" id="g-phys"></div>
+    </details>
+
+    <details class="group" open>
+      <summary>Surface — wall<span class="chev"></span></summary>
+      <div class="body" id="g-surf"></div>
+    </details>
+
+    <details class="group">
+      <summary>View — light<span class="chev"></span></summary>
+      <div class="body" id="g-view"></div>
+    </details>
+
+  </div>
+
+  <div id="footer">
+    <div class="note" id="statLine" style="padding-top:0">—</div>
+    <div class="btnrow">
+      <button id="btnUndo" title="Ctrl+Z">Undo</button>
+      <button id="btnClearLayer">Clear layer</button>
+      <button id="btnClearAll" class="warm">Buff wall</button>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnPNG">Export PNG</button>
+      <button class="primary" id="btnDecal" title="Transparent paint albedo + paint height map, for decals in Unreal / VR">Export decal</button>
+      <button id="btnRec">Record</button>
+    </div>
+    <div class="row"><label>Wall size</label><div class="ctl"><select id="sizeSel">
+      <option value="1280x720">1280 × 720</option>
+      <option value="1600x900" selected>1600 × 900</option>
+      <option value="1920x1080">1920 × 1080</option>
+      <option value="1080x1080">1080 × 1080</option>
+      <option value="1080x1920">1080 × 1920</option>
+    </select></div></div>
+  </div>
+</div>
+
+<div id="busy">Building wall…</div>
+<input type="file" id="fAlb" accept="image/*" class="hidden">
+<input type="file" id="fNrm" accept="image/*" class="hidden">
+<input type="file" id="fHgt" accept="image/*" class="hidden">
+<input type="file" id="fFont" accept=".ttf,.otf,.woff,.woff2" class="hidden">
+
+<script src="unlimiter-ui.js" data-ulx-canvas="#gl"></script>
+<script>
+"use strict";
+/* =====================================================================
+   GHOST TAG — Unlimiter
+   Spray paint simulation for graffiti: caps, paints, pooling and drips,
+   hand-drawn or typed (single-line tags, or outline/fill throw-ups
+   painted by a robot hand), stacked layers, lit walls with normal maps.
+
+   Structure, so it can move onto meshes later:
+     sprayAt / spraySegment  deposit paint in WALL SPACE (px of the wall
+                             texture). A mesh version only needs to turn a
+                             ray hit into a UV → wall px and call the same.
+     fields                  per-layer thickness, global wet/gloss/metal,
+                             surface height/gradient/porosity (sim res)
+     drips                   agents running down the wall, steered by the
+                             surface gradient, caught by ledges
+     render                  WebGL2 — wall albedo + normal, paint colour,
+                             paint relief from thickness, wet sheen
+   ===================================================================== */
+
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
+const TAU=Math.PI*2, D2R=Math.PI/180;
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gauss(){let u=1-Math.random(),v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v)}
+function n1(x){const i=Math.floor(x),f=x-i,u=f*f*(3-2*f);const h=k=>{let t=Math.imul(k|0,0x27d4eb2d);t^=t>>>15;t=Math.imul(t,0x85ebca6b);t^=t>>>13;return(t>>>0)/4294967296};return h(i)+(h(i+1)-h(i))*u}
+function makeNoise(seed){
+  const R=mulberry(seed),P=new Float32Array(65536);for(let i=0;i<65536;i++)P[i]=R();
+  function n(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+    const x0=xi&255,y0=yi&255,x1=(x0+1)&255,y1=(y0+1)&255;
+    const a=P[y0<<8|x0],b=P[y0<<8|x1],c=P[y1<<8|x0],d=P[y1<<8|x1];
+    return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+  function fbm(x,y,o){let s=0,a=.5,f=1,t=0;for(let i=0;i<o;i++){s+=a*n(x*f+i*17.3,y*f-i*9.1);t+=a;a*=.5;f*=2.03}return s/t}
+  return {n,fbm};
+}
+function hex2rgb(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const v=parseInt(h,16);return[(v>>16)&255,(v>>8)&255,v&255]}
+function rgb2hex(r,g,b){return'#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1)}
+
+/* ---------------------------------------------------------------------
+   CAPS & PAINTS
+   r0   spray radius (px) at mid distance     flow   paint per second
+   spread speckle halo, × radius               speck  speckle dots per unit paint
+   dot  speckle dot size (px)                  spit   chance of a spat droplet
+   aspect  <1 makes a flat fan (calligraphy)
+   --------------------------------------------------------------------- */
+const CAPS={
+  stencil:   {name:"Needle / stencil",     r0:1.8, flow:.55, spread:1.1, speck:1500,dot:.8, spit:.000},
+  skinny:    {name:"Skinny (NY thin)",     r0:3.6, flow:1.0, spread:1.5, speck:2600,dot:1.0,spit:.004},
+  soft:      {name:"Soft — German outline",r0:6.5, flow:1.5, spread:2.3, speck:2600,dot:1.1,spit:.004},
+  fat:       {name:"Fat (NY fat)",         r0:17,  flow:6,   spread:1.7, speck:1300,dot:1.2,spit:.006},
+  superfat:  {name:"Super fat",            r0:32,  flow:11,  spread:1.6, speck:900, dot:1.3,spit:.006},
+  calli:     {name:"Calligraphy (flat fan)",r0:15, flow:4,   spread:1.4, speck:1500,dot:1.1,spit:.004,aspect:.16},
+  dirty:     {name:"Dirty / spitting",     r0:8,   flow:2.2, spread:2.0, speck:1800,dot:1.4,spit:.12}
+};
+const PAINTS={
+  matte: {name:"Low pressure matt", flow:.8,  visc:1.0, run:1.0, gloss:.08,metal:0, alpha:1},
+  hp:    {name:"High pressure",     flow:1.6, visc:.8,  run:1.3, gloss:.2, metal:0, alpha:1},
+  gloss: {name:"Gloss enamel",      flow:1.1, visc:1.5, run:2.0, gloss:.95,metal:0, alpha:1},
+  chrome:{name:"Chrome / metallic", flow:1.0, visc:.9,  run:1.1, gloss:.7, metal:1, alpha:1},
+  ink:   {name:"Drip ink (refill)", flow:1.0, visc:.3,  run:3.2, gloss:.55,metal:0, alpha:.72},
+  fluoro:{name:"Fluoro / transparent",flow:1.0,visc:.7, run:1.4, gloss:.15,metal:0, alpha:.55}
+};
+const SWATCHES=["#0d0d0f","#f4f1ea","#d7263d","#ff6b1a","#ffd23f","#3bceac","#0ead69","#1b98e0","#3a2bd9","#c44bd8","#ff5da2","#8a8a8a","#6b3e26","#b7b7b7","#00f0ff","#c8ff00"];
+
+/* ---------------------------------------------------------------------
+   SINGLE-STROKE HANDSTYLE ALPHABET — [width, strokes]
+   y=0 cap line, y=10 baseline. Repeated points make corners.
+   --------------------------------------------------------------------- */
+const SF={
+  A:[6,[[0,10,3,0,3,0,6,10],[1.2,6.6,4.8,6.6]]],
+  B:[5.2,[[0,0,0,10],[0,0,3,0,4.8,1.4,4.6,3.8,2.6,5,.4,5,.4,5,3.2,5,5.2,6.6,5,9,3,10,0,10]]],
+  C:[5.2,[[5,1.5,3.5,.1,1.5,.5,.2,3,.2,7,1.5,9.6,3.5,9.9,5.2,8.5]]],
+  D:[5.5,[[0,0,0,10],[0,0,2.5,0,4.8,1.8,5.5,5,4.8,8.2,2.5,10,0,10]]],
+  E:[4.6,[[4.6,0,0,0,0,0,0,10,0,10,4.6,10],[0,5,3.6,5]]],
+  F:[4.6,[[4.6,0,0,0,0,0,0,10],[0,5,3.6,5]]],
+  G:[5.6,[[5,1.5,3.5,.1,1.5,.5,.2,3,.2,7,1.5,9.6,3.5,9.9,5.2,8.5,5.4,6,5.4,6,3,6]]],
+  H:[5,[[0,0,0,10],[5,0,5,10],[0,5,5,5]]],
+  I:[1.4,[[.7,0,.7,10]]],
+  J:[4.2,[[4.2,0,4.2,7.5,3.1,9.7,1.2,9.7,0,8]]],
+  K:[5,[[0,0,0,10],[5,0,.2,5.6],[1.8,4.2,5.2,10]]],
+  L:[4.5,[[0,0,0,10,0,10,4.5,10]]],
+  M:[7,[[0,10,.5,0,.5,0,3.5,7,3.5,7,6.5,0,6.5,0,7,10]]],
+  N:[5.5,[[0,10,0,0,0,0,5.5,10,5.5,10,5.5,0]]],
+  O:[6,[[3,0,.6,1.5,0,5,.6,8.5,3,10,5.4,8.5,6,5,5.4,1.5,3,0,2.4,.15]]],
+  P:[5,[[0,10,0,0,0,0,3,0,4.9,1.5,4.9,3.8,3,5.2,.2,5.2]]],
+  Q:[6,[[3,0,.6,1.5,0,5,.6,8.5,3,10,5.4,8.5,6,5,5.4,1.5,3,0,2.4,.15],[3.6,7,6.4,10.8]]],
+  R:[5.2,[[0,10,0,0,0,0,3,0,4.9,1.5,4.9,3.8,3,5.2,.2,5.2,.2,5.2,5.2,10]]],
+  S:[5,[[5,1.3,3.2,0,1,.4,.2,2.4,1.3,4.3,3.7,5.6,5,7.6,4.2,9.5,2,10,0,8.7]]],
+  T:[5,[[0,0,5,0],[2.5,0,2.5,10]]],
+  U:[5.5,[[0,0,0,6.8,1,9.4,2.75,10,4.5,9.4,5.5,6.8,5.5,0]]],
+  V:[6,[[0,0,3,10,3,10,6,0]]],
+  W:[8,[[0,0,2,10,2,10,4,2.5,4,2.5,6,10,6,10,8,0]]],
+  X:[5.5,[[0,0,5.5,10],[5.5,0,0,10]]],
+  Y:[5.5,[[0,0,2.75,5,2.75,5,5.5,0],[2.75,5,2.75,10]]],
+  Z:[5,[[0,0,5,0,5,0,0,10,0,10,5,10]]],
+  "0":[5,[[2.5,0,.4,1.6,0,5,.4,8.4,2.5,10,4.6,8.4,5,5,4.6,1.6,2.5,0,2,.2]]],
+  "1":[3,[[0,2,2,0,2,0,2,10]]],
+  "2":[5,[[.2,2,1.6,.2,3.6,.2,4.8,1.8,4.4,4,0,10,0,10,5,10]]],
+  "3":[5,[[.3,1,2.4,0,4.4,.8,4.6,2.8,2.6,4.8,1.6,4.8,1.6,4.8,3.8,5.2,5,7.2,4.2,9.4,2.2,10,.2,9]]],
+  "4":[5.5,[[4,10,4,0,4,0,0,7,0,7,5.5,7]]],
+  "5":[5,[[4.8,0,1,0,1,0,.5,4.4,2.6,3.8,4.6,4.8,5,7.2,4,9.4,2,10,0,8.8]]],
+  "6":[5,[[4.5,.8,2.8,0,1,1.2,.1,4.5,.2,7.8,1.6,9.8,3.6,9.8,4.9,8,4.6,5.6,2.8,4.8,1,5.6,.2,7]]],
+  "7":[5,[[0,0,5,0,5,0,1.5,10]]],
+  "8":[5,[[2.5,4.8,.6,3.6,.6,1.2,2.5,0,4.4,1.2,4.4,3.6,2.5,4.8,.2,6.3,.2,8.8,2.5,10,4.8,8.8,4.8,6.3,2.5,4.8]]],
+  "9":[5,[[4.8,3,4,.8,2.4,0,.6,.8,.1,2.8,1,4.6,3,5,4.8,3.4,4.8,3.4,4,10]]],
+  "!":[1.2,[[.6,0,.6,7],[.6,9.5,.62,10]]],
+  ".":[1,[[.5,9.5,.52,10]]],
+  "-":[3,[[0,5.5,3,5.5]]],
+  "+":[4,[[0,5,4,5],[2,3,2,7]]],
+  "*":[4.4,[[2.2,0,2.2,5],[0,1.3,4.4,3.7],[4.4,1.3,0,3.7]]],
+  "/":[4,[[4,0,0,10]]]
+};
+
+/* ---------------------------------------------------------------------
+   STATE
+   --------------------------------------------------------------------- */
+const newCan=(cap,paint,color,dist=.5)=>({cap,paint,color,color2:"#ffd23f",fade:"none",dist,pressure:1});
+const S={
+  W:1600,H:900,sim:.5,
+  input:"hand",canTab:"hand",
+  hand:{tiltMotion:.45,tilt:0,speedWidth:.3,speedFlow:.15,dirWeight:0,nib:45,penPressure:true,penWidth:false,stabilize:.3,shake:.5,ramp:40},
+  tag:{text:"GHOST",mode:"tag",size:170,slant:.22,stretch:1,spacing:.15,jitter:.3,bounce:.25,wobble:.35,firstBig:.35,
+       speed:950,speedVar:.55,dwell:70,flick:.7,connect:false,swoosh:true,seed:11,x:.5,y:.5,
+       font:"Arial Black",weight:"900",bubble:.35,expand:.1,hatchAngle:-38,hatchSpace:1,overspill:.35,depth:22,depthAng:40,
+       outlinePasses:1,shines:true,play:1,instant:false},
+  cans:{
+    hand:   newCan("skinny","matte","#0d0d0f"),
+    tag:    newCan("skinny","hp","#0d0d0f",.42),
+    fill:   newCan("fat","matte","#ff5da2",.55),
+    outline:newCan("soft","matte","#0d0d0f",.38),
+    d3:     newCan("fat","matte","#3a2bd9",.5),
+    shine:  newCan("skinny","matte","#f4f1ea",.35)
+  },
+  phys:{gravity:1,drips:1,dry:1,runs:1,maxDrips:400},
+  surf:{type:"concrete",seed:3,scale:1,bump:1,tint:"#ffffff",absorb:.5,rough:.45,channel:.15,catch:.1,gloss:.03,flipG:false},
+  view:{lightAng:-125,lightElev:38,amb:.42,spec:1,ao:.7,relief:1,torch:false,torchH:.35}
+};
+S.cans.fill.fade="vertical";S.cans.fill.color2="#ffd23f";
+const CAN_TABS=[["hand","Hand"],["tag","Tag"],["fill","Fill"],["outline","Outline"],["d3","3D"],["shine","Shine"]];
+
+/* ---------------------------------------------------------------------
+   FIELDS
+   --------------------------------------------------------------------- */
+let SW,SH,SN;              // sim grid
+let wet,gloss,metal;       // global paint fields (sim res)
+let HS,GX,GY,POR;          // surface fields (sim res)
+let albPix,nrmPix;         // full-res wall textures (RGBA8)
+let layers=[],activeId=0,nextLayerId=1;
+let drips=[],job=null,undoStack=[],strokeSeq=0;
+let paintDirty=true,dataDirty=true,wetMax=0;
+
+function makeLayer(name){
+  const cv=document.createElement("canvas");cv.width=S.W;cv.height=S.H;
+  return {id:nextLayerId++,name,cv,ctx:cv.getContext("2d"),thick:new Float32Array(SN),vis:true,op:1};
+}
+const getLayer=id=>layers.find(l=>l.id===id)||layers[layers.length-1];
+const ci=(x,y)=>{let cx=(x*S.sim)|0,cy=(y*S.sim)|0;cx=cx<0?0:cx>=SW?SW-1:cx;cy=cy<0?0:cy>=SH?SH-1:cy;return cy*SW+cx};
+
+function allocFields(keepLayers){
+  SW=Math.ceil(S.W*S.sim);SH=Math.ceil(S.H*S.sim);SN=SW*SH;
+  wet=new Float32Array(SN);gloss=new Float32Array(SN);metal=new Float32Array(SN);
+  HS=new Float32Array(SN);GX=new Float32Array(SN);GY=new Float32Array(SN);POR=new Float32Array(SN);
+  if(!keepLayers){
+    layers=[];nextLayerId=1;
+    ["Shadow / 3D","Fill","Outline","Details"].forEach(n=>layers.push(makeLayer(n)));
+    activeId=layers[2].id;
+    S.tag.L={tag:layers[2].id,fill:layers[1].id,outline:layers[2].id,d3:layers[0].id,shine:layers[3].id};
+  }
+  drips=[];job=null;undoStack=[];
+  paintCv.width=S.W;paintCv.height=S.H;
+  dataBuf=new Uint8Array(SN*4);
+}
+
+/* ---------------------------------------------------------------------
+   SURFACES — procedural walls: albedo, height, porosity + behaviour
+   --------------------------------------------------------------------- */
+const SURFACES={
+  primer:  {name:"Primed wall (smooth)",       absorb:.05,rough:.04,channel:.08,catch:0,  gloss:.05},
+  concrete:{name:"Bare concrete",              absorb:.5, rough:.45,channel:.15,catch:.1, gloss:.02},
+  brick:   {name:"Brick & mortar",             absorb:.45,rough:.35,channel:.35,catch:.75,gloss:.02},
+  render:  {name:"Rough render / shophouse",   absorb:.4, rough:.7, channel:.05,catch:.12,gloss:.01},
+  metal:   {name:"Corrugated metal",           absorb:0,  rough:.04,channel:.9, catch:0,  gloss:.35},
+  shutter: {name:"Roller shutter",             absorb:.02,rough:.06,channel:.1, catch:.9, gloss:.25},
+  wood:    {name:"Wood hoarding",              absorb:.35,rough:.25,channel:.5, catch:.05,gloss:.03},
+  tiles:   {name:"Void-deck tiles",            absorb:.08,rough:.05,channel:.3, catch:.45,gloss:.5},
+  custom:  {name:"Custom — load maps",         absorb:.3, rough:.3, channel:.2, catch:.2, gloss:.05}
+};
+const custom={alb:null,nrm:null,hgt:null};
+
+function genSurface(){
+  const W=S.W,H=S.H,N=W*H,sc=S.surf.scale,type=S.surf.type;
+  const NZ=makeNoise(S.surf.seed*7919+11),R=mulberry(S.surf.seed*31+5);
+  const h=new Float32Array(N),por=new Float32Array(N),alb=new Uint8ClampedArray(N*4);
+  const tint=hex2rgb(S.surf.tint);
+  let nrmIn=null;
+  const put=(i,r,g,b)=>{alb[i*4]=r*tint[0]/255;alb[i*4+1]=g*tint[1]/255;alb[i*4+2]=b*tint[2]/255;alb[i*4+3]=255};
+  if(type==="custom"){
+    const read=img=>{if(!img)return null;const c=document.createElement("canvas");c.width=W;c.height=H;const g=c.getContext("2d");
+      const pat=g.createPattern(img,"repeat");const m=new DOMMatrix();m.scaleSelf(sc,sc);pat.setTransform(m);g.fillStyle=pat;g.fillRect(0,0,W,H);
+      return g.getImageData(0,0,W,H).data};
+    const A=read(custom.alb),Nm=read(custom.nrm),Hm=read(custom.hgt);nrmIn=Nm;
+    for(let i=0;i<N;i++){
+      const r=A?A[i*4]:200,g=A?A[i*4+1]:200,b=A?A[i*4+2]:200;put(i,r,g,b);
+      h[i]=Hm?Hm[i*4]/255:(Nm?.5:(.25+.5*(r*.3+g*.59+b*.11)/255));
+      por[i]=S.surf.absorb;
+    }
+  }else{
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const i=y*W+x,X=x/sc,Y=y/sc;let r,g,b,hh,pp;
+      if(type==="primer"){
+        const n=NZ.fbm(X/90,Y/90,3),f=NZ.n(X/1.6,Y/1.6);
+        hh=.5+(n-.5)*.18+(f-.5)*.05;const v=226+(n-.5)*14+(f-.5)*6;r=v+2;g=v;b=v-6;pp=.05;
+      }else if(type==="concrete"){
+        const big=NZ.fbm(X/120,Y/120,4),mid=NZ.fbm(X/14,Y/14,3),fine=NZ.n(X/2.2,Y/2.2),pit=NZ.n(X/3.5+40,Y/3.5);
+        const stain=NZ.fbm(X/40,Y/500,3);
+        hh=.55+(mid-.5)*.5+(fine-.5)*.22+(big-.5)*.2;
+        if(pit>.86){hh-=(pit-.86)*4;}
+        const v=138+(big-.5)*50+(mid-.5)*22+(fine-.5)*14-(stain>.6?(stain-.6)*90:0);
+        r=v;g=v-1;b=v-6;pp=.45+(1-hh)*.3;
+      }else if(type==="brick"){
+        const bw=68,bh=24,m=4,row=Math.floor(Y/bh),off=(row&1)?bw/2:0,col=Math.floor((X+off)/bw);
+        const lx=(X+off)-col*bw,ly=Y-row*bh;
+        const ex=Math.min(lx,bw-lx),ey=Math.min(ly,bh-ly),e=Math.min(ex,ey);
+        const fine=NZ.n(X/1.8,Y/1.8),mid=NZ.fbm(X/9,Y/9,3);
+        if(e<m*.5){hh=.18+fine*.12;r=g=b=0;const v=150+(fine-.5)*30;r=v+6;g=v+2;b=v-6;pp=.85}
+        else{
+          const bev=clamp((e-m*.5)/3,0,1);const hsh=((col*73856093)^(row*19349663))>>>0;const k=(hsh%1000)/1000;
+          hh=.45+bev*.33+(mid-.5)*.18+(fine-.5)*.1;
+          r=128+k*60+(mid-.5)*30;g=52+k*22+(mid-.5)*16;b=38+k*14+(mid-.5)*12;
+          if(k>.85){r*=.7;g*=.7;b*=.75}
+          pp=.38+(1-mid)*.15;
+        }
+      }else if(type==="render"){
+        const a=NZ.fbm(X/3,Y/3,3),c=NZ.fbm(X/11,Y/11,3),big=NZ.fbm(X/180,Y/180,3),dirt=NZ.fbm(X/50,Y/300,4);
+        hh=.25+a*.55+(c-.5)*.35;
+        const v=(big-.5)*24-(dirt>.58?(dirt-.58)*120:0)+(a-.5)*16;
+        r=226+v;g=212+v;b=180+v;pp=.4+(1-hh)*.25;
+      }else if(type==="metal"){
+        const P=28,ph=X/P*TAU,rust=NZ.fbm(X/60,Y/40,4),fine=NZ.n(X/2,Y/2);
+        hh=.5+.42*Math.sin(ph)+(fine-.5)*.03;
+        const sh=Math.cos(ph)*12;const rr=clamp((rust-.58)*4,0,1);
+        r=lerp(150+sh,128,rr);g=lerp(160+sh,72,rr);b=lerp(168+sh,40,rr);pp=rr*.4;
+      }else if(type==="shutter"){
+        const P=34,t=(Y%P)/P,fine=NZ.n(X/2,Y/2),dirt=NZ.fbm(X/70,Y/200,4);
+        hh=t<.07?.08:.55+.3*Math.sin(Math.PI*(t-.07)/.93)+(fine-.5)*.03;
+        const v=(dirt-.5)*40+(t<.07?-40:0);r=96+v;g=118+v;b=126+v;pp=.03;
+      }else if(type==="wood"){
+        const PW=92,lx=X%PW,plank=Math.floor(X/PW),k=((plank*2654435761)>>>0)%1000/1000;
+        const grain=NZ.fbm(X/3+plank*9,Y/120,4),knot=NZ.fbm(X/18,Y/30,2);
+        if(lx<3){hh=.02;r=40;g=30;b=22;pp=.6}
+        else{hh=.6+(grain-.5)*.18+(NZ.n(X/1.5,Y/9)-.5)*.06;const v=(grain-.5)*60+(knot>.7?-(knot-.7)*120:0);
+          r=150+k*40+v;g=104+k*26+v*.7;b=66+k*14+v*.5;pp=.32}
+      }else if(type==="tiles"){
+        const T=44,g0=3,lx=X%T,ly=Y%T,e=Math.min(lx,T-lx,ly,T-ly),tx=Math.floor(X/T),ty=Math.floor(Y/T),k=(((tx*73856093)^(ty*19349663))>>>0)%1000/1000;
+        const fine=NZ.n(X/2,Y/2);
+        if(e<g0*.5){hh=.25+fine*.1;const v=128+(fine-.5)*20;r=v;g=v-2;b=v-8;pp=.7}
+        else{hh=.7+clamp((e-g0*.5)/2,0,1)*.08+(fine-.5)*.01;const v=(k-.5)*10;r=222+v;g=214+v;b=196+v;pp=.02}
+      }
+      h[i]=clamp(hh,0,1);por[i]=clamp(pp,0,1);put(i,r,g,b);
+    }
+  }
+  // normal map (full res) — xyz normal, a = height
+  const nrm=new Uint8ClampedArray(N*4),K=type==="custom"?6:9;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x;
+    let nx,ny,nz;
+    if(nrmIn){nx=nrmIn[i*4]/127.5-1;ny=(nrmIn[i*4+1]/127.5-1)*(S.surf.flipG?1:-1);nz=Math.max(.05,nrmIn[i*4+2]/127.5-1)}
+    else{const xl=x>0?h[i-1]:h[i],xr=x<W-1?h[i+1]:h[i],yu=y>0?h[i-W]:h[i],yd=y<H-1?h[i+W]:h[i];
+      nx=-(xr-xl)*.5*K;ny=-(yd-yu)*.5*K;nz=1}
+    const L=Math.hypot(nx,ny,nz);
+    nrm[i*4]=(nx/L*.5+.5)*255;nrm[i*4+1]=(ny/L*.5+.5)*255;nrm[i*4+2]=(nz/L*.5+.5)*255;nrm[i*4+3]=h[i]*255;
+  }
+  albPix=alb;nrmPix=nrm;
+  // sim fields
+  const inv=1/S.sim;
+  for(let y=0;y<SH;y++)for(let x=0;x<SW;x++){
+    const fx=Math.min(W-1,(x*inv)|0),fy=Math.min(H-1,(y*inv)|0),j=fy*W+fx,i=y*SW+x;
+    HS[i]=h[j];POR[i]=por[j];
+    if(nrmIn){const nz=Math.max(.1,nrm[j*4+2]/127.5-1);GX[i]=-(nrm[j*4]/127.5-1)/nz*.25;GY[i]=-(nrm[j*4+1]/127.5-1)/nz*.25}
+  }
+  if(!nrmIn)for(let y=0;y<SH;y++)for(let x=0;x<SW;x++){
+    const i=y*SW+x;GX[i]=((x<SW-1?HS[i+1]:HS[i])-(x>0?HS[i-1]:HS[i]))*.5;GY[i]=((y<SH-1?HS[i+SW]:HS[i])-(y>0?HS[i-SW]:HS[i]))*.5;
+  }
+  uploadWall();
+}
+
+/* ---------------------------------------------------------------------
+   SPRAY ENGINE
+   --------------------------------------------------------------------- */
+const KD=2400;                 // optical density per unit paint per px²
+const spriteCache=new Map();
+function sprite(hex){
+  let s=spriteCache.get(hex);if(s)return s;
+  if(spriteCache.size>200)spriteCache.clear();
+  s=document.createElement("canvas");s.width=s.height=64;const g=s.getContext("2d"),[r,gg,b]=hex2rgb(hex);
+  const gr=g.createRadialGradient(32,32,0,32,32,32);
+  [[0,1],[.2,.9],[.4,.62],[.6,.3],[.8,.09],[1,0]].forEach(([o,a])=>gr.addColorStop(o,`rgba(${r},${gg},${b},${a})`));
+  g.fillStyle=gr;g.fillRect(0,0,64,64);spriteCache.set(hex,s);return s;
+}
+function canColour(can,x,y,st){
+  if(can.fade==="none")return can.color;
+  let t;const bb=st.bb||{x0:0,y0:0,x1:S.W,y1:S.H};
+  if(can.fade==="vertical")t=(y-bb.y0)/Math.max(1,bb.y1-bb.y0);
+  else if(can.fade==="horizontal")t=(x-bb.x0)/Math.max(1,bb.x1-bb.x0);
+  else t=.5-.5*Math.cos(st.dist/420*Math.PI);
+  t=Math.round(clamp(t,0,1)*24)/24;
+  const a=hex2rgb(can.color),b=hex2rgb(can.color2);
+  return rgb2hex(Math.round(lerp(a[0],b[0],t)),Math.round(lerp(a[1],b[1],t)),Math.round(lerp(a[2],b[2],t)));
+}
+/* A nozzle is one can in one hand: position, heading, speed, how long it's been held. */
+function newNozzle(can,layerId,weights,bb){
+  return {can,layerId,w:weights,bb,x:0,y:0,dir:0,speed:0,age:0,dist:0,sid:strokeSeq,lastR:4};
+}
+/* Spray while the nozzle moves from (st.x,st.y) to (x1,y1) over dt seconds. */
+function spraySegment(st,x1,y1,dt,pin){
+  const can=st.can,cap=CAPS[can.cap],paint=PAINTS[can.paint],w=st.w,surf=S.surf;
+  const dx=x1-st.x,dy=y1-st.y,L=Math.hypot(dx,dy);
+  const v=L/Math.max(dt,1e-4);
+  st.speed=lerp(st.speed,v,clamp(dt*14,0,1));
+  if(L>.3){const a=Math.atan2(dy,dx);let d=a-st.dir;d=Math.atan2(Math.sin(d),Math.cos(d));st.dir+=d*clamp(L/6,0,1)}
+  st.age+=dt;
+  const sn=clamp(st.speed/1400,0,1);
+  let p=pin*can.pressure*clamp(st.age*1000/Math.max(w.ramp,1),0,1);
+  p*=clamp(1+w.speedFlow*(.5-sn)*1.6,0,2);
+  let r=cap.r0*(.3+1.4*can.dist);
+  const wf=1/(1+st.speed/380);
+  r*=clamp(1+w.speedWidth*(wf*1.2-.55),.25,2.2);
+  r*=1-w.dirWeight*.75*Math.abs(Math.sin(st.dir-w.nib*D2R));
+  if(st.widthMul)r*=st.widthMul;
+  r=Math.max(.9,r);st.lastR=r;
+  const tilt=clamp(w.tilt+w.tiltMotion*sn,0,.9);
+  let ang=st.dir,maj=1+tilt*1.5,min=1;
+  if(cap.aspect){ang=w.nib*D2R;maj=1;min=cap.aspect}
+  const A=cap.flow*paint.flow*p*dt;
+  if(A<=0){st.x=x1;st.y=y1;return}
+  const n=clamp(Math.ceil(L/(r*.3)),1,80);
+  const layer=getLayer(st.layerId),ctx=layer.ctx;
+  for(let k=1;k<=n;k++){
+    const t=k/n,x=st.x+dx*t,y=st.y+dy*t;
+    st.dist+=L/n;
+    stampAt(ctx,layer,st,x,y,r,A/n,ang,maj,min,tilt,cap,paint,surf);
+  }
+  st.x=x1;st.y=y1;
+  paintDirty=dataDirty=true;
+}
+function stampAt(ctx,layer,st,x,y,r,a,ang,maj,min,tilt,cap,paint,surf){
+  const hex=canColour(st.can,x,y,st);
+  const ca=Math.cos(ang),sa=Math.sin(ang);
+  const ox=x+ca*r*tilt*.6,oy=y+sa*r*tilt*.6;
+  // soft core
+  const od=KD*a/(r*r);
+  const al=(1-Math.exp(-od*.85))*paint.alpha;
+  const rx=r*1.25*maj,ry=r*1.25*min;
+  ctx.globalAlpha=al;
+  ctx.setTransform(ca*rx,sa*rx,-sa*ry,ca*ry,ox,oy);
+  ctx.drawImage(sprite(hex),-1,-1,2,2);
+  ctx.setTransform(1,0,0,1,0,0);
+  // speckle halo
+  const cnt=a*cap.speck,nd=Math.floor(cnt+Math.random());
+  if(nd>0){
+    ctx.fillStyle=hex;
+    const sg=r*cap.spread*.55,rough=surf.rough;
+    for(let i=0;i<nd;i++){
+      let u=gauss()*sg*maj,v=gauss()*sg*min;
+      u+=Math.abs(u)*tilt*.7;                       // overspray drifts ahead of a tilted can
+      const px=ox+u*ca-v*sa,py=oy+u*sa+v*ca;
+      if(rough>0){const hh=HS[ci(px,py)];if(Math.random()<rough*Math.pow(1-hh,1.5)*1.4)continue}
+      const s=cap.dot*(.55+Math.random()*.9);
+      ctx.globalAlpha=paint.alpha*(.25+Math.random()*.65);
+      ctx.fillRect(px-s*.5,py-s*.5,s,s);
+    }
+  }
+  // spat droplets
+  if(cap.spit>0&&Math.random()<cap.spit*a*60){
+    const dd=r*(1+Math.random()*2.2),th=Math.random()*TAU,px=ox+Math.cos(th)*dd,py=oy+Math.sin(th)*dd,rr=.8+Math.random()*Math.random()*3.2;
+    ctx.globalAlpha=paint.alpha;ctx.fillStyle=hex;ctx.beginPath();ctx.arc(px,py,rr,0,TAU);ctx.fill();
+    deposit(layer,px,py,rr*.8,rr*rr*1.2,paint,false);
+  }
+  ctx.globalAlpha=1;
+  // paint film on the wall
+  deposit(layer,ox,oy,r*.62,od,paint,true,st,hex);
+}
+/* Add paint film to the fields; maybe start a drip. */
+function deposit(layer,x,y,sigma,peak,paint,canDrip,st,hex){
+  const s=S.sim,cx=x*s,cy=y*s,sc=Math.max(sigma*s,.6),R=Math.ceil(sc*2.2);
+  const x0=Math.max(0,Math.floor(cx-R)),x1=Math.min(SW-1,Math.ceil(cx+R)),y0=Math.max(0,Math.floor(cy-R)),y1=Math.min(SH-1,Math.ceil(cy+R));
+  const k=-1/(2*sc*sc),absorb=S.surf.absorb,th=layer.thick;
+  for(let yy=y0;yy<=y1;yy++){const dy2=(yy-cy)*(yy-cy);for(let xx=x0;xx<=x1;xx++){
+    const wgt=Math.exp(((xx-cx)*(xx-cx)+dy2)*k);if(wgt<.02)continue;
+    const i=yy*SW+xx,t=peak*wgt;
+    th[i]+=t;
+    wet[i]+=t*(1-absorb*.55*(.5+POR[i]));
+    const m=Math.min(1,wgt*t*.4);gloss[i]+=(paint.gloss-gloss[i])*m;metal[i]+=(paint.metal-metal[i])*m;
+    if(wet[i]>wetMax)wetMax=wet[i];
+  }}
+  if(!canDrip||!S.phys.drips)return;
+  const i=ci(x,y),T=dripThreshold(paint,i);
+  if(wet[i]>T&&drips.length<S.phys.maxDrips&&Math.random()<.22){
+    const ex=wet[i]-T*.55;
+    const m=clamp(ex/T*2.2,.35,6);
+    const dx=x+gauss()*sigma*.45,dy=y+sigma*(.3+Math.random()*.5);
+    // the drip takes the paint out of the film around it
+    const rr=Math.max(1,Math.round(sigma*s*.9));
+    for(let yy=-rr;yy<=rr;yy++)for(let xx=-rr;xx<=rr;xx++){if(xx*xx+yy*yy>rr*rr)continue;const j=ci(dx+xx/s,y+yy/s);wet[j]*=.5}
+    drips.push({x:dx,y:dy,lx:dx,ly:dy,vx:0,m,vy:0,col:hex,layerId:layer.id,sid:st?st.sid:strokeSeq,seed:Math.random()*1000,
+      visc:paint.visc,run:paint.run,alpha:paint.alpha,gloss:paint.gloss,metal:paint.metal,stall:0,t:0});
+  }
+}
+function dripThreshold(paint,i){return 52*paint.visc*(1+S.surf.absorb*POR[i]*1.6)/Math.max(.05,S.phys.drips)}
+
+/* ---------------------------------------------------------------------
+   DRIPS — run down, follow grooves, catch on ledges, end in a bead
+   --------------------------------------------------------------------- */
+function stepDrips(dt){
+  if(!drips.length)return;
+  const g=62*S.phys.gravity,surf=S.surf,s=S.sim;
+  const keep=[];
+  for(const d of drips){
+    const L=layers.find(l=>l.id===d.layerId);if(!L)continue;
+    const ctx=L.ctx,i=ci(d.x,d.y),gy=GY[i],gx=GX[i];
+    d.t+=dt;
+    let vt=g*Math.sqrt(d.m)/d.visc;
+    vt*=.35+.65*n1(d.seed+d.y*.045);                      // stick–slip
+    if(d.t<.3)vt*=d.t/.3;                                  // drips start slow
+    vt*=clamp(1-surf.catch*Math.max(0,gy)*14,0,1.4);       // rising face below a groove / ledge
+    d.vy+=(vt-d.vy)*clamp(dt*5,0,1);
+    let dy=d.vy*dt;
+    if(vt<2){                                              // caught: pool, then maybe spill
+      d.stall+=dt;d.m+=Math.min(wet[i]*.002,.02)-dt*.03;
+      if(d.stall>(.6+2.4*surf.catch)/Math.max(.3,d.m)&&Math.random()<dt*1.5){dy=3;d.stall=0}
+      if(Math.random()<dt*3){const w=clamp(1+Math.sqrt(Math.max(d.m,0))*1.3,1,10);
+        ctx.globalAlpha=Math.min(1,d.alpha*1.2);ctx.fillStyle=d.col;ctx.beginPath();ctx.ellipse(d.x,d.y,w*(.8+d.stall*.6),w*.55,0,0,TAU);ctx.fill();ctx.globalAlpha=1;paintDirty=true}
+    }
+    // grooves steer the drip toward their low line; never more than ~35° off vertical
+    const tx=clamp(-gx*surf.channel*9,-.7,.7)+(n1(d.seed*3+d.y*.02)-.5)*.25;
+    d.vx+=(tx-d.vx)*clamp(dt*6,0,1);
+    if(dy>0&&surf.catch>0){                                // don't tunnel through a ledge between frames
+      for(let yy=1.5;yy<=dy;yy+=1.5){const q=ci(d.x,d.y+yy);if(1-surf.catch*Math.max(0,GY[q])*14<.08&&d.stall===0){dy=Math.max(0,yy-1.5);d.vy*=.2;break}}
+      if(d.stall>0&&vt>=2)d.stall=0;
+    }
+    d.x+=d.vx*Math.max(dy,0);d.y+=dy;
+    const j=ci(d.x,d.y);
+    if(dy>0){const pick=wet[j]*.02;d.m+=pick*.018;wet[j]-=pick;
+      d.m-=dy*.012*(1+surf.absorb*POR[j]*3)/(d.run*S.phys.runs)}
+    const wpx=clamp(1.2+Math.sqrt(Math.max(d.m,0))*1.4,1,10);
+    const seg=Math.hypot(d.x-d.lx,d.y-d.ly);
+    if(seg>=Math.max(1.2,wpx*.6)){
+      ctx.globalAlpha=Math.min(1,d.alpha*1.3);ctx.strokeStyle=d.col;ctx.lineWidth=wpx;ctx.lineCap="butt";
+      ctx.beginPath();ctx.moveTo(d.lx,d.ly-.4);ctx.lineTo(d.x,d.y);ctx.stroke();ctx.globalAlpha=1;
+      const R=Math.max(0,Math.round(wpx*.5*s)),nst=Math.max(1,Math.ceil(seg*s));
+      for(let u=1;u<=nst;u++){const fx=lerp(d.lx,d.x,u/nst),fy=lerp(d.ly,d.y,u/nst);
+        for(let k=-R;k<=R;k++){const q=ci(fx+k/s,fy);const a=(seg/nst)*(1-Math.abs(k)/(R+1)*.5);L.thick[q]+=a*1.4;wet[q]+=a*.8;gloss[q]+=(d.gloss-gloss[q])*.3;metal[q]+=(d.metal-metal[q])*.3}}
+      d.lx=d.x;d.ly=d.y;paintDirty=dataDirty=true;
+    }
+    if(d.m<.12||d.y>S.H+10){
+      if(d.y<S.H){ctx.globalAlpha=Math.min(1,d.alpha*1.3);ctx.fillStyle=d.col;ctx.beginPath();ctx.ellipse(d.x,d.y+wpx*.2,wpx*.8,wpx*.98,0,0,TAU);ctx.fill();ctx.globalAlpha=1;
+        const q=ci(d.x,d.y);L.thick[q]+=6;wet[q]+=4;paintDirty=dataDirty=true}
+      continue;
+    }
+    keep.push(d);
+  }
+  drips=keep;
+}
+function dry(dt){
+  if(wetMax<.2){return}
+  const base=4.5/Math.max(.05,S.phys.dry),ab=S.surf.absorb;let mx=0;
+  for(let i=0;i<SN;i++){const w=wet[i];if(w<=0)continue;
+    const tau=base*(.6+gloss[i]*1.8)/(1+ab*POR[i]*3);
+    const nw=w-w*dt/tau-dt*.02;wet[i]=nw>0?nw:0;if(nw>mx)mx=nw}
+  wetMax=mx;dataDirty=true;
+}
+
+/* ---------------------------------------------------------------------
+   HAND INPUT
+   --------------------------------------------------------------------- */
+const hand={down:false,queue:[],st:null,sx:0,sy:0,lastT:0,mx:-99,my:-99,pressure:1,over:false,t:0};
+const ov=$("#ov"),octx=ov.getContext("2d");
+function toWall(e){const r=ov.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*S.W,y:(e.clientY-r.top)/r.height*S.H}}
+ov.addEventListener("pointerdown",e=>{
+  ov.setPointerCapture(e.pointerId);
+  const p=toWall(e);hand.mx=p.x;hand.my=p.y;
+  if(S.input==="type"){S.tag.x=clamp(p.x/S.W,0,1);S.tag.y=clamp(p.y/S.H,0,1);schedulePreview();return}
+  if(e.button!==0)return;
+  pushUndo([activeId]);
+  hand.down=true;hand.queue.length=0;hand.sx=p.x;hand.sy=p.y;hand.lastT=e.timeStamp;
+  hand.st=newNozzle(S.cans.hand,activeId,S.hand,null);hand.st.x=p.x;hand.st.y=p.y;
+  hand.pressure=penP(e);
+});
+ov.addEventListener("pointermove",e=>{
+  const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+  for(const ev of (evs.length?evs:[e])){const p=toWall(ev);hand.mx=p.x;hand.my=p.y;
+    if(hand.down)hand.queue.push({x:p.x,y:p.y,t:ev.timeStamp,p:penP(ev)})}
+});
+const endHand=()=>{hand.down=false;hand.st=null;hand.queue.length=0};
+ov.addEventListener("pointerup",endHand);ov.addEventListener("pointercancel",endHand);
+ov.addEventListener("pointerenter",()=>hand.over=true);ov.addEventListener("pointerleave",()=>hand.over=false);
+ov.addEventListener("wheel",e=>{e.preventDefault();const c=S.input==="hand"?S.cans.hand:S.cans[S.canTab];c.dist=clamp(c.dist-e.deltaY*.0006,0,1);syncCanUI()},{passive:false});
+function penP(e){return(e.pointerType==="pen"&&S.hand.penPressure)?clamp(e.pressure*1.4,.05,1.4):1}
+function handTick(dt){
+  hand.t+=dt;
+  if(!hand.down||!hand.st)return;
+  const st=hand.st,stab=S.hand.stabilize,amp=S.hand.shake*2.2;
+  const shake=()=>[(n1(hand.t*5.3)-.5)*amp+(n1(hand.t*23+9)-.5)*amp*.4,(n1(hand.t*4.7+50)-.5)*amp+(n1(hand.t*19+3)-.5)*amp*.4];
+  let used=0;
+  if(S.hand.penWidth)st.widthMul=clamp(.4+hand.pressure*.8,.3,1.6);else st.widthMul=1;
+  for(const q of hand.queue){
+    const sdt=clamp((q.t-hand.lastT)/1000,0,.05);hand.lastT=q.t;used+=sdt;
+    const k=1-Math.pow(stab,Math.max(sdt*60,.05)*1.0);
+    hand.sx+=(q.x-hand.sx)*k;hand.sy+=(q.y-hand.sy)*k;hand.pressure=q.p;
+    const [jx,jy]=shake();
+    spraySegment(st,hand.sx+jx,hand.sy+jy,Math.max(sdt,.001),hand.pressure);
+  }
+  hand.queue.length=0;
+  const rest=dt-used;
+  if(rest>.002){
+    const k=1-Math.pow(stab,rest*60);hand.sx+=(hand.mx-hand.sx)*k;hand.sy+=(hand.my-hand.sy)*k;
+    const [jx,jy]=shake();spraySegment(st,hand.sx+jx,hand.sy+jy,rest,hand.pressure);hand.lastT+=rest*1000;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   TYPED — build strokes for a robot hand to paint
+   --------------------------------------------------------------------- */
+function crSpline(f,seg){ // flat [x,y,...] -> [{x,y}] Catmull–Rom through every point
+  const P=[];for(let i=0;i<f.length;i+=2)P.push({x:f[i],y:f[i+1]});
+  if(P.length<2)return P;
+  const out=[];
+  for(let i=0;i<P.length-1;i++){
+    const p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(P.length-1,i+2)];
+    for(let k=0;k<seg;k++){const t=k/seg,t2=t*t,t3=t2*t;
+      out.push({x:.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+                y:.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3)})}
+  }
+  out.push(P[P.length-1]);return out;
+}
+function resample(pts,step){
+  if(pts.length<2)return pts.slice();
+  const out=[{...pts[0]}];let acc=0;
+  for(let i=1;i<pts.length;i++){
+    let ax=pts[i-1].x,ay=pts[i-1].y;const bx=pts[i].x,by=pts[i].y;let seg=Math.hypot(bx-ax,by-ay);
+    while(acc+seg>=step){const t=(step-acc)/seg;ax+=(bx-ax)*t;ay+=(by-ay)*t;out.push({x:ax,y:ay,p:pts[i].p});seg=Math.hypot(bx-ax,by-ay);acc=0}
+    acc+=seg;
+  }
+  const l=pts[pts.length-1];if(Math.hypot(l.x-out[out.length-1].x,l.y-out[out.length-1].y)>.5)out.push({...l});
+  return out;
+}
+function bboxOf(strokes){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const s of strokes)for(const p of s.pts){if(p.x<x0)x0=p.x;if(p.y<y0)y0=p.y;if(p.x>x1)x1=p.x;if(p.y>y1)y1=p.y}return{x0,y0,x1,y1}}
+
+/* prepare a stroke for the robot: per-point pressure & speed, flick tail */
+function robotStroke(pts,canKey,speed,opt={}){
+  let P=resample(pts,2.5);if(P.length<2)P=[pts[0],{x:pts[0].x+.5,y:pts[0].y+.5}];
+  P.forEach(p=>{if(p.p==null)p.p=1});
+  const flick=opt.flick||0;
+  if(flick>0&&P.length>3){
+    const a=P[P.length-1],b=P[P.length-4],dx=a.x-b.x,dy=a.y-b.y,l=Math.hypot(dx,dy)||1,len=flick;
+    for(let k=1;k<=12;k++){const t=k/12;P.push({x:a.x+dx/l*len*t,y:a.y+dy/l*len*t,p:Math.pow(1-t,1.6),f:1})}
+  }
+  if(opt.taper){const n=P.length;P.forEach((p,i)=>{p.p*=Math.pow(Math.sin(Math.PI*clamp(i/(n-1),0.02,.98)),.6)})}
+  // speed: slow down where the path turns
+  const sv=S.tag.speedVar;
+  for(let i=0;i<P.length;i++){
+    const a=P[Math.max(0,i-3)],b=P[i],c=P[Math.min(P.length-1,i+3)];
+    const a1=Math.atan2(b.y-a.y,b.x-a.x),a2=Math.atan2(c.y-b.y,c.x-b.x);let d=Math.abs(Math.atan2(Math.sin(a2-a1),Math.cos(a2-a1)));
+    b.v=P[i].f?1.6:1-sv*.75*clamp(d/1.4,0,1);
+  }
+  const cl=[0];for(let i=1;i<P.length;i++)cl.push(cl[i-1]+Math.hypot(P[i].x-P[i-1].x,P[i].y-P[i-1].y));
+  return {pts:P,cl,canKey,layerId:S.tag.L[canKey==="tag"?"tag":canKey],speed,dwell:opt.dwell||0};
+}
+
+function buildTag(){
+  const T=S.tag,R=mulberry(T.seed*977+3),NZ=makeNoise(T.seed+101);
+  const letters=[];let pen=0,k=0;
+  for(const raw of T.text.toUpperCase()){
+    if(raw===" "){pen+=3.2+T.spacing*4;continue}
+    const g=SF[raw];if(!g)continue;
+    const big=k===0?T.firstBig:0;
+    const sc=1+big+(R()-.5)*T.jitter*.45, rot=(R()-.5)*T.jitter*.5, by=Math.sin(k*1.9+T.seed)*T.bounce*1.6+(R()-.5)*T.bounce*1.6;
+    const gw=g[0]*sc*T.stretch;
+    const strokes=g[1].map(f=>{
+      const o=[];for(let i=0;i<f.length;i+=2){
+        let lx=(f[i]-g[0]/2)*sc*T.stretch,ly=(f[i+1]-10)*sc;
+        const c=Math.cos(rot),s=Math.sin(rot),rx=lx*c-ly*s,ry=lx*s+ly*c;
+        o.push(rx+pen+gw/2,ry+10+by)}
+      return o});
+    letters.push({strokes,x0:pen,x1:pen+gw});
+    pen+=gw+1.1+T.spacing*4;k++;
+  }
+  if(!letters.length)return [];
+  const total=pen-(1.1+T.spacing*4);
+  const unit=T.size/10, ox=T.x*S.W-total*unit/2+T.slant*5*unit, oy=T.y*S.H-5*unit;
+  const toPx=(x,y)=>{const w1=(NZ.n(x*.35,y*.35)-.5)*T.wobble*.9,w2=(NZ.n(x*.35+40,y*.35)-.5)*T.wobble*.9;
+    const X=x+w1-(y-10)*T.slant;return{x:ox+X*unit,y:oy+(y+w2)*unit}};
+  let raw=[];
+  letters.forEach(L=>L.strokes.forEach(f=>{const sp=crSpline(f,7).map(p=>toPx(p.x,p.y));raw.push(sp)}));
+  if(T.connect){ // join a letter's end to the next start when they're close
+    const j=[raw[0]];for(let i=1;i<raw.length;i++){const a=j[j.length-1],b=raw[i],e=a[a.length-1],s=b[0];
+      if(Math.hypot(e.x-s.x,e.y-s.y)<unit*4.2&&s.x>e.x-unit)j[j.length-1]=a.concat(b);else j.push(b)}raw=j;
+  }
+  if(T.swoosh){
+    const e=total;const f=[e+.6,9.2,e*.75,12.2,e*.35,12.6,-.4,11.6,-1.4,10.6];
+    raw.push(crSpline(f,10).map(p=>toPx(p.x,p.y)));
+  }
+  const flick=T.flick*unit*2.2;
+  return raw.map((pts,i)=>robotStroke(pts,"tag",T.speed*(i===raw.length-1&&T.swoosh?1.5:1),{flick,dwell:T.dwell}));
+}
+
+/* ---- throw-up / piece: outline + fill from any font ---- */
+const maskCv=document.createElement("canvas"),blurCv=document.createElement("canvas");
+function buildPiece(){
+  const T=S.tag,W=S.W,H=S.H,R=mulberry(T.seed*131+7),F=2,gw=Math.floor(W/F),gh=Math.floor(H/F);
+  maskCv.width=blurCv.width=W;maskCv.height=blurCv.height=H;
+  const g=maskCv.getContext("2d");g.clearRect(0,0,W,H);g.fillStyle="#fff";
+  const font=`${T.weight} ${T.size}px "${T.font}", "Arial Black", Impact, sans-serif`;g.font=font;g.textBaseline="alphabetic";
+  const chars=[...T.text];const ws=chars.map(c=>g.measureText(c).width);
+  const sp=T.spacing*T.size*.35-T.size*.04;
+  const total=ws.reduce((a,b)=>a+b,0)+sp*(chars.length-1);
+  let x=T.x*W-total/2;const cy=T.y*H;const boxes=[];
+  chars.forEach((c,i)=>{
+    const w=ws[i];if(c!==" "){
+      const rot=(R()-.5)*T.jitter*.35,by=(Math.sin(i*1.9+T.seed)*.5+(R()-.5)*.5)*T.bounce*T.size*.18,sc=1+(R()-.5)*T.jitter*.25;
+      g.save();g.translate(x+w/2,cy+by);g.rotate(rot);g.transform(1,0,-T.slant*.6,1,0,0);g.scale(sc,sc);
+      g.fillText(c,-w/2,T.size*.36);g.restore();
+      boxes.push({x0:x,x1:x+w,y0:cy+by-T.size*.42,y1:cy+by+T.size*.38});
+    }
+    x+=w+sp;
+  });
+  const b=T.bubble*T.size*.09;
+  const bg=blurCv.getContext("2d");bg.clearRect(0,0,W,H);bg.filter=b>.5?`blur(${b}px)`:"none";bg.drawImage(maskCv,0,0);bg.filter="none";
+  const A=bg.getImageData(0,0,W,H).data,thr=(.5-T.expand*.4)*255;
+  const M=new Uint8Array(gw*gh);
+  for(let y=1;y<gh-1;y++)for(let x=1;x<gw-1;x++)M[y*gw+x]=A[((y*F)*W+x*F)*4+3]>thr?1:0;
+  // 3D block
+  const E=new Uint8Array(gw*gh);
+  if(T.depth>0){const ca=Math.cos(T.depthAng*D2R),sa=Math.sin(T.depthAng*D2R),steps=Math.round(T.depth/F);
+    for(let k=1;k<=steps;k++){const sx=Math.round(k*ca),sy=Math.round(k*sa);
+      for(let y=1;y<gh-1;y++){const yy=y-sy;if(yy<1||yy>=gh-1)continue;for(let x=1;x<gw-1;x++){const xx=x-sx;if(xx<1||xx>=gw-1)continue;if(M[yy*gw+xx])E[y*gw+x]=1}}}
+    for(let i=0;i<E.length;i++)if(M[i])E[i]=0;
+  }
+  const U=new Uint8Array(gw*gh);for(let i=0;i<U.length;i++)U[i]=M[i]|E[i];
+  const capR=c=>CAPS[c.cap].r0*(.3+1.4*c.dist);
+  const strokes=[];
+  const bb={x0:1e9,y0:1e9,x1:-1e9,y1:-1e9};boxes.forEach(q=>{bb.x0=Math.min(bb.x0,q.x0);bb.x1=Math.max(bb.x1,q.x1);bb.y0=Math.min(bb.y0,q.y0);bb.y1=Math.max(bb.y1,q.y1)});
+  // fill
+  const fr=capR(S.cans.fill);
+  hatch(M,gw,gh,F,T.hatchAngle,fr*.9*T.hatchSpace,fr*T.overspill*2).forEach(p=>strokes.push(robotStroke(p,"fill",T.speed*1.05,{})));
+  // 3D
+  if(T.depth>0){const dr=capR(S.cans.d3);hatch(E,gw,gh,F,T.hatchAngle+70,dr*.9*T.hatchSpace,dr*T.overspill).forEach(p=>strokes.push(robotStroke(p,"d3",T.speed*1.05,{})))}
+  // outline: the whole silhouette (letters + 3D), then the letter edges
+  const outl=[];
+  for(let pass=0;pass<T.outlinePasses;pass++){
+    if(T.depth>0)contours(U,gw,gh,F).forEach(c=>outl.push(c));
+    contours(M,gw,gh,F).forEach(c=>outl.push(c));
+  }
+  outl.forEach(c=>strokes.push(robotStroke(c,"outline",T.speed*.8,{dwell:T.dwell*.5})));
+  // shines
+  if(T.shines)boxes.forEach((q,i)=>{
+    const L=(q.x1-q.x0)*.16;let hit=null;
+    for(let yy=q.y0;yy<q.y1&&!hit;yy+=3)for(let xx=q.x0;xx<q.x1;xx+=3){
+      const ix=Math.floor((xx+L*.9)/F),iy=Math.floor((yy+L*.9)/F);if(ix<0||iy<0||ix>=gw||iy>=gh)continue;
+      if(M[iy*gw+ix]&&M[Math.floor((yy+L*1.6)/F)*gw+Math.floor((xx+L*1.6)/F)]){hit={x:xx+L*1.1,y:yy+L*1.1};break}}
+    if(!hit)return;
+    const s=L*(.8+R()*.5);
+    strokes.push(robotStroke([{x:hit.x-s,y:hit.y},{x:hit.x+s,y:hit.y}],"shine",T.speed*1.2,{taper:1}));
+    strokes.push(robotStroke([{x:hit.x,y:hit.y-s*1.3},{x:hit.x,y:hit.y+s*1.3}],"shine",T.speed*1.2,{taper:1}));
+  });
+  strokes.forEach(s=>s.bb=bb);
+  return strokes;
+}
+/* back-and-forth hatching across a mask, linked into continuous zig-zags */
+function hatch(M,gw,gh,F,angDeg,spacing,over){
+  let x0=gw,y0=gh,x1=0,y1=0;for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)if(M[y*gw+x]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(x1<x0)return [];
+  const a=angDeg*D2R,dx=Math.cos(a),dy=Math.sin(a),nx=-dy,ny=dx,cx=(x0+x1)/2,cy=(y0+y1)/2,half=Math.hypot(x1-x0,y1-y0)/2+2;
+  const sp=Math.max(1.5,spacing/F),ov=over/F,segs=[];
+  let line=0;
+  for(let t=-half;t<=half;t+=sp,line++){
+    let run=-1e9;
+    for(let s=-half;s<=half+1;s+=1){
+      const px=Math.round(cx+nx*t+dx*s),py=Math.round(cy+ny*t+dy*s);
+      const inside=px>=0&&py>=0&&px<gw&&py<gh&&M[py*gw+px];
+      if(inside&&run===-1e9)run=s;
+      if(!inside&&run!==-1e9){if(s-run>1.5)segs.push({a:[cx+nx*t+dx*(run-ov),cy+ny*t+dy*(run-ov)],b:[cx+nx*t+dx*(s-1+ov),cy+ny*t+dy*(s-1+ov)],line});run=-1e9}
+    }
+  }
+  const out=[],used=new Uint8Array(segs.length);
+  let cur=null,pos=null;
+  for(let n=0;n<segs.length;n++){
+    let best=-1,bd=1e9,rev=false;
+    if(pos)for(let i=0;i<segs.length;i++){if(used[i])continue;const s=segs[i];
+      const da=Math.hypot(s.a[0]-pos[0],s.a[1]-pos[1]),db=Math.hypot(s.b[0]-pos[0],s.b[1]-pos[1]);
+      if(da<bd){bd=da;best=i;rev=false}if(db<bd){bd=db;best=i;rev=true}}
+    if(best<0||bd>sp*2.8){
+      if(cur)out.push(cur);
+      best=-1;for(let i=0;i<segs.length;i++)if(!used[i]){best=i;break}
+      if(best<0)break;rev=false;cur=[];
+    }
+    used[best]=1;const s=segs[best],A=rev?s.b:s.a,B=rev?s.a:s.b;
+    cur.push({x:A[0]*F,y:A[1]*F},{x:B[0]*F,y:B[1]*F});pos=B;
+  }
+  if(cur&&cur.length)out.push(cur);
+  return out;
+}
+/* marching squares → closed, smoothed contours in wall px */
+function contours(M,gw,gh,F){
+  const adj=new Map(),key=(x,y)=>((y*2)|0)*(gw*2+4)+((x*2)|0),pt=new Map();
+  const add=(ax,ay,bx,by)=>{const ka=key(ax,ay),kb=key(bx,by);pt.set(ka,[ax,ay]);pt.set(kb,[bx,by]);
+    (adj.get(ka)||adj.set(ka,[]).get(ka)).push(kb);(adj.get(kb)||adj.set(kb,[]).get(kb)).push(ka)};
+  for(let y=0;y<gh-1;y++)for(let x=0;x<gw-1;x++){
+    const a=M[y*gw+x],b=M[y*gw+x+1],c=M[(y+1)*gw+x+1],d=M[(y+1)*gw+x],idx=a*8+b*4+c*2+d;if(idx===0||idx===15)continue;
+    const T=[x+.5,y],Rr=[x+1,y+.5],B=[x+.5,y+1],L=[x,y+.5];
+    const S2=(p,q)=>add(p[0],p[1],q[0],q[1]);
+    switch(idx){case 1:case 14:S2(L,B);break;case 2:case 13:S2(B,Rr);break;case 3:case 12:S2(L,Rr);break;case 4:case 11:S2(T,Rr);break;
+      case 5:S2(L,T);S2(B,Rr);break;case 6:case 9:S2(T,B);break;case 7:case 8:S2(L,T);break;case 10:S2(T,Rr);S2(L,B);break}
+  }
+  const seen=new Set(),out=[];
+  for(const [k0] of adj){
+    if(seen.has(k0))continue;
+    const chain=[k0];seen.add(k0);let prev=null,cur=k0;
+    for(;;){const nb=adj.get(cur).filter(n=>n!==prev&&!seen.has(n));if(!nb.length)break;prev=cur;cur=nb[0];seen.add(cur);chain.push(cur)}
+    if(chain.length<14)continue;
+    let P=chain.map(k=>{const p=pt.get(k);return{x:p[0]*F,y:p[1]*F}});
+    P=rdp(P,1.2);
+    for(let it=0;it<2;it++){const Q=[];for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length];Q.push({x:a.x*.75+b.x*.25,y:a.y*.75+b.y*.25},{x:a.x*.25+b.x*.75,y:a.y*.25+b.y*.75})}P=Q}
+    // start at the top-left-most point, the way a writer would, and close with a small overlap
+    let st=0;P.forEach((p,i)=>{if(p.x+p.y<P[st].x+P[st].y)st=i});P=P.slice(st).concat(P.slice(0,st));
+    P=P.concat(P.slice(0,Math.min(6,P.length)));
+    out.push(P);
+  }
+  return out;
+}
+function rdp(P,eps){
+  if(P.length<3)return P;
+  const keep=new Uint8Array(P.length);keep[0]=keep[P.length-1]=1;const st=[[0,P.length-1]];
+  while(st.length){const[a,b]=st.pop();let md=0,mi=-1;const A=P[a],B=P[b],dx=B.x-A.x,dy=B.y-A.y,l=Math.hypot(dx,dy)||1;
+    for(let i=a+1;i<b;i++){const d=Math.abs((P[i].x-A.x)*dy-(P[i].y-A.y)*dx)/l;if(d>md){md=d;mi=i}}
+    if(md>eps&&mi>0){keep[mi]=1;st.push([a,mi],[mi,b])}}
+  return P.filter((_,i)=>keep[i]);
+}
+
+/* ---- robot hand ---- */
+let preview=null,previewT=0;
+function buildJob(){return S.tag.mode==="tag"?buildTag():buildPiece()}
+function schedulePreview(){previewT=performance.now()+120}
+function startJob(){
+  const strokes=buildJob();if(!strokes.length)return;
+  const ids=[...new Set(strokes.map(s=>s.layerId))];
+  pushUndo(ids);
+  job={strokes,si:0,st:null,d:0,wait:0,dwell:0,t:0};
+  if(S.tag.mode==="tag"){const bb=bboxOf(strokes);strokes.forEach(s=>s.bb=bb)}
+}
+function robotAdvance(dt){
+  if(!job)return;
+  job.t+=dt;
+  if(job.wait>0){job.wait-=dt;return}
+  const s=job.strokes[job.si];if(!s){job=null;updateStatus();return}
+  if(!job.st){
+    const can=S.cans[s.canKey];
+    job.st=newNozzle(can,s.layerId,S.hand,s.bb);job.st.sid=job.sid||strokeSeq;
+    job.st.x=s.pts[0].x;job.st.y=s.pts[0].y;job.d=0;job.k=0;job.dwell=s.dwell/1000;
+  }
+  const st=job.st;
+  if(job.dwell>0){spraySegment(st,st.x,st.y,dt,1);job.dwell-=dt;return}
+  const P=s.pts,cl=s.cl;
+  const v=s.speed*(P[job.k].v||1);
+  job.d+=v*dt;
+  while(job.k<P.length-2&&cl[job.k+1]<job.d)job.k++;
+  const a=P[job.k],b=P[job.k+1],t=clamp((job.d-cl[job.k])/Math.max(1e-3,cl[job.k+1]-cl[job.k]),0,1);
+  const amp=S.hand.shake*1.4,tt=job.t;
+  const x=lerp(a.x,b.x,t)+(n1(tt*5.1)-.5)*amp,y=lerp(a.y,b.y,t)+(n1(tt*4.3+30)-.5)*amp;
+  spraySegment(st,x,y,dt,lerp(a.p,b.p,t));
+  if(job.d>=cl[cl.length-1]){job.si++;job.st=null;job.wait=.05+Math.random()*.06}
+}
+function robotTick(dt){
+  if(!job)return;
+  if(S.tag.instant){
+    const t0=performance.now();const sdt=1/120;
+    while(job&&performance.now()-t0<26){robotAdvance(sdt);stepDrips(sdt);}
+  }else{
+    let rem=dt*S.tag.play;const sdt=1/240;
+    while(job&&rem>0){const d=Math.min(sdt,rem);robotAdvance(d);rem-=d}
+  }
+}
+
+/* ---------------------------------------------------------------------
+   UNDO
+   --------------------------------------------------------------------- */
+function pushUndo(ids){
+  strokeSeq++;
+  const snap={sid:strokeSeq,layers:ids.map(id=>{const L=getLayer(id);const c=document.createElement("canvas");c.width=S.W;c.height=S.H;c.getContext("2d").drawImage(L.cv,0,0);return{id:L.id,c,thick:L.thick.slice()}})};
+  undoStack.push(snap);while(undoStack.length>10)undoStack.shift();
+}
+function doUndo(){
+  const s=undoStack.pop();if(!s)return;
+  drips=drips.filter(d=>d.sid<s.sid);if(job&&job.st&&job.st.sid>=s.sid)job=null;if(hand.st&&hand.st.sid>=s.sid)endHand();
+  for(const l of s.layers){const L=layers.find(q=>q.id===l.id);if(!L)continue;L.ctx.clearRect(0,0,S.W,S.H);L.ctx.drawImage(l.c,0,0);L.thick.set(l.thick)}
+  paintDirty=dataDirty=true;
+}
+
+/* ---------------------------------------------------------------------
+   RENDER — WebGL2
+   --------------------------------------------------------------------- */
+const glcv=$("#gl");
+const gl=glcv.getContext("webgl2",{preserveDrawingBuffer:true,antialias:false,premultipliedAlpha:false,alpha:false});
+const paintCv=document.createElement("canvas"),pctx=paintCv.getContext("2d");
+let dataBuf;
+const VS=`#version 300 es
+in vec2 p;out vec2 v;void main(){v=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0,1);}`;
+const FS=`#version 300 es
+precision highp float;in vec2 v;out vec4 o;
+uniform sampler2D uAlb,uNrm,uPaint,uData;uniform vec2 uRes,uSim;
+uniform vec3 uLight;uniform vec3 uLP;uniform float uTorch,uAmb,uSpec,uAO,uRelief,uBump,uRough,uWallGloss;
+void main(){
+  vec4 pc=texture(uPaint,v);vec4 d=texture(uData,v);
+  vec4 nt=texture(uNrm,v);vec3 wn=nt.xyz*2.-1.;float h=nt.a;
+  wn.xy*=uBump;
+  vec2 px=1./uSim;
+  float tl=texture(uData,v-vec2(px.x,0)).r,tr=texture(uData,v+vec2(px.x,0)).r,tu=texture(uData,v-vec2(0,px.y)).r,td=texture(uData,v+vec2(0,px.y)).r;
+  vec2 pg=vec2(tr-tl,td-tu)*3.2*uRelief;
+  float cover=smoothstep(0.,.55,d.r);
+  vec3 n=normalize(vec3(wn.xy*(1.-cover*.85)/max(wn.z,.2)-pg,1.));
+  // thin coats skip the recesses of rough walls; thick paint bridges them
+  float a=pc.a*mix(1.,smoothstep(.06,.5,h+d.r*.9+pc.a*.15),uRough);
+  vec3 alb=texture(uAlb,v).rgb;
+  vec3 base=mix(alb,pc.rgb,a);
+  vec3 fp=vec3(v*uRes,0.);
+  vec3 L=uTorch>.5?normalize(vec3((uLP.xy-fp.xy)/uRes.y,uLP.z)):normalize(uLight);
+  float flat_=max(L.z,.25);
+  float diff=clamp(max(dot(n,L),0.)/flat_,0.,1.7);
+  if(uTorch>.5){float dd=length((uLP.xy-fp.xy)/uRes.y);diff*=1.25/(1.+dd*dd*3.);}
+  float wet=d.g*a,glo=d.b*a,met=d.a*a;
+  vec3 H=normalize(L+vec3(0,0,1));
+  float shin=mix(12.,140.,max(wet,glo));
+  float sAmt=(.03+.75*wet+.45*glo)*a+uWallGloss*(1.-a);
+  float spec=pow(max(dot(n,H),0.),shin)*sAmt*uSpec*(.4+shin/70.);
+  vec3 specC=mix(vec3(1.),pc.rgb*1.4+.1,met);
+  float ao=mix(1.,clamp(.55+.9*h,0.,1.),uAO*(1.-cover));
+  vec3 r=reflect(vec3(0,0,-1),n);float env=smoothstep(-1.,1.,-r.y*1.4+r.x*.3);
+  vec3 col=base*(uAmb+(1.-uAmb)*diff)*ao*(1.-met*.55);
+  col+=met*pc.rgb*(.25+.9*env)*(.6+.4*diff);
+  col+=specC*spec;
+  o=vec4(pow(col,vec3(1.)),1.);
+}`;
+function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x}
+const prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+gl.useProgram(prog);
+const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const ploc=gl.getAttribLocation(prog,"p");gl.enableVertexAttribArray(ploc);gl.vertexAttribPointer(ploc,2,gl.FLOAT,false,0,0);
+const U={};["uAlb","uNrm","uPaint","uData","uRes","uSim","uLight","uLP","uTorch","uAmb","uSpec","uAO","uRelief","uBump","uRough","uWallGloss"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+function mkTex(unit){const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t}
+const tAlb=mkTex(0),tNrm=mkTex(1),tPaint=mkTex(2),tData=mkTex(3);
+gl.uniform1i(U.uAlb,0);gl.uniform1i(U.uNrm,1);gl.uniform1i(U.uPaint,2);gl.uniform1i(U.uData,3);
+gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+function uploadWall(){
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tAlb);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,S.W,S.H,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(albPix.buffer));
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,tNrm);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,S.W,S.H,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(nrmPix.buffer));
+  dataDirty=paintDirty=true;
+}
+function compositePaint(){
+  pctx.clearRect(0,0,S.W,S.H);
+  for(const L of layers){if(!L.vis||L.op<=0)continue;pctx.globalAlpha=L.op;pctx.drawImage(L.cv,0,0)}
+  pctx.globalAlpha=1;
+  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,tPaint);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,paintCv);
+  paintDirty=false;
+}
+function uploadData(){
+  const vis=layers.filter(l=>l.vis&&l.op>0),B=dataBuf;
+  for(let i=0;i<SN;i++){
+    let t=0;for(let k=0;k<vis.length;k++)t+=vis[k].thick[i]*vis[k].op;
+    const j=i*4;B[j]=255*(1-Math.exp(-t/12));B[j+1]=255*(1-Math.exp(-wet[i]/15));B[j+2]=gloss[i]*255;B[j+3]=metal[i]*255;
+  }
+  gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,tData);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,SW,SH,0,gl.RGBA,gl.UNSIGNED_BYTE,B);
+  dataDirty=false;
+}
+function render(){
+  const V=S.view;
+  gl.viewport(0,0,S.W,S.H);
+  gl.uniform2f(U.uRes,S.W,S.H);gl.uniform2f(U.uSim,SW,SH);
+  const a=V.lightAng*D2R,e=V.lightElev*D2R;
+  gl.uniform3f(U.uLight,Math.cos(a)*Math.cos(e),Math.sin(a)*Math.cos(e),Math.sin(e));
+  gl.uniform3f(U.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(U.uTorch,V.torch&&hand.over?1:0);
+  gl.uniform1f(U.uAmb,V.amb);gl.uniform1f(U.uSpec,V.spec);gl.uniform1f(U.uAO,V.ao);gl.uniform1f(U.uRelief,V.relief);
+  gl.uniform1f(U.uBump,S.surf.bump);gl.uniform1f(U.uRough,S.surf.rough);gl.uniform1f(U.uWallGloss,S.surf.gloss);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+function drawOverlay(){
+  octx.clearRect(0,0,S.W,S.H);
+  const sc=S.W/ov.getBoundingClientRect().width;
+  if(S.input==="type"&&!job){
+    if(preview){
+      octx.lineWidth=1.2*sc;
+      for(const s of preview){const c=S.cans[s.canKey];octx.strokeStyle=c.color;octx.globalAlpha=.55;
+        octx.beginPath();s.pts.forEach((p,i)=>i?octx.lineTo(p.x,p.y):octx.moveTo(p.x,p.y));octx.stroke()}
+      octx.globalAlpha=1;
+    }
+    const cx=S.tag.x*S.W,cy=S.tag.y*S.H;octx.strokeStyle="rgba(127,209,192,.9)";octx.lineWidth=1*sc;
+    octx.beginPath();octx.moveTo(cx-10*sc,cy);octx.lineTo(cx+10*sc,cy);octx.moveTo(cx,cy-10*sc);octx.lineTo(cx,cy+10*sc);octx.stroke();
+  }
+  if(S.input==="hand"&&hand.over){
+    const c=S.cans.hand,cap=CAPS[c.cap],r=Math.max(1.5,cap.r0*(.3+1.4*c.dist));
+    octx.strokeStyle="rgba(255,255,255,.55)";octx.lineWidth=1*sc;
+    octx.beginPath();
+    if(cap.aspect)octx.ellipse(hand.mx,hand.my,r*1.25,r*1.25*cap.aspect,S.hand.nib*D2R,0,TAU);else octx.arc(hand.mx,hand.my,r*1.25,0,TAU);
+    octx.stroke();
+    octx.fillStyle=c.color;octx.beginPath();octx.arc(hand.mx,hand.my,1.6*sc,0,TAU);octx.fill();
+    octx.strokeStyle="rgba(0,0,0,.5)";octx.beginPath();octx.arc(hand.mx,hand.my,r*1.25+1*sc,0,TAU);octx.stroke();
+  }
+}
+function fitFrame(){
+  const wrap=$("#canvasWrap"),r=wrap.getBoundingClientRect(),pad=44,aw=r.width-pad,ah=r.height-pad;
+  const s=Math.min(aw/S.W,ah/S.H);const f=$("#frame");f.style.width=(S.W*s)+"px";f.style.height=(S.H*s)+"px";
+}
+addEventListener("resize",fitFrame);
+
+/* ---------------------------------------------------------------------
+   MAIN LOOP
+   --------------------------------------------------------------------- */
+let last=performance.now(),fps=60,statT=0;
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;fps=lerp(fps,1/Math.max(dt,1e-3),.05);
+  handTick(dt);robotTick(dt);stepDrips(dt);dry(dt);
+  if(previewT&&now>previewT){previewT=0;try{preview=buildJob()}catch(e){console.error(e);preview=null}}
+  if(paintDirty)compositePaint();
+  if(dataDirty)uploadData();
+  render();drawOverlay();
+  if(now-statT>250){statT=now;updateStatus()}
+  requestAnimationFrame(frame);
+}
+function updateStatus(){
+  const c=S.input==="hand"?S.cans.hand:S.cans[S.canTab];
+  $("#status").textContent=`${S.W}×${S.H} · ${SURFACES[S.surf.type].name.toLowerCase()} · drips ${drips.length} · ${fps.toFixed(0)} fps`;
+  $("#statLine").innerHTML=job?`Painting stroke ${job.si+1} / ${job.strokes.length}`:
+    `distance ${(c.dist*100|0)}% <kbd>wheel</kbd> <kbd>[</kbd><kbd>]</kbd> · undo <kbd>Ctrl Z</kbd> · caps <kbd>1</kbd>–<kbd>7</kbd>`;
+}
+
+/* ---------------------------------------------------------------------
+   UI
+   --------------------------------------------------------------------- */
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
+function row(parent,label,...ctl){const r=el("div","row");r.append(el("label",null,label));const c=el("div","ctl");c.append(...ctl);r.append(c);parent.append(r);return r}
+const syncers=[];
+function slider(parent,label,obj,key,min,max,step,fmt,cb){
+  const i=el("input");i.type="range";i.min=min;i.max=max;i.step=step;const v=el("span","val");
+  const f=fmt||(x=>(+x).toFixed(step<.1?2:step<1?1:0));
+  const sync=()=>{i.value=obj[key];v.textContent=f(obj[key])};sync();
+  i.oninput=()=>{obj[key]=+i.value;v.textContent=f(obj[key]);cb&&cb()};
+  row(parent,label,i,v);syncers.push(sync);return i;
+}
+function select(parent,label,obj,key,opts,cb){
+  const s=el("select");opts.forEach(([v,t])=>{const o=el("option",null,t);o.value=v;s.append(o)});s.value=obj[key];
+  s.onchange=()=>{obj[key]=s.value;cb&&cb()};row(parent,label,s);syncers.push(()=>{s.value=obj[key]});return s;
+}
+function color(parent,label,obj,key,cb){const c=el("input");c.type="color";c.value=obj[key];c.oninput=()=>{obj[key]=c.value;cb&&cb()};
+  const r=row(parent,label,c);syncers.push(()=>{c.value=obj[key]});return c}
+function check(parent,label,obj,key,cb){const c=el("input");c.type="checkbox";c.checked=!!obj[key];c.onchange=()=>{obj[key]=c.checked;cb&&cb()};
+  row(parent,label,c);syncers.push(()=>{c.checked=!!obj[key]});return c}
+function note(parent,t){parent.append(el("div","note",t))}
+function sub(parent,t){parent.append(el("div","subhead",t))}
+function btns(parent,list){const r=el("div","btnrow");list.forEach(([t,fn,c])=>{const b=el("button",c||"",t);b.onclick=fn;r.append(b)});parent.append(r);return r}
+const pct=x=>Math.round(x*100)+"%";
+
+/* Input */
+function buildInputUI(){
+  const h=$("#inHand");h.innerHTML="";
+  note(h,"Draw on the wall. Holding still pools paint until it runs. The wheel moves the can nearer or further.");
+  sub(h,"Feel — weighting");
+  slider(h,"Speed → width",S.hand,"speedWidth",-1,1,.01);
+  slider(h,"Speed → flow",S.hand,"speedFlow",-1,1,.01);
+  slider(h,"Tilt from motion",S.hand,"tiltMotion",0,1,.01);
+  slider(h,"Can tilt",S.hand,"tilt",0,.9,.01);
+  slider(h,"Direction weight",S.hand,"dirWeight",0,1,.01);
+  slider(h,"Nib angle",S.hand,"nib",0,180,1,x=>x+"°");
+  slider(h,"Trigger ramp",S.hand,"ramp",0,400,1,x=>x+" ms");
+  slider(h,"Stabiliser",S.hand,"stabilize",0,.95,.01);
+  slider(h,"Hand shake",S.hand,"shake",0,3,.01);
+  check(h,"Pen → pressure",S.hand,"penPressure");
+  check(h,"Pen → width",S.hand,"penWidth");
+  note(h,"The same feel settings drive the robot hand in Type mode.");
+
+  const t=$("#inType");t.innerHTML="";
+  const txt=el("input","big");txt.type="text";txt.value=S.tag.text;txt.maxLength=24;txt.oninput=()=>{S.tag.text=txt.value;schedulePreview()};
+  t.append(txt);
+  const mt=el("div","tabs");[["tag","Tag — single line"],["piece","Throw-up — outline + fill"]].forEach(([m,l])=>{const b=el("button",null,l);b.dataset.m=m;b.onclick=()=>{S.tag.mode=m;buildInputUI();schedulePreview()};if(S.tag.mode===m)b.classList.add("on");mt.append(b)});
+  t.append(mt);
+  note(t,"Click the wall to place it. The preview shows the path the hand will take.");
+  const P=schedulePreview;
+  slider(t,"Size",S.tag,"size",40,500,1,x=>x+" px",P);
+  slider(t,"Slant",S.tag,"slant",-.6,.8,.01,null,P);
+  slider(t,"Spacing",S.tag,"spacing",-.6,1,.01,null,P);
+  slider(t,"Letter jitter",S.tag,"jitter",0,1.5,.01,null,P);
+  slider(t,"Bounce",S.tag,"bounce",0,1.5,.01,null,P);
+  if(S.tag.mode==="tag"){
+    slider(t,"Stretch",S.tag,"stretch",.4,2,.01,null,P);
+    slider(t,"Wobble",S.tag,"wobble",0,1.5,.01,null,P);
+    slider(t,"First letter",S.tag,"firstBig",0,1,.01,null,P);
+    check(t,"Swoosh under",S.tag,"swoosh",P);
+    check(t,"Connect letters",S.tag,"connect",P);
+    slider(t,"End flicks",S.tag,"flick",0,2,.01,null,P);
+  }else{
+    const fonts=[["Arial Black","Arial Black"],["Impact","Impact"],["Segoe UI","Segoe UI"],["Verdana","Verdana"],["Georgia","Georgia"],["Trebuchet MS","Trebuchet MS"],["Comic Sans MS","Comic Sans MS"],["Courier New","Courier New"]];
+    if(customFont)fonts.unshift([customFont,customFont+" (loaded)"]);
+    select(t,"Font",S.tag,"font",fonts,P);
+    btns(t,[["Load font file…",()=>$("#fFont").click()]]);
+    slider(t,"Bubble",S.tag,"bubble",0,1.5,.01,null,P);
+    slider(t,"Expand",S.tag,"expand",-.5,.9,.01,null,P);
+    slider(t,"3D depth",S.tag,"depth",0,80,1,x=>x+" px",P);
+    slider(t,"3D angle",S.tag,"depthAng",0,360,1,x=>x+"°",P);
+    slider(t,"Fill angle",S.tag,"hatchAngle",-90,90,1,x=>x+"°",P);
+    slider(t,"Fill spacing",S.tag,"hatchSpace",.5,2.5,.01,null,P);
+    slider(t,"Overspill",S.tag,"overspill",0,1.5,.01,null,P);
+    slider(t,"Outline passes",S.tag,"outlinePasses",1,3,1,null,P);
+    check(t,"Shines",S.tag,"shines",P);
+  }
+  slider(t,"Seed",S.tag,"seed",1,999,1,null,P);
+  sub(t,"Hand");
+  slider(t,"Hand speed",S.tag,"speed",150,2500,1,x=>x+" px/s",P);
+  slider(t,"Slow on curves",S.tag,"speedVar",0,1,.01,null,P);
+  slider(t,"Start dwell",S.tag,"dwell",0,600,1,x=>x+" ms",P);
+  slider(t,"Playback",S.tag,"play",.1,6,.01,x=>(+x).toFixed(2)+"×");
+  check(t,"Instant",S.tag,"instant");
+  sub(t,"Layers");
+  const lo=layers.slice().reverse().map(l=>[l.id,l.name]);
+  const keys=S.tag.mode==="tag"?[["tag","Tag"]]:[["fill","Fill"],["d3","3D"],["outline","Outline"],["shine","Shines"]];
+  keys.forEach(([k,n])=>{const s=select(t,n+" →",S.tag.L,k,lo,()=>{S.tag.L[k]=+s.value;P()});s.value=S.tag.L[k]});
+  btns(t,[["▶ Paint it",startJob,"primary"],["■ Stop",()=>{job=null}]]);
+  $("#inTabs").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.in===S.input));
+  $("#inHand").classList.toggle("hidden",S.input!=="hand");$("#inType").classList.toggle("hidden",S.input!=="type");
+  document.body.classList.toggle("typing",S.input==="type");
+}
+$("#inTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  S.input=b.dataset.in;
+  if(S.input==="hand")S.canTab="hand";else if(S.canTab==="hand")S.canTab=S.tag.mode==="tag"?"tag":"fill";
+  buildInputUI();buildCanUI();if(S.input==="type")schedulePreview();
+});
+
+/* Can */
+let canSync=[];
+function buildCanUI(){
+  const tabs=$("#canTabs");tabs.innerHTML="";
+  CAN_TABS.forEach(([k,n])=>{const b=el("button",null,n);if(k===S.canTab)b.classList.add("on");b.onclick=()=>{S.canTab=k;buildCanUI()};tabs.append(b)});
+  const c=S.cans[S.canTab],b=$("#canBody");b.innerHTML="";
+  const before=syncers.length;
+  select(b,"Cap",c,"cap",Object.entries(CAPS).map(([k,v])=>[k,v.name]),schedulePreview);
+  select(b,"Paint",c,"paint",Object.entries(PAINTS).map(([k,v])=>[k,v.name]));
+  color(b,"Colour",c,"color");
+  const sw=el("div","swatches");SWATCHES.forEach(hx=>{const i=el("i");i.style.background=hx;i.title=hx;i.onclick=()=>{c.color=hx;syncCanUI()};sw.append(i)});b.append(sw);
+  select(b,"Fade",c,"fade",[["none","None"],["vertical","Top → bottom"],["horizontal","Left → right"],["stroke","Along stroke"]],()=>buildCanUI());
+  if(c.fade!=="none")color(b,"Fade to",c,"color2");
+  slider(b,"Distance",c,"dist",0,1,.01,pct,schedulePreview);
+  slider(b,"Pressure",c,"pressure",.1,1.5,.01,pct);
+  canSync=syncers.slice(before);
+  note(b,S.canTab==="hand"?"Close and slow: thin, wet, drips. Far and fast: wide, dry, misty.":"This can is used by the robot hand when it paints the "+CAN_TABS.find(t=>t[0]===S.canTab)[1].toLowerCase()+".");
+}
+function syncCanUI(){canSync.forEach(f=>f());updateStatus()}
+
+/* Layers */
+function buildLayerUI(){
+  const g=$("#g-layers");g.innerHTML="";
+  const list=el("div");list.id="layerList";
+  layers.slice().reverse().forEach(L=>{
+    const r=el("div","lyr"+(L.id===activeId?" on":""));
+    const eye=el("input");eye.type="checkbox";eye.checked=L.vis;eye.title="Visible";eye.onclick=e=>e.stopPropagation();eye.onchange=()=>{L.vis=eye.checked;paintDirty=dataDirty=true};
+    const nm=el("input","nm");nm.type="text";nm.value=L.name;nm.onchange=()=>{L.name=nm.value;buildInputUI()};nm.onclick=e=>{e.stopPropagation();activeId=L.id;buildLayerUI()};
+    const op=el("input","op");op.type="range";op.min=0;op.max=1;op.step=.01;op.value=L.op;op.title="Opacity";op.onclick=e=>e.stopPropagation();op.oninput=()=>{L.op=+op.value;paintDirty=dataDirty=true};
+    const tg=el("span","tag",L.id===activeId?"hand":"");
+    r.append(eye,nm,tg,op);r.onclick=()=>{activeId=L.id;buildLayerUI()};list.append(r);
+  });
+  g.append(list);
+  btns(g,[["+ Add",()=>{const L=makeLayer("Layer "+nextLayerId);const i=layers.findIndex(l=>l.id===activeId);layers.splice(i+1,0,L);activeId=L.id;buildLayerUI();buildInputUI()}],
+    ["▲",()=>moveLayer(1)],["▼",()=>moveLayer(-1)],
+    ["Delete",()=>{if(layers.length<2)return;const i=layers.findIndex(l=>l.id===activeId);const id=layers[i].id;layers.splice(i,1);drips=drips.filter(d=>d.layerId!==id);
+      activeId=layers[Math.max(0,i-1)].id;Object.keys(S.tag.L).forEach(k=>{if(S.tag.L[k]===id)S.tag.L[k]=activeId});paintDirty=dataDirty=true;buildLayerUI();buildInputUI()}]]);
+  note(g,"Hand strokes go on the highlighted layer. Type mode routes fill, 3D, outline and shines to their own layers (set under Input).");
+}
+function moveLayer(d){const i=layers.findIndex(l=>l.id===activeId),j=i+d;if(j<0||j>=layers.length)return;[layers[i],layers[j]]=[layers[j],layers[i]];paintDirty=true;buildLayerUI();buildInputUI()}
+function clearLayer(L){L.ctx.clearRect(0,0,S.W,S.H);L.thick.fill(0);drips=drips.filter(d=>d.layerId!==L.id)}
+
+/* Physics */
+function buildPhysUI(){
+  const g=$("#g-phys");
+  slider(g,"Drip amount",S.phys,"drips",0,3,.01);
+  slider(g,"Run length",S.phys,"runs",.2,4,.01);
+  slider(g,"Gravity",S.phys,"gravity",.1,3,.01);
+  slider(g,"Drying speed",S.phys,"dry",.1,5,.01);
+  slider(g,"Max drips",S.phys,"maxDrips",20,1500,1);
+  note(g,"Each paint sets its own viscosity, run and gloss; the wall sets how fast it soaks in and where drips go.");
+}
+
+/* Surface */
+let surfTimer=0;
+function rebuildSurface(keep){
+  $("#busy").style.display="block";clearTimeout(surfTimer);
+  surfTimer=setTimeout(()=>{try{genSurface()}catch(e){console.error(e)}$("#busy").style.display="none"},30);
+}
+function buildSurfUI(){
+  const g=$("#g-surf");g.innerHTML="";
+  select(g,"Wall",S.surf,"type",Object.entries(SURFACES).map(([k,v])=>[k,v.name]),()=>{Object.assign(S.surf,pick(SURFACES[S.surf.type]));buildSurfUI();rebuildSurface()});
+  if(S.surf.type==="custom"){
+    btns(g,[["Albedo…",()=>$("#fAlb").click()],["Normal map…",()=>$("#fNrm").click()],["Height…",()=>$("#fHgt").click()]]);
+    note(g,`Loaded: ${["alb","nrm","hgt"].map(k=>custom[k]?k:"—").join(" · ")}. Maps tile across the wall.`);
+    check(g,"DirectX normal",S.surf,"flipG",()=>rebuildSurface());
+  }
+  slider(g,"Seed",S.surf,"seed",1,99,1,null,()=>rebuildSurface());
+  slider(g,"Scale",S.surf,"scale",.4,3,.01,null,()=>rebuildSurface());
+  color(g,"Tint",S.surf,"tint",()=>rebuildSurface());
+  slider(g,"Bump",S.surf,"bump",0,3,.01);
+  sub(g,"How paint behaves on it");
+  slider(g,"Absorbency",S.surf,"absorb",0,1,.01);
+  slider(g,"Roughness",S.surf,"rough",0,1,.01);
+  slider(g,"Channels drips",S.surf,"channel",0,1,.01);
+  slider(g,"Ledges catch",S.surf,"catch",0,1,.01);
+  slider(g,"Wall sheen",S.surf,"gloss",0,1,.01);
+  note(g,"Absorbent walls drink thin coats and dry fast. Rough walls leave the recesses bare until paint is thick. Grooves steer drips; ledges stop them until they pool and spill.");
+}
+const pick=o=>({absorb:o.absorb,rough:o.rough,channel:o.channel,catch:o.catch,gloss:o.gloss});
+function loadImg(file,cb){const u=URL.createObjectURL(file);const i=new Image();i.onload=()=>cb(i);i.src=u}
+[["#fAlb","alb"],["#fNrm","nrm"],["#fHgt","hgt"]].forEach(([s,k])=>$(s).onchange=e=>{const f=e.target.files[0];if(!f)return;loadImg(f,i=>{custom[k]=i;buildSurfUI();rebuildSurface()});e.target.value=""});
+let customFont=null;
+$("#fFont").onchange=async e=>{const f=e.target.files[0];if(!f)return;const name="GT_"+f.name.replace(/\W+/g,"_");
+  try{const ff=new FontFace(name,await f.arrayBuffer());await ff.load();document.fonts.add(ff);customFont=name;S.tag.font=name;buildInputUI();schedulePreview()}catch(err){console.error(err)}e.target.value=""};
+
+/* View */
+function buildViewUI(){
+  const g=$("#g-view");
+  slider(g,"Light angle",S.view,"lightAng",-180,180,1,x=>x+"°");
+  slider(g,"Light height",S.view,"lightElev",5,90,1,x=>x+"°");
+  slider(g,"Ambient",S.view,"amb",0,1,.01);
+  slider(g,"Specular",S.view,"spec",0,3,.01);
+  slider(g,"Occlusion",S.view,"ao",0,1,.01);
+  slider(g,"Paint relief",S.view,"relief",0,4,.01);
+  check(g,"Torch (follows cursor)",S.view,"torch");
+  slider(g,"Torch height",S.view,"torchH",.05,1.5,.01);
+}
+
+/* Footer */
+$("#btnUndo").onclick=doUndo;
+$("#btnClearLayer").onclick=()=>{pushUndo([activeId]);clearLayer(getLayer(activeId));paintDirty=dataDirty=true};
+$("#btnClearAll").onclick=()=>{pushUndo(layers.map(l=>l.id));layers.forEach(clearLayer);wet.fill(0);gloss.fill(0);metal.fill(0);job=null;paintDirty=dataDirty=true};
+function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+const stamp=()=>new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+$("#btnPNG").onclick=()=>{render();glcv.toBlob(b=>download(b,`ghost-tag-${stamp()}.png`),"image/png")};
+$("#btnDecal").onclick=()=>{
+  compositePaint();paintCv.toBlob(b=>download(b,`ghost-tag-${stamp()}-albedo.png`),"image/png");
+  const c=document.createElement("canvas");c.width=SW;c.height=SH;const g=c.getContext("2d"),id=g.createImageData(SW,SH);
+  for(let i=0;i<SN;i++){let t=0;for(const L of layers)if(L.vis)t+=L.thick[i]*L.op;const v=255*(1-Math.exp(-t/12));id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255}
+  g.putImageData(id,0,0);const big=document.createElement("canvas");big.width=S.W;big.height=S.H;const bg=big.getContext("2d");bg.imageSmoothingEnabled=true;bg.drawImage(c,0,0,S.W,S.H);
+  setTimeout(()=>big.toBlob(b=>download(b,`ghost-tag-${stamp()}-height.png`),"image/png"),300);
+};
+let rec=null;
+$("#btnRec").onclick=()=>{
+  if(rec){rec.stop();return}
+  const stream=glcv.captureStream(60);const chunks=[];
+  const mime=MediaRecorder.isTypeSupported("video/webm;codecs=vp9")?"video/webm;codecs=vp9":"video/webm";
+  rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:16e6});
+  rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  rec.onstop=()=>{download(new Blob(chunks,{type:"video/webm"}),`ghost-tag-${stamp()}.webm`);rec=null;$("#btnRec").textContent="Record";$("#btnRec").classList.remove("warm")};
+  rec.start(500);$("#btnRec").textContent="● Stop";$("#btnRec").classList.add("warm");
+};
+$("#sizeSel").onchange=e=>{const[w,h]=e.target.value.split("x").map(Number);S.W=w;S.H=h;glcv.width=ov.width=w;glcv.height=ov.height=h;allocFields(false);
+  fitFrame();buildLayerUI();buildInputUI();rebuildSurface();schedulePreview()};
+
+/* Keys */
+addEventListener("keydown",e=>{
+  if(e.target&&(e.target.tagName==="INPUT"&&e.target.type==="text"))return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();doUndo();return}
+  const c=S.input==="hand"?S.cans.hand:S.cans[S.canTab];
+  if(e.key==="["){c.dist=clamp(c.dist-.05,0,1);syncCanUI()}
+  if(e.key==="]"){c.dist=clamp(c.dist+.05,0,1);syncCanUI()}
+  const keys=Object.keys(CAPS);const n=parseInt(e.key,10);
+  if(n>=1&&n<=keys.length&&!e.ctrlKey&&!e.metaKey){c.cap=keys[n-1];syncCanUI();schedulePreview()}
+});
+
+/* ---------------------------------------------------------------------
+   BOOT
+   --------------------------------------------------------------------- */
+glcv.width=ov.width=S.W;glcv.height=ov.height=S.H;
+allocFields(false);
+buildInputUI();buildCanUI();buildLayerUI();buildPhysUI();buildSurfUI();buildViewUI();
+fitFrame();
+genSurface();
+requestAnimationFrame(frame);
+// a first tag so the wall isn't empty
+setTimeout(()=>{if(!job&&!hand.down){S.input="type";startJob();S.input="hand"}},350);
+window.GhostTag={S,layers:()=>layers,startJob,buildJob,get job(){return job},get drips(){return drips},rebuildSurface,doUndo};
+</script>
+</body>
+</html>
