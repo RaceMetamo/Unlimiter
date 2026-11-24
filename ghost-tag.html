@@ -110,6 +110,21 @@
     </details>
 
     <details class="group" open>
+      <summary>Layers<span class="chev"></span></summary>
+      <div class="body" id="g-layers"></div>
+    </details>
+
+    <details class="group" open id="grp-brush">
+      <summary>Brush — line, nib, passes<span class="chev"></span></summary>
+      <div class="body" id="g-brush"></div>
+    </details>
+
+    <details class="group" open id="grp-motion">
+      <summary>Ambient motion<span class="chev"></span></summary>
+      <div class="body" id="g-motion"></div>
+    </details>
+
+    <details class="group" open id="grp-can">
       <summary>Can — cap, paint, colour<span class="chev"></span></summary>
       <div class="body">
         <div class="tabs" id="canTabs"></div>
@@ -117,17 +132,17 @@
       </div>
     </details>
 
-    <details class="group" open>
-      <summary>Layers<span class="chev"></span></summary>
-      <div class="body" id="g-layers"></div>
+    <details class="group">
+      <summary>Hand feel — weighting<span class="chev"></span></summary>
+      <div class="body" id="g-feel"></div>
     </details>
 
-    <details class="group">
+    <details class="group" id="grp-phys">
       <summary>Drips &amp; drying<span class="chev"></span></summary>
       <div class="body" id="g-phys"></div>
     </details>
 
-    <details class="group" open>
+    <details class="group">
       <summary>Surface — wall<span class="chev"></span></summary>
       <div class="body" id="g-surf"></div>
     </details>
@@ -135,6 +150,16 @@
     <details class="group">
       <summary>View — light<span class="chev"></span></summary>
       <div class="body" id="g-view"></div>
+    </details>
+
+    <details class="group">
+      <summary>Camera — 3D<span class="chev"></span></summary>
+      <div class="body" id="g-cam"></div>
+    </details>
+
+    <details class="group">
+      <summary>Drive — audio, MIDI, modulation<span class="chev"></span></summary>
+      <div class="body" id="g-drive"></div>
     </details>
 
   </div>
@@ -168,6 +193,7 @@
 <input type="file" id="fFont" accept=".ttf,.otf,.woff,.woff2" class="hidden">
 
 <script src="unlimiter-ui.js" data-ulx-canvas="#gl"></script>
+<script src="unlimiter-drive.js"></script>
 <script>
 "use strict";
 /* =====================================================================
@@ -223,12 +249,12 @@ const CAPS={
   dirty:     {name:"Dirty / spitting",     r0:8,   flow:2.2, spread:2.0, speck:1800,dot:1.4,spit:.12}
 };
 const PAINTS={
-  matte: {name:"Low pressure matt", flow:.8,  visc:1.0, run:1.0, gloss:.08,metal:0, alpha:1},
-  hp:    {name:"High pressure",     flow:1.6, visc:.8,  run:1.3, gloss:.2, metal:0, alpha:1},
-  gloss: {name:"Gloss enamel",      flow:1.1, visc:1.5, run:2.0, gloss:.95,metal:0, alpha:1},
-  chrome:{name:"Chrome / metallic", flow:1.0, visc:.9,  run:1.1, gloss:.7, metal:1, alpha:1},
-  ink:   {name:"Drip ink (refill)", flow:1.0, visc:.3,  run:3.2, gloss:.55,metal:0, alpha:.72},
-  fluoro:{name:"Fluoro / transparent",flow:1.0,visc:.7, run:1.4, gloss:.15,metal:0, alpha:.55}
+  matte: {name:"Low pressure matt", flow:.8,  visc:1.0, run:1.0, gloss:0,  metal:0, alpha:1, d:"Flat, chalky finish. Slow flow, short drips."},
+  hp:    {name:"High pressure",     flow:1.6, visc:.8,  run:1.3, gloss:.3, metal:0, alpha:1, d:"Twice the flow — covers fast, pools and drips easily. Satin."},
+  gloss: {name:"Gloss enamel",      flow:1.1, visc:1.5, run:2.0, gloss:1,  metal:0, alpha:1, d:"Thick and shiny. Resists dripping, but when it runs it runs long. Stays wet longer."},
+  chrome:{name:"Chrome / metallic", flow:1.0, visc:.9,  run:1.1, gloss:.8, metal:1, alpha:1, d:"Mirror metal — reflects the light; the colour tints it. Pick a light colour for silver."},
+  ink:   {name:"Drip ink (refill)", flow:1.0, visc:.3,  run:3.2, gloss:.55,metal:0, alpha:.72,d:"Thin, see-through and runny — drips at the slightest pause and runs a long way."},
+  fluoro:{name:"Fluoro / transparent",flow:1.0,visc:.7, run:1.4, gloss:.15,metal:-1,alpha:.55,d:"Transparent but glowing — builds up in layers, brightens what it covers."}
 };
 const SWATCHES=["#0d0d0f","#f4f1ea","#d7263d","#ff6b1a","#ffd23f","#3bceac","#0ead69","#1b98e0","#3a2bd9","#c44bd8","#ff5da2","#8a8a8a","#6b3e26","#b7b7b7","#00f0ff","#c8ff00"];
 
@@ -302,10 +328,12 @@ const S={
     shine:  newCan("skinny","matte","#f4f1ea",.35)
   },
   phys:{gravity:1,drips:1,dry:1,runs:1,maxDrips:400},
-  surf:{type:"concrete",seed:3,scale:1,bump:1,tint:"#ffffff",absorb:.5,rough:.45,channel:.15,catch:.1,gloss:.03,flipG:false},
-  view:{lightAng:-125,lightElev:38,amb:.42,spec:1,ao:.7,relief:1,torch:false,torchH:.35}
+  surf:{type:"blank",seed:3,scale:1,bump:1,tint:"#ffffff",absorb:.05,rough:0,channel:0,catch:0,gloss:.02,flipG:false},
+  view:{lightAng:-125,lightElev:38,amb:.42,spec:1,ao:.7,relief:1,torch:false,torchH:.35,
+        dim3:false,camYaw:-28,camPitch:14,camRoll:0,camDist:1800,persp:1,camZoom:.8,camAuto:0,showWall:true,bg:"#101214"}
 };
 S.cans.fill.fade="vertical";S.cans.fill.color2="#ffd23f";
+const Drive=(window.UnlimiterDrive)?UnlimiterDrive.create({onChange:()=>{for(const L of layers)if(L.kind==="brush"){L.dirty=true;if(L.src)L.src.sig=""}},getOutputCanvas:()=>glcv}):null;
 const CAN_TABS=[["hand","Hand"],["tag","Tag"],["fill","Fill"],["outline","Outline"],["d3","3D"],["shine","Shine"]];
 
 /* ---------------------------------------------------------------------
@@ -321,9 +349,17 @@ let paintDirty=true,dataDirty=true,wetMax=0;
 
 function makeLayer(name){
   const cv=document.createElement("canvas");cv.width=S.W;cv.height=S.H;
-  return {id:nextLayerId++,name,cv,ctx:cv.getContext("2d"),thick:new Float32Array(SN),vis:true,op:1};
+  return {id:nextLayerId++,kind:"spray",name,cv,ctx:cv.getContext("2d"),thick:new Float32Array(SN),vis:true,op:1};
 }
-const getLayer=id=>layers.find(l=>l.id===id)||layers[layers.length-1];
+function makeBrushLayer(name,look){
+  const cv=document.createElement("canvas");cv.width=S.W;cv.height=S.H;
+  const B=Object.assign({},BRUSH_DEFAULTS,look?BRUSH_LOOKS[look].v:{});
+  return {id:nextLayerId++,kind:"brush",name,cv,ctx:cv.getContext("2d"),vis:true,op:1,B,strokes:[],src:null,live:[],fills:[],dirty:true,write:null,tex:null,Q:B};
+}
+const getLayer=id=>layers.find(l=>l.id===id)||layers.find(l=>l.kind==="spray");
+const activeLayer=()=>layers.find(l=>l.id===activeId)||layers[layers.length-1];
+const sprayLayers=()=>layers.filter(l=>l.kind==="spray");
+const brushLayers=()=>layers.filter(l=>l.kind==="brush");
 const ci=(x,y)=>{let cx=(x*S.sim)|0,cy=(y*S.sim)|0;cx=cx<0?0:cx>=SW?SW-1:cx;cy=cy<0?0:cy>=SH?SH-1:cy;return cy*SW+cx};
 
 function allocFields(keepLayers){
@@ -332,9 +368,9 @@ function allocFields(keepLayers){
   HS=new Float32Array(SN);GX=new Float32Array(SN);GY=new Float32Array(SN);POR=new Float32Array(SN);
   if(!keepLayers){
     layers=[];nextLayerId=1;
-    ["Shadow / 3D","Fill","Outline","Details"].forEach(n=>layers.push(makeLayer(n)));
-    activeId=layers[2].id;
-    S.tag.L={tag:layers[2].id,fill:layers[1].id,outline:layers[2].id,d3:layers[0].id,shine:layers[3].id};
+    layers.push(makeLayer("Spray"));layers.push(makeBrushLayer("Brush","calligraphy"));
+    activeId=layers[1].id;
+    const sp=layers[0].id;S.tag.L={tag:sp,fill:sp,outline:sp,d3:sp,shine:sp};
   }
   drips=[];job=null;undoStack=[];
   paintCv.width=S.W;paintCv.height=S.H;
@@ -345,6 +381,7 @@ function allocFields(keepLayers){
    SURFACES — procedural walls: albedo, height, porosity + behaviour
    --------------------------------------------------------------------- */
 const SURFACES={
+  blank:   {name:"Blank white",                absorb:.05,rough:0,  channel:0,  catch:0,  gloss:.02},
   primer:  {name:"Primed wall (smooth)",       absorb:.05,rough:.04,channel:.08,catch:0,  gloss:.05},
   concrete:{name:"Bare concrete",              absorb:.5, rough:.45,channel:.15,catch:.1, gloss:.02},
   brick:   {name:"Brick & mortar",             absorb:.45,rough:.35,channel:.35,catch:.75,gloss:.02},
@@ -377,7 +414,8 @@ function genSurface(){
   }else{
     for(let y=0;y<H;y++)for(let x=0;x<W;x++){
       const i=y*W+x,X=x/sc,Y=y/sc;let r,g,b,hh,pp;
-      if(type==="primer"){
+      if(type==="blank"){hh=.5;r=g=b=247;pp=0}
+      else if(type==="primer"){
         const n=NZ.fbm(X/90,Y/90,3),f=NZ.n(X/1.6,Y/1.6);
         hh=.5+(n-.5)*.18+(f-.5)*.05;const v=226+(n-.5)*14+(f-.5)*6;r=v+2;g=v;b=v-6;pp=.05;
       }else if(type==="concrete"){
@@ -504,14 +542,14 @@ function spraySegment(st,x1,y1,dt,pin){
   const A=cap.flow*paint.flow*p*dt;
   if(A<=0){st.x=x1;st.y=y1;return}
   const n=clamp(Math.ceil(L/(r*.3)),1,80);
-  const layer=getLayer(st.layerId),ctx=layer.ctx;
+  const layer=st.layerObj||getLayer(st.layerId),ctx=layer.ctx;
   for(let k=1;k<=n;k++){
     const t=k/n,x=st.x+dx*t,y=st.y+dy*t;
     st.dist+=L/n;
     stampAt(ctx,layer,st,x,y,r,A/n,ang,maj,min,tilt,cap,paint,surf);
   }
   st.x=x1;st.y=y1;
-  paintDirty=dataDirty=true;
+  if(!layer.preview)paintDirty=dataDirty=true;
 }
 function stampAt(ctx,layer,st,x,y,r,a,ang,maj,min,tilt,cap,paint,surf){
   const hex=canColour(st.can,x,y,st);
@@ -534,7 +572,7 @@ function stampAt(ctx,layer,st,x,y,r,a,ang,maj,min,tilt,cap,paint,surf){
       let u=gauss()*sg*maj,v=gauss()*sg*min;
       u+=Math.abs(u)*tilt*.7;                       // overspray drifts ahead of a tilted can
       const px=ox+u*ca-v*sa,py=oy+u*sa+v*ca;
-      if(rough>0){const hh=HS[ci(px,py)];if(Math.random()<rough*Math.pow(1-hh,1.5)*1.4)continue}
+      if(rough>0&&!layer.preview){const hh=HS[ci(px,py)];if(Math.random()<rough*Math.pow(1-hh,1.5)*1.4)continue}
       const s=cap.dot*(.55+Math.random()*.9);
       ctx.globalAlpha=paint.alpha*(.25+Math.random()*.65);
       ctx.fillRect(px-s*.5,py-s*.5,s,s);
@@ -544,11 +582,11 @@ function stampAt(ctx,layer,st,x,y,r,a,ang,maj,min,tilt,cap,paint,surf){
   if(cap.spit>0&&Math.random()<cap.spit*a*60){
     const dd=r*(1+Math.random()*2.2),th=Math.random()*TAU,px=ox+Math.cos(th)*dd,py=oy+Math.sin(th)*dd,rr=.8+Math.random()*Math.random()*3.2;
     ctx.globalAlpha=paint.alpha;ctx.fillStyle=hex;ctx.beginPath();ctx.arc(px,py,rr,0,TAU);ctx.fill();
-    deposit(layer,px,py,rr*.8,rr*rr*1.2,paint,false);
+    if(!layer.preview)deposit(layer,px,py,rr*.8,rr*rr*1.2,paint,false);
   }
   ctx.globalAlpha=1;
   // paint film on the wall
-  deposit(layer,ox,oy,r*.62,od,paint,true,st,hex);
+  if(!layer.preview)deposit(layer,ox,oy,r*.62,od,paint,true,st,hex);
 }
 /* Add paint film to the fields; maybe start a drip. */
 function deposit(layer,x,y,sigma,peak,paint,canDrip,st,hex){
@@ -641,16 +679,269 @@ function dry(dt){
 }
 
 /* ---------------------------------------------------------------------
+   BRUSH — vector calligraphy strokes, kept as data and re-drawn every
+   frame, so every setting stays live and can be modulated.
+   A stroke is a spline of samples {x,y,t,p}; from it we derive arc
+   length, speed and heading. Line weight comes from the nib angle
+   against the heading, speed, pressure, taper and jitter. Like Anchor,
+   each stroke is drawn as N passes that ramp size, offset, depth,
+   opacity and colour from start to end — with depth on, the passes
+   extrude the writing into 3D.
+   --------------------------------------------------------------------- */
+const BRUSH_DEFAULTS={
+  style:"ribbon",width:18,nibAngle:35,nibRound:.12,speedW:.5,speedRef:900,pressW:.6,
+  taperS:.05,taperE:.25,jitter:.05,jitterFreq:.035,tremor:0,stampGap:4,bristles:9,dryness:.35,smooth:2,
+  passes:1,passEase:"linear",sizeS:1,sizeE:1,offS:0,offE:0,shiftX:0,shiftY:0,zS:0,zE:0,opaS:1,opaE:1,
+  colA:"#121212",colB:"#3a2bd9",extrude:false,fillOn:true,fillCol:"#ff5da2",fillCol2:"#ffd23f",fillFade:true,
+  rimW:0,rimCol:"#f4f1ea",alpha:1,finish:"satin",bevel:4,glow:0,
+  reveal:1,animSpeed:.3,mBreathe:0,mSway:0,mWander:0,mWobble:0,mShimmer:0,mTravel:0,mHue:0,mFloat:0
+};
+const BRUSH_LOOKS={
+  calligraphy:{name:"Calligraphy nib",v:{style:"ribbon",width:18,nibAngle:35,nibRound:.12,speedW:.5,taperS:.05,taperE:.25,finish:"satin",bevel:4,passes:1,colA:"#121212"}},
+  marker:{name:"Marker tag (round)",v:{style:"ribbon",width:9,nibRound:1,speedW:.35,taperS:0,taperE:.12,jitter:.03,finish:"gloss",bevel:3,passes:1,colA:"#121212"}},
+  brushpen:{name:"Brush pen",v:{style:"ribbon",width:22,nibRound:.85,speedW:.9,pressW:.8,taperS:.18,taperE:.45,jitter:.08,finish:"satin",bevel:2,passes:1,colA:"#121212"}},
+  sumi:{name:"Dry brush (sumi)",v:{style:"dry",width:30,nibRound:.7,speedW:.7,taperS:.1,taperE:.35,bristles:14,dryness:.5,finish:"matte",bevel:1,passes:1,colA:"#121212"}},
+  hatched:{name:"Hatched nib",v:{style:"nib",width:26,nibAngle:40,nibRound:.05,speedW:.3,stampGap:3,finish:"flat",bevel:0,passes:1,colA:"#121212"}},
+  echo:{name:"Echo passes (Anchor)",v:{style:"ribbon",width:8,nibRound:.6,passes:12,passEase:"outQuad",offS:0,offE:70,sizeS:1,sizeE:.25,opaS:1,opaE:.15,colA:"#d7263d",colB:"#1b98e0",finish:"flat",bevel:0}},
+  block3d:{name:"3D block letters",v:{style:"ribbon",width:14,nibRound:.25,passes:16,shiftX:14,shiftY:16,zS:0,zE:-70,extrude:true,colA:"#121212",colB:"#3a2bd9",rimW:2.5,rimCol:"#f4f1ea",finish:"gloss",bevel:4}},
+  chrome:{name:"Chrome 3D",v:{style:"ribbon",width:20,nibRound:.4,passes:10,zS:0,zE:-60,shiftX:6,shiftY:8,extrude:true,colA:"#d9dde2",colB:"#55606b",finish:"chrome",bevel:7,rimW:2,rimCol:"#121212"}},
+  neon:{name:"Neon glow",v:{style:"ribbon",width:7,nibRound:1,taperS:0,taperE:.05,passes:6,sizeS:1,sizeE:3.2,opaS:1,opaE:.08,colA:"#00f0ff",colB:"#c44bd8",finish:"glow",glow:1,bevel:2}}
+};
+const FINISHES={flat:{name:"Flat (unlit)",flat:1,g:0,m:0,glow:0},matte:{name:"Matt",g:0,m:0,glow:0},satin:{name:"Satin",g:.35,m:0,glow:0},
+  gloss:{name:"Gloss",g:1,m:0,glow:0},chrome:{name:"Chrome",g:.85,m:1,glow:0},glow:{name:"Glow",g:.2,m:0,glow:.8}};
+const EASES={linear:t=>t,inQuad:t=>t*t,outQuad:t=>1-(1-t)*(1-t),inOutSine:t=>.5-.5*Math.cos(Math.PI*t),outCubic:t=>1-Math.pow(1-t,3)};
+const STYLES=[["ribbon","Ribbon — solid nib stroke"],["nib","Hatched nib — stamped lines"],["dots","Beads — stamped dots"],["dry","Dry brush — bristles"]];
+let TT=0;                                 // animation clock (s)
+const _p=[0,0,0,0];
+
+function strokeGeom(st,smooth){
+  if(st.geom&&st.gkey===smooth&&st.gn===st.pts.length)return st.geom;
+  const raw=st.pts,n=raw.length;
+  let X=raw.map(p=>p.x),Y=raw.map(p=>p.y);const Tm=raw.map(p=>p.t),Pr=raw.map(p=>p.p==null?1:p.p);
+  for(let it=0;it<smooth;it++){const nx=X.slice(),ny=Y.slice();for(let i=1;i<n-1;i++){nx[i]=(X[i-1]+2*X[i]+X[i+1])/4;ny[i]=(Y[i-1]+2*Y[i]+Y[i+1])/4}X=nx;Y=ny}
+  const step=2,ox=[X[0]],oy=[Y[0]],ot=[Tm[0]],op=[Pr[0]];let acc=0;
+  for(let i=1;i<n;i++){
+    let ax=X[i-1],ay=Y[i-1];const bx=X[i],by=Y[i],segL=Math.hypot(bx-ax,by-ay);let d=segL;
+    while(segL>0&&acc+d>=step){const f=(step-acc)/d;ax+=(bx-ax)*f;ay+=(by-ay)*f;d=Math.hypot(bx-ax,by-ay);const u=1-d/segL;
+      ox.push(ax);oy.push(ay);ot.push(lerp(Tm[i-1],Tm[i],u));op.push(lerp(Pr[i-1],Pr[i],u));acc=0}
+    acc+=d;
+  }
+  if(n>1&&Math.hypot(X[n-1]-ox[ox.length-1],Y[n-1]-oy[oy.length-1])>.3){ox.push(X[n-1]);oy.push(Y[n-1]);ot.push(Tm[n-1]);op.push(Pr[n-1])}
+  const m=ox.length,Sx=new Float32Array(m),V=new Float32Array(m),A=new Float32Array(m);
+  for(let i=1;i<m;i++)Sx[i]=Sx[i-1]+Math.hypot(ox[i]-ox[i-1],oy[i]-oy[i-1]);
+  for(let i=0;i<m;i++){const a=Math.max(0,i-2),b=Math.min(m-1,i+2);V[i]=(Sx[b]-Sx[a])/Math.max(1e-3,ot[b]-ot[a]);A[i]=m>1?Math.atan2(oy[b]-oy[a],ox[b]-ox[a]):0}
+  for(let it=0;it<3;it++)for(let i=1;i<m-1;i++)V[i]=(V[i-1]+V[i]*2+V[i+1])/4;
+  st.geom={m,X:Float32Array.from(ox),Y:Float32Array.from(oy),P:Float32Array.from(op),S:Sx,V,A,L:m>1?Sx[m-1]:0};
+  st.gkey=smooth;st.gn=n;return st.geom;
+}
+function mixHex(a,b,t){const A=hex2rgb(a),B=hex2rgb(b);return rgb2hex(Math.round(lerp(A[0],B[0],t)),Math.round(lerp(A[1],B[1],t)),Math.round(lerp(A[2],B[2],t)))}
+function shadeHex(a,f){const A=hex2rgb(a);return rgb2hex(clamp(Math.round(A[0]*f),0,255),clamp(Math.round(A[1]*f),0,255),clamp(Math.round(A[2]*f),0,255))}
+function hueShift(hex,deg){
+  if(!deg)return hex;const[r,g,b]=hex2rgb(hex),a=deg*D2R,c=Math.cos(a),s=Math.sin(a);
+  const R=(.299+.701*c+.168*s)*r+(.587-.587*c+.330*s)*g+(.114-.114*c-.497*s)*b;
+  const G=(.299-.299*c-.328*s)*r+(.587+.413*c+.035*s)*g+(.114-.114*c+.292*s)*b;
+  const B=(.299-.3*c+1.25*s)*r+(.587-.588*c-1.05*s)*g+(.114+.886*c-.203*s)*b;
+  return rgb2hex(clamp(Math.round(R),0,255),clamp(Math.round(G),0,255),clamp(Math.round(B),0,255));
+}
+function brushAnimating(Q){return Q.mBreathe>0||Q.mSway>0||Q.mWander>0||Q.mWobble>0||Q.mShimmer>0||Q.mTravel>0||Q.mHue>0||Q.mFloat>0}
+function layerReveal(L,Q){
+  let rv=Q.reveal;
+  if(L.write){const u=(performance.now()/1000-L.write.t0)/L.write.dur;if(u>=1)L.write=null;else rv=Math.min(rv,Math.max(0,u))}
+  if(Q.mTravel>0){const ph=(TT*Q.animSpeed*.3)%1.35;rv*=lerp(1,clamp(ph,0,1),Q.mTravel)}
+  return rv;
+}
+function renderBrushLayer(L,Q){
+  const ctx=L.ctx;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.clearRect(0,0,S.W,S.H);
+  const strokes=L.live.length?L.strokes.concat(L.live):L.strokes;
+  const sm=Q.smooth|0,geoms=strokes.map(s=>strokeGeom(s,sm));
+  let total=0;for(const g of geoms)total+=g.L+1;
+  const rv=layerReveal(L,Q),revealLen=rv*total;
+  const n=Math.max(1,Q.passes|0),ease=EASES[Q.passEase]||EASES.linear,items=[];
+  const hasFill=Q.fillOn&&L.fills.length>0;
+  for(let k=0;k<n;k++){
+    const e=n>1?ease(k/(n-1)):0;
+    const z=lerp(Q.zS,Q.zE,e)+(Q.mFloat?Q.mFloat*40*Math.sin(TT*TAU*Q.animSpeed*.5+k*.2):0);
+    const it={k,e,z,sx:Q.shiftX*e,sy:Q.shiftY*e,dist:k};
+    if(CAM.on){proj(S.W/2+it.sx,S.H/2+it.sy,z,_p);it.dist=-_p[3]}
+    if(hasFill)items.push(Object.assign({fill:true},it));
+    items.push(Object.assign({fill:false},it));
+  }
+  items.sort((a,b)=>(b.dist-a.dist)||((a.fill?0:1)-(b.fill?0:1)));
+  for(const it of items){
+    if(it.fill){drawFillPass(ctx,L,Q,it,rv);continue}
+    let acc=0;
+    for(let i=0;i<strokes.length;i++){const g=geoms[i],lim=revealLen-acc;acc+=g.L+1;if(lim<=0)break;drawStrokePass(ctx,g,Q,it,Math.min(g.L,lim),i)}
+  }
+  ctx.globalAlpha=1;
+}
+function passColour(Q,it,base){
+  let c=Q.extrude&&it.k>0?shadeHex(Q.colB,1-.45*it.e):mixHex(base,Q.colB,it.e);
+  if(Q.mHue)c=hueShift(c,Q.mHue*180*Math.sin(TAU*TT*Q.animSpeed*.2+it.e*2));
+  return c;
+}
+const PX=new Float32Array(8192*6);
+function drawStrokePass(ctx,g,Q,it,lim,idx){
+  const m=g.m;if(!m)return;
+  const e=it.e,W0=Q.width*lerp(Q.sizeS,Q.sizeE,e),off=lerp(Q.offS,Q.offE,e),t=TT*Q.animSpeed,seed=idx*17.13+1;
+  const nib=(Q.nibAngle+(Q.mWobble?Q.mWobble*30*Math.sin(TAU*t*.7+idx):0))*D2R,nbx=Math.cos(nib),nby=Math.sin(nib),rd=Q.nibRound;
+  let alpha=Q.alpha*lerp(Q.opaS,Q.opaE,e);
+  if(Q.mShimmer)alpha*=1-Q.mShimmer*.5*(1+Math.sin(TAU*t*2.3+idx*1.7+e*4));
+  if(alpha<=.002)return;
+  const col=passColour(Q,it,Q.colA),L=Math.max(1,g.L);
+  let cnt=0;const buf=m*6>PX.length?new Float32Array(m*6):PX;   // per point: Lx,Ly,Rx,Ry,Cx,Cy (screen)
+  let wsum=0;
+  for(let i=0;i<m;i++){
+    const s=g.S[i];if(s>lim&&i>0)break;
+    const u=s/L;
+    const ts=Q.taperS>0?clamp(u/Q.taperS,0,1):1,te=Q.taperE>0?clamp((1-u)/Q.taperE,0,1):1;
+    const tap=Math.sin(ts*Math.PI/2)*Math.sin(te*Math.PI/2);
+    const sv=g.V[i]/Math.max(50,Q.speedRef);
+    const fs=clamp(1-Q.speedW*(sv-.4)*.85,.12,1.9);
+    const fp=lerp(1,g.P[i]*1.15,Q.pressW);
+    const fj=1+(n1(seed+s*Q.jitterFreq)-.5)*2*Q.jitter;
+    const fb=Q.mBreathe?1+Q.mBreathe*.45*Math.sin(s*.025-TAU*t):1;
+    const w=Math.max(.35,W0*(m>1?tap:1)*fs*fp*fj*fb);
+    const a=g.A[i],nx=-Math.sin(a),ny=Math.cos(a);
+    const ex=(nbx*(1-rd)+nx*rd)*w*.5,ey=(nby*(1-rd)+ny*rd)*w*.5;
+    const sw=Q.mSway?Q.mSway*Math.sin(s*.018-TAU*t*.8+seed):0;
+    let cx=g.X[i]+nx*(off+sw)+it.sx,cy=g.Y[i]+ny*(off+sw)+it.sy;
+    if(Q.mWander){cx+=(n1(g.X[i]*.006+t*.9+seed)-.5)*2*Q.mWander;cy+=(n1(g.Y[i]*.006-t*.8+seed+50)-.5)*2*Q.mWander}
+    if(Q.tremor){cx+=(n1(s*.35+seed)-.5)*2*Q.tremor;cy+=(n1(s*.35+seed+99)-.5)*2*Q.tremor}
+    const j=cnt*6;
+    if(CAM.on){proj(cx+ex,cy+ey,it.z,_p);buf[j]=_p[0];buf[j+1]=_p[1];proj(cx-ex,cy-ey,it.z,_p);buf[j+2]=_p[0];buf[j+3]=_p[1];proj(cx,cy,it.z,_p);buf[j+4]=_p[0];buf[j+5]=_p[1]}
+    else{buf[j]=cx+ex;buf[j+1]=cy+ey;buf[j+2]=cx-ex;buf[j+3]=cy-ey;buf[j+4]=cx;buf[j+5]=cy}
+    wsum+=Math.hypot(buf[j]-buf[j+2],buf[j+1]-buf[j+3]);cnt++;
+  }
+  if(!cnt)return;
+  ctx.globalAlpha=clamp(alpha,0,1);
+  const style=Q.style;
+  if(cnt<2){ // a dab
+    const r=Math.max(.6,wsum*.5);ctx.fillStyle=col;ctx.beginPath();ctx.arc(buf[4],buf[5],r,0,TAU);ctx.fill();return;
+  }
+  if(style==="ribbon"){
+    ctx.beginPath();ctx.moveTo(buf[0],buf[1]);
+    for(let i=1;i<cnt;i++)ctx.lineTo(buf[i*6],buf[i*6+1]);
+    for(let i=cnt-1;i>=0;i--)ctx.lineTo(buf[i*6+2],buf[i*6+3]);
+    ctx.closePath();
+    if(Q.rimW>0&&it.k===0){ctx.lineJoin="round";ctx.lineWidth=Q.rimW*2*(CAM.on?CAM.k:1);ctx.strokeStyle=Q.rimCol;ctx.stroke()}
+    ctx.fillStyle=col;ctx.fill();
+  }else if(style==="nib"){
+    const gap=Math.max(1,Math.round(Q.stampGap/2));
+    ctx.strokeStyle=col;ctx.lineCap="round";ctx.lineWidth=Math.max(.7,W0*.06);ctx.beginPath();
+    for(let i=0;i<cnt;i+=gap){ctx.moveTo(buf[i*6],buf[i*6+1]);ctx.lineTo(buf[i*6+2],buf[i*6+3])}
+    ctx.stroke();
+  }else if(style==="dots"){
+    const gap=Math.max(1,Math.round(Q.stampGap/2));ctx.fillStyle=col;ctx.beginPath();
+    for(let i=0;i<cnt;i+=gap){const j=i*6,r=Math.max(.4,Math.hypot(buf[j]-buf[j+2],buf[j+1]-buf[j+3])*.5);ctx.moveTo(buf[j+4]+r,buf[j+5]);ctx.arc(buf[j+4],buf[j+5],r,0,TAU)}
+    ctx.fill();
+  }else{ // dry brush: bristles across the nib that break up with speed and toward the end
+    const nb=Math.max(2,Q.bristles|0);ctx.strokeStyle=col;ctx.lineCap="round";ctx.lineJoin="round";
+    ctx.lineWidth=Math.max(.5,(wsum/cnt)/nb*1.35);
+    for(let b=0;b<nb;b++){
+      const f=((b+.5)/nb*2-1)*.95;let on=false;ctx.beginPath();
+      for(let i=0;i<cnt;i++){
+        const s=g.S[Math.min(i,m-1)],u=s/L,sv=clamp(g.V[Math.min(i,m-1)]/Math.max(50,Q.speedRef),0,1.6);
+        const thr=Q.dryness*(.2+.45*sv/1.6+.6*Math.pow(u,3)+.25*Math.abs(f));
+        const vis=n1(b*7.31+seed+s*.06)>thr;
+        const j=i*6,x=buf[j+4]+(buf[j]-buf[j+4])*f,y=buf[j+5]+(buf[j+1]-buf[j+5])*f;
+        if(vis){if(!on)ctx.moveTo(x,y);else ctx.lineTo(x,y);on=true}else on=false;
+      }
+      ctx.stroke();
+    }
+  }
+}
+function drawFillPass(ctx,L,Q,it,rv){
+  const fa=clamp(rv/.3,0,1)*Q.alpha*lerp(Q.opaS,Q.opaE,it.e);if(fa<=.002)return;
+  const front=it.k===0;
+  let fill;
+  if(front){
+    let c1=Q.fillCol,c2=Q.fillCol2;if(Q.mHue){c1=hueShift(c1,Q.mHue*180*Math.sin(TAU*TT*Q.animSpeed*.2));c2=hueShift(c2,Q.mHue*180*Math.sin(TAU*TT*Q.animSpeed*.2))}
+    if(Q.fillFade){let y0=1e9,y1=-1e9;for(const poly of L.fills)for(const p of poly){proj(p.x+it.sx,p.y+it.sy,it.z,_p);if(_p[1]<y0)y0=_p[1];if(_p[1]>y1)y1=_p[1]}
+      fill=ctx.createLinearGradient(0,y0,0,y1);fill.addColorStop(0,c1);fill.addColorStop(1,c2)}
+    else fill=c1;
+  }else fill=passColour(Q,it,Q.fillCol);
+  ctx.globalAlpha=clamp(fa,0,1);ctx.fillStyle=fill;ctx.beginPath();
+  for(const poly of L.fills){poly.forEach((p,i)=>{proj(p.x+it.sx,p.y+it.sy,it.z,_p);i?ctx.lineTo(_p[0],_p[1]):ctx.moveTo(_p[0],_p[1])});ctx.closePath()}
+  ctx.fill("evenodd");
+}
+
+/* ---- live text on a brush layer ---- */
+const TAG_SIG=["mode","text","size","slant","stretch","spacing","jitter","bounce","wobble","firstBig","flick","connect","swoosh","seed","x","y","speed","speedVar"];
+const PIECE_SIG=["mode","text","size","slant","spacing","jitter","bounce","seed","x","y","font","weight","bubble","expand","speed"];
+function robotToBrush(rs){
+  return rs.map(r=>{let t=0;const pts=[];r.pts.forEach((p,i)=>{if(i){const q=r.pts[i-1];t+=Math.hypot(p.x-q.x,p.y-q.y)/Math.max(60,r.speed*(p.v||1))}pts.push({x:p.x,y:p.y,t,p:p.p==null?1:p.p})});return{pts}});
+}
+function regenLive(L){
+  if(!L.src){if(L.live.length||L.fills.length){L.live=[];L.fills=[];L.dirty=true}return}
+  const T=Drive?Drive.resolve(L.src.T):L.src.T;
+  const sig=(T.mode==="tag"?TAG_SIG:PIECE_SIG).map(k=>T[k]).join("|");
+  if(sig===L.src.sig)return;
+  L.src.sig=sig;
+  if(T.mode==="tag"){L.live=robotToBrush(buildTag(T));L.fills=[]}
+  else{const v=buildPiece(T,true);L.live=robotToBrush(v.strokes);L.fills=v.fills}
+  L.dirty=true;
+}
+function writeOn(L){
+  const g=(L.live.length?L.strokes.concat(L.live):L.strokes).map(s=>strokeGeom(s,L.B.smooth|0));
+  const tot=g.reduce((a,b)=>a+b.L,0),sp=(L.src?L.src.T.speed:900)*S.tag.play;
+  L.write={t0:performance.now()/1000,dur:Math.max(.5,tot/Math.max(100,sp))};L.dirty=true;
+}
+
+/* ---- camera (Anchor's software camera) ---- */
+const CAM={on:false,cy:1,sy:0,cp:1,sp:0,cr:1,sr:0,d:1800,persp:1,k:1,sig:""};
+let camDragYaw=0,camDragPitch=0,camAutoYaw=0,HINV=null;
+function camUpdate(QV){
+  CAM.on=!!S.view.dim3;
+  const yaw=(QV.camYaw+camDragYaw+camAutoYaw)*D2R,pitch=(QV.camPitch+camDragPitch)*D2R,roll=QV.camRoll*D2R;
+  CAM.cy=Math.cos(yaw);CAM.sy=Math.sin(yaw);CAM.cp=Math.cos(pitch);CAM.sp=Math.sin(pitch);CAM.cr=Math.cos(roll);CAM.sr=Math.sin(roll);
+  CAM.d=Math.max(200,QV.camDist);CAM.persp=QV.persp;CAM.k=QV.camZoom;
+  const sig=CAM.on?[yaw,pitch,roll,CAM.d,CAM.persp,CAM.k].map(v=>v.toFixed(4)).join():"off";
+  const ch=sig!==CAM.sig;CAM.sig=sig;
+  if(ch&&CAM.on){const c=[[0,0],[S.W,0],[S.W,S.H],[0,S.H]],d=c.map(([x,y])=>{proj(x,y,0,_p);return[_p[0],_p[1]]});HINV=inv3(homography(c,d))}
+  return ch;
+}
+function proj(x,y,z,out){
+  if(!CAM.on){out[0]=x;out[1]=y;out[2]=1;out[3]=z;return out}
+  const X=x-S.W/2,Y=y-S.H/2;
+  const x1=X*CAM.cy+z*CAM.sy,z1=-X*CAM.sy+z*CAM.cy;
+  const y2=Y*CAM.cp-z1*CAM.sp,z2=Y*CAM.sp+z1*CAM.cp;
+  const x3=x1*CAM.cr-y2*CAM.sr,y3=x1*CAM.sr+y2*CAM.cr;
+  let s=CAM.d/Math.max(CAM.d*.05,CAM.d-z2);s=(1+(s-1)*CAM.persp)*CAM.k;
+  out[0]=S.W/2+x3*s;out[1]=S.H/2+y3*s;out[2]=s;out[3]=z2;return out;
+}
+function homography(src,dst){
+  const A=[],b=[];
+  for(let i=0;i<4;i++){const[x,y]=src[i],[u,v]=dst[i];A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v)}
+  for(let i=0;i<8;i++){let p=i;for(let r=i+1;r<8;r++)if(Math.abs(A[r][i])>Math.abs(A[p][i]))p=r;[A[i],A[p]]=[A[p],A[i]];[b[i],b[p]]=[b[p],b[i]];
+    for(let r=i+1;r<8;r++){const f=A[r][i]/A[i][i];for(let c=i;c<8;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i]}}
+  const h=new Array(8).fill(0);for(let i=7;i>=0;i--){let v=b[i];for(let c=i+1;c<8;c++)v-=A[i][c]*h[c];h[i]=v/A[i][i]}
+  return[h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
+}
+function inv3(m){const[a,b,c,d,e,f,g,h,i]=m,A=e*i-f*h,B=-(d*i-f*g),C=d*h-e*g,det=a*A+b*B+c*C;
+  return[A/det,-(b*i-c*h)/det,(b*f-c*e)/det,B/det,(a*i-c*g)/det,-(a*f-c*d)/det,C/det,-(a*h-b*g)/det,(a*e-b*d)/det]}
+function applyH(H,x,y){const w=H[6]*x+H[7]*y+H[8];return[(H[0]*x+H[1]*y+H[2])/w,(H[3]*x+H[4]*y+H[5])/w]}
+
+/* ---------------------------------------------------------------------
    HAND INPUT
    --------------------------------------------------------------------- */
-const hand={down:false,queue:[],st:null,sx:0,sy:0,lastT:0,mx:-99,my:-99,pressure:1,over:false,t:0};
+const hand={down:false,queue:[],st:null,sx:0,sy:0,lastT:0,mx:-99,my:-99,scrX:-99,scrY:-99,pressure:1,over:false,t:0,bs:null,bl:null,orbit:null};
 const ov=$("#ov"),octx=ov.getContext("2d");
-function toWall(e){const r=ov.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*S.W,y:(e.clientY-r.top)/r.height*S.H}}
+function toScreen(e){const r=ov.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*S.W,y:(e.clientY-r.top)/r.height*S.H}}
+function toWall(e){const q=toScreen(e);if(CAM.on&&HINV){const[x,y]=applyH(HINV,q.x,q.y);return{x,y,sx:q.x,sy:q.y}}return{x:q.x,y:q.y,sx:q.x,sy:q.y}}
+ov.addEventListener("contextmenu",e=>e.preventDefault());
 ov.addEventListener("pointerdown",e=>{
   ov.setPointerCapture(e.pointerId);
-  const p=toWall(e);hand.mx=p.x;hand.my=p.y;
-  if(S.input==="type"){S.tag.x=clamp(p.x/S.W,0,1);S.tag.y=clamp(p.y/S.H,0,1);schedulePreview();return}
+  const p=toWall(e);hand.mx=p.x;hand.my=p.y;hand.scrX=p.sx;hand.scrY=p.sy;
+  if(e.button===2||e.altKey){            // orbit the 3D view
+    if(!S.view.dim3){S.view.dim3=true;syncAll()}
+    hand.orbit={x:e.clientX,y:e.clientY};return}
+  if(S.input==="type"){const T=tagObj();T.x=clamp(p.x/S.W,0,1);T.y=clamp(p.y/S.H,0,1);schedulePreview();return}
   if(e.button!==0)return;
+  const AL=activeLayer();
+  if(AL.kind==="brush"){
+    pushUndo([AL.id]);hand.down=true;hand.queue.length=0;hand.sx=p.x;hand.sy=p.y;hand.lastT=e.timeStamp;
+    hand.bs={pts:[{x:p.x,y:p.y,t:e.timeStamp/1000,p:penP(e)}]};hand.bl=AL;AL.strokes.push(hand.bs);AL.dirty=true;return;
+  }
   pushUndo([activeId]);
   hand.down=true;hand.queue.length=0;hand.sx=p.x;hand.sy=p.y;hand.lastT=e.timeStamp;
   hand.st=newNozzle(S.cans.hand,activeId,S.hand,null);hand.st.x=p.x;hand.st.y=p.y;
@@ -658,16 +949,31 @@ ov.addEventListener("pointerdown",e=>{
 });
 ov.addEventListener("pointermove",e=>{
   const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
-  for(const ev of (evs.length?evs:[e])){const p=toWall(ev);hand.mx=p.x;hand.my=p.y;
+  if(hand.orbit){camDragYaw+=(e.clientX-hand.orbit.x)*.35;camDragPitch=clamp(camDragPitch-(e.clientY-hand.orbit.y)*.35,-170,170);hand.orbit={x:e.clientX,y:e.clientY};return}
+  for(const ev of (evs.length?evs:[e])){const p=toWall(ev);hand.mx=p.x;hand.my=p.y;hand.scrX=p.sx;hand.scrY=p.sy;
     if(hand.down)hand.queue.push({x:p.x,y:p.y,t:ev.timeStamp,p:penP(ev)})}
 });
-const endHand=()=>{hand.down=false;hand.st=null;hand.queue.length=0};
+const endHand=()=>{
+  if(hand.bs&&hand.bl){hand.bl.dirty=true;if(hand.bs.pts.length<1)hand.bl.strokes.pop()}
+  hand.down=false;hand.st=null;hand.queue.length=0;hand.bs=null;hand.bl=null;hand.orbit=null};
 ov.addEventListener("pointerup",endHand);ov.addEventListener("pointercancel",endHand);
 ov.addEventListener("pointerenter",()=>hand.over=true);ov.addEventListener("pointerleave",()=>hand.over=false);
-ov.addEventListener("wheel",e=>{e.preventDefault();const c=S.input==="hand"?S.cans.hand:S.cans[S.canTab];c.dist=clamp(c.dist-e.deltaY*.0006,0,1);syncCanUI()},{passive:false});
+ov.addEventListener("wheel",e=>{e.preventDefault();
+  if(CAM.on&&(e.ctrlKey||e.shiftKey)){S.view.camZoom=clamp(S.view.camZoom*(1-e.deltaY*.001),.2,3);syncAll();return}
+  const AL=activeLayer();
+  if(AL.kind==="brush"){AL.B.width=clamp(AL.B.width*(1-e.deltaY*.0012),1,160);AL.dirty=true;syncAll();return}
+  const c=S.input==="hand"?S.cans.hand:S.cans[S.canTab];c.dist=clamp(c.dist-e.deltaY*.0006,0,1);syncCanUI()},{passive:false});
 function penP(e){return(e.pointerType==="pen"&&S.hand.penPressure)?clamp(e.pressure*1.4,.05,1.4):1}
 function handTick(dt){
   hand.t+=dt;
+  if(hand.down&&hand.bs){           // brush: record the stabilised spline with time and pressure
+    const stab=S.hand.stabilize;
+    for(const q of hand.queue){const sdt=clamp((q.t-hand.lastT)/1000,0,.05);hand.lastT=q.t;
+      const k=1-Math.pow(stab,Math.max(sdt*60,.05));hand.sx+=(q.x-hand.sx)*k;hand.sy+=(q.y-hand.sy)*k;
+      const last=hand.bs.pts[hand.bs.pts.length-1];
+      if(Math.hypot(hand.sx-last.x,hand.sy-last.y)>.6)hand.bs.pts.push({x:hand.sx,y:hand.sy,t:q.t/1000,p:q.p})}
+    hand.queue.length=0;hand.bl.dirty=true;return;
+  }
   if(!hand.down||!hand.st)return;
   const st=hand.st,stab=S.hand.stabilize,amp=S.hand.shake*2.2;
   const shake=()=>[(n1(hand.t*5.3)-.5)*amp+(n1(hand.t*23+9)-.5)*amp*.4,(n1(hand.t*4.7+50)-.5)*amp+(n1(hand.t*19+3)-.5)*amp*.4];
@@ -682,7 +988,7 @@ function handTick(dt){
   }
   hand.queue.length=0;
   const rest=dt-used;
-  if(rest>.002){
+  if(used===0&&rest>.002){
     const k=1-Math.pow(stab,rest*60);hand.sx+=(hand.mx-hand.sx)*k;hand.sy+=(hand.my-hand.sy)*k;
     const [jx,jy]=shake();spraySegment(st,hand.sx+jx,hand.sy+jy,rest,hand.pressure);hand.lastT+=rest*1000;
   }
@@ -727,7 +1033,7 @@ function robotStroke(pts,canKey,speed,opt={}){
   }
   if(opt.taper){const n=P.length;P.forEach((p,i)=>{p.p*=Math.pow(Math.sin(Math.PI*clamp(i/(n-1),0.02,.98)),.6)})}
   // speed: slow down where the path turns
-  const sv=S.tag.speedVar;
+  const sv=(opt.T||S.tag).speedVar;
   for(let i=0;i<P.length;i++){
     const a=P[Math.max(0,i-3)],b=P[i],c=P[Math.min(P.length-1,i+3)];
     const a1=Math.atan2(b.y-a.y,b.x-a.x),a2=Math.atan2(c.y-b.y,c.x-b.x);let d=Math.abs(Math.atan2(Math.sin(a2-a1),Math.cos(a2-a1)));
@@ -737,8 +1043,8 @@ function robotStroke(pts,canKey,speed,opt={}){
   return {pts:P,cl,canKey,layerId:S.tag.L[canKey==="tag"?"tag":canKey],speed,dwell:opt.dwell||0};
 }
 
-function buildTag(){
-  const T=S.tag,R=mulberry(T.seed*977+3),NZ=makeNoise(T.seed+101);
+function buildTag(T=S.tag){
+  const R=mulberry(T.seed*977+3),NZ=makeNoise(T.seed+101);
   const letters=[];let pen=0,k=0;
   for(const raw of T.text.toUpperCase()){
     if(raw===" "){pen+=3.2+T.spacing*4;continue}
@@ -771,13 +1077,13 @@ function buildTag(){
     raw.push(crSpline(f,10).map(p=>toPx(p.x,p.y)));
   }
   const flick=T.flick*unit*2.2;
-  return raw.map((pts,i)=>robotStroke(pts,"tag",T.speed*(i===raw.length-1&&T.swoosh?1.5:1),{flick,dwell:T.dwell}));
+  return raw.map((pts,i)=>robotStroke(pts,"tag",T.speed*(i===raw.length-1&&T.swoosh?1.5:1),{flick,dwell:T.dwell,T}));
 }
 
 /* ---- throw-up / piece: outline + fill from any font ---- */
 const maskCv=document.createElement("canvas"),blurCv=document.createElement("canvas");
-function buildPiece(){
-  const T=S.tag,W=S.W,H=S.H,R=mulberry(T.seed*131+7),F=2,gw=Math.floor(W/F),gh=Math.floor(H/F);
+function buildPiece(T=S.tag,vector=false){
+  const W=S.W,H=S.H,R=mulberry(T.seed*131+7),F=2,gw=Math.floor(W/F),gh=Math.floor(H/F);
   maskCv.width=blurCv.width=W;maskCv.height=blurCv.height=H;
   const g=maskCv.getContext("2d");g.clearRect(0,0,W,H);g.fillStyle="#fff";
   const font=`${T.weight} ${T.size}px "${T.font}", "Arial Black", Impact, sans-serif`;g.font=font;g.textBaseline="alphabetic";
@@ -799,6 +1105,10 @@ function buildPiece(){
   const A=bg.getImageData(0,0,W,H).data,thr=(.5-T.expand*.4)*255;
   const M=new Uint8Array(gw*gh);
   for(let y=1;y<gh-1;y++)for(let x=1;x<gw-1;x++)M[y*gw+x]=A[((y*F)*W+x*F)*4+3]>thr?1:0;
+  if(vector){   // brush layer: the letter shapes as a fill, their edges as strokes (3D comes from the brush passes)
+    const cs=contours(M,gw,gh,F);
+    return{fills:cs.map(c=>c.slice(0,Math.max(3,c.length-6))),strokes:cs.map(c=>robotStroke(c,"outline",T.speed*.8,{T}))};
+  }
   // 3D block
   const E=new Uint8Array(gw*gh);
   if(T.depth>0){const ca=Math.cos(T.depthAng*D2R),sa=Math.sin(T.depthAng*D2R),steps=Math.round(T.depth/F);
@@ -910,8 +1220,19 @@ function rdp(P,eps){
 /* ---- robot hand ---- */
 let preview=null,previewT=0;
 function buildJob(){return S.tag.mode==="tag"?buildTag():buildPiece()}
+function tagObj(){const L=activeLayer();return(L&&L.kind==="brush"&&L.src)?L.src.T:S.tag}
+function paintTyped(){
+  const L=activeLayer();
+  if(L.kind==="brush"){
+    pushUndo([L.id]);
+    if(!L.src)L.src={T:JSON.parse(JSON.stringify(S.tag)),sig:""};
+    L.src.sig="";regenLive(L);writeOn(L);buildInputUI();return;
+  }
+  startJob();
+}
 function schedulePreview(){previewT=performance.now()+120}
 function startJob(){
+  if(!sprayLayers().length)return;
   const strokes=buildJob();if(!strokes.length)return;
   const ids=[...new Set(strokes.map(s=>s.layerId))];
   pushUndo(ids);
@@ -956,13 +1277,17 @@ function robotTick(dt){
    --------------------------------------------------------------------- */
 function pushUndo(ids){
   strokeSeq++;
-  const snap={sid:strokeSeq,layers:ids.map(id=>{const L=getLayer(id);const c=document.createElement("canvas");c.width=S.W;c.height=S.H;c.getContext("2d").drawImage(L.cv,0,0);return{id:L.id,c,thick:L.thick.slice()}})};
+  const snap={sid:strokeSeq,layers:ids.map(id=>{const L=layers.find(q=>q.id===id);if(!L)return null;
+    if(L.kind==="brush")return{id:L.id,brush:true,strokes:L.strokes.slice(),src:L.src?{T:JSON.parse(JSON.stringify(L.src.T)),sig:""}:null};
+    const c=document.createElement("canvas");c.width=S.W;c.height=S.H;c.getContext("2d").drawImage(L.cv,0,0);return{id:L.id,c,thick:L.thick.slice()}}).filter(Boolean)};
   undoStack.push(snap);while(undoStack.length>10)undoStack.shift();
 }
 function doUndo(){
   const s=undoStack.pop();if(!s)return;
   drips=drips.filter(d=>d.sid<s.sid);if(job&&job.st&&job.st.sid>=s.sid)job=null;if(hand.st&&hand.st.sid>=s.sid)endHand();
-  for(const l of s.layers){const L=layers.find(q=>q.id===l.id);if(!L)continue;L.ctx.clearRect(0,0,S.W,S.H);L.ctx.drawImage(l.c,0,0);L.thick.set(l.thick)}
+  for(const l of s.layers){const L=layers.find(q=>q.id===l.id);if(!L)continue;
+    if(l.brush){L.strokes=l.strokes;L.src=l.src;L.live=[];L.fills=[];L.dirty=true;continue}
+    L.ctx.clearRect(0,0,S.W,S.H);L.ctx.drawImage(l.c,0,0);L.thick.set(l.thick)}
   paintDirty=dataDirty=true;
 }
 
@@ -974,7 +1299,35 @@ const gl=glcv.getContext("webgl2",{preserveDrawingBuffer:true,antialias:false,pr
 const paintCv=document.createElement("canvas"),pctx=paintCv.getContext("2d");
 let dataBuf;
 const VS=`#version 300 es
-in vec2 p;out vec2 v;void main(){v=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0,1);}`;
+in vec3 a;in vec2 t;out vec2 v;void main(){v=t;gl_Position=vec4(a.xy*a.z,0.,a.z);}`;
+// brush layers: screen-space image of the (already projected) strokes, shaded with a bevel from its own alpha
+const FSB=`#version 300 es
+precision highp float;in vec2 v;out vec4 o;
+uniform sampler2D uB;uniform vec2 uRes;uniform vec3 uLight,uLP;
+uniform float uTorch,uAmb,uSpec,uBevel,uGl,uMe,uGlow,uFlat,uOp;
+float al(vec2 p){return texture(uB,p).a;}
+float hh(vec2 p){vec2 r=uBevel/uRes;float s=al(p)*2.;
+  s+=al(p+vec2(r.x,0.))+al(p-vec2(r.x,0.))+al(p+vec2(0.,r.y))+al(p-vec2(0.,r.y));
+  s+=al(p+r*.7)+al(p-r*.7)+al(p+vec2(r.x,-r.y)*.7)+al(p+vec2(-r.x,r.y)*.7);return s/10.;}
+void main(){
+  vec4 c=texture(uB,v);if(c.a<.003)discard;
+  vec3 col=c.rgb;
+  if(uFlat<.5){
+    vec2 px=vec2(max(1.,uBevel*.5))/uRes;
+    float hx=hh(v+vec2(px.x,0.))-hh(v-vec2(px.x,0.)),hy=hh(v+vec2(0.,px.y))-hh(v-vec2(0.,px.y));
+    vec3 n=normalize(vec3(-hx*1.6,-hy*1.6,1.)*vec3(step(.01,uBevel),step(.01,uBevel),1.));
+    vec3 fp=vec3(v*uRes,0.);
+    vec3 L=uTorch>.5?normalize(vec3((uLP.xy-fp.xy)/uRes.y,uLP.z)):normalize(uLight);
+    float diff=clamp(max(dot(n,L),0.)/max(L.z,.25),0.,1.7);
+    vec3 H=normalize(L+vec3(0.,0.,1.));float shin=mix(10.,120.,uGl);
+    float spec=pow(max(dot(n,H),0.),shin)*(.03+.9*uGl)*uSpec*(.4+shin/70.);
+    vec3 r=reflect(vec3(0.,0.,-1.),n);float env=smoothstep(-1.,1.,-r.y*1.4+r.x*.3);
+    col=c.rgb*(uAmb+(1.-uAmb)*diff)*(1.-uMe*.55)+uMe*c.rgb*(.25+.9*env)*(.6+.4*diff);
+    col+=mix(vec3(1.),c.rgb*1.4+.1,uMe)*spec+uGl*vec3(.02+.12*env*env)*(.4+.6*diff);
+  }
+  col+=c.rgb*uGlow*.7;
+  float a=c.a*uOp;o=vec4(col*a,a);
+}`;
 const FS=`#version 300 es
 precision highp float;in vec2 v;out vec4 o;
 uniform sampler2D uAlb,uNrm,uPaint,uData;uniform vec2 uRes,uSim;
@@ -997,7 +1350,7 @@ void main(){
   float flat_=max(L.z,.25);
   float diff=clamp(max(dot(n,L),0.)/flat_,0.,1.7);
   if(uTorch>.5){float dd=length((uLP.xy-fp.xy)/uRes.y);diff*=1.25/(1.+dd*dd*3.);}
-  float wet=d.g*a,glo=d.b*a,met=d.a*a;
+  float wet=d.g*a,glo=d.b*a,mm=d.a*2.-1.,met=max(mm,0.)*a,flu=max(-mm,0.)*a;
   vec3 H=normalize(L+vec3(0,0,1));
   float shin=mix(12.,140.,max(wet,glo));
   float sAmt=(.03+.75*wet+.45*glo)*a+uWallGloss*(1.-a);
@@ -1008,18 +1361,30 @@ void main(){
   vec3 col=base*(uAmb+(1.-uAmb)*diff)*ao*(1.-met*.55);
   col+=met*pc.rgb*(.25+.9*env)*(.6+.4*diff);
   col+=specC*spec;
+  // gloss: a clear-coat reflection; matt: slightly chalky and flat
+  col=mix(col,col*1.04,glo);
+  col+=glo*vec3(.02+.16*env*env)*(.4+.6*diff);
+  col=mix(col,col*.93+vec3(.035),(1.-max(glo,wet))*a*(1.-met)*.6);
+  // fluoro: glows and saturates
+  col+=pc.rgb*flu*.55;
   o=vec4(pow(col,vec3(1.)),1.);
 }`;
 function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x}
-const prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+function mkProg(fs){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,VS));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));
+  gl.bindAttribLocation(p,0,"a");gl.bindAttribLocation(p,1,"t");gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p}
+const prog=mkProg(FS),progB=mkProg(FSB);
 gl.useProgram(prog);
-const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-const ploc=gl.getAttribLocation(prog,"p");gl.enableVertexAttribArray(ploc);gl.vertexAttribPointer(ploc,2,gl.FLOAT,false,0,0);
+const wallBuf=gl.createBuffer(),fullBuf=gl.createBuffer(),wallVerts=new Float32Array(20);
+gl.bindBuffer(gl.ARRAY_BUFFER,fullBuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,1,1,0,0, 1,1,1,1,0, -1,-1,1,0,1, 1,-1,1,1,1]),gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);gl.enableVertexAttribArray(1);
+function bindQuad(buf){gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.vertexAttribPointer(0,3,gl.FLOAT,false,20,0);gl.vertexAttribPointer(1,2,gl.FLOAT,false,20,12)}
+const UB={};["uB","uRes","uLight","uLP","uTorch","uAmb","uSpec","uBevel","uGl","uMe","uGlow","uFlat","uOp"].forEach(n=>UB[n]=gl.getUniformLocation(progB,n));
 const U={};["uAlb","uNrm","uPaint","uData","uRes","uSim","uLight","uLP","uTorch","uAmb","uSpec","uAO","uRelief","uBump","uRough","uWallGloss"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
 function mkTex(unit){const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t}
 const tAlb=mkTex(0),tNrm=mkTex(1),tPaint=mkTex(2),tData=mkTex(3);
+function uploadBrush(L){if(!L.tex)L.tex=mkTex(4);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,L.cv)}
 gl.uniform1i(U.uAlb,0);gl.uniform1i(U.uNrm,1);gl.uniform1i(U.uPaint,2);gl.uniform1i(U.uData,3);
 gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
 function uploadWall(){
@@ -1029,52 +1394,87 @@ function uploadWall(){
 }
 function compositePaint(){
   pctx.clearRect(0,0,S.W,S.H);
-  for(const L of layers){if(!L.vis||L.op<=0)continue;pctx.globalAlpha=L.op;pctx.drawImage(L.cv,0,0)}
+  for(const L of layers){if(L.kind!=="spray"||!L.vis||L.op<=0)continue;pctx.globalAlpha=L.op;pctx.drawImage(L.cv,0,0)}
   pctx.globalAlpha=1;
   gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,tPaint);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,paintCv);
   paintDirty=false;
 }
 function uploadData(){
-  const vis=layers.filter(l=>l.vis&&l.op>0),B=dataBuf;
+  const vis=layers.filter(l=>l.kind==="spray"&&l.vis&&l.op>0),B=dataBuf;
   for(let i=0;i<SN;i++){
     let t=0;for(let k=0;k<vis.length;k++)t+=vis[k].thick[i]*vis[k].op;
-    const j=i*4;B[j]=255*(1-Math.exp(-t/12));B[j+1]=255*(1-Math.exp(-wet[i]/15));B[j+2]=gloss[i]*255;B[j+3]=metal[i]*255;
+    const j=i*4;B[j]=255*(1-Math.exp(-t/12));B[j+1]=255*(1-Math.exp(-wet[i]/15));B[j+2]=gloss[i]*255;B[j+3]=(metal[i]*.5+.5)*255;
   }
   gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,tData);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,SW,SH,0,gl.RGBA,gl.UNSIGNED_BYTE,B);
   dataDirty=false;
 }
+let QV=S.view;
 function render(){
-  const V=S.view;
+  const V=QV;
   gl.viewport(0,0,S.W,S.H);
-  gl.uniform2f(U.uRes,S.W,S.H);gl.uniform2f(U.uSim,SW,SH);
-  const a=V.lightAng*D2R,e=V.lightElev*D2R;
-  gl.uniform3f(U.uLight,Math.cos(a)*Math.cos(e),Math.sin(a)*Math.cos(e),Math.sin(e));
-  gl.uniform3f(U.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(U.uTorch,V.torch&&hand.over?1:0);
-  gl.uniform1f(U.uAmb,V.amb);gl.uniform1f(U.uSpec,V.spec);gl.uniform1f(U.uAO,V.ao);gl.uniform1f(U.uRelief,V.relief);
-  gl.uniform1f(U.uBump,S.surf.bump);gl.uniform1f(U.uRough,S.surf.rough);gl.uniform1f(U.uWallGloss,S.surf.gloss);
-  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  const bg=hex2rgb(S.view.bg);gl.clearColor(bg[0]/255,bg[1]/255,bg[2]/255,1);gl.clear(gl.COLOR_BUFFER_BIT);
+  const a=V.lightAng*D2R,e=V.lightElev*D2R,lx=Math.cos(a)*Math.cos(e),ly=Math.sin(a)*Math.cos(e),lz=Math.sin(e);
+  const torch=V.torch&&hand.over?1:0;
+  gl.disable(gl.BLEND);
+  if(!CAM.on||S.view.showWall){
+    gl.useProgram(prog);
+    // the wall as a quad seen through the camera (flat on in 2D)
+    [[0,0],[S.W,0],[0,S.H],[S.W,S.H]].forEach(([x,y],i)=>{proj(x,y,0,_p);const w=1/_p[2];
+      wallVerts.set([(_p[0]/S.W*2-1),(1-_p[1]/S.H*2),w,x/S.W,y/S.H],i*5)});
+    gl.bindBuffer(gl.ARRAY_BUFFER,wallBuf);gl.bufferData(gl.ARRAY_BUFFER,wallVerts,gl.DYNAMIC_DRAW);bindQuad(wallBuf);
+    gl.uniform2f(U.uRes,S.W,S.H);gl.uniform2f(U.uSim,SW,SH);
+    gl.uniform3f(U.uLight,lx,ly,lz);
+    gl.uniform3f(U.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(U.uTorch,torch);
+    gl.uniform1f(U.uAmb,V.amb);gl.uniform1f(U.uSpec,V.spec);gl.uniform1f(U.uAO,V.ao);gl.uniform1f(U.uRelief,V.relief);
+    gl.uniform1f(U.uBump,S.surf.bump);gl.uniform1f(U.uRough,S.surf.rough);gl.uniform1f(U.uWallGloss,S.surf.gloss);
+    for(const [n,u] of [["uAlb",0],["uNrm",1],["uPaint",2],["uData",3]])gl.uniform1i(U[n],u);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  }
+  const bl=brushLayers().filter(L=>L.vis&&L.op>0&&L.tex);
+  if(bl.length){
+    gl.useProgram(progB);bindQuad(fullBuf);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform2f(UB.uRes,S.W,S.H);gl.uniform3f(UB.uLight,lx,ly,lz);gl.uniform3f(UB.uLP,hand.scrX,hand.scrY,V.torchH);gl.uniform1f(UB.uTorch,torch);
+    gl.uniform1f(UB.uAmb,V.amb);gl.uniform1f(UB.uSpec,V.spec);gl.uniform1i(UB.uB,4);
+    for(const L of bl){
+      const Q=L.Q||L.B,F=FINISHES[Q.finish]||FINISHES.satin;
+      gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);
+      gl.uniform1f(UB.uBevel,Q.bevel*(CAM.on?CAM.k:1));gl.uniform1f(UB.uGl,F.g);gl.uniform1f(UB.uMe,F.m);
+      gl.uniform1f(UB.uGlow,F.glow+Q.glow);gl.uniform1f(UB.uFlat,F.flat?1:0);gl.uniform1f(UB.uOp,L.op);
+      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    }
+    gl.disable(gl.BLEND);
+  }
+  if(Drive)Drive.pushFrame(glcv);
 }
 function drawOverlay(){
   octx.clearRect(0,0,S.W,S.H);
   const sc=S.W/ov.getBoundingClientRect().width;
-  if(S.input==="type"&&!job){
+  if(S.input==="type"&&!job&&!CAM.on&&activeLayer().kind!=="brush"){
     if(preview){
       octx.lineWidth=1.2*sc;
       for(const s of preview){const c=S.cans[s.canKey];octx.strokeStyle=c.color;octx.globalAlpha=.55;
         octx.beginPath();s.pts.forEach((p,i)=>i?octx.lineTo(p.x,p.y):octx.moveTo(p.x,p.y));octx.stroke()}
       octx.globalAlpha=1;
     }
-    const cx=S.tag.x*S.W,cy=S.tag.y*S.H;octx.strokeStyle="rgba(127,209,192,.9)";octx.lineWidth=1*sc;
+  }
+  if(S.input==="type"&&!job){
+    const T=tagObj();proj(T.x*S.W,T.y*S.H,0,_p);const cx=_p[0],cy=_p[1];octx.strokeStyle="rgba(127,209,192,.9)";octx.lineWidth=1*sc;
     octx.beginPath();octx.moveTo(cx-10*sc,cy);octx.lineTo(cx+10*sc,cy);octx.moveTo(cx,cy-10*sc);octx.lineTo(cx,cy+10*sc);octx.stroke();
   }
-  if(S.input==="hand"&&hand.over){
+  if(S.input==="hand"&&hand.over&&activeLayer().kind==="brush"&&!hand.orbit){
+    const B=activeLayer().B,a=B.nibAngle*D2R,w=B.width*(CAM.on?CAM.k:1)*.5,x=hand.scrX,y=hand.scrY;
+    octx.lineWidth=1*sc;octx.strokeStyle="rgba(0,0,0,.45)";octx.beginPath();octx.arc(x,y,Math.max(2,w),0,TAU);octx.stroke();
+    octx.strokeStyle=B.colA;octx.lineWidth=2*sc;octx.beginPath();octx.moveTo(x-Math.cos(a)*w,y-Math.sin(a)*w);octx.lineTo(x+Math.cos(a)*w,y+Math.sin(a)*w);octx.stroke();
+  }else if(S.input==="hand"&&hand.over&&!hand.orbit){
+    hand.mx=hand.mx;const _hx=hand.scrX,_hy=hand.scrY;
     const c=S.cans.hand,cap=CAPS[c.cap],r=Math.max(1.5,cap.r0*(.3+1.4*c.dist));
     octx.strokeStyle="rgba(255,255,255,.55)";octx.lineWidth=1*sc;
     octx.beginPath();
-    if(cap.aspect)octx.ellipse(hand.mx,hand.my,r*1.25,r*1.25*cap.aspect,S.hand.nib*D2R,0,TAU);else octx.arc(hand.mx,hand.my,r*1.25,0,TAU);
+    const rk=r*(CAM.on?CAM.k:1);
+    if(cap.aspect)octx.ellipse(_hx,_hy,rk*1.25,rk*1.25*cap.aspect,S.hand.nib*D2R,0,TAU);else octx.arc(_hx,_hy,rk*1.25,0,TAU);
     octx.stroke();
-    octx.fillStyle=c.color;octx.beginPath();octx.arc(hand.mx,hand.my,1.6*sc,0,TAU);octx.fill();
-    octx.strokeStyle="rgba(0,0,0,.5)";octx.beginPath();octx.arc(hand.mx,hand.my,r*1.25+1*sc,0,TAU);octx.stroke();
+    octx.fillStyle=c.color;octx.beginPath();octx.arc(_hx,_hy,1.6*sc,0,TAU);octx.fill();
+    octx.strokeStyle="rgba(0,0,0,.5)";octx.beginPath();octx.arc(_hx,_hy,rk*1.25+1*sc,0,TAU);octx.stroke();
   }
 }
 function fitFrame(){
@@ -1089,7 +1489,16 @@ addEventListener("resize",fitFrame);
 let last=performance.now(),fps=60,statT=0;
 function frame(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;fps=lerp(fps,1/Math.max(dt,1e-3),.05);
+  TT+=dt;
   handTick(dt);robotTick(dt);stepDrips(dt);dry(dt);
+  QV=Drive?Drive.resolve(S.view):S.view;
+  if(S.view.dim3&&QV.camAuto)camAutoYaw+=QV.camAuto*dt;
+  const camCh=camUpdate(QV),live=!!(Drive&&Drive.isLive());
+  for(const L of brushLayers()){
+    if(L.src)regenLive(L);
+    const Q=live?Drive.resolve(L.B):L.B;L.Q=Q;
+    if(L.vis&&(L.dirty||camCh||live||brushAnimating(Q)||L.write||hand.bl===L)){renderBrushLayer(L,Q);uploadBrush(L);L.dirty=false}
+  }
   if(previewT&&now>previewT){previewT=0;try{preview=buildJob()}catch(e){console.error(e);preview=null}}
   if(paintDirty)compositePaint();
   if(dataDirty)uploadData();
@@ -1098,9 +1507,11 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 function updateStatus(){
-  const c=S.input==="hand"?S.cans.hand:S.cans[S.canTab];
-  $("#status").textContent=`${S.W}×${S.H} · ${SURFACES[S.surf.type].name.toLowerCase()} · drips ${drips.length} · ${fps.toFixed(0)} fps`;
+  const c=S.input==="hand"?S.cans.hand:S.cans[S.canTab],AL=activeLayer();
+  const nStr=brushLayers().reduce((a,L)=>a+L.strokes.length+L.live.length,0);
+  $("#status").textContent=`${S.W}×${S.H} · ${SURFACES[S.surf.type].name.toLowerCase()} · ${nStr} brush strokes · drips ${drips.length}${CAM.on?" · 3D":""} · ${fps.toFixed(0)} fps`;
   $("#statLine").innerHTML=job?`Painting stroke ${job.si+1} / ${job.strokes.length}`:
+    AL.kind==="brush"?`width ${AL.B.width.toFixed(0)} px <kbd>wheel</kbd> · orbit <kbd>Alt</kbd>/<kbd>right</kbd>-drag · undo <kbd>Ctrl Z</kbd>`:
     `distance ${(c.dist*100|0)}% <kbd>wheel</kbd> <kbd>[</kbd><kbd>]</kbd> · undo <kbd>Ctrl Z</kbd> · caps <kbd>1</kbd>–<kbd>7</kbd>`;
 }
 
@@ -1109,13 +1520,17 @@ function updateStatus(){
    --------------------------------------------------------------------- */
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
 function row(parent,label,...ctl){const r=el("div","row");r.append(el("label",null,label));const c=el("div","ctl");c.append(...ctl);r.append(c);parent.append(r);return r}
-const syncers=[];
+let syncers=[];
+let GRP="";
+const NO_MOD=new Set(["passes","smooth","bristles","seed","stampGap","speedRef","outlinePasses","hatchAngle","hatchSpace","overspill","depth","depthAng","dwell","play","bubble","expand"]);
+function registerMod(key,label,min,max){if(!Drive||!GRP||NO_MOD.has(key))return;Drive.registerTarget(key,GRP+" — "+label,min,max)}
+function syncAll(){syncers=syncers.filter(f=>{try{f();return true}catch(e){return false}});updateStatus()}
 function slider(parent,label,obj,key,min,max,step,fmt,cb){
   const i=el("input");i.type="range";i.min=min;i.max=max;i.step=step;const v=el("span","val");
   const f=fmt||(x=>(+x).toFixed(step<.1?2:step<1?1:0));
   const sync=()=>{i.value=obj[key];v.textContent=f(obj[key])};sync();
   i.oninput=()=>{obj[key]=+i.value;v.textContent=f(obj[key]);cb&&cb()};
-  row(parent,label,i,v);syncers.push(sync);return i;
+  row(parent,label,i,v);syncers.push(sync);registerMod(key,label,+min,+max);return i;
 }
 function select(parent,label,obj,key,opts,cb){
   const s=el("select");opts.forEach(([v,t])=>{const o=el("option",null,t);o.value=v;s.append(o)});s.value=obj[key];
@@ -1133,8 +1548,12 @@ const pct=x=>Math.round(x*100)+"%";
 /* Input */
 function buildInputUI(){
   const h=$("#inHand");h.innerHTML="";
-  note(h,"Draw on the wall. Holding still pools paint until it runs. The wheel moves the can nearer or further.");
-  sub(h,"Feel — weighting");
+  note(h,activeLayer().kind==="brush"?"Draw on the active <b style='color:var(--text)'>Brush</b> layer: vector strokes whose weight follows the nib angle, your speed and pen pressure. The wheel sets width."
+    :"Draw on the active <b style='color:var(--text)'>Spray</b> layer. Holding still pools paint until it runs. The wheel moves the can nearer or further.");
+  buildInputRest();
+}
+function buildInputFeel(){
+  const fe=$("#g-feel");fe.innerHTML="";{const h=fe;
   slider(h,"Speed → width",S.hand,"speedWidth",-1,1,.01);
   slider(h,"Speed → flow",S.hand,"speedFlow",-1,1,.01);
   slider(h,"Tilt from motion",S.hand,"tiltMotion",0,1,.01);
@@ -1146,105 +1565,258 @@ function buildInputUI(){
   slider(h,"Hand shake",S.hand,"shake",0,3,.01);
   check(h,"Pen → pressure",S.hand,"penPressure");
   check(h,"Pen → width",S.hand,"penWidth");
-  note(h,"The same feel settings drive the robot hand in Type mode.");
+  note(h,"How speed, direction and pressure shape the spray. Stabiliser also smooths brush strokes.");}
+}
+function buildInputRest(){
 
   const t=$("#inType");t.innerHTML="";
-  const txt=el("input","big");txt.type="text";txt.value=S.tag.text;txt.maxLength=24;txt.oninput=()=>{S.tag.text=txt.value;schedulePreview()};
+  const AL=activeLayer(),T=tagObj(),onBrush=AL.kind==="brush",live=onBrush&&AL.src;
+  const P=()=>{if(live){AL.dirty=true}else schedulePreview()};
+  note(t,onBrush?(live?`<b style="color:var(--text)">Live text on “${AL.name}”.</b> Every change redraws it; the settings below can be modulated in Drive.`
+      :`Types onto the brush layer “${AL.name}” as live vector strokes — it stays editable and animatable after it's placed.`)
+    :`Paints onto the spray layers with a robot hand. Select a Brush layer for live, animatable text.`);
+  const txt=el("input","big");txt.type="text";txt.value=T.text;txt.maxLength=32;txt.oninput=()=>{T.text=txt.value;P()};
   t.append(txt);
-  const mt=el("div","tabs");[["tag","Tag — single line"],["piece","Throw-up — outline + fill"]].forEach(([m,l])=>{const b=el("button",null,l);b.dataset.m=m;b.onclick=()=>{S.tag.mode=m;buildInputUI();schedulePreview()};if(S.tag.mode===m)b.classList.add("on");mt.append(b)});
+  const mt=el("div","tabs");[["tag","Tag — single line"],["piece","Throw-up — outline + fill"]].forEach(([m,l])=>{const b=el("button",null,l);b.dataset.m=m;b.onclick=()=>{T.mode=m;buildInputUI();buildCanUI();P()};if(T.mode===m)b.classList.add("on");mt.append(b)});
   t.append(mt);
-  note(t,"Click the wall to place it. The preview shows the path the hand will take.");
-  const P=schedulePreview;
-  slider(t,"Size",S.tag,"size",40,500,1,x=>x+" px",P);
-  slider(t,"Slant",S.tag,"slant",-.6,.8,.01,null,P);
-  slider(t,"Spacing",S.tag,"spacing",-.6,1,.01,null,P);
-  slider(t,"Letter jitter",S.tag,"jitter",0,1.5,.01,null,P);
-  slider(t,"Bounce",S.tag,"bounce",0,1.5,.01,null,P);
-  if(S.tag.mode==="tag"){
-    slider(t,"Stretch",S.tag,"stretch",.4,2,.01,null,P);
-    slider(t,"Wobble",S.tag,"wobble",0,1.5,.01,null,P);
-    slider(t,"First letter",S.tag,"firstBig",0,1,.01,null,P);
-    check(t,"Swoosh under",S.tag,"swoosh",P);
-    check(t,"Connect letters",S.tag,"connect",P);
-    slider(t,"End flicks",S.tag,"flick",0,2,.01,null,P);
+  note(t,"Click the wall to place it.");
+  GRP="Text";
+  slider(t,"Size",T,"size",40,500,1,x=>x+" px",P);
+  slider(t,"Slant",T,"slant",-.6,.8,.01,null,P);
+  slider(t,"Spacing",T,"spacing",-.6,1,.01,null,P);
+  slider(t,"Letter jitter",T,"jitter",0,1.5,.01,null,P);
+  slider(t,"Bounce",T,"bounce",0,1.5,.01,null,P);
+  if(T.mode==="tag"){
+    slider(t,"Stretch",T,"stretch",.4,2,.01,null,P);
+    slider(t,"Wobble",T,"wobble",0,1.5,.01,null,P);
+    slider(t,"First letter",T,"firstBig",0,1,.01,null,P);
+    check(t,"Swoosh under",T,"swoosh",P);
+    check(t,"Connect letters",T,"connect",P);
+    slider(t,"End flicks",T,"flick",0,2,.01,null,P);
   }else{
     const fonts=[["Arial Black","Arial Black"],["Impact","Impact"],["Segoe UI","Segoe UI"],["Verdana","Verdana"],["Georgia","Georgia"],["Trebuchet MS","Trebuchet MS"],["Comic Sans MS","Comic Sans MS"],["Courier New","Courier New"]];
     if(customFont)fonts.unshift([customFont,customFont+" (loaded)"]);
-    select(t,"Font",S.tag,"font",fonts,P);
+    select(t,"Font",T,"font",fonts,P);
     btns(t,[["Load font file…",()=>$("#fFont").click()]]);
-    slider(t,"Bubble",S.tag,"bubble",0,1.5,.01,null,P);
-    slider(t,"Expand",S.tag,"expand",-.5,.9,.01,null,P);
-    slider(t,"3D depth",S.tag,"depth",0,80,1,x=>x+" px",P);
-    slider(t,"3D angle",S.tag,"depthAng",0,360,1,x=>x+"°",P);
-    slider(t,"Fill angle",S.tag,"hatchAngle",-90,90,1,x=>x+"°",P);
-    slider(t,"Fill spacing",S.tag,"hatchSpace",.5,2.5,.01,null,P);
-    slider(t,"Overspill",S.tag,"overspill",0,1.5,.01,null,P);
-    slider(t,"Outline passes",S.tag,"outlinePasses",1,3,1,null,P);
-    check(t,"Shines",S.tag,"shines",P);
+    slider(t,"Bubble",T,"bubble",0,1.5,.01,null,P);
+    slider(t,"Expand",T,"expand",-.5,.9,.01,null,P);
+    if(!onBrush){
+      slider(t,"3D depth",T,"depth",0,80,1,x=>x+" px",P);
+      slider(t,"3D angle",T,"depthAng",0,360,1,x=>x+"°",P);
+      slider(t,"Fill angle",T,"hatchAngle",-90,90,1,x=>x+"°",P);
+      slider(t,"Fill spacing",T,"hatchSpace",.5,2.5,.01,null,P);
+      slider(t,"Overspill",T,"overspill",0,1.5,.01,null,P);
+      slider(t,"Outline passes",T,"outlinePasses",1,3,1,null,P);
+      check(t,"Shines",T,"shines",P);
+    }else note(t,"Fill colour, outline and 3D come from the Brush section (Fill, Passes, Depth).");
   }
-  slider(t,"Seed",S.tag,"seed",1,999,1,null,P);
+  slider(t,"Seed",T,"seed",1,999,1,null,P);
   sub(t,"Hand");
-  slider(t,"Hand speed",S.tag,"speed",150,2500,1,x=>x+" px/s",P);
-  slider(t,"Slow on curves",S.tag,"speedVar",0,1,.01,null,P);
-  slider(t,"Start dwell",S.tag,"dwell",0,600,1,x=>x+" ms",P);
-  slider(t,"Playback",S.tag,"play",.1,6,.01,x=>(+x).toFixed(2)+"×");
-  check(t,"Instant",S.tag,"instant");
-  sub(t,"Layers");
-  const lo=layers.slice().reverse().map(l=>[l.id,l.name]);
-  const keys=S.tag.mode==="tag"?[["tag","Tag"]]:[["fill","Fill"],["d3","3D"],["outline","Outline"],["shine","Shines"]];
-  keys.forEach(([k,n])=>{const s=select(t,n+" →",S.tag.L,k,lo,()=>{S.tag.L[k]=+s.value;P()});s.value=S.tag.L[k]});
-  btns(t,[["▶ Paint it",startJob,"primary"],["■ Stop",()=>{job=null}]]);
+  slider(t,"Hand speed",T,"speed",150,2500,1,x=>x+" px/s",P);
+  slider(t,"Slow on curves",T,"speedVar",0,1,.01,null,P);
+  GRP="";
+  if(!onBrush){
+    slider(t,"Start dwell",T,"dwell",0,600,1,x=>x+" ms",P);
+    slider(t,"Playback",S.tag,"play",.1,6,.01,x=>(+x).toFixed(2)+"×");
+    check(t,"Instant",S.tag,"instant");
+    sub(t,"Layers");
+    const lo=sprayLayers().reverse().map(l=>[l.id,l.name]);
+    const keys=T.mode==="tag"?[["tag","Tag"]]:[["fill","Fill"],["d3","3D"],["outline","Outline"],["shine","Shines"]];
+    keys.forEach(([k,n])=>{const s=select(t,n+" →",S.tag.L,k,lo,()=>{S.tag.L[k]=+s.value;P()});s.value=S.tag.L[k]});
+    btns(t,[["▶ Paint it",paintTyped,"primary"],["■ Stop",()=>{job=null}]]);
+  }else{
+    btns(t,live?[["▶ Write it on again",()=>writeOn(AL),"primary"],["Remove text",()=>{pushUndo([AL.id]);AL.src=null;regenLive(AL);buildInputUI()}]]
+      :[["▶ Place on layer",paintTyped,"primary"]]);
+    if(live)note(t,"One live text per brush layer — add another Brush layer for a second piece.");
+  }
   $("#inTabs").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.in===S.input));
   $("#inHand").classList.toggle("hidden",S.input!=="hand");$("#inType").classList.toggle("hidden",S.input!=="type");
   document.body.classList.toggle("typing",S.input==="type");
 }
 $("#inTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
   S.input=b.dataset.in;
-  if(S.input==="hand")S.canTab="hand";else if(S.canTab==="hand")S.canTab=S.tag.mode==="tag"?"tag":"fill";
   buildInputUI();buildCanUI();if(S.input==="type")schedulePreview();
 });
 
 /* Can */
 let canSync=[];
+const CAP_DESC={
+  stencil:"Hair-thin and crisp, almost no halo. Details, signatures.",
+  skinny:"The tagging cap — tight line, small soft halo.",
+  soft:"Wider line with a soft, misty edge. Classic outline cap.",
+  fat:"Wide, soft band for fills. Width depends a lot on distance.",
+  superfat:"Huge soft band — backgrounds and fast fills.",
+  calli:"Flat fan: thick across, thin along — set by Nib angle under Input.",
+  dirty:"Clogged cap — spits droplets and blobs along the line."
+};
+function visibleCans(){return S.input==="hand"?["hand"]:S.tag.mode==="tag"?["tag"]:["fill","outline","d3","shine"]}
 function buildCanUI(){
+  const vis=visibleCans();if(!vis.includes(S.canTab))S.canTab=vis[0];
   const tabs=$("#canTabs");tabs.innerHTML="";
-  CAN_TABS.forEach(([k,n])=>{const b=el("button",null,n);if(k===S.canTab)b.classList.add("on");b.onclick=()=>{S.canTab=k;buildCanUI()};tabs.append(b)});
+  if(vis.length>1)CAN_TABS.filter(t=>vis.includes(t[0])).forEach(([k,n])=>{const b=el("button",null,n);if(k===S.canTab)b.classList.add("on");b.onclick=()=>{S.canTab=k;buildCanUI()};tabs.append(b)});
   const c=S.cans[S.canTab],b=$("#canBody");b.innerHTML="";
+  b.append(el("div","note",S.input==="hand"?"<b style='color:var(--text)'>Your mouse / pen can.</b> Every stroke you draw uses these settings."
+    :S.tag.mode==="tag"?"<b style='color:var(--text)'>The tag can.</b> The robot hand paints the tag with this."
+    :"<b style='color:var(--text)'>"+CAN_TABS.find(t=>t[0]===S.canTab)[1]+" can.</b> Used by the robot hand for that part of the throw-up."));
+  const pv=el("canvas");pv.id="canPreview";pv.width=640;pv.height=120;pv.style.cssText="width:100%;height:60px;display:block;border:1px solid var(--line);border-radius:3px;margin:4px 0 6px;background:#e9e6df";
+  b.append(pv);
   const before=syncers.length;
-  select(b,"Cap",c,"cap",Object.entries(CAPS).map(([k,v])=>[k,v.name]),schedulePreview);
-  select(b,"Paint",c,"paint",Object.entries(PAINTS).map(([k,v])=>[k,v.name]));
-  color(b,"Colour",c,"color");
-  const sw=el("div","swatches");SWATCHES.forEach(hx=>{const i=el("i");i.style.background=hx;i.title=hx;i.onclick=()=>{c.color=hx;syncCanUI()};sw.append(i)});b.append(sw);
+  const rp=()=>{drawCanPreview();schedulePreview()};
+  select(b,"Cap",c,"cap",Object.entries(CAPS).map(([k,v])=>[k,v.name]),()=>{capNote.textContent=CAP_DESC[c.cap];rp()});
+  const capNote=el("div","note",CAP_DESC[c.cap]);b.append(capNote);
+  select(b,"Paint",c,"paint",Object.entries(PAINTS).map(([k,v])=>[k,v.name]),()=>{
+    paintNote.textContent=PAINTS[c.paint].d;
+    if(c.paint==="chrome"){const[r,g,bb]=hex2rgb(c.color);if(r*.3+g*.59+bb*.11<110){c.color="#c8ccd2";syncCanUI()}}
+    rp()});
+  const paintNote=el("div","note",PAINTS[c.paint].d);b.append(paintNote);
+  color(b,"Colour",c,"color",rp);
+  const sw=el("div","swatches");SWATCHES.forEach(hx=>{const i=el("i");i.style.background=hx;i.title=hx;i.onclick=()=>{c.color=hx;syncCanUI();rp()};sw.append(i)});b.append(sw);
   select(b,"Fade",c,"fade",[["none","None"],["vertical","Top → bottom"],["horizontal","Left → right"],["stroke","Along stroke"]],()=>buildCanUI());
-  if(c.fade!=="none")color(b,"Fade to",c,"color2");
-  slider(b,"Distance",c,"dist",0,1,.01,pct,schedulePreview);
-  slider(b,"Pressure",c,"pressure",.1,1.5,.01,pct);
+  if(c.fade!=="none")color(b,"Fade to",c,"color2",rp);
+  slider(b,"Distance",c,"dist",0,1,.01,pct,rp);
+  slider(b,"Pressure",c,"pressure",.1,1.5,.01,pct,rp);
   canSync=syncers.slice(before);
-  note(b,S.canTab==="hand"?"Close and slow: thin, wet, drips. Far and fast: wide, dry, misty.":"This can is used by the robot hand when it paints the "+CAN_TABS.find(t=>t[0]===S.canTab)[1].toLowerCase()+".");
+  note(b,"Close and slow: thin, wet, drips. Far and fast: wide, dry, misty. Keys <kbd>1</kbd>–<kbd>7</kbd> switch caps, <kbd>[</kbd> <kbd>]</kbd> or the wheel set distance.");
+  drawCanPreview();
 }
-function syncCanUI(){canSync.forEach(f=>f());updateStatus()}
-
+function syncCanUI(){canSync.forEach(f=>f());drawCanPreview();updateStatus()}
+/* Test strip: the current can sprayed along an S-curve at slow → fast speed, no drips, no wall. */
+function drawCanPreview(){
+  const pv=document.getElementById("canPreview");if(!pv)return;
+  const g=pv.getContext("2d");const can=S.cans[S.canTab];
+  const [cr,cg,cb]=hex2rgb(can.color),bg=(cr*.3+cg*.59+cb*.11)>150?"#2a2d30":"#e9e6df";
+  g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.fillStyle=bg;g.fillRect(0,0,pv.width,pv.height);pv.style.background=bg;
+  const lyr={id:-1,preview:true,ctx:g};
+  const st=newNozzle(can,-1,S.input==="hand"?S.hand:S.hand,{x0:20,y0:10,x1:620,y1:110});st.layerObj=lyr;
+  const N=90,x0=24,x1=616;st.x=x0;st.y=60;st.age=1;
+  for(let i=1;i<=N;i++){
+    const u=i/N,x=lerp(x0,x1,u),y=60+Math.sin(u*TAU*1.25)*26;
+    const v=lerp(250,1500,u);                         // speeds up left → right
+    const dt=Math.hypot(x-st.x,y-st.y)/v;
+    spraySegment(st,x,y,dt,1);
+  }
+  g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;
+  g.fillStyle=bg==="#e9e6df"?"rgba(0,0,0,.45)":"rgba(255,255,255,.45)";g.font="18px ui-monospace,Consolas,monospace";g.fillText("slow",8,114);g.fillText("fast",590,114);
+}
 /* Layers */
+function selectLayer(id){activeId=id;refreshPanels()}
 function buildLayerUI(){
   const g=$("#g-layers");g.innerHTML="";
   const list=el("div");list.id="layerList";
   layers.slice().reverse().forEach(L=>{
     const r=el("div","lyr"+(L.id===activeId?" on":""));
-    const eye=el("input");eye.type="checkbox";eye.checked=L.vis;eye.title="Visible";eye.onclick=e=>e.stopPropagation();eye.onchange=()=>{L.vis=eye.checked;paintDirty=dataDirty=true};
-    const nm=el("input","nm");nm.type="text";nm.value=L.name;nm.onchange=()=>{L.name=nm.value;buildInputUI()};nm.onclick=e=>{e.stopPropagation();activeId=L.id;buildLayerUI()};
+    const eye=el("input");eye.type="checkbox";eye.checked=L.vis;eye.title="Visible";eye.onclick=e=>e.stopPropagation();eye.onchange=()=>{L.vis=eye.checked;L.dirty=true;paintDirty=dataDirty=true};
+    const nm=el("input","nm");nm.type="text";nm.value=L.name;nm.onchange=()=>{L.name=nm.value;buildInputUI()};nm.onclick=e=>{e.stopPropagation();if(activeId!==L.id)selectLayer(L.id)};
     const op=el("input","op");op.type="range";op.min=0;op.max=1;op.step=.01;op.value=L.op;op.title="Opacity";op.onclick=e=>e.stopPropagation();op.oninput=()=>{L.op=+op.value;paintDirty=dataDirty=true};
-    const tg=el("span","tag",L.id===activeId?"hand":"");
-    r.append(eye,nm,tg,op);r.onclick=()=>{activeId=L.id;buildLayerUI()};list.append(r);
+    const tg=el("span","tag",L.kind==="brush"?(L.src?"brush·text":"brush"):"spray");
+    if(L.id===activeId)tg.style.color="var(--accent)";
+    r.append(eye,nm,tg,op);r.onclick=()=>selectLayer(L.id);list.append(r);
   });
   g.append(list);
-  btns(g,[["+ Add",()=>{const L=makeLayer("Layer "+nextLayerId);const i=layers.findIndex(l=>l.id===activeId);layers.splice(i+1,0,L);activeId=L.id;buildLayerUI();buildInputUI()}],
+  const add=L=>{const i=layers.findIndex(l=>l.id===activeId);layers.splice(i+1,0,L);selectLayer(L.id)};
+  btns(g,[["+ Brush",()=>add(makeBrushLayer("Brush "+nextLayerId,"calligraphy"))],["+ Spray",()=>add(makeLayer("Spray "+nextLayerId))],
     ["▲",()=>moveLayer(1)],["▼",()=>moveLayer(-1)],
-    ["Delete",()=>{if(layers.length<2)return;const i=layers.findIndex(l=>l.id===activeId);const id=layers[i].id;layers.splice(i,1);drips=drips.filter(d=>d.layerId!==id);
-      activeId=layers[Math.max(0,i-1)].id;Object.keys(S.tag.L).forEach(k=>{if(S.tag.L[k]===id)S.tag.L[k]=activeId});paintDirty=dataDirty=true;buildLayerUI();buildInputUI()}]]);
-  note(g,"Hand strokes go on the highlighted layer. Type mode routes fill, 3D, outline and shines to their own layers (set under Input).");
+    ["✕",()=>{if(layers.length<2)return;const i=layers.findIndex(l=>l.id===activeId);const id=layers[i].id;layers.splice(i,1);drips=drips.filter(d=>d.layerId!==id);
+      const sp=sprayLayers()[0];Object.keys(S.tag.L).forEach(k=>{if(S.tag.L[k]===id&&sp)S.tag.L[k]=sp.id});paintDirty=dataDirty=true;selectLayer(layers[Math.max(0,i-1)].id)}]]);
+  note(g,"<b style='color:var(--text)'>Brush</b> layers hold vector strokes — calligraphy, live text, 3D, animation — and float above the wall. <b style='color:var(--text)'>Spray</b> layers are paint on the wall itself: caps, drips, soak-in.");
+}
+function refreshPanels(){
+  const b=activeLayer().kind==="brush";
+  $("#grp-brush").classList.toggle("hidden",!b);$("#grp-motion").classList.toggle("hidden",!b);
+  $("#grp-can").classList.toggle("hidden",b);$("#grp-phys").classList.toggle("hidden",b);
+  syncers=[];
+  buildLayerUI();buildInputUI();buildCanUI();buildBrushUI();buildFeelPhysViewCam();updateStatus();
+}
+
+/* Brush */
+function buildBrushUI(){
+  const L=activeLayer(),g=$("#g-brush"),m=$("#g-motion");g.innerHTML="";m.innerHTML="";
+  if(L.kind!=="brush")return;
+  const B=L.B,D=()=>{L.dirty=true},RB=()=>{L.dirty=true;buildBrushUI()};
+  const lk={v:""};const ls=select(g,"Look",lk,"v",[["","— apply a look —"],...Object.entries(BRUSH_LOOKS).map(([k,v])=>[k,v.name])],()=>{if(!lk.v)return;
+    const keep={colA:B.colA,fillCol:B.fillCol,fillCol2:B.fillCol2};Object.assign(B,BRUSH_DEFAULTS,BRUSH_LOOKS[lk.v].v);
+    if(!/echo|chrome|neon/.test(lk.v))Object.assign(B,{colA:keep.colA});Object.assign(B,{fillCol:keep.fillCol,fillCol2:keep.fillCol2});RB()});
+  GRP="Brush";
+  select(g,"Style",B,"style",STYLES,RB);
+  const pv=el("canvas");pv.id="brushPreview";pv.width=640;pv.height=130;pv.style.cssText="width:100%;height:65px;display:block;border:1px solid var(--line);border-radius:3px;margin:4px 0 6px;background:#f7f7f7";g.append(pv);
+  const DP=()=>{D();drawBrushPreview()};
+  sub(g,"Line weight");
+  slider(g,"Width",B,"width",1,160,.5,x=>(+x).toFixed(1)+" px",DP);
+  slider(g,"Nib angle",B,"nibAngle",-90,180,1,x=>x+"°",DP);
+  slider(g,"Nib round",B,"nibRound",0,1,.01,null,DP);
+  slider(g,"Speed → thin",B,"speedW",-1,1.5,.01,null,DP);
+  slider(g,"Speed scale",B,"speedRef",150,3000,10,x=>x+" px/s",DP);
+  slider(g,"Pressure",B,"pressW",0,1,.01,null,DP);
+  slider(g,"Taper start",B,"taperS",0,.5,.01,null,DP);
+  slider(g,"Taper end",B,"taperE",0,.5,.01,null,DP);
+  slider(g,"Ink jitter",B,"jitter",0,1,.01,null,DP);
+  slider(g,"Jitter scale",B,"jitterFreq",.005,.3,.001,null,DP);
+  slider(g,"Tremor",B,"tremor",0,12,.1,x=>(+x).toFixed(1)+" px",DP);
+  slider(g,"Smoothing",B,"smooth",0,8,1,null,DP);
+  if(B.style==="nib"||B.style==="dots")slider(g,"Stamp gap",B,"stampGap",1,40,1,x=>x+" px",DP);
+  if(B.style==="dry"){slider(g,"Bristles",B,"bristles",2,40,1,null,DP);slider(g,"Dryness",B,"dryness",0,1,.01,null,DP)}
+  sub(g,"Colour");
+  color(g,"Line",B,"colA",DP);
+  const sw=el("div","swatches");SWATCHES.forEach(hx=>{const i=el("i");i.style.background=hx;i.onclick=()=>{B.colA=hx;syncAll();DP()};sw.append(i)});g.append(sw);
+  color(g,"Pass / depth colour",B,"colB",DP);
+  check(g,"Solid extrusion",B,"extrude",DP);
+  slider(g,"Opacity",B,"alpha",0,1,.01,null,DP);
+  slider(g,"Outline rim",B,"rimW",0,12,.1,x=>(+x).toFixed(1)+" px",DP);
+  color(g,"Rim colour",B,"rimCol",DP);
+  if(L.fills.length||(L.src&&L.src.T.mode==="piece")){
+    check(g,"Fill letters",B,"fillOn",D);color(g,"Fill",B,"fillCol",D);check(g,"Fill fade",B,"fillFade",D);color(g,"Fade to",B,"fillCol2",D);
+  }
+  sub(g,"Passes — Anchor-style repeats");
+  slider(g,"Passes",B,"passes",1,40,1,null,DP);
+  select(g,"Pass ease",B,"passEase",Object.keys(EASES).map(k=>[k,k]),DP);
+  slider(g,"Size start",B,"sizeS",0,4,.01,null,DP);
+  slider(g,"Size end",B,"sizeE",0,4,.01,null,DP);
+  slider(g,"Offset start",B,"offS",-200,200,1,x=>x+" px",DP);
+  slider(g,"Offset end",B,"offE",-200,200,1,x=>x+" px",DP);
+  slider(g,"Shift X",B,"shiftX",-120,120,1,x=>x+" px",DP);
+  slider(g,"Shift Y",B,"shiftY",-120,120,1,x=>x+" px",DP);
+  slider(g,"Depth start",B,"zS",-400,400,1,x=>x+" px",DP);
+  slider(g,"Depth end",B,"zE",-400,400,1,x=>x+" px",DP);
+  slider(g,"Opacity start",B,"opaS",0,1,.01,null,DP);
+  slider(g,"Opacity end",B,"opaE",0,1,.01,null,DP);
+  note(g,"Depth puts passes in front of (+) or behind (−) the wall — turn on Camera — 3D to see it. Shift does the classic 2D drop.");
+  sub(g,"Finish");
+  select(g,"Finish",B,"finish",Object.entries(FINISHES).map(([k,v])=>[k,v.name]),D);
+  slider(g,"Bevel",B,"bevel",0,24,.1,x=>(+x).toFixed(1)+" px",D);
+  slider(g,"Glow",B,"glow",0,2,.01,null,D);
+  // motion
+  GRP="Motion";
+  slider(m,"Reveal",B,"reveal",0,1,.001,pct,D);
+  slider(m,"Speed",B,"animSpeed",0,3,.01,null,D);
+  slider(m,"Write-on loop",B,"mTravel",0,1,.01,null,D);
+  slider(m,"Breathe",B,"mBreathe",0,1.5,.01,null,D);
+  slider(m,"Sway",B,"mSway",0,60,.1,x=>(+x).toFixed(1)+" px",D);
+  slider(m,"Wander",B,"mWander",0,80,.1,x=>(+x).toFixed(1)+" px",D);
+  slider(m,"Nib wobble",B,"mWobble",0,1.5,.01,null,D);
+  slider(m,"Shimmer",B,"mShimmer",0,1,.01,null,D);
+  slider(m,"Hue drift",B,"mHue",0,1,.01,null,D);
+  slider(m,"Float (3D)",B,"mFloat",0,3,.01,null,D);
+  GRP="";
+  btns(m,[["▶ Write on",()=>writeOn(L),"primary"],["Still",()=>{["mTravel","mBreathe","mSway","mWander","mWobble","mShimmer","mHue","mFloat"].forEach(k=>B[k]=0);syncAll();D()}]]);
+  note(m,"Every slider in Brush, Motion and Text can be routed in Drive — LFOs, audio bands, beat clock, MIDI.");
+  drawBrushPreview();
+}
+/* Test strip: the brush along an S-curve, slow on the left, fast on the right */
+const previewStroke=(()=>{const pts=[];let t=0;for(let i=0;i<=120;i++){const u=i/120,x=lerp(30,610,u),y=65+Math.sin(u*TAU*1.15)*34;
+  if(i){const q=pts[i-1];t+=Math.hypot(x-q.x,y-q.y)/lerp(200,1700,u)}pts.push({x,y,t,p:.6+.4*Math.sin(u*Math.PI)})}return{pts}})();
+function drawBrushPreview(){
+  const pv=document.getElementById("brushPreview");if(!pv)return;const L=activeLayer();if(L.kind!=="brush")return;
+  const g=pv.getContext("2d");g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.fillStyle="#f7f7f7";g.fillRect(0,0,pv.width,pv.height);
+  const Q=Object.assign({},L.B,{zS:0,zE:0,mTravel:0,reveal:1,shiftX:L.B.shiftX*.4,shiftY:L.B.shiftY*.4,offS:L.B.offS*.3,offE:L.B.offE*.3});
+  const was=CAM.on;CAM.on=false;previewStroke.geom=null;const gm=strokeGeom(previewStroke,Q.smooth|0);
+  const n=Math.max(1,Q.passes|0),ease=EASES[Q.passEase]||EASES.linear;
+  for(let k=n-1;k>=0;k--){const e=n>1?ease(k/(n-1)):0;drawStrokePass(g,gm,Q,{k,e,z:0,sx:Q.shiftX*e,sy:Q.shiftY*e},gm.L,0)}
+  CAM.on=was;g.globalAlpha=1;g.fillStyle="rgba(0,0,0,.4)";g.font="18px ui-monospace,Consolas,monospace";g.fillText("slow",8,124);g.fillText("fast",590,124);
 }
 function moveLayer(d){const i=layers.findIndex(l=>l.id===activeId),j=i+d;if(j<0||j>=layers.length)return;[layers[i],layers[j]]=[layers[j],layers[i]];paintDirty=true;buildLayerUI();buildInputUI()}
-function clearLayer(L){L.ctx.clearRect(0,0,S.W,S.H);L.thick.fill(0);drips=drips.filter(d=>d.layerId!==L.id)}
+function clearLayer(L){
+  if(L.kind==="brush"){L.strokes=[];L.src=null;L.live=[];L.fills=[];L.write=null;L.dirty=true;return}
+  L.ctx.clearRect(0,0,S.W,S.H);L.thick.fill(0);drips=drips.filter(d=>d.layerId!==L.id)}
 
 /* Physics */
 function buildPhysUI(){
@@ -1292,7 +1864,7 @@ $("#fFont").onchange=async e=>{const f=e.target.files[0];if(!f)return;const name
 
 /* View */
 function buildViewUI(){
-  const g=$("#g-view");
+  const g=$("#g-view");g.innerHTML="";GRP="View";
   slider(g,"Light angle",S.view,"lightAng",-180,180,1,x=>x+"°");
   slider(g,"Light height",S.view,"lightElev",5,90,1,x=>x+"°");
   slider(g,"Ambient",S.view,"amb",0,1,.01);
@@ -1301,19 +1873,39 @@ function buildViewUI(){
   slider(g,"Paint relief",S.view,"relief",0,4,.01);
   check(g,"Torch (follows cursor)",S.view,"torch");
   slider(g,"Torch height",S.view,"torchH",.05,1.5,.01);
+  GRP="";
 }
-
+function buildCamUI(){
+  const g=$("#g-cam");g.innerHTML="";
+  check(g,"3D view",S.view,"dim3",()=>{if(!S.view.dim3){camDragYaw=camDragPitch=camAutoYaw=0}});
+  GRP="Camera";
+  slider(g,"Yaw",S.view,"camYaw",-180,180,.5,x=>x+"°");
+  slider(g,"Pitch",S.view,"camPitch",-89,89,.5,x=>x+"°");
+  slider(g,"Roll",S.view,"camRoll",-180,180,.5,x=>x+"°");
+  slider(g,"Distance",S.view,"camDist",300,6000,10,x=>x+" px");
+  slider(g,"Perspective",S.view,"persp",0,1,.01);
+  slider(g,"Zoom",S.view,"camZoom",.2,3,.01);
+  slider(g,"Auto-rotate",S.view,"camAuto",-60,60,.1,x=>(+x).toFixed(1)+"°/s");
+  GRP="";
+  check(g,"Show wall",S.view,"showWall");
+  color(g,"Background",S.view,"bg");
+  btns(g,[["Front",()=>{Object.assign(S.view,{camYaw:0,camPitch:0,camRoll:0});camDragYaw=camDragPitch=camAutoYaw=0;syncAll()}],
+          ["¾ view",()=>{S.view.dim3=true;Object.assign(S.view,{camYaw:-28,camPitch:14,camRoll:0});camDragYaw=camDragPitch=camAutoYaw=0;syncAll()}],
+          ["Low angle",()=>{S.view.dim3=true;Object.assign(S.view,{camYaw:-55,camPitch:-18,camRoll:0});camDragYaw=camDragPitch=camAutoYaw=0;syncAll()}]]);
+  note(g,"<kbd>Alt</kbd>-drag or right-drag the canvas to orbit; <kbd>Shift</kbd>+wheel zooms. You can keep drawing on the wall from any angle. Brush passes with Depth stand off the wall.");
+}
+function buildFeelPhysViewCam(){buildInputFeel();$("#g-phys").innerHTML="";buildPhysUI();buildViewUI();buildCamUI()}
 /* Footer */
 $("#btnUndo").onclick=doUndo;
 $("#btnClearLayer").onclick=()=>{pushUndo([activeId]);clearLayer(getLayer(activeId));paintDirty=dataDirty=true};
-$("#btnClearAll").onclick=()=>{pushUndo(layers.map(l=>l.id));layers.forEach(clearLayer);wet.fill(0);gloss.fill(0);metal.fill(0);job=null;paintDirty=dataDirty=true};
+$("#btnClearAll").onclick=()=>{pushUndo(layers.map(l=>l.id));layers.forEach(clearLayer);buildInputUI();wet.fill(0);gloss.fill(0);metal.fill(0);job=null;paintDirty=dataDirty=true};
 function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
 const stamp=()=>new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
 $("#btnPNG").onclick=()=>{render();glcv.toBlob(b=>download(b,`ghost-tag-${stamp()}.png`),"image/png")};
 $("#btnDecal").onclick=()=>{
   compositePaint();paintCv.toBlob(b=>download(b,`ghost-tag-${stamp()}-albedo.png`),"image/png");
   const c=document.createElement("canvas");c.width=SW;c.height=SH;const g=c.getContext("2d"),id=g.createImageData(SW,SH);
-  for(let i=0;i<SN;i++){let t=0;for(const L of layers)if(L.vis)t+=L.thick[i]*L.op;const v=255*(1-Math.exp(-t/12));id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255}
+  for(let i=0;i<SN;i++){let t=0;for(const L of layers)if(L.vis&&L.kind==="spray")t+=L.thick[i]*L.op;const v=255*(1-Math.exp(-t/12));id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255}
   g.putImageData(id,0,0);const big=document.createElement("canvas");big.width=S.W;big.height=S.H;const bg=big.getContext("2d");bg.imageSmoothingEnabled=true;bg.drawImage(c,0,0,S.W,S.H);
   setTimeout(()=>big.toBlob(b=>download(b,`ghost-tag-${stamp()}-height.png`),"image/png"),300);
 };
@@ -1338,7 +1930,7 @@ addEventListener("keydown",e=>{
   if(e.key==="["){c.dist=clamp(c.dist-.05,0,1);syncCanUI()}
   if(e.key==="]"){c.dist=clamp(c.dist+.05,0,1);syncCanUI()}
   const keys=Object.keys(CAPS);const n=parseInt(e.key,10);
-  if(n>=1&&n<=keys.length&&!e.ctrlKey&&!e.metaKey){c.cap=keys[n-1];syncCanUI();schedulePreview()}
+  if(n>=1&&n<=keys.length&&!e.ctrlKey&&!e.metaKey){c.cap=keys[n-1];buildCanUI();schedulePreview()}
 });
 
 /* ---------------------------------------------------------------------
@@ -1346,13 +1938,14 @@ addEventListener("keydown",e=>{
    --------------------------------------------------------------------- */
 glcv.width=ov.width=S.W;glcv.height=ov.height=S.H;
 allocFields(false);
-buildInputUI();buildCanUI();buildLayerUI();buildPhysUI();buildSurfUI();buildViewUI();
+buildSurfUI();refreshPanels();
+if(Drive)Drive.mountPanel($("#g-drive"));else $("#g-drive").innerHTML='<div class="note">unlimiter-drive.js was not found next to this file — modulation is off, everything else works.</div>';
 fitFrame();
 genSurface();
 requestAnimationFrame(frame);
-// a first tag so the wall isn't empty
-setTimeout(()=>{if(!job&&!hand.down){S.input="type";startJob();S.input="hand"}},350);
-window.GhostTag={S,layers:()=>layers,startJob,buildJob,get job(){return job},get drips(){return drips},rebuildSurface,doUndo};
+// a first live tag so the wall isn't empty — it writes itself on
+setTimeout(()=>{const L=brushLayers()[0];if(L&&!L.src&&!L.strokes.length){paintTyped()}},300);
+window.GhostTag={S,layers:()=>layers,activeLayer,startJob,buildJob,paintTyped,selectLayer,refreshPanels,writeOn,get job(){return job},get drips(){return drips},rebuildSurface,doUndo,CAM};
 </script>
 </body>
 </html>
