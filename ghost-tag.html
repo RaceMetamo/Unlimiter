@@ -330,7 +330,7 @@ const S={
   phys:{gravity:1,drips:1,dry:1,runs:1,maxDrips:400},
   surf:{type:"blank",seed:3,scale:1,bump:1,tint:"#ffffff",absorb:.05,rough:0,channel:0,catch:0,gloss:.02,flipG:false},
   view:{lightAng:-125,lightElev:38,amb:.42,spec:1,ao:.7,relief:1,torch:false,torchH:.35,
-        dim3:false,camYaw:-28,camPitch:14,camRoll:0,camDist:1800,persp:1,camZoom:.8,camAuto:0,showWall:true,bg:"#101214"}
+        dim3:false,camYaw:-28,camPitch:14,camRoll:0,camDist:1800,persp:1,camZoom:.8,camAuto:0,wallOp:1,bg:"#101214"}
 };
 S.cans.fill.fade="vertical";S.cans.fill.color2="#ffd23f";
 const Drive=(window.UnlimiterDrive)?UnlimiterDrive.create({onChange:()=>{for(const L of layers)if(L.kind==="brush"){L.dirty=true;if(L.src)L.src.sig=""}},getOutputCanvas:()=>glcv}):null;
@@ -368,7 +368,7 @@ function allocFields(keepLayers){
   HS=new Float32Array(SN);GX=new Float32Array(SN);GY=new Float32Array(SN);POR=new Float32Array(SN);
   if(!keepLayers){
     layers=[];nextLayerId=1;
-    layers.push(makeLayer("Spray"));layers.push(makeBrushLayer("Brush","calligraphy"));
+    layers.push(makeLayer("Spray"));layers.push(makeBrushLayer("Brush","ink3d"));
     activeId=layers[1].id;
     const sp=layers[0].id;S.tag.L={tag:sp,fill:sp,outline:sp,d3:sp,shine:sp};
   }
@@ -694,7 +694,8 @@ const BRUSH_DEFAULTS={
   passes:1,passEase:"linear",sizeS:1,sizeE:1,offS:0,offE:0,shiftX:0,shiftY:0,zS:0,zE:0,opaS:1,opaE:1,
   colA:"#121212",colB:"#3a2bd9",extrude:false,fillOn:true,fillCol:"#ff5da2",fillCol2:"#ffd23f",fillFade:true,
   rimW:0,rimCol:"#f4f1ea",alpha:1,finish:"satin",bevel:4,glow:0,
-  reveal:1,animSpeed:.3,mBreathe:0,mSway:0,mWander:0,mWobble:0,mShimmer:0,mTravel:0,mHue:0,mFloat:0
+  reveal:1,animSpeed:.3,mBreathe:0,mSway:0,mWander:0,mWobble:0,mShimmer:0,mTravel:0,mHue:0,mFloat:0,
+  meshSides:14,meshStar:0,meshThick:1,meshRot:0,meshTwist:0,meshFacet:false,meshStep:4,meshCaps:true,meshLift:1,shadow:.45
 };
 const BRUSH_LOOKS={
   calligraphy:{name:"Calligraphy nib",v:{style:"ribbon",width:18,nibAngle:35,nibRound:.12,speedW:.5,taperS:.05,taperE:.25,finish:"satin",bevel:4,passes:1,colA:"#121212"}},
@@ -705,12 +706,18 @@ const BRUSH_LOOKS={
   echo:{name:"Echo passes (Anchor)",v:{style:"ribbon",width:8,nibRound:.6,passes:12,passEase:"outQuad",offS:0,offE:70,sizeS:1,sizeE:.25,opaS:1,opaE:.15,colA:"#d7263d",colB:"#1b98e0",finish:"flat",bevel:0}},
   block3d:{name:"3D block letters",v:{style:"ribbon",width:14,nibRound:.25,passes:16,shiftX:14,shiftY:16,zS:0,zE:-70,extrude:true,colA:"#121212",colB:"#3a2bd9",rimW:2.5,rimCol:"#f4f1ea",finish:"gloss",bevel:4}},
   chrome:{name:"Chrome 3D",v:{style:"ribbon",width:20,nibRound:.4,passes:10,zS:0,zE:-60,shiftX:6,shiftY:8,extrude:true,colA:"#d9dde2",colB:"#55606b",finish:"chrome",bevel:7,rimW:2,rimCol:"#121212"}},
+  ink3d:{name:"3D calligraphy — gloss ink",v:{style:"mesh",width:20,nibAngle:35,nibRound:.12,speedW:.5,taperS:.05,taperE:.25,meshSides:16,meshThick:.7,finish:"gloss",colA:"#121212"}},
+  tube:{name:"3D tube — gloss",v:{style:"mesh",width:16,nibRound:.85,speedW:.45,taperS:.04,taperE:.18,meshSides:16,meshThick:1,finish:"gloss",colA:"#d7263d"}},
+  chrometube:{name:"3D chrome calligraphy",v:{style:"mesh",width:22,nibAngle:35,nibRound:.15,speedW:.5,taperS:.05,taperE:.25,meshSides:18,meshThick:.55,finish:"chrome",colA:"#d9dde2"}},
+  startwist:{name:"3D star twist",v:{style:"mesh",width:22,nibRound:1,speedW:.3,taperS:.08,taperE:.2,meshSides:5,meshStar:.45,meshThick:1,meshTwist:90,meshFacet:true,finish:"satin",colA:"#ffd23f"}},
+  fins:{name:"3D fins (flat nib blade)",v:{style:"mesh",width:26,nibAngle:40,nibRound:.05,speedW:.4,meshSides:4,meshThick:.12,meshRot:0,meshFacet:true,finish:"gloss",colA:"#1b98e0"}},
+  neontube:{name:"3D neon tube",v:{style:"mesh",width:9,nibRound:1,taperS:0,taperE:.04,meshSides:12,meshThick:1,finish:"glow",glow:1.2,colA:"#00f0ff"}},
   neon:{name:"Neon glow",v:{style:"ribbon",width:7,nibRound:1,taperS:0,taperE:.05,passes:6,sizeS:1,sizeE:3.2,opaS:1,opaE:.08,colA:"#00f0ff",colB:"#c44bd8",finish:"glow",glow:1,bevel:2}}
 };
 const FINISHES={flat:{name:"Flat (unlit)",flat:1,g:0,m:0,glow:0},matte:{name:"Matt",g:0,m:0,glow:0},satin:{name:"Satin",g:.35,m:0,glow:0},
   gloss:{name:"Gloss",g:1,m:0,glow:0},chrome:{name:"Chrome",g:.85,m:1,glow:0},glow:{name:"Glow",g:.2,m:0,glow:.8}};
 const EASES={linear:t=>t,inQuad:t=>t*t,outQuad:t=>1-(1-t)*(1-t),inOutSine:t=>.5-.5*Math.cos(Math.PI*t),outCubic:t=>1-Math.pow(1-t,3)};
-const STYLES=[["ribbon","Ribbon — solid nib stroke"],["nib","Hatched nib — stamped lines"],["dots","Beads — stamped dots"],["dry","Dry brush — bristles"]];
+const STYLES=[["mesh","3D mesh — profile swept along the stroke"],["ribbon","Ribbon — solid nib stroke"],["nib","Hatched nib — stamped lines"],["dots","Beads — stamped dots"],["dry","Dry brush — bristles"]];
 let TT=0;                                 // animation clock (s)
 const _p=[0,0,0,0];
 
@@ -767,6 +774,11 @@ function renderBrushLayer(L,Q){
     items.push(Object.assign({fill:false},it));
   }
   items.sort((a,b)=>(b.dist-a.dist)||((a.fill?0:1)-(b.fill?0:1)));
+  L.mItems=items;L.mGeoms=geoms;L.mReveal=revealLen;L.mRv=rv;
+  if(Q.style==="mesh"){            // fills drawn flat in wall space once; the GL pass stacks them per pass in 3D
+    if(hasFill){const was=CAM.on;CAM.on=false;drawFillPass(ctx,L,Q,{k:0,e:0,z:0,sx:0,sy:0},rv);CAM.on=was}
+    buildMesh(L,Q,strokes,geoms,items.filter(i=>!i.fill),revealLen);return;
+  }
   for(const it of items){
     if(it.fill){drawFillPass(ctx,L,Q,it,rv);continue}
     let acc=0;
@@ -779,17 +791,16 @@ function passColour(Q,it,base){
   if(Q.mHue)c=hueShift(c,Q.mHue*180*Math.sin(TAU*TT*Q.animSpeed*.2+it.e*2));
   return c;
 }
-const PX=new Float32Array(8192*6);
-function drawStrokePass(ctx,g,Q,it,lim,idx){
-  const m=g.m;if(!m)return;
+/* Walk one pass of a stroke and work out, per sample: centre, half-width edge vector, normal, width.
+   Shared by the 2D styles and the 3D mesh sweep, so line weight behaves identically in both. */
+let SM={n:0,cap:0};
+function samplePass(g,Q,it,lim,idx){
+  const m=g.m;
+  if(SM.cap<m){SM={cap:m+256,n:0,CX:new Float32Array(m+256),CY:new Float32Array(m+256),EX:new Float32Array(m+256),EY:new Float32Array(m+256),
+    NX:new Float32Array(m+256),NY:new Float32Array(m+256),W:new Float32Array(m+256),SS:new Float32Array(m+256),SV:new Float32Array(m+256)}}
   const e=it.e,W0=Q.width*lerp(Q.sizeS,Q.sizeE,e),off=lerp(Q.offS,Q.offE,e),t=TT*Q.animSpeed,seed=idx*17.13+1;
   const nib=(Q.nibAngle+(Q.mWobble?Q.mWobble*30*Math.sin(TAU*t*.7+idx):0))*D2R,nbx=Math.cos(nib),nby=Math.sin(nib),rd=Q.nibRound;
-  let alpha=Q.alpha*lerp(Q.opaS,Q.opaE,e);
-  if(Q.mShimmer)alpha*=1-Q.mShimmer*.5*(1+Math.sin(TAU*t*2.3+idx*1.7+e*4));
-  if(alpha<=.002)return;
-  const col=passColour(Q,it,Q.colA),L=Math.max(1,g.L);
-  let cnt=0;const buf=m*6>PX.length?new Float32Array(m*6):PX;   // per point: Lx,Ly,Rx,Ry,Cx,Cy (screen)
-  let wsum=0;
+  const L=Math.max(1,g.L);let cnt=0;
   for(let i=0;i<m;i++){
     const s=g.S[i];if(s>lim&&i>0)break;
     const u=s/L;
@@ -802,22 +813,32 @@ function drawStrokePass(ctx,g,Q,it,lim,idx){
     const fb=Q.mBreathe?1+Q.mBreathe*.45*Math.sin(s*.025-TAU*t):1;
     const w=Math.max(.35,W0*(m>1?tap:1)*fs*fp*fj*fb);
     const a=g.A[i],nx=-Math.sin(a),ny=Math.cos(a);
-    const ex=(nbx*(1-rd)+nx*rd)*w*.5,ey=(nby*(1-rd)+ny*rd)*w*.5;
     const sw=Q.mSway?Q.mSway*Math.sin(s*.018-TAU*t*.8+seed):0;
     let cx=g.X[i]+nx*(off+sw)+it.sx,cy=g.Y[i]+ny*(off+sw)+it.sy;
     if(Q.mWander){cx+=(n1(g.X[i]*.006+t*.9+seed)-.5)*2*Q.mWander;cy+=(n1(g.Y[i]*.006-t*.8+seed+50)-.5)*2*Q.mWander}
     if(Q.tremor){cx+=(n1(s*.35+seed)-.5)*2*Q.tremor;cy+=(n1(s*.35+seed+99)-.5)*2*Q.tremor}
-    const j=cnt*6;
+    SM.CX[cnt]=cx;SM.CY[cnt]=cy;SM.EX[cnt]=(nbx*(1-rd)+nx*rd)*w*.5;SM.EY[cnt]=(nby*(1-rd)+ny*rd)*w*.5;
+    SM.NX[cnt]=nx;SM.NY[cnt]=ny;SM.W[cnt]=w;SM.SS[cnt]=s;SM.SV[cnt]=sv;cnt++;
+  }
+  SM.n=cnt;return SM;
+}
+function passAlpha(Q,it,idx){let a=Q.alpha*lerp(Q.opaS,Q.opaE,it.e);if(Q.mShimmer)a*=1-Q.mShimmer*.5*(1+Math.sin(TAU*TT*Q.animSpeed*2.3+idx*1.7+it.e*4));return clamp(a,0,1)}
+const PX=new Float32Array(8192*6);
+function drawStrokePass(ctx,g,Q,it,lim,idx){
+  if(!g.m)return;
+  const alpha=passAlpha(Q,it,idx);if(alpha<=.002)return;
+  const col=passColour(Q,it,Q.colA),W0=Q.width*lerp(Q.sizeS,Q.sizeE,it.e),seed=idx*17.13+1,L=Math.max(1,g.L);
+  const sm=samplePass(g,Q,it,lim,idx),cnt=sm.n;if(!cnt)return;
+  const buf=cnt*6>PX.length?new Float32Array(cnt*6):PX;let wsum=0;
+  for(let i=0;i<cnt;i++){
+    const j=i*6,cx=sm.CX[i],cy=sm.CY[i],ex=sm.EX[i],ey=sm.EY[i];
     if(CAM.on){proj(cx+ex,cy+ey,it.z,_p);buf[j]=_p[0];buf[j+1]=_p[1];proj(cx-ex,cy-ey,it.z,_p);buf[j+2]=_p[0];buf[j+3]=_p[1];proj(cx,cy,it.z,_p);buf[j+4]=_p[0];buf[j+5]=_p[1]}
     else{buf[j]=cx+ex;buf[j+1]=cy+ey;buf[j+2]=cx-ex;buf[j+3]=cy-ey;buf[j+4]=cx;buf[j+5]=cy}
-    wsum+=Math.hypot(buf[j]-buf[j+2],buf[j+1]-buf[j+3]);cnt++;
+    wsum+=Math.hypot(buf[j]-buf[j+2],buf[j+1]-buf[j+3]);
   }
-  if(!cnt)return;
-  ctx.globalAlpha=clamp(alpha,0,1);
-  const style=Q.style;
-  if(cnt<2){ // a dab
-    const r=Math.max(.6,wsum*.5);ctx.fillStyle=col;ctx.beginPath();ctx.arc(buf[4],buf[5],r,0,TAU);ctx.fill();return;
-  }
+  ctx.globalAlpha=alpha;
+  const style=Q.style==="mesh"?"ribbon":Q.style;
+  if(cnt<2){const r=Math.max(.6,wsum*.5);ctx.fillStyle=col;ctx.beginPath();ctx.arc(buf[4],buf[5],r,0,TAU);ctx.fill();return}
   if(style==="ribbon"){
     ctx.beginPath();ctx.moveTo(buf[0],buf[1]);
     for(let i=1;i<cnt;i++)ctx.lineTo(buf[i*6],buf[i*6+1]);
@@ -834,13 +855,13 @@ function drawStrokePass(ctx,g,Q,it,lim,idx){
     const gap=Math.max(1,Math.round(Q.stampGap/2));ctx.fillStyle=col;ctx.beginPath();
     for(let i=0;i<cnt;i+=gap){const j=i*6,r=Math.max(.4,Math.hypot(buf[j]-buf[j+2],buf[j+1]-buf[j+3])*.5);ctx.moveTo(buf[j+4]+r,buf[j+5]);ctx.arc(buf[j+4],buf[j+5],r,0,TAU)}
     ctx.fill();
-  }else{ // dry brush: bristles across the nib that break up with speed and toward the end
+  }else{
     const nb=Math.max(2,Q.bristles|0);ctx.strokeStyle=col;ctx.lineCap="round";ctx.lineJoin="round";
     ctx.lineWidth=Math.max(.5,(wsum/cnt)/nb*1.35);
     for(let b=0;b<nb;b++){
       const f=((b+.5)/nb*2-1)*.95;let on=false;ctx.beginPath();
       for(let i=0;i<cnt;i++){
-        const s=g.S[Math.min(i,m-1)],u=s/L,sv=clamp(g.V[Math.min(i,m-1)]/Math.max(50,Q.speedRef),0,1.6);
+        const s=sm.SS[i],u=s/L,sv=clamp(sm.SV[i],0,1.6);
         const thr=Q.dryness*(.2+.45*sv/1.6+.6*Math.pow(u,3)+.25*Math.abs(f));
         const vis=n1(b*7.31+seed+s*.06)>thr;
         const j=i*6,x=buf[j+4]+(buf[j]-buf[j+4])*f,y=buf[j+5]+(buf[j+1]-buf[j+5])*f;
@@ -887,6 +908,98 @@ function writeOn(L){
   L.write={t0:performance.now()/1000,dur:Math.max(.5,tot/Math.max(100,sp))};L.dirty=true;
 }
 
+
+/* ---- 3D: sweep a profile along each stroke ----
+   Frame at each sample: T (heading in the wall plane), N (in-plane normal), Z (out of the wall).
+   Profile: a polygon of meshSides points (star when meshStar>0), half-width along N from the
+   line weight, depth along Z = thickness × that half-width — so speed, nib and pressure
+   shape the tube exactly as they shape the 2D line. Twist spins the profile along the length. */
+const MESH={pos:new Float32Array(1<<16),idx:new Uint32Array(1<<16),nv:0,ni:0};
+function meshGrow(nv,ni){
+  if((MESH.nv+nv)*10>MESH.pos.length){const a=new Float32Array(Math.max(MESH.pos.length*2,(MESH.nv+nv)*10*1.5|0));a.set(MESH.pos.subarray(0,MESH.nv*10));MESH.pos=a}
+  if(MESH.ni+ni>MESH.idx.length){const a=new Uint32Array(Math.max(MESH.idx.length*2,(MESH.ni+ni)*1.5|0));a.set(MESH.idx.subarray(0,MESH.ni));MESH.idx=a}
+}
+function vtx(x,y,z,nx,ny,nz,r,g,b,a){const o=MESH.nv*10,P=MESH.pos;P[o]=x;P[o+1]=y;P[o+2]=z;P[o+3]=nx;P[o+4]=ny;P[o+5]=nz;P[o+6]=r;P[o+7]=g;P[o+8]=b;P[o+9]=a;return MESH.nv++}
+function profileShape(Q){
+  const n=Math.max(3,Math.round(Q.meshSides)),star=clamp(Q.meshStar,0,.95),pts=[];
+  const k=star>0?n*2:n,r0=Q.meshRot*D2R;
+  for(let i=0;i<k;i++){const a=r0+i/k*TAU,r=star>0&&(i&1)?1-star:1;pts.push([Math.cos(a)*r,Math.sin(a)*r])}
+  // per-vertex 2D normals from neighbours (smooth; Facets in the shader gives hard edges)
+  const nrm=pts.map((p,i)=>{const a=pts[(i-1+k)%k],b=pts[(i+1)%k];let nx=b[1]-a[1],ny=-(b[0]-a[0]);const l=Math.hypot(nx,ny)||1;
+    // make it point outward
+    if(nx*p[0]+ny*p[1]<0){nx=-nx;ny=-ny}return[nx/l,ny/l]});
+  return{pts,nrm,k};
+}
+function buildMesh(L,Q,strokes,geoms,items,revealLen){
+  MESH.nv=0;MESH.ni=0;
+  const prof=profileShape(Q),K=prof.k,step=Math.max(1,Math.round(Q.meshStep/2));
+  for(const it of items){
+    let acc=0;
+    for(let si=0;si<strokes.length;si++){
+      const g=geoms[si],lim=revealLen-acc;acc+=g.L+1;if(lim<=0)break;if(!g.m)continue;
+      const alpha=passAlpha(Q,it,si);if(alpha<=.002)continue;
+      const [cr,cg,cb]=hex2rgb(passColour(Q,it,Q.colA)).map(v=>v/255);
+      const sm=samplePass(g,Q,it,Math.min(g.L,lim),si),cnt=sm.n;if(!cnt)continue;
+      const ids=[];for(let i=0;i<cnt;i+=step)ids.push(i);if(ids[ids.length-1]!==cnt-1)ids.push(cnt-1);
+      const R=ids.length;meshGrow(R*K+2,R*K*6+K*6);
+      const base=MESH.nv;
+      for(const i of ids){
+        const nx=sm.NX[i],ny=sm.NY[i];
+        const ha=Math.max(.3,Math.abs(sm.EX[i]*nx+sm.EY[i]*ny)),hb=Math.max(.3,ha*Q.meshThick);
+        const tw=Q.meshTwist*D2R*sm.SS[i]/100,ct=Math.cos(tw),st=Math.sin(tw);
+        const cx=sm.CX[i],cy=sm.CY[i],cz=it.z+hb*Q.meshLift;
+        for(let k=0;k<K;k++){
+          const p=prof.pts[k],q=prof.nrm[k];
+          const u0=p[0]*ct-p[1]*st,v0=p[0]*st+p[1]*ct,un=q[0]*ct-q[1]*st,vn=q[0]*st+q[1]*ct;
+          const u=u0*ha,v=v0*hb;
+          let a2=un/ha,b2=vn/hb;const l=Math.hypot(a2,b2)||1;a2/=l;b2/=l;   // ellipse-correct normal
+          vtx(cx+nx*u,cy+ny*u,cz+v, nx*a2,ny*a2,b2, cr,cg,cb,alpha);
+        }
+      }
+      const I=MESH.idx;
+      for(let r=0;r<R-1;r++)for(let k=0;k<K;k++){
+        const a=base+r*K+k,b=base+r*K+(k+1)%K,c=a+K,d=b+K;
+        I[MESH.ni++]=a;I[MESH.ni++]=c;I[MESH.ni++]=b;I[MESH.ni++]=b;I[MESH.ni++]=c;I[MESH.ni++]=d;
+      }
+      if(Q.meshCaps&&R>1){   // close both ends with a fan
+        for(const [ri,dir] of [[0,-1],[R-1,1]]){
+          const i=ids[ri],tx=-sm.NY[i]*dir,ty=sm.NX[i]*dir;  // heading
+          const hbc=Math.max(.3,Math.max(.3,Math.abs(sm.EX[i]*sm.NX[i]+sm.EY[i]*sm.NY[i]))*Q.meshThick);
+          const c=vtx(sm.CX[i],sm.CY[i],it.z+hbc*Q.meshLift,tx,ty,0,cr,cg,cb,alpha);
+          for(let k=0;k<K;k++){const a=base+ri*K+k,b=base+ri*K+(k+1)%K;I[MESH.ni++]=c;I[MESH.ni++]=a;I[MESH.ni++]=b}
+        }
+      }
+    }
+  }
+  uploadMesh(L);
+}
+/* camera matrix that reproduces proj() exactly: column-major for GL */
+const MVP=new Float32Array(16),VIEWV=[0,0,1];
+function camMatrix(){
+  let cy=1,sy=0,cp=1,sp=0,cr=1,sr=0,k=1,p=0,d=CAM.d;
+  if(CAM.on){cy=CAM.cy;sy=CAM.sy;cp=CAM.cp;sp=CAM.sp;cr=CAM.cr;sr=CAM.sr;k=CAM.k;p=CAM.persp}
+  const rx=[cr*cy-sr*sp*sy,-sr*cp,cr*sy+sr*sp*cy],ry=[sr*cy+cr*sp*sy,cr*cp,sr*sy-cr*sp*cy],rz=[-cp*sy,sp,cp*cy];
+  const hx=S.W/2,hy=S.H/2,DR=12000;
+  const row=(r,f,c0)=>[r[0]*f,r[1]*f,r[2]*f,-(r[0]*hx+r[1]*hy)*f+(c0||0)];
+  const X=row(rx,k/hx),Y=row(ry,-k/hy),Z=row(rz,-1/DR),Wr=row(rz,-p/d,1);
+  for(let c=0;c<4;c++){MVP[c*4]=X[c];MVP[c*4+1]=Y[c];MVP[c*4+2]=Z[c];MVP[c*4+3]=Wr[c]}
+  VIEWV[0]=rz[0];VIEWV[1]=rz[1];VIEWV[2]=rz[2];
+}
+function clipOf(x,y,z,out){out[0]=MVP[0]*x+MVP[4]*y+MVP[8]*z+MVP[12];out[1]=MVP[1]*x+MVP[5]*y+MVP[9]*z+MVP[13];
+  out[2]=MVP[2]*x+MVP[6]*y+MVP[10]*z+MVP[14];out[3]=MVP[3]*x+MVP[7]*y+MVP[11]*z+MVP[15];return out}
+function exportOBJ(){
+  let out="# Ghost Tag — brush meshes\n# units: wall pixels; Y up, Z out of the wall\n",vo=1;
+  for(const L of brushLayers()){
+    if(!L.vis||!L.meshCPU||!L.meshCPU.ni)continue;const{pos,idx,nv,ni}=L.meshCPU;
+    out+=`o ${L.name.replace(/\s+/g,"_")}\n`;
+    for(let i=0;i<nv;i++){const o=i*10;out+=`v ${pos[o].toFixed(2)} ${(S.H-pos[o+1]).toFixed(2)} ${pos[o+2].toFixed(2)} ${pos[o+6].toFixed(3)} ${pos[o+7].toFixed(3)} ${pos[o+8].toFixed(3)}\n`}
+    for(let i=0;i<nv;i++){const o=i*10;out+=`vn ${pos[o+3].toFixed(4)} ${(-pos[o+4]).toFixed(4)} ${pos[o+5].toFixed(4)}\n`}
+    for(let i=0;i<ni;i+=3){const a=idx[i]+vo,b=idx[i+1]+vo,c=idx[i+2]+vo;out+=`f ${a}//${a} ${c}//${c} ${b}//${b}\n`}
+    vo+=nv;
+  }
+  if(vo===1)return false;
+  download(new Blob([out],{type:"text/plain"}),`ghost-tag-${stamp()}.obj`);return true;
+}
 /* ---- camera (Anchor's software camera) ---- */
 const CAM={on:false,cy:1,sy:0,cp:1,sp:0,cr:1,sr:0,d:1800,persp:1,k:1,sig:""};
 let camDragYaw=0,camDragPitch=0,camAutoYaw=0,HINV=null;
@@ -906,7 +1019,7 @@ function proj(x,y,z,out){
   const x1=X*CAM.cy+z*CAM.sy,z1=-X*CAM.sy+z*CAM.cy;
   const y2=Y*CAM.cp-z1*CAM.sp,z2=Y*CAM.sp+z1*CAM.cp;
   const x3=x1*CAM.cr-y2*CAM.sr,y3=x1*CAM.sr+y2*CAM.cr;
-  let s=CAM.d/Math.max(CAM.d*.05,CAM.d-z2);s=(1+(s-1)*CAM.persp)*CAM.k;
+  const s=CAM.k/Math.max(.05,1-CAM.persp*z2/CAM.d);
   out[0]=S.W/2+x3*s;out[1]=S.H/2+y3*s;out[2]=s;out[3]=z2;return out;
 }
 function homography(src,dst){
@@ -1295,11 +1408,43 @@ function doUndo(){
    RENDER — WebGL2
    --------------------------------------------------------------------- */
 const glcv=$("#gl");
-const gl=glcv.getContext("webgl2",{preserveDrawingBuffer:true,antialias:false,premultipliedAlpha:false,alpha:false});
+const gl=glcv.getContext("webgl2",{preserveDrawingBuffer:true,antialias:true,depth:true,premultipliedAlpha:false,alpha:false});
 const paintCv=document.createElement("canvas"),pctx=paintCv.getContext("2d");
 let dataBuf;
 const VS=`#version 300 es
-in vec3 a;in vec2 t;out vec2 v;void main(){v=t;gl_Position=vec4(a.xy*a.z,0.,a.z);}`;
+in vec4 a;in vec2 t;out vec2 v;void main(){v=t;gl_Position=a;}`;
+// swept brush meshes
+const VSM=`#version 300 es
+in vec3 p;in vec3 n;in vec4 c;uniform mat4 uM;uniform vec3 uLight;uniform float uShadow;out vec3 vN;out vec3 vP;out vec4 vC;
+void main(){vN=n;vP=p;vC=c;vec3 q=p;
+  if(uShadow>.5){vec3 L=normalize(uLight);q.xy-=L.xy*max(p.z,0.)/max(L.z,.08);q.z=.8;}
+  gl_Position=uM*vec4(q,1.);}`;
+const FSM=`#version 300 es
+precision highp float;in vec3 vN;in vec3 vP;in vec4 vC;out vec4 o;
+uniform vec3 uLight,uLP,uView;uniform float uTorch,uAmb,uSpec,uGl,uMe,uGlow,uFlat,uFacet,uOp,uH,uShadow,uShadowA;
+void main(){
+  if(uShadow>.5){o=vec4(0.,0.,0.,uShadowA*vC.a);return;}
+  vec3 n=normalize(vN);
+  if(uFacet>.5){vec3 f=cross(dFdx(vP),dFdy(vP));if(length(f)>1e-6)n=normalize(f);}
+  vec3 V=normalize(uView);if(dot(n,V)<0.)n=-n;
+  vec3 L=uTorch>.5?normalize(vec3(uLP.xy-vP.xy,uLP.z*uH-vP.z)):normalize(uLight);
+  vec3 col=vC.rgb;
+  if(uFlat<.5){
+    float diff=max(dot(n,L),0.);
+    vec3 Hh=normalize(L+V);float shin=mix(10.,140.,uGl);
+    float spec=pow(max(dot(n,Hh),0.),shin)*(.04+1.1*uGl)*uSpec*(.4+shin/70.);
+    vec3 r=reflect(-V,n);float env=smoothstep(-1.,1.,-r.y*1.3+r.x*.3+r.z*.2);
+    float rim=pow(1.-max(dot(n,V),0.),3.);
+    col=vC.rgb*(uAmb+(1.-uAmb)*diff*1.25)*(1.-uMe*.6)+uMe*vC.rgb*(.2+1.1*env)*(.55+.45*diff);
+    col+=mix(vec3(1.),vC.rgb*1.4+.1,uMe)*spec+(uGl*.25+uMe*.3)*rim*vec3(.8,.85,.9)*(.3+env);
+  }
+  col+=vC.rgb*uGlow*.8;
+  float a=vC.a*uOp;o=vec4(col*a,a);
+}`;
+// a brush layer's flat fills, stacked as one textured plane per pass
+const FSP=`#version 300 es
+precision highp float;in vec2 v;out vec4 o;uniform sampler2D uB;uniform vec3 uTint;uniform float uTintAmt,uOp,uShade;
+void main(){vec4 c=texture(uB,v);if(c.a<.02)discard;vec3 col=mix(c.rgb,uTint,uTintAmt)*uShade;float a=c.a*uOp;o=vec4(col*a,a);}`;
 // brush layers: screen-space image of the (already projected) strokes, shaded with a bevel from its own alpha
 const FSB=`#version 300 es
 precision highp float;in vec2 v;out vec4 o;
@@ -1331,7 +1476,7 @@ void main(){
 const FS=`#version 300 es
 precision highp float;in vec2 v;out vec4 o;
 uniform sampler2D uAlb,uNrm,uPaint,uData;uniform vec2 uRes,uSim;
-uniform vec3 uLight;uniform vec3 uLP;uniform float uTorch,uAmb,uSpec,uAO,uRelief,uBump,uRough,uWallGloss;
+uniform vec3 uLight;uniform vec3 uLP;uniform float uTorch,uAmb,uSpec,uAO,uRelief,uBump,uRough,uWallGloss,uWallOp;
 void main(){
   vec4 pc=texture(uPaint,v);vec4 d=texture(uData,v);
   vec4 nt=texture(uNrm,v);vec3 wn=nt.xyz*2.-1.;float h=nt.a;
@@ -1344,7 +1489,9 @@ void main(){
   // thin coats skip the recesses of rough walls; thick paint bridges them
   float a=pc.a*mix(1.,smoothstep(.06,.5,h+d.r*.9+pc.a*.15),uRough);
   vec3 alb=texture(uAlb,v).rgb;
-  vec3 base=mix(alb,pc.rgb,a);
+  float aOut=a+uWallOp*(1.-a);
+  if(aOut<.004)discard;
+  vec3 base=(pc.rgb*a+alb*uWallOp*(1.-a))/aOut;
   vec3 fp=vec3(v*uRes,0.);
   vec3 L=uTorch>.5?normalize(vec3((uLP.xy-fp.xy)/uRes.y,uLP.z)):normalize(uLight);
   float flat_=max(L.z,.25);
@@ -1367,19 +1514,35 @@ void main(){
   col=mix(col,col*.93+vec3(.035),(1.-max(glo,wet))*a*(1.-met)*.6);
   // fluoro: glows and saturates
   col+=pc.rgb*flu*.55;
-  o=vec4(pow(col,vec3(1.)),1.);
+  o=vec4(col*aOut,aOut);
 }`;
 function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x}
 function mkProg(fs){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,VS));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));
   gl.bindAttribLocation(p,0,"a");gl.bindAttribLocation(p,1,"t");gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p}
-const prog=mkProg(FS),progB=mkProg(FSB);
+const prog=mkProg(FS),progB=mkProg(FSB),progP=mkProg(FSP);
+const progM=(()=>{const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,VSM));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,FSM));
+  gl.bindAttribLocation(p,2,"p");gl.bindAttribLocation(p,3,"n");gl.bindAttribLocation(p,4,"c");gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p})();
+const UM={};["uM","uLight","uLP","uView","uTorch","uAmb","uSpec","uGl","uMe","uGlow","uFlat","uFacet","uOp","uH","uShadow","uShadowA"].forEach(n=>UM[n]=gl.getUniformLocation(progM,n));
+const UP={};["uB","uTint","uTintAmt","uOp","uShade"].forEach(n=>UP[n]=gl.getUniformLocation(progP,n));
 gl.useProgram(prog);
-const wallBuf=gl.createBuffer(),fullBuf=gl.createBuffer(),wallVerts=new Float32Array(20);
-gl.bindBuffer(gl.ARRAY_BUFFER,fullBuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,1,1,0,0, 1,1,1,1,0, -1,-1,1,0,1, 1,-1,1,1,1]),gl.STATIC_DRAW);
-gl.enableVertexAttribArray(0);gl.enableVertexAttribArray(1);
-function bindQuad(buf){gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.vertexAttribPointer(0,3,gl.FLOAT,false,20,0);gl.vertexAttribPointer(1,2,gl.FLOAT,false,20,12)}
+const wallBuf=gl.createBuffer(),fullBuf=gl.createBuffer(),planeBuf=gl.createBuffer(),wallVerts=new Float32Array(24);
+gl.bindBuffer(gl.ARRAY_BUFFER,fullBuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,1,0,1,0,0, 1,1,0,1,1,0, -1,-1,0,1,0,1, 1,-1,0,1,1,1]),gl.STATIC_DRAW);
+function bindQuad(buf){gl.bindBuffer(gl.ARRAY_BUFFER,buf);[2,3,4].forEach(i=>gl.disableVertexAttribArray(i));gl.enableVertexAttribArray(0);gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(0,4,gl.FLOAT,false,24,0);gl.vertexAttribPointer(1,2,gl.FLOAT,false,24,16)}
+/* a wall-space quad at depth z (shifted) → clip-space verts through the camera matrix */
+const _c=[0,0,0,0];
+function planeVerts(buf,z,sx,sy){[[0,0],[S.W,0],[0,S.H],[S.W,S.H]].forEach(([x,y],i)=>{clipOf(x+sx,y+sy,z,_c);wallVerts.set([_c[0],_c[1],_c[2],_c[3],x/S.W,y/S.H],i*6)});
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,wallVerts,gl.DYNAMIC_DRAW);bindQuad(buf)}
+function uploadMesh(L){
+  L.meshCPU={pos:MESH.pos.slice(0,MESH.nv*10),idx:MESH.idx.slice(0,MESH.ni),nv:MESH.nv,ni:MESH.ni};
+  if(!L.vbo){L.vbo=gl.createBuffer();L.ibo=gl.createBuffer()}
+  gl.bindBuffer(gl.ARRAY_BUFFER,L.vbo);gl.bufferData(gl.ARRAY_BUFFER,L.meshCPU.pos,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,L.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,L.meshCPU.idx,gl.DYNAMIC_DRAW);
+  L.icount=MESH.ni;
+}
 const UB={};["uB","uRes","uLight","uLP","uTorch","uAmb","uSpec","uBevel","uGl","uMe","uGlow","uFlat","uOp"].forEach(n=>UB[n]=gl.getUniformLocation(progB,n));
-const U={};["uAlb","uNrm","uPaint","uData","uRes","uSim","uLight","uLP","uTorch","uAmb","uSpec","uAO","uRelief","uBump","uRough","uWallGloss"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+const U={};["uAlb","uNrm","uPaint","uData","uRes","uSim","uLight","uLP","uTorch","uAmb","uSpec","uAO","uRelief","uBump","uRough","uWallGloss","uWallOp"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
 function mkTex(unit){const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t}
@@ -1412,27 +1575,65 @@ let QV=S.view;
 function render(){
   const V=QV;
   gl.viewport(0,0,S.W,S.H);
-  const bg=hex2rgb(S.view.bg);gl.clearColor(bg[0]/255,bg[1]/255,bg[2]/255,1);gl.clear(gl.COLOR_BUFFER_BIT);
+  const bg=hex2rgb(S.view.bg);gl.clearColor(bg[0]/255,bg[1]/255,bg[2]/255,1);gl.clearDepth(1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const a=V.lightAng*D2R,e=V.lightElev*D2R,lx=Math.cos(a)*Math.cos(e),ly=Math.sin(a)*Math.cos(e),lz=Math.sin(e);
   const torch=V.torch&&hand.over?1:0;
-  gl.disable(gl.BLEND);
-  if(!CAM.on||S.view.showWall){
-    gl.useProgram(prog);
-    // the wall as a quad seen through the camera (flat on in 2D)
-    [[0,0],[S.W,0],[0,S.H],[S.W,S.H]].forEach(([x,y],i)=>{proj(x,y,0,_p);const w=1/_p[2];
-      wallVerts.set([(_p[0]/S.W*2-1),(1-_p[1]/S.H*2),w,x/S.W,y/S.H],i*5)});
-    gl.bindBuffer(gl.ARRAY_BUFFER,wallBuf);gl.bufferData(gl.ARRAY_BUFFER,wallVerts,gl.DYNAMIC_DRAW);bindQuad(wallBuf);
-    gl.uniform2f(U.uRes,S.W,S.H);gl.uniform2f(U.uSim,SW,SH);
-    gl.uniform3f(U.uLight,lx,ly,lz);
-    gl.uniform3f(U.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(U.uTorch,torch);
-    gl.uniform1f(U.uAmb,V.amb);gl.uniform1f(U.uSpec,V.spec);gl.uniform1f(U.uAO,V.ao);gl.uniform1f(U.uRelief,V.relief);
-    gl.uniform1f(U.uBump,S.surf.bump);gl.uniform1f(U.uRough,S.surf.rough);gl.uniform1f(U.uWallGloss,S.surf.gloss);
-    for(const [n,u] of [["uAlb",0],["uNrm",1],["uPaint",2],["uData",3]])gl.uniform1i(U[n],u);
-    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  camMatrix();
+  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  // 1 — mesh layers: stacked fill planes, then the swept strokes (both write depth)
+  const ml=brushLayers().filter(L=>L.vis&&L.op>0&&(L.Q||L.B).style==="mesh");
+  for(const L of ml){
+    const Q=L.Q||L.B,F=FINISHES[Q.finish]||FINISHES.satin;
+    if(L.fills.length&&Q.fillOn&&L.tex&&L.mItems){
+      gl.useProgram(progP);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);gl.uniform1i(UP.uB,4);gl.uniform1f(UP.uOp,L.op);
+      for(const it of L.mItems){if(!it.fill)continue;
+        const tc=hex2rgb(Q.extrude?Q.colB:mixHex(Q.fillCol,Q.colB,it.e)).map(v=>v/255);
+        gl.uniform3f(UP.uTint,tc[0],tc[1],tc[2]);gl.uniform1f(UP.uTintAmt,it.k===0?0:(Q.extrude?1:.85));gl.uniform1f(UP.uShade,it.k===0?1:1-.35*it.e);
+        planeVerts(planeBuf,it.z,it.sx,it.sy);gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}
+    }
+    if(L.icount&&L.vbo){
+      gl.useProgram(progM);[0,1].forEach(i=>gl.disableVertexAttribArray(i));
+      gl.bindBuffer(gl.ARRAY_BUFFER,L.vbo);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,L.ibo);
+      gl.enableVertexAttribArray(2);gl.enableVertexAttribArray(3);gl.enableVertexAttribArray(4);
+      gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,0);gl.vertexAttribPointer(3,3,gl.FLOAT,false,40,12);gl.vertexAttribPointer(4,4,gl.FLOAT,false,40,24);
+      gl.uniformMatrix4fv(UM.uM,false,MVP);gl.uniform3f(UM.uLight,lx,ly,lz);gl.uniform3f(UM.uView,VIEWV[0],VIEWV[1],VIEWV[2]);
+      gl.uniform3f(UM.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(UM.uH,S.H);gl.uniform1f(UM.uTorch,torch);
+      gl.uniform1f(UM.uAmb,V.amb);gl.uniform1f(UM.uSpec,V.spec);gl.uniform1f(UM.uGl,F.g);gl.uniform1f(UM.uMe,F.m);
+      gl.uniform1f(UM.uGlow,F.glow+Q.glow);gl.uniform1f(UM.uFlat,F.flat?1:0);gl.uniform1f(UM.uFacet,Q.meshFacet?1:0);gl.uniform1f(UM.uOp,L.op);
+      gl.uniform1f(UM.uShadow,0);
+      gl.drawElements(gl.TRIANGLES,L.icount,gl.UNSIGNED_INT,0);
+      [2,3,4].forEach(i=>gl.disableVertexAttribArray(i));
+      L._shadow=Q.shadow;
+    }
   }
-  const bl=brushLayers().filter(L=>L.vis&&L.op>0&&L.tex);
+  // 2 — the wall / spray plane. Opaque: hides what's behind it. Transparent: only the paint stays, and the meshes pass through it.
+  const wop=S.view.wallOp;
+  gl.useProgram(prog);gl.depthMask(wop>=.999);
+  planeVerts(wallBuf,0,0,0);
+  gl.uniform2f(U.uRes,S.W,S.H);gl.uniform2f(U.uSim,SW,SH);gl.uniform3f(U.uLight,lx,ly,lz);
+  gl.uniform3f(U.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(U.uTorch,torch);
+  gl.uniform1f(U.uAmb,V.amb);gl.uniform1f(U.uSpec,V.spec);gl.uniform1f(U.uAO,V.ao);gl.uniform1f(U.uRelief,V.relief);
+  gl.uniform1f(U.uBump,S.surf.bump);gl.uniform1f(U.uRough,S.surf.rough);gl.uniform1f(U.uWallGloss,S.surf.gloss);gl.uniform1f(U.uWallOp,wop);
+  for(const [n,u] of [["uAlb",0],["uNrm",1],["uPaint",2],["uData",3]])gl.uniform1i(U[n],u);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  gl.depthMask(true);
+  if(wop>.3){
+    gl.useProgram(progM);gl.depthFunc(gl.LESS);
+    for(const L of ml){const Q=L.Q||L.B;if(!L.icount||!(Q.shadow>0))continue;
+      gl.bindBuffer(gl.ARRAY_BUFFER,L.vbo);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,L.ibo);
+      [2,3,4].forEach(i=>gl.enableVertexAttribArray(i));
+      gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,0);gl.vertexAttribPointer(3,3,gl.FLOAT,false,40,12);gl.vertexAttribPointer(4,4,gl.FLOAT,false,40,24);
+      gl.uniformMatrix4fv(UM.uM,false,MVP);gl.uniform3f(UM.uLight,lx,ly,Math.max(lz,.15));gl.uniform1f(UM.uShadow,1);gl.uniform1f(UM.uShadowA,Q.shadow*wop*L.op);
+      gl.drawElements(gl.TRIANGLES,L.icount,gl.UNSIGNED_INT,0);
+      [2,3,4].forEach(i=>gl.disableVertexAttribArray(i));
+    }
+    gl.uniform1f(UM.uShadow,0);gl.depthFunc(gl.LEQUAL);
+  }
+  gl.disable(gl.DEPTH_TEST);
+  // 3 — 2D-style brush layers, already projected into screen space
+  const bl=brushLayers().filter(L=>L.vis&&L.op>0&&L.tex&&(L.Q||L.B).style!=="mesh");
   if(bl.length){
-    gl.useProgram(progB);bindQuad(fullBuf);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(progB);bindQuad(fullBuf);
     gl.uniform2f(UB.uRes,S.W,S.H);gl.uniform3f(UB.uLight,lx,ly,lz);gl.uniform3f(UB.uLP,hand.scrX,hand.scrY,V.torchH);gl.uniform1f(UB.uTorch,torch);
     gl.uniform1f(UB.uAmb,V.amb);gl.uniform1f(UB.uSpec,V.spec);gl.uniform1i(UB.uB,4);
     for(const L of bl){
@@ -1442,8 +1643,8 @@ function render(){
       gl.uniform1f(UB.uGlow,F.glow+Q.glow);gl.uniform1f(UB.uFlat,F.flat?1:0);gl.uniform1f(UB.uOp,L.op);
       gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
     }
-    gl.disable(gl.BLEND);
   }
+  gl.disable(gl.BLEND);
   if(Drive)Drive.pushFrame(glcv);
 }
 function drawOverlay(){
@@ -1497,7 +1698,7 @@ function frame(now){
   for(const L of brushLayers()){
     if(L.src)regenLive(L);
     const Q=live?Drive.resolve(L.B):L.B;L.Q=Q;
-    if(L.vis&&(L.dirty||camCh||live||brushAnimating(Q)||L.write||hand.bl===L)){renderBrushLayer(L,Q);uploadBrush(L);L.dirty=false}
+    if(L.vis&&(L.dirty||(camCh&&Q.style!=="mesh")||live||brushAnimating(Q)||L.write||hand.bl===L)){renderBrushLayer(L,Q);uploadBrush(L);L.dirty=false}
   }
   if(previewT&&now>previewT){previewT=0;try{preview=buildJob()}catch(e){console.error(e);preview=null}}
   if(paintDirty)compositePaint();
@@ -1522,7 +1723,7 @@ const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=nu
 function row(parent,label,...ctl){const r=el("div","row");r.append(el("label",null,label));const c=el("div","ctl");c.append(...ctl);r.append(c);parent.append(r);return r}
 let syncers=[];
 let GRP="";
-const NO_MOD=new Set(["passes","smooth","bristles","seed","stampGap","speedRef","outlinePasses","hatchAngle","hatchSpace","overspill","depth","depthAng","dwell","play","bubble","expand"]);
+const NO_MOD=new Set(["meshStep","passes","smooth","bristles","seed","stampGap","speedRef","outlinePasses","hatchAngle","hatchSpace","overspill","depth","depthAng","dwell","play","bubble","expand"]);
 function registerMod(key,label,min,max){if(!Drive||!GRP||NO_MOD.has(key))return;Drive.registerTarget(key,GRP+" — "+label,min,max)}
 function syncAll(){syncers=syncers.filter(f=>{try{f();return true}catch(e){return false}});updateStatus()}
 function slider(parent,label,obj,key,min,max,step,fmt,cb){
@@ -1755,6 +1956,21 @@ function buildBrushUI(){
   slider(g,"Smoothing",B,"smooth",0,8,1,null,DP);
   if(B.style==="nib"||B.style==="dots")slider(g,"Stamp gap",B,"stampGap",1,40,1,x=>x+" px",DP);
   if(B.style==="dry"){slider(g,"Bristles",B,"bristles",2,40,1,null,DP);slider(g,"Dryness",B,"dryness",0,1,.01,null,DP)}
+  if(B.style==="mesh"){
+    sub(g,"3D profile — swept along the stroke");
+    slider(g,"Sides",B,"meshSides",3,32,1,null,D);
+    slider(g,"Star",B,"meshStar",0,.9,.01,null,D);
+    slider(g,"Thickness",B,"meshThick",.05,2.5,.01,null,D);
+    slider(g,"Profile rotate",B,"meshRot",-180,180,1,x=>x+"°",D);
+    slider(g,"Twist",B,"meshTwist",-720,720,1,x=>x+"°/100px",D);
+    check(g,"Facets",B,"meshFacet",D);
+    check(g,"End caps",B,"meshCaps",D);
+    slider(g,"Lift",B,"meshLift",-1.5,4,.01,null,D);
+    slider(g,"Cast shadow",B,"shadow",0,1,.01,null,D);
+    slider(g,"Ring spacing",B,"meshStep",2,20,1,x=>x+" px",D);
+    note(g,"Width comes from the line weight above (nib, speed, pressure, taper); Thickness is how far it bulges out of the wall. Lift 1 rests it on the wall, 0 sinks it halfway through the plane, above 1 floats it. 4 sides + low thickness = a flat nib blade; Star + Twist = sculpted rope.");
+    btns(g,[["Export OBJ (brush meshes)",()=>{if(!exportOBJ())note(g,"No mesh strokes to export yet.")}]]);
+  }
   sub(g,"Colour");
   color(g,"Line",B,"colA",DP);
   const sw=el("div","swatches");SWATCHES.forEach(hx=>{const i=el("i");i.style.background=hx;i.onclick=()=>{B.colA=hx;syncAll();DP()};sw.append(i)});g.append(sw);
@@ -1887,7 +2103,8 @@ function buildCamUI(){
   slider(g,"Zoom",S.view,"camZoom",.2,3,.01);
   slider(g,"Auto-rotate",S.view,"camAuto",-60,60,.1,x=>(+x).toFixed(1)+"°/s");
   GRP="";
-  check(g,"Show wall",S.view,"showWall");
+  slider(g,"Wall opacity",S.view,"wallOp",0,1,.01,pct);
+  note(g,"Below 100% the wall turns into a clear plane that keeps only the spray paint — 3D brush strokes pass through it.");
   color(g,"Background",S.view,"bg");
   btns(g,[["Front",()=>{Object.assign(S.view,{camYaw:0,camPitch:0,camRoll:0});camDragYaw=camDragPitch=camAutoYaw=0;syncAll()}],
           ["¾ view",()=>{S.view.dim3=true;Object.assign(S.view,{camYaw:-28,camPitch:14,camRoll:0});camDragYaw=camDragPitch=camAutoYaw=0;syncAll()}],
