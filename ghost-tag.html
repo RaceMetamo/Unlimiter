@@ -349,12 +349,38 @@ let paintDirty=true,dataDirty=true,wetMax=0;
 
 function makeLayer(name){
   const cv=document.createElement("canvas");cv.width=S.W;cv.height=S.H;
-  return {id:nextLayerId++,kind:"spray",name,cv,ctx:cv.getContext("2d"),thick:new Float32Array(SN),vis:true,op:1};
+  return withXform({id:nextLayerId++,kind:"spray",name,cv,ctx:cv.getContext("2d"),thick:new Float32Array(SN),vis:true,op:1,blend:"normal"});
 }
+/* Each layer carries its own transform, keyed by layer id so Drive can route to one layer without moving the others. */
+function withXform(L){const i=L.id;L.X={["tx"+i]:0,["ty"+i]:0,["tz"+i]:0,["rx"+i]:0,["ry"+i]:0,["rz"+i]:0,["sc"+i]:1};L.QX=L.X;L.M=IDM;L.Msig="";return L}
+const IDM={id:true,r:[1,0,0,0,1,0,0,0,1],s:1,t:[0,0,0]};
+function layerModel(L,Q){
+  const i=L.id,tx=Q["tx"+i],ty=Q["ty"+i],tz=Q["tz"+i],rx=Q["rx"+i]*D2R,ry=Q["ry"+i]*D2R,rz=Q["rz"+i]*D2R,sc=Q["sc"+i];
+  if(!tx&&!ty&&!tz&&!rx&&!ry&&!rz&&sc===1)return IDM;
+  const cy=Math.cos(ry),sy=Math.sin(ry),cp=Math.cos(rx),sp=Math.sin(rx),cr=Math.cos(rz),sr=Math.sin(rz);
+  // same yaw → pitch → roll order as the camera, about the wall centre
+  const r=[cr*cy-sr*sp*sy,-sr*cp,cr*sy+sr*sp*cy, sr*cy+cr*sp*sy,cr*cp,sr*sy-cr*sp*cy, -cp*sy,sp,cp*cy];
+  return{id:false,r,s:sc,t:[tx,ty,tz]};
+}
+function applyModel(M,x,y,z,out){
+  if(M.id){out[0]=x;out[1]=y;out[2]=z;return out}
+  const r=M.r,dx=x-S.W/2,dy=y-S.H/2;
+  out[0]=(r[0]*dx+r[1]*dy+r[2]*z)*M.s+S.W/2+M.t[0];out[1]=(r[3]*dx+r[4]*dy+r[5]*z)*M.s+S.H/2+M.t[1];out[2]=(r[6]*dx+r[7]*dy+r[8]*z)*M.s+M.t[2];return out;
+}
+function modelMat4(M,out){
+  const r=M.r,s=M.s,hx=S.W/2,hy=S.H/2;
+  // column-major: R*s, translation = c + t − R*s*c
+  out.set([r[0]*s,r[3]*s,r[6]*s,0, r[1]*s,r[4]*s,r[7]*s,0, r[2]*s,r[5]*s,r[8]*s,0,
+    hx+M.t[0]-(r[0]*hx+r[1]*hy)*s, hy+M.t[1]-(r[3]*hx+r[4]*hy)*s, M.t[2]-(r[6]*hx+r[7]*hy)*s, 1]);return out;
+}
+const isDetached=L=>L.kind==="spray"&&!L.M.id;
+const BLENDS=[["normal","Normal"],["add","Add"],["screen","Screen"],["multiply","Multiply"],["overlay","Overlay"],["softlight","Soft light"],["difference","Difference"]];
+const BLEND_ID={normal:0,add:1,screen:2,multiply:3,overlay:4,softlight:5,difference:6};
+const CANVAS_BLEND={normal:"source-over",add:"lighter",screen:"screen",multiply:"multiply",overlay:"overlay",softlight:"soft-light",difference:"difference"};
 function makeBrushLayer(name,look){
   const cv=document.createElement("canvas");cv.width=S.W;cv.height=S.H;
   const B=Object.assign({},BRUSH_DEFAULTS,look?BRUSH_LOOKS[look].v:{});
-  return {id:nextLayerId++,kind:"brush",name,cv,ctx:cv.getContext("2d"),vis:true,op:1,B,strokes:[],src:null,live:[],fills:[],dirty:true,write:null,tex:null,Q:B};
+  return withXform({id:nextLayerId++,kind:"brush",name,cv,ctx:cv.getContext("2d"),vis:true,op:1,blend:"normal",B,strokes:[],src:null,live:[],fills:[],dirty:true,write:null,tex:null,Q:B});
 }
 const getLayer=id=>layers.find(l=>l.id===id)||layers.find(l=>l.kind==="spray");
 const activeLayer=()=>layers.find(l=>l.id===activeId)||layers[layers.length-1];
@@ -758,6 +784,9 @@ function layerReveal(L,Q){
   return rv;
 }
 function renderBrushLayer(L,Q){
+  CUR_MODEL=L.M.id?null:L.M;try{renderBrushLayerInner(L,Q)}finally{CUR_MODEL=null}
+}
+function renderBrushLayerInner(L,Q){
   const ctx=L.ctx;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.clearRect(0,0,S.W,S.H);
   const strokes=L.live.length?L.strokes.concat(L.live):L.strokes;
   const sm=Q.smooth|0,geoms=strokes.map(s=>strokeGeom(s,sm));
@@ -776,7 +805,7 @@ function renderBrushLayer(L,Q){
   items.sort((a,b)=>(b.dist-a.dist)||((a.fill?0:1)-(b.fill?0:1)));
   L.mItems=items;L.mGeoms=geoms;L.mReveal=revealLen;L.mRv=rv;
   if(Q.style==="mesh"){            // fills drawn flat in wall space once; the GL pass stacks them per pass in 3D
-    if(hasFill){const was=CAM.on;CAM.on=false;drawFillPass(ctx,L,Q,{k:0,e:0,z:0,sx:0,sy:0},rv);CAM.on=was}
+    if(hasFill){const was=CAM.on,cm=CUR_MODEL;CAM.on=false;CUR_MODEL=null;drawFillPass(ctx,L,Q,{k:0,e:0,z:0,sx:0,sy:0},rv);CAM.on=was;CUR_MODEL=cm}
     buildMesh(L,Q,strokes,geoms,items.filter(i=>!i.fill),revealLen);return;
   }
   for(const it of items){
@@ -1010,10 +1039,11 @@ function camUpdate(QV){
   CAM.d=Math.max(200,QV.camDist);CAM.persp=QV.persp;CAM.k=QV.camZoom;
   const sig=CAM.on?[yaw,pitch,roll,CAM.d,CAM.persp,CAM.k].map(v=>v.toFixed(4)).join():"off";
   const ch=sig!==CAM.sig;CAM.sig=sig;
-  if(ch&&CAM.on){const c=[[0,0],[S.W,0],[S.W,S.H],[0,S.H]],d=c.map(([x,y])=>{proj(x,y,0,_p);return[_p[0],_p[1]]});HINV=inv3(homography(c,d))}
   return ch;
 }
+let CUR_MODEL=null;const _m=[0,0,0];
 function proj(x,y,z,out){
+  if(CUR_MODEL){applyModel(CUR_MODEL,x,y,z,_m);x=_m[0];y=_m[1];z=_m[2]}
   if(!CAM.on){out[0]=x;out[1]=y;out[2]=1;out[3]=z;return out}
   const X=x-S.W/2,Y=y-S.H/2;
   const x1=X*CAM.cy+z*CAM.sy,z1=-X*CAM.sy+z*CAM.cy;
@@ -1040,7 +1070,14 @@ function applyH(H,x,y){const w=H[6]*x+H[7]*y+H[8];return[(H[0]*x+H[1]*y+H[2])/w,
 const hand={down:false,queue:[],st:null,sx:0,sy:0,lastT:0,mx:-99,my:-99,scrX:-99,scrY:-99,pressure:1,over:false,t:0,bs:null,bl:null,orbit:null};
 const ov=$("#ov"),octx=ov.getContext("2d");
 function toScreen(e){const r=ov.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*S.W,y:(e.clientY-r.top)/r.height*S.H}}
-function toWall(e){const q=toScreen(e);if(CAM.on&&HINV){const[x,y]=applyH(HINV,q.x,q.y);return{x,y,sx:q.x,sy:q.y}}return{x:q.x,y:q.y,sx:q.x,sy:q.y}}
+/* drawing lands on the active layer's own plane, wherever it has been moved */
+function updateHomography(){
+  const L=activeLayer();if(!CAM.on&&(!L||L.M.id)){HINV=null;return}
+  CUR_MODEL=L&&!L.M.id?L.M:null;
+  const c=[[0,0],[S.W,0],[S.W,S.H],[0,S.H]],d=c.map(([x,y])=>{proj(x,y,0,_p);return[_p[0],_p[1]]});CUR_MODEL=null;
+  try{HINV=inv3(homography(c,d))}catch(e){HINV=null}
+}
+function toWall(e){const q=toScreen(e);if(HINV){const[x,y]=applyH(HINV,q.x,q.y);return{x,y,sx:q.x,sy:q.y}}return{x:q.x,y:q.y,sx:q.x,sy:q.y}}
 ov.addEventListener("contextmenu",e=>e.preventDefault());
 ov.addEventListener("pointerdown",e=>{
   ov.setPointerCapture(e.pointerId);
@@ -1408,20 +1445,30 @@ function doUndo(){
    RENDER — WebGL2
    --------------------------------------------------------------------- */
 const glcv=$("#gl");
-const gl=glcv.getContext("webgl2",{preserveDrawingBuffer:true,antialias:true,depth:true,premultipliedAlpha:false,alpha:false});
+const gl=glcv.getContext("webgl2",{preserveDrawingBuffer:true,antialias:false,depth:false,premultipliedAlpha:false,alpha:false});
 const paintCv=document.createElement("canvas"),pctx=paintCv.getContext("2d");
 let dataBuf;
 const VS=`#version 300 es
 in vec4 a;in vec2 t;out vec2 v;void main(){v=t;gl_Position=a;}`;
 // swept brush meshes
 const VSM=`#version 300 es
-in vec3 p;in vec3 n;in vec4 c;uniform mat4 uM;uniform vec3 uLight;uniform float uShadow;out vec3 vN;out vec3 vP;out vec4 vC;
-void main(){vN=n;vP=p;vC=c;vec3 q=p;
-  if(uShadow>.5){vec3 L=normalize(uLight);q.xy-=L.xy*max(p.z,0.)/max(L.z,.08);q.z=.8;}
+in vec3 p;in vec3 n;in vec4 c;uniform mat4 uM,uModel;uniform vec3 uLight;uniform float uShadow;out vec3 vN;out vec3 vP;out vec4 vC;
+void main(){vec3 w=(uModel*vec4(p,1.)).xyz;vN=mat3(uModel)*n;vP=w;vC=c;vec3 q=w;
+  if(uShadow>.5){vec3 L=normalize(uLight);q.xy-=L.xy*max(w.z,0.)/max(L.z,.08);q.z=.8;}
   gl_Position=uM*vec4(q,1.);}`;
 const FSM=`#version 300 es
 precision highp float;in vec3 vN;in vec3 vP;in vec4 vC;out vec4 o;
 uniform vec3 uLight,uLP,uView;uniform float uTorch,uAmb,uSpec,uGl,uMe,uGlow,uFlat,uFacet,uOp,uH,uShadow,uShadowA;
+uniform sampler2D uDst;uniform float uMode;uniform vec2 uFB;
+vec4 blendOut(vec3 s,float a){
+  if(uMode<3.5)return vec4(s*a,a);
+  vec3 d=texture(uDst,gl_FragCoord.xy/uFB).rgb,r;
+  if(uMode<4.5)r=mix(2.*d*s,1.-2.*(1.-d)*(1.-s),step(.5,d));
+  else if(uMode<5.5)r=mix(d-(1.-2.*s)*d*(1.-d),d+(2.*s-1.)*(sqrt(d)-d),step(.5,s));
+  else r=abs(d-s);
+  return vec4(mix(d,r,a),1.);
+}
+
 void main(){
   if(uShadow>.5){o=vec4(0.,0.,0.,uShadowA*vC.a);return;}
   vec3 n=normalize(vN);
@@ -1439,17 +1486,36 @@ void main(){
     col+=mix(vec3(1.),vC.rgb*1.4+.1,uMe)*spec+(uGl*.25+uMe*.3)*rim*vec3(.8,.85,.9)*(.3+env);
   }
   col+=vC.rgb*uGlow*.8;
-  float a=vC.a*uOp;o=vec4(col*a,a);
+  o=blendOut(col,vC.a*uOp);
 }`;
 // a brush layer's flat fills, stacked as one textured plane per pass
 const FSP=`#version 300 es
 precision highp float;in vec2 v;out vec4 o;uniform sampler2D uB;uniform vec3 uTint;uniform float uTintAmt,uOp,uShade;
-void main(){vec4 c=texture(uB,v);if(c.a<.02)discard;vec3 col=mix(c.rgb,uTint,uTintAmt)*uShade;float a=c.a*uOp;o=vec4(col*a,a);}`;
+uniform sampler2D uDst;uniform float uMode;uniform vec2 uFB;
+vec4 blendOut(vec3 s,float a){
+  if(uMode<3.5)return vec4(s*a,a);
+  vec3 d=texture(uDst,gl_FragCoord.xy/uFB).rgb,r;
+  if(uMode<4.5)r=mix(2.*d*s,1.-2.*(1.-d)*(1.-s),step(.5,d));
+  else if(uMode<5.5)r=mix(d-(1.-2.*s)*d*(1.-d),d+(2.*s-1.)*(sqrt(d)-d),step(.5,s));
+  else r=abs(d-s);
+  return vec4(mix(d,r,a),1.);
+}
+void main(){vec4 c=texture(uB,v);if(c.a<.02)discard;vec3 col=mix(c.rgb,uTint,uTintAmt)*uShade;o=blendOut(col,c.a*uOp);}`;
 // brush layers: screen-space image of the (already projected) strokes, shaded with a bevel from its own alpha
 const FSB=`#version 300 es
 precision highp float;in vec2 v;out vec4 o;
 uniform sampler2D uB;uniform vec2 uRes;uniform vec3 uLight,uLP;
 uniform float uTorch,uAmb,uSpec,uBevel,uGl,uMe,uGlow,uFlat,uOp;
+uniform sampler2D uDst;uniform float uMode;uniform vec2 uFB;
+vec4 blendOut(vec3 s,float a){
+  if(uMode<3.5)return vec4(s*a,a);
+  vec3 d=texture(uDst,gl_FragCoord.xy/uFB).rgb,r;
+  if(uMode<4.5)r=mix(2.*d*s,1.-2.*(1.-d)*(1.-s),step(.5,d));
+  else if(uMode<5.5)r=mix(d-(1.-2.*s)*d*(1.-d),d+(2.*s-1.)*(sqrt(d)-d),step(.5,s));
+  else r=abs(d-s);
+  return vec4(mix(d,r,a),1.);
+}
+
 float al(vec2 p){return texture(uB,p).a;}
 float hh(vec2 p){vec2 r=uBevel/uRes;float s=al(p)*2.;
   s+=al(p+vec2(r.x,0.))+al(p-vec2(r.x,0.))+al(p+vec2(0.,r.y))+al(p-vec2(0.,r.y));
@@ -1471,11 +1537,11 @@ void main(){
     col+=mix(vec3(1.),c.rgb*1.4+.1,uMe)*spec+uGl*vec3(.02+.12*env*env)*(.4+.6*diff);
   }
   col+=c.rgb*uGlow*.7;
-  float a=c.a*uOp;o=vec4(col*a,a);
+  o=blendOut(col,c.a*uOp);
 }`;
 const FS=`#version 300 es
 precision highp float;in vec2 v;out vec4 o;
-uniform sampler2D uAlb,uNrm,uPaint,uData;uniform vec2 uRes,uSim;
+uniform sampler2D uAlb,uNrm,uPaint,uData,uComp;uniform vec2 uRes,uSim;
 uniform vec3 uLight;uniform vec3 uLP;uniform float uTorch,uAmb,uSpec,uAO,uRelief,uBump,uRough,uWallGloss,uWallOp;
 void main(){
   vec4 pc=texture(uPaint,v);vec4 d=texture(uData,v);
@@ -1491,7 +1557,9 @@ void main(){
   vec3 alb=texture(uAlb,v).rgb;
   float aOut=a+uWallOp*(1.-a);
   if(aOut<.004)discard;
-  vec3 base=(pc.rgb*a+alb*uWallOp*(1.-a))/aOut;
+  vec3 comp=texture(uComp,v).rgb;                       // wall + spray layers with their blend modes
+  float cov=pc.a>.001?clamp(a/pc.a,0.,1.):0.;
+  vec3 base=mix(pc.rgb,mix(alb,comp,cov),uWallOp);
   vec3 fp=vec3(v*uRes,0.);
   vec3 L=uTorch>.5?normalize(vec3((uLP.xy-fp.xy)/uRes.y,uLP.z)):normalize(uLight);
   float flat_=max(L.z,.25);
@@ -1519,12 +1587,13 @@ void main(){
 function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x}
 function mkProg(fs){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,VS));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));
   gl.bindAttribLocation(p,0,"a");gl.bindAttribLocation(p,1,"t");gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p}
-const prog=mkProg(FS),progB=mkProg(FSB),progP=mkProg(FSP);
+const prog=mkProg(FS),progB=mkProg(FSB),progP=mkProg(FSP),progC=mkProg(`#version 300 es
+precision highp float;in vec2 v;out vec4 o;uniform sampler2D uT;void main(){o=vec4(texture(uT,vec2(v.x,1.-v.y)).rgb,1.);}`);
 const progM=(()=>{const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,VSM));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,FSM));
   gl.bindAttribLocation(p,2,"p");gl.bindAttribLocation(p,3,"n");gl.bindAttribLocation(p,4,"c");gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p})();
-const UM={};["uM","uLight","uLP","uView","uTorch","uAmb","uSpec","uGl","uMe","uGlow","uFlat","uFacet","uOp","uH","uShadow","uShadowA"].forEach(n=>UM[n]=gl.getUniformLocation(progM,n));
-const UP={};["uB","uTint","uTintAmt","uOp","uShade"].forEach(n=>UP[n]=gl.getUniformLocation(progP,n));
+const UM={};["uM","uModel","uLight","uLP","uView","uTorch","uAmb","uSpec","uGl","uMe","uGlow","uFlat","uFacet","uOp","uH","uShadow","uShadowA","uMode","uDst","uFB"].forEach(n=>UM[n]=gl.getUniformLocation(progM,n));
+const UP={};["uB","uTint","uTintAmt","uOp","uShade","uMode","uDst","uFB"].forEach(n=>UP[n]=gl.getUniformLocation(progP,n));
 gl.useProgram(prog);
 const wallBuf=gl.createBuffer(),fullBuf=gl.createBuffer(),planeBuf=gl.createBuffer(),wallVerts=new Float32Array(24);
 gl.bindBuffer(gl.ARRAY_BUFFER,fullBuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,1,0,1,0,0, 1,1,0,1,1,0, -1,-1,0,1,0,1, 1,-1,0,1,1,1]),gl.STATIC_DRAW);
@@ -1532,7 +1601,8 @@ function bindQuad(buf){gl.bindBuffer(gl.ARRAY_BUFFER,buf);[2,3,4].forEach(i=>gl.
   gl.vertexAttribPointer(0,4,gl.FLOAT,false,24,0);gl.vertexAttribPointer(1,2,gl.FLOAT,false,24,16)}
 /* a wall-space quad at depth z (shifted) → clip-space verts through the camera matrix */
 const _c=[0,0,0,0];
-function planeVerts(buf,z,sx,sy){[[0,0],[S.W,0],[0,S.H],[S.W,S.H]].forEach(([x,y],i)=>{clipOf(x+sx,y+sy,z,_c);wallVerts.set([_c[0],_c[1],_c[2],_c[3],x/S.W,y/S.H],i*6)});
+const _w=[0,0,0];
+function planeVerts(buf,z,sx,sy,M){[[0,0],[S.W,0],[0,S.H],[S.W,S.H]].forEach(([x,y],i)=>{applyModel(M||IDM,x+sx,y+sy,z,_w);clipOf(_w[0],_w[1],_w[2],_c);wallVerts.set([_c[0],_c[1],_c[2],_c[3],x/S.W,y/S.H],i*6)});
   gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,wallVerts,gl.DYNAMIC_DRAW);bindQuad(buf)}
 function uploadMesh(L){
   L.meshCPU={pos:MESH.pos.slice(0,MESH.nv*10),idx:MESH.idx.slice(0,MESH.ni),nv:MESH.nv,ni:MESH.ni};
@@ -1541,29 +1611,37 @@ function uploadMesh(L){
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,L.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,L.meshCPU.idx,gl.DYNAMIC_DRAW);
   L.icount=MESH.ni;
 }
-const UB={};["uB","uRes","uLight","uLP","uTorch","uAmb","uSpec","uBevel","uGl","uMe","uGlow","uFlat","uOp"].forEach(n=>UB[n]=gl.getUniformLocation(progB,n));
-const U={};["uAlb","uNrm","uPaint","uData","uRes","uSim","uLight","uLP","uTorch","uAmb","uSpec","uAO","uRelief","uBump","uRough","uWallGloss","uWallOp"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+const UB={};["uB","uRes","uLight","uLP","uTorch","uAmb","uSpec","uBevel","uGl","uMe","uGlow","uFlat","uOp","uMode","uDst","uFB"].forEach(n=>UB[n]=gl.getUniformLocation(progB,n));
+const U={};["uAlb","uNrm","uPaint","uData","uRes","uSim","uLight","uLP","uTorch","uAmb","uSpec","uAO","uRelief","uBump","uRough","uWallGloss","uWallOp","uComp"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
 function mkTex(unit){const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t}
-const tAlb=mkTex(0),tNrm=mkTex(1),tPaint=mkTex(2),tData=mkTex(3);
+const tAlb=mkTex(0),tNrm=mkTex(1),tPaint=mkTex(2),tData=mkTex(3),tComp=mkTex(6);
 function uploadBrush(L){if(!L.tex)L.tex=mkTex(4);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,L.cv)}
 gl.uniform1i(U.uAlb,0);gl.uniform1i(U.uNrm,1);gl.uniform1i(U.uPaint,2);gl.uniform1i(U.uData,3);
 gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
 function uploadWall(){
+  albCv.width=S.W;albCv.height=S.H;albCv.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(albPix.buffer,0,S.W*S.H*4),S.W,S.H),0,0);
   gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tAlb);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,S.W,S.H,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(albPix.buffer));
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,tNrm);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,S.W,S.H,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(nrmPix.buffer));
   dataDirty=paintDirty=true;
 }
+const compCv=document.createElement("canvas"),cctx=compCv.getContext("2d"),albCv=document.createElement("canvas");
 function compositePaint(){
   pctx.clearRect(0,0,S.W,S.H);
-  for(const L of layers){if(L.kind!=="spray"||!L.vis||L.op<=0)continue;pctx.globalAlpha=L.op;pctx.drawImage(L.cv,0,0)}
-  pctx.globalAlpha=1;
+  if(compCv.width!==S.W||compCv.height!==S.H){compCv.width=S.W;compCv.height=S.H}
+  cctx.globalCompositeOperation="copy";cctx.globalAlpha=1;cctx.drawImage(albCv,0,0);
+  for(const L of layers){if(L.kind!=="spray"||!L.vis||L.op<=0)continue;
+    if(isDetached(L)){if(!L.tex)L.tex=mkTex(4);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,L.cv);continue}
+    pctx.globalAlpha=L.op;pctx.drawImage(L.cv,0,0);
+    cctx.globalCompositeOperation=CANVAS_BLEND[L.blend]||"source-over";cctx.globalAlpha=L.op;cctx.drawImage(L.cv,0,0)}
+  pctx.globalAlpha=1;cctx.globalAlpha=1;cctx.globalCompositeOperation="source-over";
   gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,tPaint);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,paintCv);
+  gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,tComp);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,compCv);
   paintDirty=false;
 }
 function uploadData(){
-  const vis=layers.filter(l=>l.kind==="spray"&&l.vis&&l.op>0),B=dataBuf;
+  const vis=layers.filter(l=>l.kind==="spray"&&l.vis&&l.op>0&&!isDetached(l)),B=dataBuf;
   for(let i=0;i<SN;i++){
     let t=0;for(let k=0;k<vis.length;k++)t+=vis[k].thick[i]*vis[k].op;
     const j=i*4;B[j]=255*(1-Math.exp(-t/12));B[j+1]=255*(1-Math.exp(-wet[i]/15));B[j+2]=gloss[i]*255;B[j+3]=(metal[i]*.5+.5)*255;
@@ -1572,79 +1650,122 @@ function uploadData(){
   dataDirty=false;
 }
 let QV=S.view;
+/* Render into a multisampled offscreen buffer. Overlay / soft light / difference layers
+   need the pixels underneath them, so before such a layer we resolve a copy (uDst). */
+let FB=null;
+function makeFB(){
+  const samples=Math.min(4,gl.getParameter(gl.MAX_SAMPLES)||0);
+  if(FB){gl.deleteFramebuffer(FB.ms);gl.deleteFramebuffer(FB.rs);gl.deleteRenderbuffer(FB.rc);gl.deleteRenderbuffer(FB.rd)}
+  FB={ms:gl.createFramebuffer(),rs:gl.createFramebuffer(),rc:gl.createRenderbuffer(),rd:gl.createRenderbuffer(),tex:FB?FB.tex:mkTex(5)};
+  gl.bindRenderbuffer(gl.RENDERBUFFER,FB.rc);gl.renderbufferStorageMultisample(gl.RENDERBUFFER,samples,gl.RGBA8,S.W,S.H);
+  gl.bindRenderbuffer(gl.RENDERBUFFER,FB.rd);gl.renderbufferStorageMultisample(gl.RENDERBUFFER,samples,gl.DEPTH_COMPONENT24,S.W,S.H);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,FB.ms);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.RENDERBUFFER,FB.rc);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,FB.rd);
+  gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,FB.tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,S.W,S.H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,FB.rs);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,FB.tex,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);FB.w=S.W;FB.h=S.H;
+}
+function grabDst(){
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER,FB.ms);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,FB.rs);
+  gl.blitFramebuffer(0,0,S.W,S.H,0,0,S.W,S.H,gl.COLOR_BUFFER_BIT,gl.NEAREST);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,FB.ms);gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,FB.tex);
+}
+function setBlend(mode,UX){
+  const id=BLEND_ID[mode]||0;
+  if(id===1)gl.blendFunc(gl.ONE,gl.ONE);
+  else if(id===2)gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_COLOR);
+  else if(id===3)gl.blendFunc(gl.DST_COLOR,gl.ONE_MINUS_SRC_ALPHA);
+  else if(id>=4){grabDst();gl.blendFunc(gl.ONE,gl.ZERO)}
+  else gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  gl.uniform1f(UX.uMode,id);gl.uniform1i(UX.uDst,5);gl.uniform2f(UX.uFB,S.W,S.H);
+}
+const MODEL=new Float32Array(16);
 function render(){
   const V=QV;
+  if(!FB||FB.w!==S.W||FB.h!==S.H)makeFB();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,FB.ms);
   gl.viewport(0,0,S.W,S.H);
   const bg=hex2rgb(S.view.bg);gl.clearColor(bg[0]/255,bg[1]/255,bg[2]/255,1);gl.clearDepth(1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const a=V.lightAng*D2R,e=V.lightElev*D2R,lx=Math.cos(a)*Math.cos(e),ly=Math.sin(a)*Math.cos(e),lz=Math.sin(e);
   const torch=V.torch&&hand.over?1:0;
   camMatrix();
-  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
-  // 1 — mesh layers: stacked fill planes, then the swept strokes (both write depth)
-  const ml=brushLayers().filter(L=>L.vis&&L.op>0&&(L.Q||L.B).style==="mesh");
-  for(const L of ml){
+  gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.depthFunc(gl.LEQUAL);
+  const wop=S.view.wallOp,drawn=new Set();
+  const isMesh=L=>L.kind==="brush"&&(L.Q||L.B).style==="mesh";
+  const ml=layers.filter(L=>L.vis&&L.op>0&&isMesh(L));
+
+  function drawMeshLayer(L,shadow){
     const Q=L.Q||L.B,F=FINISHES[Q.finish]||FINISHES.satin;
-    if(L.fills.length&&Q.fillOn&&L.tex&&L.mItems){
-      gl.useProgram(progP);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);gl.uniform1i(UP.uB,4);gl.uniform1f(UP.uOp,L.op);
+    if(!shadow&&L.fills.length&&Q.fillOn&&L.tex&&L.mItems){
+      gl.enable(gl.DEPTH_TEST);gl.useProgram(progP);setBlend(L.blend,UP);
+      gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);gl.uniform1i(UP.uB,4);gl.uniform1f(UP.uOp,L.op);
       for(const it of L.mItems){if(!it.fill)continue;
         const tc=hex2rgb(Q.extrude?Q.colB:mixHex(Q.fillCol,Q.colB,it.e)).map(v=>v/255);
         gl.uniform3f(UP.uTint,tc[0],tc[1],tc[2]);gl.uniform1f(UP.uTintAmt,it.k===0?0:(Q.extrude?1:.85));gl.uniform1f(UP.uShade,it.k===0?1:1-.35*it.e);
-        planeVerts(planeBuf,it.z,it.sx,it.sy);gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}
+        planeVerts(planeBuf,it.z,it.sx,it.sy,L.M);gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}
     }
-    if(L.icount&&L.vbo){
-      gl.useProgram(progM);[0,1].forEach(i=>gl.disableVertexAttribArray(i));
-      gl.bindBuffer(gl.ARRAY_BUFFER,L.vbo);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,L.ibo);
-      gl.enableVertexAttribArray(2);gl.enableVertexAttribArray(3);gl.enableVertexAttribArray(4);
-      gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,0);gl.vertexAttribPointer(3,3,gl.FLOAT,false,40,12);gl.vertexAttribPointer(4,4,gl.FLOAT,false,40,24);
-      gl.uniformMatrix4fv(UM.uM,false,MVP);gl.uniform3f(UM.uLight,lx,ly,lz);gl.uniform3f(UM.uView,VIEWV[0],VIEWV[1],VIEWV[2]);
-      gl.uniform3f(UM.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(UM.uH,S.H);gl.uniform1f(UM.uTorch,torch);
+    if(!L.icount||!L.vbo)return;
+    gl.enable(gl.DEPTH_TEST);gl.useProgram(progM);[0,1].forEach(i=>gl.disableVertexAttribArray(i));
+    gl.bindBuffer(gl.ARRAY_BUFFER,L.vbo);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,L.ibo);
+    [2,3,4].forEach(i=>gl.enableVertexAttribArray(i));
+    gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,0);gl.vertexAttribPointer(3,3,gl.FLOAT,false,40,12);gl.vertexAttribPointer(4,4,gl.FLOAT,false,40,24);
+    gl.uniformMatrix4fv(UM.uM,false,MVP);gl.uniformMatrix4fv(UM.uModel,false,modelMat4(L.M,MODEL));
+    gl.uniform3f(UM.uView,VIEWV[0],VIEWV[1],VIEWV[2]);
+    if(shadow){
+      gl.uniform3f(UM.uLight,lx,ly,Math.max(lz,.15));gl.uniform1f(UM.uShadow,1);gl.uniform1f(UM.uShadowA,Q.shadow*wop*L.op);gl.uniform1f(UM.uMode,0);
+      gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+    }else{
+      setBlend(L.blend,UM);
+      gl.uniform3f(UM.uLight,lx,ly,lz);gl.uniform3f(UM.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(UM.uH,S.H);gl.uniform1f(UM.uTorch,torch);
       gl.uniform1f(UM.uAmb,V.amb);gl.uniform1f(UM.uSpec,V.spec);gl.uniform1f(UM.uGl,F.g);gl.uniform1f(UM.uMe,F.m);
-      gl.uniform1f(UM.uGlow,F.glow+Q.glow);gl.uniform1f(UM.uFlat,F.flat?1:0);gl.uniform1f(UM.uFacet,Q.meshFacet?1:0);gl.uniform1f(UM.uOp,L.op);
-      gl.uniform1f(UM.uShadow,0);
-      gl.drawElements(gl.TRIANGLES,L.icount,gl.UNSIGNED_INT,0);
-      [2,3,4].forEach(i=>gl.disableVertexAttribArray(i));
-      L._shadow=Q.shadow;
+      gl.uniform1f(UM.uGlow,F.glow+Q.glow);gl.uniform1f(UM.uFlat,F.flat?1:0);gl.uniform1f(UM.uFacet,Q.meshFacet?1:0);gl.uniform1f(UM.uOp,L.op);gl.uniform1f(UM.uShadow,0);
     }
+    gl.drawElements(gl.TRIANGLES,L.icount,gl.UNSIGNED_INT,0);
+    [2,3,4].forEach(i=>gl.disableVertexAttribArray(i));gl.uniform1f(UM.uShadow,0);
   }
-  // 2 — the wall / spray plane. Opaque: hides what's behind it. Transparent: only the paint stays, and the meshes pass through it.
-  const wop=S.view.wallOp;
-  gl.useProgram(prog);gl.depthMask(wop>=.999);
-  planeVerts(wallBuf,0,0,0);
+  function drawFlatLayer(L){        // 2D-style brush layer: already projected into screen space
+    const Q=L.Q||L.B,F=FINISHES[Q.finish]||FINISHES.satin;
+    gl.disable(gl.DEPTH_TEST);gl.useProgram(progB);bindQuad(fullBuf);setBlend(L.blend,UB);
+    gl.uniform2f(UB.uRes,S.W,S.H);gl.uniform3f(UB.uLight,lx,ly,lz);gl.uniform3f(UB.uLP,hand.scrX,hand.scrY,V.torchH);gl.uniform1f(UB.uTorch,torch);
+    gl.uniform1f(UB.uAmb,V.amb);gl.uniform1f(UB.uSpec,V.spec);gl.uniform1i(UB.uB,4);
+    gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);
+    gl.uniform1f(UB.uBevel,Q.bevel*(CAM.on?CAM.k:1));gl.uniform1f(UB.uGl,F.g);gl.uniform1f(UB.uMe,F.m);
+    gl.uniform1f(UB.uGlow,F.glow+Q.glow);gl.uniform1f(UB.uFlat,F.flat?1:0);gl.uniform1f(UB.uOp,L.op);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  }
+  function drawSprayPlane(L){       // a spray layer lifted off the wall onto its own plane
+    if(!L.tex)return;
+    gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.useProgram(progP);setBlend(L.blend,UP);
+    gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);gl.uniform1i(UP.uB,4);gl.uniform1f(UP.uOp,L.op);
+    gl.uniform3f(UP.uTint,0,0,0);gl.uniform1f(UP.uTintAmt,0);gl.uniform1f(UP.uShade,1);
+    planeVerts(planeBuf,0,0,0,L.M);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.depthMask(true);
+  }
+  function drawLayer(L){
+    if(!L.vis||L.op<=0)return;
+    if(isMesh(L))drawMeshLayer(L,false);
+    else if(L.kind==="brush"){if(L.tex)drawFlatLayer(L)}
+    else if(isDetached(L))drawSprayPlane(L);
+  }
+  // see-through wall: solid geometry first so it shows through the plane
+  if(wop<.999)for(const L of ml)if(L.blend==="normal"){drawLayer(L);drawn.add(L)}
+  // the wall / spray plane
+  gl.enable(gl.DEPTH_TEST);gl.useProgram(prog);gl.depthMask(wop>=.999);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  planeVerts(wallBuf,0,0,0,IDM);
   gl.uniform2f(U.uRes,S.W,S.H);gl.uniform2f(U.uSim,SW,SH);gl.uniform3f(U.uLight,lx,ly,lz);
   gl.uniform3f(U.uLP,hand.mx,hand.my,V.torchH);gl.uniform1f(U.uTorch,torch);
   gl.uniform1f(U.uAmb,V.amb);gl.uniform1f(U.uSpec,V.spec);gl.uniform1f(U.uAO,V.ao);gl.uniform1f(U.uRelief,V.relief);
   gl.uniform1f(U.uBump,S.surf.bump);gl.uniform1f(U.uRough,S.surf.rough);gl.uniform1f(U.uWallGloss,S.surf.gloss);gl.uniform1f(U.uWallOp,wop);
-  for(const [n,u] of [["uAlb",0],["uNrm",1],["uPaint",2],["uData",3]])gl.uniform1i(U[n],u);
+  for(const [n,u] of [["uAlb",0],["uNrm",1],["uPaint",2],["uData",3],["uComp",6]])gl.uniform1i(U[n],u);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   gl.depthMask(true);
-  if(wop>.3){
-    gl.useProgram(progM);gl.depthFunc(gl.LESS);
-    for(const L of ml){const Q=L.Q||L.B;if(!L.icount||!(Q.shadow>0))continue;
-      gl.bindBuffer(gl.ARRAY_BUFFER,L.vbo);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,L.ibo);
-      [2,3,4].forEach(i=>gl.enableVertexAttribArray(i));
-      gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,0);gl.vertexAttribPointer(3,3,gl.FLOAT,false,40,12);gl.vertexAttribPointer(4,4,gl.FLOAT,false,40,24);
-      gl.uniformMatrix4fv(UM.uM,false,MVP);gl.uniform3f(UM.uLight,lx,ly,Math.max(lz,.15));gl.uniform1f(UM.uShadow,1);gl.uniform1f(UM.uShadowA,Q.shadow*wop*L.op);
-      gl.drawElements(gl.TRIANGLES,L.icount,gl.UNSIGNED_INT,0);
-      [2,3,4].forEach(i=>gl.disableVertexAttribArray(i));
-    }
-    gl.uniform1f(UM.uShadow,0);gl.depthFunc(gl.LEQUAL);
-  }
-  gl.disable(gl.DEPTH_TEST);
-  // 3 — 2D-style brush layers, already projected into screen space
-  const bl=brushLayers().filter(L=>L.vis&&L.op>0&&L.tex&&(L.Q||L.B).style!=="mesh");
-  if(bl.length){
-    gl.useProgram(progB);bindQuad(fullBuf);
-    gl.uniform2f(UB.uRes,S.W,S.H);gl.uniform3f(UB.uLight,lx,ly,lz);gl.uniform3f(UB.uLP,hand.scrX,hand.scrY,V.torchH);gl.uniform1f(UB.uTorch,torch);
-    gl.uniform1f(UB.uAmb,V.amb);gl.uniform1f(UB.uSpec,V.spec);gl.uniform1i(UB.uB,4);
-    for(const L of bl){
-      const Q=L.Q||L.B,F=FINISHES[Q.finish]||FINISHES.satin;
-      gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,L.tex);
-      gl.uniform1f(UB.uBevel,Q.bevel*(CAM.on?CAM.k:1));gl.uniform1f(UB.uGl,F.g);gl.uniform1f(UB.uMe,F.m);
-      gl.uniform1f(UB.uGlow,F.glow+Q.glow);gl.uniform1f(UB.uFlat,F.flat?1:0);gl.uniform1f(UB.uOp,L.op);
-      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
-    }
-  }
-  gl.disable(gl.BLEND);
+  // shadows of the meshes on the wall (LESS so overlapping triangles don't double-darken)
+  if(wop>.3){gl.depthFunc(gl.LESS);for(const L of ml){const Q=L.Q||L.B;if(Q.shadow>0&&L.icount)drawMeshLayer(L,true)}gl.depthFunc(gl.LEQUAL)}
+  // every other layer, bottom to top, with its blend mode
+  for(const L of layers)if(!drawn.has(L)&&L.kind!=="spray"||isDetached(L))drawLayer(L);
+  gl.disable(gl.DEPTH_TEST);gl.disable(gl.BLEND);
+  // resolve to the canvas
+  grabDst();gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.useProgram(progC);bindQuad(fullBuf);gl.uniform1i(gl.getUniformLocation(progC,"uT"),5);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   if(Drive)Drive.pushFrame(glcv);
 }
 function drawOverlay(){
@@ -1695,10 +1816,16 @@ function frame(now){
   QV=Drive?Drive.resolve(S.view):S.view;
   if(S.view.dim3&&QV.camAuto)camAutoYaw+=QV.camAuto*dt;
   const camCh=camUpdate(QV),live=!!(Drive&&Drive.isLive());
+  for(const L of layers){
+    L.QX=live?Drive.resolve(L.X):L.X;const was=isDetached(L);L.M=layerModel(L,L.QX);
+    const sig=L.M.id?"":L.M.r.map(v=>v.toFixed(4)).join()+L.M.s.toFixed(4)+L.M.t.map(v=>v.toFixed(2)).join();
+    if(sig!==L.Msig){L.Msig=sig;L.dirty=true;if(L.kind==="spray"&&was!==isDetached(L))paintDirty=dataDirty=true}
+  }
+  updateHomography();
   for(const L of brushLayers()){
     if(L.src)regenLive(L);
     const Q=live?Drive.resolve(L.B):L.B;L.Q=Q;
-    if(L.vis&&(L.dirty||(camCh&&Q.style!=="mesh")||live||brushAnimating(Q)||L.write||hand.bl===L)){renderBrushLayer(L,Q);uploadBrush(L);L.dirty=false}
+    if(L.vis&&(L.dirty||(camCh&&Q.style!=="mesh")||(live&&!L.M.id)||live||brushAnimating(Q)||L.write||hand.bl===L)){renderBrushLayer(L,Q);uploadBrush(L);L.dirty=false}
   }
   if(previewT&&now>previewT){previewT=0;try{preview=buildJob()}catch(e){console.error(e);preview=null}}
   if(paintDirty)compositePaint();
@@ -1919,6 +2046,25 @@ function buildLayerUI(){
     ["▲",()=>moveLayer(1)],["▼",()=>moveLayer(-1)],
     ["✕",()=>{if(layers.length<2)return;const i=layers.findIndex(l=>l.id===activeId);const id=layers[i].id;layers.splice(i,1);drips=drips.filter(d=>d.layerId!==id);
       const sp=sprayLayers()[0];Object.keys(S.tag.L).forEach(k=>{if(S.tag.L[k]===id&&sp)S.tag.L[k]=sp.id});paintDirty=dataDirty=true;selectLayer(layers[Math.max(0,i-1)].id)}]]);
+  // selected layer: blend + 3D transform
+  const L=activeLayer();
+  if(L){
+    sub(g,`“${L.name}” — blend &amp; transform`);
+    select(g,"Blend",L,"blend",BLENDS,()=>{L.dirty=true;paintDirty=true});
+    const X=L.X,i=L.id,D=()=>{L.dirty=true};
+    GRP="Layer "+L.name;
+    slider(g,"Move X",X,"tx"+i,-1600,1600,1,x=>x+" px",D);
+    slider(g,"Move Y",X,"ty"+i,-1000,1000,1,x=>x+" px",D);
+    slider(g,"Move Z",X,"tz"+i,-1200,1200,1,x=>x+" px",D);
+    slider(g,"Rotate X",X,"rx"+i,-180,180,.5,x=>x+"°",D);
+    slider(g,"Rotate Y",X,"ry"+i,-180,180,.5,x=>x+"°",D);
+    slider(g,"Rotate Z",X,"rz"+i,-180,180,.5,x=>x+"°",D);
+    slider(g,"Scale",X,"sc"+i,.1,4,.01,null,D);
+    GRP="";
+    btns(g,[["Reset transform",()=>{["tx","ty","tz","rx","ry","rz"].forEach(k=>X[k+i]=0);X["sc"+i]=1;syncAll();D()}]]);
+    note(g,L.kind==="spray"?"Moving a spray layer lifts it off the wall onto its own plane (blend modes still apply). Spray you add keeps landing on that plane.":
+      "Turn on Camera — 3D to see depth moves. You can keep drawing into the moved layer — strokes land on its own plane.");
+  }
   note(g,"<b style='color:var(--text)'>Brush</b> layers hold vector strokes — calligraphy, live text, 3D, animation — and float above the wall. <b style='color:var(--text)'>Spray</b> layers are paint on the wall itself: caps, drips, soak-in.");
 }
 function refreshPanels(){
@@ -2136,7 +2282,7 @@ $("#btnRec").onclick=()=>{
   rec.onstop=()=>{download(new Blob(chunks,{type:"video/webm"}),`ghost-tag-${stamp()}.webm`);rec=null;$("#btnRec").textContent="Record";$("#btnRec").classList.remove("warm")};
   rec.start(500);$("#btnRec").textContent="● Stop";$("#btnRec").classList.add("warm");
 };
-$("#sizeSel").onchange=e=>{const[w,h]=e.target.value.split("x").map(Number);S.W=w;S.H=h;glcv.width=ov.width=w;glcv.height=ov.height=h;allocFields(false);
+$("#sizeSel").onchange=e=>{const[w,h]=e.target.value.split("x").map(Number);S.W=w;S.H=h;glcv.width=ov.width=w;glcv.height=ov.height=h;allocFields(false);FB&&makeFB();
   fitFrame();buildLayerUI();buildInputUI();rebuildSurface();schedulePreview()};
 
 /* Keys */
